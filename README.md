@@ -1,4 +1,4 @@
-Niklas E. Siedhoff, Alexander-Maurice Illig, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – an Integrated Framework for Data-driven Protein Engineering, 2020  
+Niklas E. Siedhoff, Alexander-Maurice Illig, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – An Integrated Framework for Data-driven Protein Engineering, 2020  
 
 # PyPEF
 Pythonic Protein Engineering Framework (PyPEF);
