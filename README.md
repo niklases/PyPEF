@@ -8,13 +8,13 @@ Protein engineering by rational or random approaches generates data
 that can aid the construction of self-learned sequence-function
 landscapes to predict beneficial variants by using probabilistic methods.
 Such predictive methods can be applied for increasing the success/effectivity of an
-engineering campaign (while partly offering the prospect to reveal hidden patterns or
-complex networks of epistatic effects). Here we present a workflow tool termed
-PyPEF for assisting the training and validation of models
+engineering campaign while partly offering the prospect to reveal hidden patterns or
+complex networks of epistatic effects. Here we present an engineering framework termed
+PyPEF for assisting the tuning and validation of models
 for combination of identified substitutions using machine learning algorithms (partial least squares regression).
 As training input, the developed software tool requires the sequence and 
 the corresponding screening results (fitness labels) of the
-identified variants. Using PLS regression, PyPEF trains
+identified variants as .csv (or .fasta datasets). Using PLS regression, PyPEF trains
 on the given learning data and validates model performances on left-out data.
 Finally, the selected or best model for validation can be
 used to predict natural diverse or recombinant sequences that
