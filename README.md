@@ -1,3 +1,5 @@
+Niklas E. Siedhoff, Alexander-Maurice Illig, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – an Integrated Framework for Data-driven Protein Engineering, 2020  
+
 # PyPEF
 Pythonic Protein Engineering Framework (PyPEF);
 a Python 3 script (and tutorial) for performing sequence-based machine learning-assisted protein engineering.
