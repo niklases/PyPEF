@@ -18,7 +18,7 @@ the corresponding screening results (fitness labels) of the
 identified variants as .csv (or .fasta datasets). Using PLS regression, PyPEF trains
 on the given learning data and validates model performances on left-out data.
 Finally, the selected or best model for validation can be
-used to perform directed evolution walks *in silico* (see [Church-lab](https://github.com/churchlab/UniRep) implementation or [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering) or to predict natural diverse or recombinant sequences that
+used to perform directed evolution walks *in silico* (see [Church-lab](https://github.com/churchlab/UniRep) implementation or [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant sequences that
 subsequently are to be designed and validated in the wet-lab.
 
 
