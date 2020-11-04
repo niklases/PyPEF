@@ -23,6 +23,6 @@ subsequently are to be designed and validated in the wet-lab.
 
 
 Detailed information is given in the following publication, PyPEF - an Integrated Framework for Data-driven Protein Engineering, and the
-workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol, see
-workflow directory.  
+workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
+/workflow directory).  
 
