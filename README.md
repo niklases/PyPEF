@@ -6,7 +6,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 
 Protein engineering by rational or random approaches generates data
 that can aid the construction of self-learned sequence-function
-landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space *in silico* with uncertainty.
+landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico* .
 Such predictive methods can be applied for increasing the success/effectivity of an
 engineering campaign while partly offering the prospect to reveal hidden patterns or
 complex networks of epistatic effects. Here we present an engineering framework termed
@@ -18,7 +18,7 @@ the corresponding screening results (fitness labels) of the
 identified variants as .csv (or .fasta datasets). Using PLS regression, PyPEF trains
 on the given learning data and validates model performances on left-out data.
 Finally, the selected or best model for validation can be
-used to perform directed evolution walks *in silico* or to predict natural diverse or recombinant sequences that
+used to perform directed evolution walks *in silico* (see [Church-lab](https://github.com/churchlab/UniRep) implementation or [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering) or to predict natural diverse or recombinant sequences that
 subsequently are to be designed and validated in the wet-lab.
 
 
