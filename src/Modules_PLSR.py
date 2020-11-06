@@ -557,6 +557,7 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
         if Label is not False:
             from adjustText import adjust_text
             texts = [ax.text(Y_true[i], Y_pred[i], txt, fontsize=4) for i, txt in enumerate(Names_Of_Mutations)]
+            print(texts)
             adjust_text(texts, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
 
         if Color is not False:
@@ -835,16 +836,20 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
             f_len = len(f)
             if f_len > f_len_max:
                 f_len_max = f_len
-            ax.plot(np.arange(1, len(f)+2, 1), np.insert(f, 0, y_WT), label='EvoTraj' + str(j+1))
+            ax.plot(np.arange(1, len(f)+2, 1), np.insert(f, 0, y_WT),
+                    '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(j+1))
         else:
-            ax.plot(np.arange(1, len(f)+1, 1), f, label='EvoTraj' + str(j+1))
+            ax.plot(np.arange(1, len(f)+1, 1), f,
+                    '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(j+1))
+    label_x_y_name = []
     for k, l in enumerate(v_records):
-        for kk, ll in enumerate(l):
-            if y_WT is not None:
-                ax.annotate(ll, (kk+2, y_records[k][kk]))
+        for kk, ll in enumerate(l):  # kk = 1, 2, 3, ...  (=x); ll = variant name; y_records[k][kk] = fitness (=y)
+            if y_WT is not None:     # kk+2 as enumerate starts with 0 and WT is 1 --> start labeling with 2
+                label_x_y_name.append(ax.text(kk+2, y_records[k][kk], ll))
             else:
-                ax.annotate(ll, (kk+1, y_records[k][kk]))
-
+                label_x_y_name.append(ax.text(kk+1, y_records[k][kk], ll))
+    from adjustText import adjust_text
+    adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
     leg = ax.legend()
     if y_WT is not None:
         wt_tick = (['', 'WT'] + ((np.arange(1, f_len_max+1, 1)).tolist()))
