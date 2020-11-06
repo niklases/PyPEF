@@ -557,7 +557,6 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
         if Label is not False:
             from adjustText import adjust_text
             texts = [ax.text(Y_true[i], Y_pred[i], txt, fontsize=4) for i, txt in enumerate(Names_Of_Mutations)]
-            print(texts)
             adjust_text(texts, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
 
         if Color is not False:
