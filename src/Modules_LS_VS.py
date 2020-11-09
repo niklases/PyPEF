@@ -87,21 +87,25 @@ def drop_rows(csv_file, amino_acids, threshold_drop):
             drop_rows.append(i)
 
     for i, variant in enumerate(sequence):
-        if '/' in variant:
-            m = re.split(r'/', variant)
-            for a, splits in enumerate(m):
-                if splits[0].isdigit() and variant[-1] in amino_acids:
+        try:
+            if '/' in variant:
+                m = re.split(r'/', variant)
+                for a, splits in enumerate(m):
+                    if splits[0].isdigit() and variant[-1] in amino_acids:
+                        continue
+                    elif splits[0] not in amino_acids or splits[-1] not in amino_acids:
+                        if i not in drop_rows:
+                            drop_rows.append(i)
+                            # print('Does not know this definition of amino acid substitution: Variant:', variant)
+            else:
+                if variant[0].isdigit() and variant[-1] in amino_acids:
                     continue
-                elif splits[0] not in amino_acids or splits[-1] not in amino_acids:
-                    if i not in drop_rows:
-                        drop_rows.append(i)
-                        # print('Does not know this definition of amino acid substitution: Variant:', variant)
-        else:
-            if variant[0].isdigit() and variant[-1] in amino_acids:
-                continue
-            elif variant[0] not in amino_acids or variant[-1] not in amino_acids:
-                drop_rows.append(i)
-                # print('Does not know this definition of amino acid substitution: Variant:', variant)
+                elif variant[0] not in amino_acids or variant[-1] not in amino_acids:
+                    drop_rows.append(i)
+                    # print('Does not know this definition of amino acid substitution: Variant:', variant)
+        except TypeError:
+            raise TypeError('You might consider checking the input .csv for empty first two columns,'
+                            ' e.g. in the last row.')
 
     print('No. of dropped rows: {}.'.format(len(drop_rows)), 'Total given variants: {}'.format(len(df_raw)))
 
