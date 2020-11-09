@@ -17,6 +17,7 @@ from sklearn.model_selection import LeaveOneOut
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, r2_score
+# import adjust_text  # only locally imported for labeled validation plots and in silico directed evolution
 
 import sys
 from tqdm import tqdm  # progress bars
@@ -276,7 +277,7 @@ def Get_R2(X_learn, X_valid, Y_learn, Y_valid):
     In the next iteration, the number of components is increased by 1 (number_of_components += 1)
     and the MSE is calculated for this regressor. The loop breaks if i > 9.
     Finally, the model of the single AAindex model with the lowest MSE is chosen.
-    This function returnes performance (R2, (N)RMSE, Pearson r) and number of components of model.
+    This function returnes performance (R2, (N)RMSE, Pearson's r) and number of components of model.
     """
     Mean_Squared_Error = []
 
@@ -374,7 +375,7 @@ def Formatted_Output(AAindex_R2_List, Minimum_R2=0.0):
     data = np.array([index, value, value2, value3, value4, n_com]).T
     col_width = max(len(str(value)) for row in data for value in row) + 5
 
-    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson_r', 'N_Components']
+    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'N_Components']
     with open('Model_Results.txt', 'w') as f:
         f.write("".join(caption.ljust(col_width) for caption in head) + '\n')
         f.write(len(head)*col_width*'-' + '\n')
@@ -449,7 +450,7 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             ax.scatter(Y_test_total, Y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
             ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1], [min(Y_predicted_total) - 1, max(Y_predicted_total) + 1], 'k', lw=2)
             ax.legend(['R$^2$ = ' + str(round(r_squared, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +
-                       '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson r = ' + str(round(pearson_r, 3))])
+                       '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s r = ' + str(round(pearson_r, 3))])
             ax.set_xlabel('Measured')
             ax.set_ylabel('Predicted')
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
@@ -521,7 +522,7 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
     """
     Function Plot is used to make plots of the validation process and
     shows predicted (Y_pred) vs. measured/"true" (Y_true) protein fitness and
-    calculates the corresponding model performance (R2, (N)RMSE, Pearson r).
+    calculates the corresponding model performance (R2, (N)RMSE, Pearson's r).
     Also allows colored version plotting to classify predictions in true or
     false positive or negative predictions.
     """
@@ -547,7 +548,7 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
         nrmse = rmse / stddev
         pearson_r = np.corrcoef(Y_true, Y_pred)[0][1]
         legend = '$R^2$ = ' + str(round(R2, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +\
-                 '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson r = ' + str(round(pearson_r, 3))
+                 '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s r = ' + str(round(pearson_r, 3))
         x = np.linspace(min(Y_pred) - 1, max(Y_pred) + 1, 100)
 
         fig, ax = plt.subplots()
