@@ -2,7 +2,7 @@ This repository contains supplementary information to
 
 Niklas E. Siedhoff<sup>*§*</sup>, Alexander-Maurice Illig<sup>*§*</sup>, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – An Integrated Framework for Data-driven Protein Engineering, 2020 
 
-<sup>*§*</sup>equal contribution
+<sup>*§*</sup><sub>equal contribution</sub>
 
 # PyPEF: Pythonic Protein Engineering Framework
 
@@ -63,6 +63,6 @@ Now you should be able to directly start with the tuorial. Change directory to .
 
 `jupyter notebook`  
 
-and copy the notebook URL in your browser and open the file `Workflow_PyPEF.ipynb`  .
+and copy the notebook URL in your internet browser and select the `Workflow_PyPEF.ipynb` file.
 
 Good luck and have fun!
