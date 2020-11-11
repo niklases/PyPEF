@@ -1,4 +1,4 @@
-This repository contains supplementary information to the paper
+This repository contains supplementary information to
 
 Niklas E. Siedhoff<sup>*§*</sup>, Alexander-Maurice Illig<sup>*§*</sup>, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – An Integrated Framework for Data-driven Protein Engineering, 2020 
 
