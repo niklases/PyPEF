@@ -63,6 +63,6 @@ Now you should be able to directly start with the tuorial. Change directory to .
 
 `jupyter notebook`  
 
-and copy the notebook URL in your browser and open the file `Workflow_PyPEF.ipynb`.
+and copy the notebook URL in your browser and open the file `Workflow_PyPEF.ipynb`  .
 
 Good luck and have fun!
