@@ -32,7 +32,7 @@ workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyP
 
  
 
-Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([sh installer](https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
 `bash Anaconda3-2020.07-Linux-x86_64.sh`  .
