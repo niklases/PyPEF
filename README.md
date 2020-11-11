@@ -57,7 +57,7 @@ and optionally
 
 Next, install Jupyter Notebook:
 
-`python3 -m pip install jupyter-notebook`  .
+`python3 -m pip install notebook`  .
 
 Now you should be able to directly start with the tuorial. Change directory to ./workflow and run the .ipynb file:
 
