@@ -30,3 +30,37 @@ Detailed information is given in the following publication, PyPEF - an Integrate
 workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
 ./workflow directory).  
 
+Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Change to the download directory and run the installation, e.g. in Linux:
+
+`bash Anaconda3-2020.07-Linux-x86_64.sh`.
+
+After accepting all steps, the conda setup should also be written to your `~/.bashrc`file, so that you can call anaconda typing `conda`.
+To setup a new environment you just need to specify the name of the environment and the Python version, e.g.
+
+`conda create --name pypef python=3.7`  .
+
+To activate the envirionment you can define
+
+`conda activate pypef`
+
+After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required
+packages with pip (or conda itself:
+
+`python3 -m pip install -r requirements.txt`
+
+and optionally
+
+`python3 -m pip install -r requirements_parallelization.txt`.
+
+Next, install Jupyter Notebook:
+
+`python3 -m pip install jupyter-notebook`.
+
+Now you should be able to directly start with the tuorial. Change directory to ./workflow and run the .ipynb file:
+
+`jupyter-notebook Workflow_PyPEF.ipynb`.
+
+Good luck and have fun!
+
+
