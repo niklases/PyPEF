@@ -57,10 +57,12 @@ and optionally
 
 Next, install Jupyter Notebook:
 
-`python3 -m pip install notebook`  .
+`conda install ipython jupyter`  .
 
 Now you should be able to directly start with the tuorial. Change directory to ./workflow and run the .ipynb file:
 
-`jupyter-notebook Workflow_PyPEF.ipynb`  .
+`jupyter notebook`  
+
+and copy the notebook URL in your browser and open the file `Workflow_PyPEF.ipynb`.
 
 Good luck and have fun!
