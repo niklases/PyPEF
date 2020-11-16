@@ -1,7 +1,7 @@
 PyPEF: Pythonic Protein Engineering Framework
 ------
 	Niklas E. Siedhoff <n.siedhoff@biotec.rwth-aachen.de>
-	Alexander-Maurice Illig	<alexander.illig@rwth-aachen.de>
+	Alexander-Maurice Illig	<a.illig@biotec.rwth-aachen.de>
 LICENSE
 ------
 Attribution-NonCommercial-ShareAlike 4.0 International
