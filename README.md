@@ -18,7 +18,9 @@ PyPEF for assisting the tuning and validation of models
 for combination of identified substitutions using machine learning algorithms (partial least squares (PLS) regression)
 from the 
 [scikit-learn](https://github.com/scikit-learn/scikit-learn) 
-<a href="https://github.com/scikit-learn/scikit-learn" target="_blank">scikit-learn</a>
+
+<a href="https://github.com/scikit-learn/scikit-learn" target="_blank">scikit-learn__</a>
+
 package.
 As training input, the developed software tool requires the sequence and 
 the corresponding screening results (fitness labels) of the
