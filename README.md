@@ -16,12 +16,7 @@ engineering campaign while partly offering the prospect to reveal hidden pattern
 complex networks of epistatic effects. Here we present an engineering framework termed
 PyPEF for assisting the tuning and validation of models
 for combination of identified substitutions using machine learning algorithms (partial least squares (PLS) regression)
-from the 
-[scikit-learn](https://github.com/scikit-learn/scikit-learn) 
-
-<a href="https://github.com/scikit-learn/scikit-learn" target="_blank">scikit-learn__</a>
-
-package.
+from the [scikit-learn](https://github.com/scikit-learn/scikit-learn) package.
 As training input, the developed software tool requires the sequence and 
 the corresponding screening results (fitness labels) of the
 identified variants as .csv (or .fasta datasets). Using PLS regression, PyPEF trains
