@@ -174,7 +174,11 @@ def get_variants(df, amino_acids, Wild_Type_Sequence):
                         raise NameError('Position of amino acids in given sequence does not match the given '
                                         'positions in the input data! E.g. see position {} and position {} being {} '
                                         'in the given sequence.'.format(variant, num, Wild_Type_Sequence[num - 1]))
-                full_variant = Wild_Type_Sequence[num - 1] + str(num) + str(variant[-1])
+                try:
+                    full_variant = Wild_Type_Sequence[num - 1] + str(num) + str(variant[-1])
+                except IndexError:
+                    raise IndexError("Found variant sequence position {} in data which "
+                                     "is out of range of wild-type sequence length.".format(str(num)))
                 single_variants.append([full_variant])
                 if i not in index_lower:
                     index_lower.append(i)
