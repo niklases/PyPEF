@@ -14,9 +14,15 @@ import numpy as np
 import os
 import pickle
 from sklearn.model_selection import LeaveOneOut
-from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import GridSearchCV  # default: refit=True
+
+# import regression models
+from sklearn.cross_decomposition import PLSRegression
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.svm import SVR
 # import adjust_text  # only locally imported for labeled validation plots and in silico directed evolution
 
 import sys
@@ -37,6 +43,9 @@ def read_models(number):
         ls = ""
         with open('Model_Results.txt', 'r') as file:
             for i, lines in enumerate(file):
+                if i == 0:
+                    if lines[:6] == 'No FFT':
+                        number += 2
                 if i <= number + 1:
                     ls += lines
         return ls
@@ -244,6 +253,7 @@ class XY:
         """
         Frequencies = []
         Amplitudes = []
+        raw_numerical_seq = []
 
         for sequence in self.sequences:
             num = self.Get_Numerical_Sequence(sequence)
@@ -253,70 +263,126 @@ class XY:
             if None in num:
                 break
 
+            # Numerical sequence gets expended by zeros so that also different lengths of sequences
+            # can be processed using '--nofft' option
+            k = np.log2(len(num))
+            if abs(int(k) - k) > 1e-8:  # check if length of array fulfills previous equation
+                num = np.append(num, np.zeros(pow(2, (int(k) + 1)) - len(num)))  # reshape array
+
             amplitudes, frequencies = self.Do_Fourier(num)
 
             # Fourier spectra are mirrored at frequency = 0.5. No more information at higher frequencies.
             half = len(frequencies) // 2  # // for integer division
             Frequencies.append(frequencies[:half])
             Amplitudes.append(amplitudes[:half])
+            raw_numerical_seq.append(num)
+
 
         Amplitudes = np.array(Amplitudes)
         Frequencies = np.array(Frequencies)
+        raw_numerical_seq = np.array(raw_numerical_seq)
 
         X = Amplitudes
         Y = self.values
 
-        return X, Y
+        return X, Y, raw_numerical_seq
 
 
-def Get_R2(X_learn, X_valid, Y_learn, Y_valid):
+def Get_R2(X_learn, X_valid, Y_learn, Y_valid, regressor='pls'):
     """
     The function Get_R2 takes features and labels from the learning and validation set.
-    The MSE is calculated for all LOOCV sets for predicted vs true labels
+
+    When using 'pls' as regressor, the MSE is calculated for all LOOCV sets for predicted vs true labels
     (mse = mean_squared_error(y_test_loo, y_pred_loo) for a fixed number of components for PLS regression.
     In the next iteration, the number of components is increased by 1 (number_of_components += 1)
     and the MSE is calculated for this regressor. The loop breaks if i > 9.
     Finally, the model of the single AAindex model with the lowest MSE is chosen.
-    This function returnes performance (R2, (N)RMSE, Pearson's r) and number of components of model.
+
+    When using other regressors the parameters are tuned using GridSearchCV.
+
+    This function returnes performance (R2, (N)RMSE, Pearson's r) and model parameters.
     """
+    regressor = regressor.lower()
+
     Mean_Squared_Error = []
 
-    for n_comp in range(1, 10):
-        pls = PLSRegression(n_components=n_comp)
-        loo = LeaveOneOut()
 
-        y_pred_loo = []
-        y_test_loo = []
+    if regressor == 'pls':
+        # PLS regression as used by Cadet et al.
+        # https://doi.org/10.1186/s12859-018-2407-8
+        # https://doi.org/10.1038/s41598-018-35033-y
+        # Hyperparameter (N component) tuning of PLS regressor
+        for n_comp in range(1, 10):
+            pls = PLSRegression(n_components=n_comp)
+            loo = LeaveOneOut()
 
-        for train, test in loo.split(X_learn):
-            x_learn_loo = []
-            y_learn_loo = []
-            x_test_loo = []
+            y_pred_loo = []
+            y_test_loo = []
 
-            for j in train:
-                x_learn_loo.append(X_learn[j])
-                y_learn_loo.append(Y_learn[j])
+            for train, test in loo.split(X_learn):
+                x_learn_loo = []
+                y_learn_loo = []
+                x_test_loo = []
 
-            for k in test:
-                x_test_loo.append(X_learn[k])
-                y_test_loo.append(Y_learn[k])
+                for j in train:
+                    x_learn_loo.append(X_learn[j])
+                    y_learn_loo.append(Y_learn[j])
 
-            pls.fit(x_learn_loo, y_learn_loo)
-            y_pred_loo.append(pls.predict(x_test_loo)[0][0])
+                for k in test:
+                    x_test_loo.append(X_learn[k])
+                    y_test_loo.append(Y_learn[k])
 
-        mse = mean_squared_error(y_test_loo, y_pred_loo)
+                pls.fit(x_learn_loo, y_learn_loo)
+                y_pred_loo.append(pls.predict(x_test_loo)[0][0])
 
-        Mean_Squared_Error.append(mse)
+            mse = mean_squared_error(y_test_loo, y_pred_loo)
 
-    Mean_Squared_Error = np.array(Mean_Squared_Error)
-    idx = np.where(Mean_Squared_Error == np.min(Mean_Squared_Error))[0][0] + 1  # finds the best number of components
+            Mean_Squared_Error.append(mse)
 
-    # Model is fitted with best n_components (lowest MSE)
-    pls = PLSRegression(n_components=idx)
-    pls.fit(X_learn, Y_learn)  # fit model
+        Mean_Squared_Error = np.array(Mean_Squared_Error)
+        idx = np.where(Mean_Squared_Error == np.min(Mean_Squared_Error))[0][0] + 1  # finds the best number of components
+
+        # Model is fitted with best n_components (lowest MSE)
+        best_params = {
+            'n_components': idx
+        }
+        regressor_ = PLSRegression(n_components=best_params.get('n_components'))
+
+    # other regression options (CV tuning)
+    elif regressor == 'pls_cv':
+        params = {
+            'n_components': list(np.arange(1, 10))
+        }
+        regressor_ = GridSearchCV(PLSRegression(), param_grid=params, cv=5)
+
+    elif regressor == 'rf':
+        params = {                      # quite similar tu Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
+            'random_state': [42],
+            'n_estimators': [100, 250, 500, 1000],
+            'max_features': ['auto', 'sqrt', 'log2']
+        }
+        regressor_ = GridSearchCV(RandomForestRegressor(), param_grid=params, cv=5)
+
+    elif regressor == 'svr':
+        params = {                      # quite similar tu Xu et al.
+            'C': [2 ** 0, 2 ** 2, 2 ** 4, 2 ** 6, 2 ** 8, 2 ** 10, 2 ** 12],
+            'gamma': [0.1, 0.01, 0.001, 0.0001, 0.00001]
+        }
+        regressor_ = GridSearchCV(SVR(), param_grid=params, cv=5)
+
+    else:
+        raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
+                          "regression model options.")
+
+    regressor_.fit(X_learn, Y_learn)  # fit model
+
+    if regressor != 'pls':
+        best_params = regressor_.best_params_
+
     Y_pred = []
-    for y_p in pls.predict(X_valid):  # predict validation entries with fitted model
+    for y_p in regressor_.predict(X_valid):  # predict validation entries with fitted model
         Y_pred.append(float(y_p))
+
     R2 = r2_score(Y_valid, Y_pred)
     RMSE = np.sqrt(mean_squared_error(Y_valid, Y_pred))
     NRMSE = RMSE / np.std(Y_valid, ddof=1)
@@ -324,12 +390,12 @@ def Get_R2(X_learn, X_valid, Y_learn, Y_valid):
         warnings.simplefilter("ignore")  # which would mean divide by zero
         pearson_r = np.corrcoef(Y_valid, Y_pred)[0][1]
 
-    return R2, RMSE, NRMSE, pearson_r, idx
+    return R2, RMSE, NRMSE, pearson_r, regressor, best_params
 
 
-def R2_List(Learning_Set, Validation_Set):
+def R2_List(Learning_Set, Validation_Set, regressor='pls', noFFT=False):
     """
-    returns the sorted list of all the model number of components and
+    returns the sorted list of all the model parameters and
     the performance values (R2 etc.) from function Get_R2.
     """
     AAindices = [file for file in os.listdir(Path_AAindex_Dir()) if file.endswith('.txt')]
@@ -337,46 +403,56 @@ def R2_List(Learning_Set, Validation_Set):
     AAindex_R2_List = []
     for index, aaindex in enumerate(tqdm(AAindices)):
         xy_learn = XY(Full_Path(aaindex), Learning_Set)
-        x_learn, y_learn = xy_learn.Get_X_And_Y()
+        if noFFT == False:  # X is FFT-ed of encoded alphabetical sequence
+            x_learn, y_learn, _ = xy_learn.Get_X_And_Y()
+        else:               # X is raw encoded of alphabetical sequence
+            _, y_learn, x_learn = xy_learn.Get_X_And_Y()
 
         # If x_learn (or y_learn) is an empty array, the sequence could not be encoded,
         # because of NoneType value. -> Skip
         if len(x_learn) != 0:
             xy_test = XY(Full_Path(aaindex), Validation_Set)
-            x_test, y_test = xy_test.Get_X_And_Y()
-            r2, rmse, nrmse, pearson_r, n_comp = Get_R2(x_learn, x_test, y_learn, y_test)
-            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, n_comp])
+            if noFFT == False:  # X is FFT-ed of the encoded alphabetical sequence
+                x_test, y_test, _ = xy_test.Get_X_And_Y()
+            else:               # X is the raw encoded of alphabetical sequence
+                _, y_test, x_test = xy_test.Get_X_And_Y()
+            r2, rmse, nrmse, pearson_r, regression_model, params = Get_R2(x_learn, x_test, y_learn, y_test, regressor)
+            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, regression_model, params])
     AAindex_R2_List.sort(key=lambda x: x[1], reverse=True)
 
     return AAindex_R2_List
 
 
-def Formatted_Output(AAindex_R2_List, Minimum_R2=0.0):
+def Formatted_Output(AAindex_R2_List, noFFT=False, Minimum_R2=0.0):
     """
     takes the sorted list from function R2_List and writes the model names with an R2 ≥ 0
-    as well as the corresponding number of components for each model so that the user gets
+    as well as the corresponding parameters for each model so that the user gets
     a list (Model_Results.txt) of the top ranking models for the given validation set.
     """
 
-    index, value, value2, value3, value4, n_com = [], [], [], [], [], []
+    index, value, value2, value3, value4, regression_model, params = [], [], [], [], [], [], []
 
-    for (idx, val, val2, val3, val4, n_c) in AAindex_R2_List:
+    for (idx, val, val2, val3, val4, r_m, pam) in AAindex_R2_List:
         if val >= Minimum_R2:
             index.append(idx[:-4])
             value.append('{:f}'.format(val))
             value2.append('{:f}'.format(val2))
             value3.append('{:f}'.format(val3))
             value4.append('{:f}'.format(val4))
-            n_com.append(n_c)
+            regression_model.append(r_m.upper())
+            params.append(pam)
 
     if len(value) == 0:
         raise ValueError('No model with positive R2.')
 
-    data = np.array([index, value, value2, value3, value4, n_com]).T
+    data = np.array([index, value, value2, value3, value4, regression_model, params]).T
     col_width = max(len(str(value)) for row in data for value in row) + 5
 
-    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'N_Components']
+    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'Regression Model', 'Model parameters']
     with open('Model_Results.txt', 'w') as f:
+        if noFFT is not False:
+            f.write("No FFT used in this model construction, performance"
+                    " represents model accuracies on raw encoded sequence data.\n\n")
         f.write("".join(caption.ljust(col_width) for caption in head) + '\n')
         f.write(len(head)*col_width*'-' + '\n')
         for row in data:
@@ -385,15 +461,41 @@ def Formatted_Output(AAindex_R2_List, Minimum_R2=0.0):
     return ()
 
 
-def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, Threshold=5):
+def cross_validation(X, Y, regressor_, n_samples=5):
+    # perform k-fold cross-validation on all data
+    # k = Number of splits, change for changing k in k-fold split-up, default=5
+    Y_test_total = []
+    Y_predicted_total = []
+
+    kf = KFold(n_splits=n_samples, shuffle=True)
+    for train_index, test_index in kf.split(Y):
+        Y = np.array(Y)
+        try:
+            X_train, X_test = X[train_index], X[test_index]
+            Y_train, Y_test = Y[train_index], Y[test_index]
+            for numbers in Y_test:
+                Y_test_total.append(numbers)
+            regressor_.fit(X_train, Y_train)  # Fitting on a random subset for Final_Model
+            # (and on a subset subset for Learning_Model)
+            # Predictions for samples in the test_set during that iteration
+            pred_for_test_set_samples = regressor_.predict(X[test_index])
+            for values in pred_for_test_set_samples:
+                Y_predicted_total.append(float(values))
+        except UserWarning:
+            continue
+
+    return Y_test_total, Y_predicted_total
+
+
+def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, Threshold=5, regressor='pls', noFFT=False):
     """
     Function Save_Model saves the best -s THRESHOLD models as 'Pickle' files (pickle.dump),
-    which can be loaded again for doing predictions. Also, in Save_Model included is the
-    computing of the k-fold CV performance of the n component-optimized model on all data
+    which can be loaded again for doing predictions. Also, in Save_Model included is the def cross_validation
+    -based computing of the k-fold CV performance of the n component-optimized model on all data
     (learning + validation set); by default  k  is 5 (n_samples = 5).
     Plots of the CV performance for the t best models are stored inside the folder CV_performance.
     """
-
+    regressor = regressor.lower()
     try:
         os.mkdir('CV_performance')
     except FileExistsError:
@@ -406,40 +508,40 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
     for t in range(Threshold):
         try:
             idx = AAindex_R2_List[t][0]
-            n_c = AAindex_R2_List[t][5]
+            parameter = AAindex_R2_List[t][6]
 
             # Estimating the CV performance of the n_component-fitted model on all data
             xy_learn = XY(Full_Path(idx), Learning_Set)
-            x_learn, y_learn = xy_learn.Get_X_And_Y()
-
             xy_test = XY(Full_Path(idx), Validation_Set)
-            x_test, y_test = xy_test.Get_X_And_Y()
+            if noFFT is False:
+                x_test, y_test, _ = xy_test.Get_X_And_Y()
+                x_learn, y_learn, _ = xy_learn.Get_X_And_Y()
+            else:
+                _, y_test, x_test = xy_test.Get_X_And_Y()
+                _, y_learn, x_learn = xy_learn.Get_X_And_Y()
 
             X = np.concatenate([x_learn, x_test])
             Y = np.concatenate([y_learn, y_test])
 
-            pls = PLSRegression(n_components=n_c)  # n_components according to lowest MSE for validation set
+            if regressor == 'pls' or regressor == 'pls_cv':
+                # n_components according to lowest MSE for validation set
+                regressor_ = PLSRegression(n_components=parameter.get('n_components'))
 
-            Y_test_total = []
-            Y_predicted_total = []
+            elif regressor == 'rf':
+                regressor_ = RandomForestRegressor(random_state=parameter.get('random_state'),
+                                                   n_estimators=parameter.get('n_estimators'),
+                                                   max_features=parameter.get('max_features'))
 
-            n_samples = 5  # Number of splits, change for changing k in k-fold split-up
-            kf = KFold(n_splits=n_samples, shuffle=True)
-            for train_index, test_index in kf.split(Y):
-                Y = np.array(Y)
-                try:
-                    X_train, X_test = X[train_index], X[test_index]
-                    Y_train, Y_test = Y[train_index], Y[test_index]
-                    for numbers in Y_test:
-                        Y_test_total.append(numbers)
-                    pls.fit(X_train, Y_train)  # Fitting on a random subset for Final_Model
-                    # (and on a subset subset for Learning_Model)
-                    # Predictions for samples in the test_set during that iteration
-                    pred_for_test_set_samples = pls.predict(X[test_index])
-                    for values in pred_for_test_set_samples:
-                        Y_predicted_total.append(float(values))
-                except UserWarning:
-                    continue
+            elif regressor == 'svr':
+                regressor_ = SVR(C=parameter.get('C'), gamma=parameter.get('gamma'))
+
+            else:
+                raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
+                         "regression model options.")
+
+            # perform 5-fold cross-validation on all data
+            n_samples = 5
+            Y_test_total, Y_predicted_total = cross_validation(X, Y, regressor_, n_samples)
 
             r_squared = r2_score(Y_test_total, Y_predicted_total)
             rmse = np.sqrt(mean_squared_error(Y_test_total, Y_predicted_total))
@@ -448,9 +550,10 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             pearson_r = np.corrcoef(Y_test_total, Y_predicted_total)[0][1]
             figure, ax = plt.subplots()
             ax.scatter(Y_test_total, Y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
-            ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1], [min(Y_predicted_total) - 1, max(Y_predicted_total) + 1], 'k', lw=2)
+            ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1],
+                    [min(Y_predicted_total) - 1, max(Y_predicted_total) + 1], 'k', lw=2)
             ax.legend(['R$^2$ = ' + str(round(r_squared, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +
-                       '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s r = ' + str(round(pearson_r, 3))])
+                       '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s $r$ = ' + str(round(pearson_r, 3))])
             ax.set_xlabel('Measured')
             ax.set_ylabel('Predicted')
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
@@ -458,11 +561,15 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
 
             # fit on full learning set
             xy = XY(Full_Path(idx), Fasta_File)
-            X, Y = xy.Get_X_And_Y()
+            X, Y, X_raw = xy.Get_X_And_Y()
 
-            pls.fit(X, Y)
+            if noFFT is False:
+                regressor_.fit(X, Y)
+            else:
+                regressor_.fit(X_raw, Y)
+
             file = open(os.path.join(Path, 'Pickles/'+idx[:-4]), 'wb')
-            pickle.dump(pls, file)
+            pickle.dump(regressor_, file)
             file.close()
 
         except IndexError:
@@ -471,7 +578,7 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
     return ()
 
 
-def Predict(Path, Prediction_Set, Model, Mult_Path=None):
+def Predict(Path, Prediction_Set, Model, Mult_Path=None, noFFT=False, print_matrix=False):
     """
     The function Predict is used to perform predictions.
     Saved pickle files of models will be loaded again (mod = pickle.load(file))
@@ -479,21 +586,41 @@ def Predict(Path, Prediction_Set, Model, Mult_Path=None):
     """
     aaidx = Full_Path(str(Model) + '.txt')
     xy = XY(aaidx, Prediction_Set, Mult_Path, Prediction=True)
-    X, _ = xy.Get_X_And_Y()
+    X, _, X_raw = xy.Get_X_And_Y()
 
     file = open(os.path.join(Path, 'Pickles/'+str(Model)), 'rb')
     mod = pickle.load(file)
     file.close()
 
-    Y = mod.predict(X)
+    try:
+        Y_ = []
+        if noFFT is False:
+            Y = mod.predict(X)
+            for y in Y:
+                Y_.append([float(y)])   # just make sure predicted Y is nested list of list [[Y_1], [Y_2], ..., [Y_N]]
+        else:
+            Y = mod.predict(X_raw)
+            for y in Y:
+                Y_.append([float(y)])   # just make sure predicted Y is nested list of list [[Y_1], [Y_2], ..., [Y_N]]
+
+    except ValueError:
+        raise ValueError("You likely tried to predict using a model with (or without) FFT featurization ('--nofft')"
+                         " while the model was trained without (or with) FFT featurization. Check the Model_Results.txt"
+                         " line 1, if the models were trained using FFT.")
 
     _ , Names_Of_Mutations, _ = Get_Sequences(Prediction_Set, Mult_Path, Prediction=True)
 
-    predictions = [(Y[i][0], Names_Of_Mutations[i]) for i in range(len(Y))]
+    predictions = [(Y_[i][0], Names_Of_Mutations[i]) for i in range(len(Y_))]
+
     # Pay attention if more negative values would define a better variant --> --use negative flag
     predictions.sort()
     predictions.reverse()
     # if predictions array too large?  if Mult_Path is not None: predictions = predictions[:100000]
+
+    # Print FFT-ed and raw sequence vectors for directed evolution if desired
+    if print_matrix == True:
+        print('X (FFT):\n{} len(X_raw): {}\nX_raw (noFFT):\n{} len(X): {}\n(Predicted value, Variant): {}\n\n'
+              .format(X, len(X[0]), X_raw, len(X_raw[0]), predictions))
 
     return predictions
 
@@ -508,7 +635,7 @@ def Predictions_Out(Predictions, Model, Prediction_Set):
         value.append('{:f}'.format(val))
 
     data = np.array([name, value]).T
-    col_width = max(len(str(value)) for row in data for value in row) + 5
+    col_width = max(len(str(value)) for row in data for value in row) + 3
 
     head = ['Name', 'Prediction']
     with open('Predictions_' + str(Model) + '_' + str(Prediction_Set)[:-6] + '.txt', 'w') as f:
@@ -518,7 +645,7 @@ def Predictions_Out(Predictions, Model, Prediction_Set):
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')
 
 
-def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
+def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
     """
     Function Plot is used to make plots of the validation process and
     shows predicted (Y_pred) vs. measured/"true" (Y_true) protein fitness and
@@ -528,7 +655,7 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
     """
     aaidx = Full_Path(str(Model) + '.txt')
     xy = XY(aaidx, Fasta_File, Prediction=False)
-    X, Y_true = xy.Get_X_And_Y()
+    X, Y_true, X_raw = xy.Get_X_And_Y()
 
     try:
         file = open(os.path.join(Path, 'Pickles/'+str(Model)), 'rb')
@@ -536,7 +663,17 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
         file.close()
 
         Y_pred = []
-        Y_pred_ = mod.predict(X)
+
+        try:
+            if noFFT is False:
+                    Y_pred_ = mod.predict(X)
+            else:
+                Y_pred_ = mod.predict(X_raw)
+        except ValueError:
+            raise ValueError("You likely tried to plot a validation set with (or without) FFT featurization ('--nofft')"
+                             " while the model was the model was trained without (or with) FFT featurization. Check the"
+                             " Model_Results.txt line 1, if the models were trained using FFT.")
+
         for y_p in Y_pred_:
             Y_pred.append(float(y_p))
 
@@ -548,12 +685,12 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
         nrmse = rmse / stddev
         pearson_r = np.corrcoef(Y_true, Y_pred)[0][1]
         legend = '$R^2$ = ' + str(round(R2, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +\
-                 '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s r = ' + str(round(pearson_r, 3))
+                 '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s $r$ = ' + str(round(pearson_r, 3))
         x = np.linspace(min(Y_pred) - 1, max(Y_pred) + 1, 100)
 
         fig, ax = plt.subplots()
         ax.scatter(Y_true, Y_pred, label=legend, marker='o', s=20, linewidths=0.5, edgecolor='black')
-        ax.plot(x, x, color='black', linewidth=0.5)
+        ax.plot(x, x, color='black', linewidth=0.5)  # plot diagonal line
 
         if Label is not False:
             from adjustText import adjust_text
@@ -618,7 +755,6 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT):
                        aspect='auto', alpha=0.8, cmap='coolwarm')  # RdYlGn
             plt.xlim([y_WT - limit_Y_true, y_WT + limit_Y_true])
             plt.ylim([y_WT - limit_Y_pred, y_WT + limit_Y_pred])
-
 
         plt.xlabel('Measured')
         plt.ylabel('Predicted')
@@ -698,8 +834,10 @@ def write_MCMC_predictions(Model, iter, predictions, counter):
     """
     write predictions to EvoTraj folder to .fasta files for each iteration of evolution
     """
-    with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1) + '.fasta', 'r') as f_in:
-        with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1) + '_prediction.fasta', 'w') as f_out:
+    with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1)
+              + '.fasta', 'r') as f_in:
+        with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1)
+                  + '_prediction.fasta', 'w') as f_out:
             for line in f_in:
                 f_out.write(line)
                 if '>' in line:
@@ -708,7 +846,8 @@ def write_MCMC_predictions(Model, iter, predictions, counter):
     return ()
 
 
-def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, counter, negative=False, usecsv=False, csvaa=False):
+def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, counter,
+                 noFFT=False, negative=False, usecsv=False, csvaa=False, print_matrix=False):
     """
     Perform directed evolution by randomly selecting a sequence position for substitution and randomly choose the
     amino acid to substitute to. New sequence gets accepted if meeting the Metropolis criterion and will be
@@ -725,11 +864,13 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
     for i in range(num_iterations):  # num_iterations
 
         if i == 0:
-            mut_loc_seed = random.randint(0, len(s_WT))  # randomly choose the location of the first mutation in the trajectory
+            # randomly choose the location of the first mutation in the trajectory
+            mut_loc_seed = random.randint(0, len(s_WT))
             # m = 1 instead of (np.random.poisson(2) + 1)
             var_seq_dict = mutate_sequence(s_WT, 1, Model, mut_loc_seed, amino_acids, Sub_LS, 0, counter, usecsv, csvaa)
 
-            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(i+1) + '.fasta', Model)
+            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
+                                  + str(i+1) + '.fasta', Model, None, noFFT, print_matrix)
             predictions = restructure_dict(predictions)
 
             write_MCMC_predictions(Model, i, predictions, counter)
@@ -754,7 +895,8 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
             new_var_seq_dict = mutate_sequence(sequence, 1, Model, new_mut_loc, amino_acids,
                                                Sub_LS, i, counter, usecsv, csvaa)
 
-            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(i+1) + '.fasta', Model)
+            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
+                                  + str(i+1) + '.fasta', Model, None, noFFT, print_matrix)
             predictions = restructure_dict(predictions)
 
             write_MCMC_predictions(Model, i, predictions, counter)
@@ -763,7 +905,6 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
             for var in predictions:
                 new_variants.append(var)
                 new_ys.append(predictions.get(var))
-
 
             new_y, new_y_var = new_ys[0], new_variants[0]
             new_mut_loc = int(new_y_var[:-1]) - 1
@@ -784,8 +925,8 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
             if rand_var < p:  # Metropolis-Hastings update selection criterion
                 # print('Updated sequence as: Rand ({}) < Boltz ({})'.format(str(rand_var), str(boltz)))
                 # print(str(new_mut_loc + 1) + " " + sequence[new_mut_loc] + "->" + new_sequence[new_mut_loc])
-                var, y, sequence = new_y_var, new_y, new_sequence  # if criteria is met, update sequence and corresponding fitness
-
+                var, y, sequence = new_y_var, new_y, new_sequence  # if criteria is met, update sequence and
+                                                                   # corresponding fitness
                 v_traj.append(var)  # update the variant naming trajectory records for this iteration of mutagenesis
                 y_traj.append(y)  # update the fitness trajectory records for this iteration of mutagenesis
                 s_traj.append(sequence)  # update the sequence trajectory records for this iteration of mutagenesis
@@ -793,8 +934,8 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
     return v_traj, s_traj, y_traj
 
 
-def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_record_folder, amino_acids,
-                        T, Path, Sub_LS, negative=False, save=False, usecsv=False, csvaa=False):
+def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_record_folder, amino_acids, T, Path,
+                        Sub_LS, noFFT=False, negative=False, save=False, usecsv=False, csvaa=False, print_matrix=False):
     """
     Runs the directed evolution by adressing the in_silico_de function and plots the evolution trajectories.
     """
@@ -805,8 +946,8 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
 
     for i in range(num_trajectories):  #iterate through however many mutation trajectories we want to sample
         # call the directed evolution function, outputting the trajectory sequence and fitness score records
-        v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, Model, amino_acids, T,
-                                              Path, Sub_LS, i, negative, usecsv, csvaa)
+        v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, Model, amino_acids, T, Path, Sub_LS, i,
+                                              noFFT, negative, usecsv, csvaa, print_matrix)
 
         v_records.append(v_traj)    # update the variant naming trajectory records for this full mutagenesis trajectory
         s_records.append(s_traj)  # update the sequence trajectory records for this full mutagenesis trajectory
@@ -818,9 +959,11 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
             except FileExistsError:
                 pass
             # save sequence records for trajectory i
-            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1) + "_seqs.txt", np.array(s_traj), fmt="%s")
+            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1)
+                       + "_seqs.txt", np.array(s_traj), fmt="%s")
             # save fitness records for trajectory i
-            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1) + "_fitness.txt", np.array(y_traj))
+            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1)
+                       + "_fitness.txt", np.array(y_traj))
 
     # numpy warning filter needed for arraying ragged nested sequences
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)

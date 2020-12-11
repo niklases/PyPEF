@@ -35,15 +35,16 @@ Usage:
     pypef.py mkps [--wtseq WT_SEQ] [--input CSV_FILE] [--drop THRESHOLD]
                                  [--drecomb] [--trecomb] [--qrecomb]
                                  [--ddiverse] [--tdiverse] [--qdiverse]
-    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--parallel] [--cores NUMCORES]
+    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--regressor TYPE] [--nofft]
+                                                       [--parallel] [--cores NUMCORES]
     pypef.py --show [MODELS]
-    pypef.py run --model MODEL12345 --figure VS_FOR_PLOTTING  [--label] [--color] [--ywt WT_FITNESS]
-    pypef.py run --model MODEL12345 --ps PREDICTION_SET [--negative]
+    pypef.py run --model MODEL12345 --figure VS_FOR_PLOTTING  [--label] [--color] [--ywt WT_FITNESS] [--nofft]
+    pypef.py run --model MODEL12345 --ps PREDICTION_SET [--nofft] [--negative] [--print]
     pypef.py run --model MODEL12345 --pmult [--drecomb] [--trecomb] [--qrecomb]
-                                          [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
+                                          [--ddiverse] [--tdiverse] [--qdiverse] [--nofft] [--negative]
     pypef.py directevo --model MODEL12345 [--ywt WT_FITNESS] [--wtseq WT_SEQ]
                                         [--numiter NUM_ITER] [--numtraj NUM_TRAJ]
-                                        [--temp TEMPERATURE] [--negative]
+                                        [--temp TEMPERATURE] [--nofft] [--negative] [--print]
                                         [--usecsv] [--csvaa] [--input CSV_FILE] [--drop THRESHOLD]
 
 
@@ -65,21 +66,28 @@ Options:
   --ddiverse                   Create/predict double natural diverse variants [default: False].
   --tdiverse                   Create/predict triple natural diverse variants [default: False].
   --qdiverse                   Create quadruple natural diverse variants [default: False].
-  -u --pmult                   Predict for all Prediction files in folder for recomb or diverse variants [default: False].
+  -u --pmult                   Predict for all Prediction files in folder for recomb
+                               or diverse variants [default: False].
   --negative                   Set if more negative values define better variants [default: False].
   -l --ls LEARNING_SET         Input Learning set in .fasta format.
   -v --vs VALIDATION_SET       Input Validation set in .fasta format.
+  --regressor TYPE             Type of regression (R.) to use, options:
+                               PLS R.: pls, PLS CV R.: pls_cv, Random Forest R.: rf, SVM R.: svr [default: pls].
+  --nofft                      Raw sequence input, i.e. no FFT for establishing protein spectra
+                               as vector inputs [default: False].
   -m --model MODEL12345        Model (pickle file) for plotting of Validation or for performing predictions.
   -f --figure VS_FOR_PLOTTING  Validation set for plotting using a trained Model.
-  --label                     Label the plot instances [default: False].
-  --color                     Color the plot for "true" and "false" predictions quarters [default: False].
+  --label                      Label the plot instances [default: False].
+  --color                      Color the plot for "true" and "false" predictions quarters [default: False].
   -p --ps PREDICTION_SET       Prediction set for performing predictions using a trained Model.
+  --print                      Print raw encoded and FFT-ed sequence matrices and predictions in Shell [default: False].
   -y --ywt WT_FITNESS          Fitness value (y) of wild-type.
   --numiter NUM_ITER           Number of mutation iterations per evolution trajectory [default: 5].
   --numtraj NUM_TRAJ           Number of trajectories, i.e. evolution pathways [default: 5].
- --temp TEMPERATURE            "Temperature" of Metropolis-Hastings criterion [default: 0.01]
- --usecsv                      Perform directed evolution on single variant csv position data [default: False].
- --csvaa                       Directed evolution csv amino acid substitutions, requires flag "--usecsv" [default: False].
+  --temp TEMPERATURE           "Temperature" of Metropolis-Hastings criterion [default: 0.01]
+  --usecsv                     Perform directed evolution on single variant csv position data [default: False].
+  --csvaa                      Directed evolution csv amino acid substitutions,
+                               requires flag "--usecsv" [default: False].
 """
 
 # importing own modules
@@ -100,15 +108,15 @@ from docopt import docopt
 import multiprocessing
 # import ray  # ray imported later locally as is is only used for parallelized running
 
-
+# --regressor
 def run():
     """
     Running the program, importing all required self-made modules and
     running them dependent on user-passed input arguments using docopt
     for argument parsing.
     """
-    arguments = docopt(__doc__, version='PyPEF 0.1 (October 2020)')
-    # print(arguments)
+    arguments = docopt(__doc__, version='PyPEF 0.1.1 (December 2020)')
+    print(arguments)  # uncomment for printing parsed arguments
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
     if arguments['--show']:
@@ -210,8 +218,9 @@ def run():
                 Quadruples = np.array(files)
                 create_split_files(Quadruples, single_variants, WT_Sequence, 'Diverse_Quadruple', no + 1)
 
-        if arguments['--drecomb'] is False and arguments['--trecomb'] is False and arguments['--qrecomb'] is False and\
-                arguments['--ddiverse'] is False and arguments['--tdiverse']is False and arguments['--qdiverse'] is False:
+        if arguments['--drecomb'] is False and arguments['--trecomb'] is False \
+                and arguments['--qrecomb'] is False and arguments['--ddiverse'] is False\
+                and arguments['--tdiverse']is False and arguments['--qdiverse'] is False:
             print('\nInput Error:\nAt least one specification needed: Specify recombinations for mkps ; '
                   'e.g. try: "pypef.py mkps --drecomb" for performing double recombinant Prediction set.\n')
             no_done = True
@@ -245,25 +254,31 @@ def run():
                     Formatted_Output(AAindex_R2_List)
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save)
                 else:
-                    AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'])
-                Formatted_Output(AAindex_R2_List)
-                Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save)
+                    AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
+                                              arguments['--nofft'])
+                    Formatted_Output(AAindex_R2_List, arguments['--nofft'])
+                    Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                               arguments['--regressor'], arguments['--nofft'])
                 print('\nDone!\n')
 
         elif arguments['--figure'] is not None and arguments['--model'] is not None:
             Path = os.getcwd()
-            Plot(Path, arguments['--figure'], arguments['--model'], arguments['--label'], arguments['--color'], arguments['--ywt'])
+            Plot(Path, arguments['--figure'], arguments['--model'], arguments['--label'], arguments['--color'],
+                 arguments['--ywt'], arguments['--nofft'])
             print('\nCreated plot!\n')
 
-        elif arguments['--ps'] is not None and arguments['--model'] is not None:   # Prediction of single .fasta file
+        # Prediction of single .fasta file
+        elif arguments['--ps'] is not None and arguments['--model'] is not None:
             Path = os.getcwd()
-            predictions = Predict(Path, arguments['--ps'], arguments['--model'])
+            print(arguments['--nofft'])
+            predictions = Predict(Path, arguments['--ps'], arguments['--model'], None, arguments['--nofft'])
             if arguments['--negative']:
                 predictions = sorted(predictions, key=lambda x: x[0], reverse=False)
             Predictions_Out(predictions, arguments['--model'], arguments['--ps'])
             print('\nDone!\n')
 
-        elif arguments['--pmult'] and arguments['--model'] is not None:  # Prediction on recombinant/diverse variant folder data
+        # Prediction on recombinant/diverse variant folder data
+        elif arguments['--pmult'] and arguments['--model'] is not None:
             Path = os.getcwd()
             recombs_total = []
             recomb_d, recomb_t, recomb_q = '/Recomb_Double_Split/', '/Recomb_Triple_Split/', '/Recomb_Quadruple_Split/'
@@ -293,7 +308,7 @@ def run():
                 os.chdir(Path)
                 files = [f for f in listdir(Path_recomb) if isfile(join(Path_recomb, f)) if f.endswith('.fasta')]
                 for f in tqdm(files):
-                    predictions = Predict(Path, f, arguments['--model'], Path_recomb)
+                    predictions = Predict(Path, f, arguments['--model'], Path_recomb, arguments['--nofft'])
                     for pred in predictions:
                         predictions_total.append(pred)  # perhaps implement numpy.save if array gets too large byte size
                 predictions_total = list(dict.fromkeys(predictions_total))  # removing duplicates from list
@@ -304,6 +319,7 @@ def run():
                 Predictions_Out(predictions_total, arguments['--model'], 'Top' + args[1:-1])
                 os.chdir(Path)
             print('\nDone!\n')
+
     # Metropolis-Hastings-driven directed evolution, similar to Biswas et al.:
     # Low-N protein engineering with data-efficient deep learning,
     # see https://github.com/ivanjayapurna/low-n-protein-engineering/tree/master/directed-evo
@@ -311,9 +327,12 @@ def run():
         if arguments['--model'] is not None:
             Path = os.getcwd()
             try:
-                T = float(arguments['--temp'])  # "temperature" parameter: determines sensitivity of Metropolis-Hastings acceptance criteria
-                num_iterations = int(arguments['--numiter'])  # how many subsequent mutation trials per simulated evolution trajectory
-                num_trajectories = int(arguments['--numtraj'])  # how many separate evolution trajectories to run
+                # "temperature" parameter: determines sensitivity of Metropolis-Hastings acceptance criteria
+                T = float(arguments['--temp'])
+                # how many subsequent mutation trials per simulated evolution trajectory
+                num_iterations = int(arguments['--numiter'])
+                # how many separate evolution trajectories to run
+                num_trajectories = int(arguments['--numtraj'])
             except ValueError:
                 raise ValueError("Define 'numiter' and 'numtraj' as integer and 'temp' as float.")
 
@@ -322,7 +341,8 @@ def run():
             y_WT = arguments['--ywt']
             negative=arguments['--negative']
 
-            usecsv = arguments['--usecsv']  # Metropolis-Hastings-driven directed evolution on single mutant position csv data
+            # Metropolis-Hastings-driven directed evolution on single mutant position csv data
+            usecsv = arguments['--usecsv']
             if usecsv is True:
                 csv_file = csv_input(arguments['--input'])
                 t_drop = float(arguments['--drop'])
@@ -349,7 +369,9 @@ def run():
             print('Running evolution trajectories and plotting..')
 
             run_DE_trajectories(s_WT, args_model, y_WT, num_iterations, num_trajectories,
-                                traj_records_folder, amino_acids, T, Path, Sub_LS, negative=negative, save=True, usecsv=usecsv, csvaa=csvaa)
+                                traj_records_folder, amino_acids, T, Path, Sub_LS, arguments['--nofft'],
+                                negative=negative, save=True, usecsv=usecsv, csvaa=csvaa,
+                                print_matrix=arguments['--print'])
             print('\nDone!')
 
 
