@@ -91,13 +91,16 @@ Options:
 """
 
 # importing own modules
-from Modules_PLSR import (read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot)
-from Modules_PLSR import (mutate_sequence, in_silico_de, Get_Sequences, run_DE_trajectories)
-from Modules_LS_VS import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS, make_sub_LS_VS_randomly,
-                           make_fasta_LS_VS)
-from Modules_PS import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
-                        create_split_files, Make_Combinations_Double_All_Diverse,
-                        Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
+from Modules_Regression import (read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot,
+                                mutate_sequence, in_silico_de, Get_Sequences, run_DE_trajectories)
+from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS,
+                                         make_sub_LS_VS_randomly, make_fasta_LS_VS)
+from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
+                                create_split_files, Make_Combinations_Double_All_Diverse,
+                                Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
+# import Modules_Parallelization locally to avoid error when not running in parallel, thus hashed
+# from Modules_Parallelization import R2_List_Parallel
+
 # standard import, for all required modules see requirements.txt file(s)
 import os
 from os import listdir
@@ -106,6 +109,8 @@ import numpy as np
 from tqdm import tqdm
 from docopt import docopt
 import multiprocessing
+
+
 # import ray  # ray imported later locally as is is only used for parallelized running
 
 # --regressor
@@ -115,7 +120,7 @@ def run():
     running them dependent on user-passed input arguments using docopt
     for argument parsing.
     """
-    arguments = docopt(__doc__, version='PyPEF 0.1.1 (December 2020)')
+    arguments = docopt(__doc__, version='PyPEF 0.1.2 (December 2020)')
     print(arguments)  # uncomment for printing parsed arguments
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
@@ -219,8 +224,8 @@ def run():
                 create_split_files(Quadruples, single_variants, WT_Sequence, 'Diverse_Quadruple', no + 1)
 
         if arguments['--drecomb'] is False and arguments['--trecomb'] is False \
-                and arguments['--qrecomb'] is False and arguments['--ddiverse'] is False\
-                and arguments['--tdiverse']is False and arguments['--qdiverse'] is False:
+                and arguments['--qrecomb'] is False and arguments['--ddiverse'] is False \
+                and arguments['--tdiverse'] is False and arguments['--qdiverse'] is False:
             print('\nInput Error:\nAt least one specification needed: Specify recombinations for mkps ; '
                   'e.g. try: "pypef.py mkps --drecomb" for performing double recombinant Prediction set.\n')
             no_done = True
@@ -237,10 +242,11 @@ def run():
                 except ValueError:
                     t_save = 5
                 if arguments['--parallel']:
+                    # Parallelization of AAindex iteration
                     # import parallel modules here as ray is yet not supported for Windows
                     import ray
                     ray.init()
-                    from Modules_PLSR_parallel import R2_List_Parallel
+                    from Modules_Parallelization import R2_List_Parallel
                     Cores = arguments['--cores']
                     try:
                         Cores = int(Cores)
@@ -250,9 +256,11 @@ def run():
                         except NotImplementedError:
                             Cores = 4
                     print('Using {} cores for parallel computing. Running...'.format(Cores))
-                    AAindex_R2_List = R2_List_Parallel(arguments['--ls'], arguments['--vs'], Cores)
-                    Formatted_Output(AAindex_R2_List)
-                    Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save)
+                    AAindex_R2_List = R2_List_Parallel(arguments['--ls'], arguments['--vs'], Cores,
+                                                       arguments['--regressor'], arguments['--nofft'])
+                    Formatted_Output(AAindex_R2_List, arguments['--nofft'])
+                    Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                               arguments['--regressor'], arguments['--nofft'])
                 else:
                     AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
                                               arguments['--nofft'])
@@ -296,7 +304,7 @@ def run():
                 recombs_total.append(diverse_t)
             if arguments['--qdiverse']:
                 recombs_total.append(diverse_q)
-            if arguments['--drecomb'] is False and arguments['--trecomb'] is False and arguments['--qrecomb'] is False\
+            if arguments['--drecomb'] is False and arguments['--trecomb'] is False and arguments['--qrecomb'] is False \
                     and arguments['--ddiverse'] is False and arguments['--tdiverse'] is False \
                     and arguments['--qdiverse'] is False:
                 print('Define prediction target for --pmult, e.g. --pmult --drecomb.')
@@ -339,7 +347,7 @@ def run():
             args_model = arguments['--model']
             s_WT = get_wt_sequence(arguments['--wtseq'])
             y_WT = arguments['--ywt']
-            negative=arguments['--negative']
+            negative = arguments['--negative']
 
             # Metropolis-Hastings-driven directed evolution on single mutant position csv data
             usecsv = arguments['--usecsv']
@@ -355,7 +363,7 @@ def run():
                 if len(single_variants) == 0:
                     print('Found NO single substitution variants for possible recombination!')
                 Sub_LS, Val_LS, _, _ = make_sub_LS_VS(single_variants, single_values, higher_variants,
-                                                                higher_values, directed_evolution=True)
+                                                      higher_values, directed_evolution=True)
                 print('Creating single variant dataset...')
 
                 make_fasta_LS_VS('Single_variants.fasta', s_WT, Sub_LS, Val_LS)
