@@ -121,7 +121,7 @@ def run():
     for argument parsing.
     """
     arguments = docopt(__doc__, version='PyPEF 0.1.2 (December 2020)')
-    print(arguments)  # uncomment for printing parsed arguments
+    # print(arguments)  # uncomment for printing parsed arguments
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
     if arguments['--show']:
