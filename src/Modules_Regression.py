@@ -187,7 +187,7 @@ def Get_Sequences(Fasta, Mult_Path=None, Prediction=False):
     if Prediction == False:
         if len(Sequences) != len(Values):
             print('Error: Number of sequences does not fit with number of target values!')
-            print('Number of sequences: ' + str(len(Sequences)), ', Number of target values: ' + str(len(Values)))
+            print('Number of sequences: {}, Number of target values: {}.'.format(str(len(Sequences)), str(len(Values))))
             sys.exit()
 
     return Sequences, Names_Of_Mutations, Values
@@ -445,7 +445,13 @@ def Formatted_Output(AAindex_R2_List, noFFT=False, Minimum_R2=0.0):
 
         heading = "".join(caption.ljust(col_width) for caption in head) + '\n'
         f.write(heading)
-        f.write(len(heading)*'-' + '\n')
+
+        row_length = []
+        for row in data:
+            row_ = "".join(str(value).ljust(col_width) for value in row) + '\n'
+            row_length.append(len(row_))
+        row_length_max = max(row_length)
+        f.write(row_length_max * '-' + '\n')
 
         for row in data:
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')

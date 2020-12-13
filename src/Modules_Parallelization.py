@@ -53,7 +53,13 @@ def Formatted_Output_Parallel(AAindex_R2_List, Minimum_R2=0.0, noFFT=False):
 
         heading = "".join(caption.ljust(col_width) for caption in head) + '\n'
         f.write(heading)
-        f.write(len(heading)*'-' + '\n')
+
+        row_length = []
+        for row in data:
+            row_ = "".join(str(value).ljust(col_width) for value in row) + '\n'
+            row_length.append(len(row_))
+        row_length_max = max(row_length)
+        f.write(row_length_max * '-' + '\n')
 
         for row in data:
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')
