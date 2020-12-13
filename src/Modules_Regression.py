@@ -435,15 +435,18 @@ def Formatted_Output(AAindex_R2_List, noFFT=False, Minimum_R2=0.0):
         raise ValueError('No model with positive R2.')
 
     data = np.array([index, value, value2, value3, value4, regression_model, params]).T
-    col_width = max(len(str(value)) for row in data for value in row) - 5
+    col_width = max(len(str(value)) for row in data for value in row[:-1]) + 5
 
     head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'Regression', 'Model parameters']
     with open('Model_Results.txt', 'w') as f:
         if noFFT is not False:
             f.write("No FFT used in this model construction, performance"
                     " represents model accuracies on raw encoded sequence data.\n\n")
-        f.write("".join(caption.ljust(col_width) for caption in head) + '\n')
-        f.write(len(head)*col_width*'-' + '\n')
+
+        heading = "".join(caption.ljust(col_width) for caption in head) + '\n'
+        f.write(heading)
+        f.write(len(heading)*'-' + '\n')
+
         for row in data:
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')
 
@@ -625,7 +628,7 @@ def Predictions_Out(Predictions, Model, Prediction_Set):
         value.append('{:f}'.format(val))
 
     data = np.array([name, value]).T
-    col_width = max(len(str(value)) for row in data for value in row) - 5
+    col_width = max(len(str(value)) for row in data for value in row) + 5
 
     head = ['Name', 'Prediction']
     with open('Predictions_' + str(Model) + '_' + str(Prediction_Set)[:-6] + '.txt', 'w') as f:

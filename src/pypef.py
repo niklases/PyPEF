@@ -261,6 +261,7 @@ def run():
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
                                arguments['--regressor'], arguments['--nofft'])
+
                 else:
                     AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
                                               arguments['--nofft'])
@@ -322,6 +323,7 @@ def run():
                 predictions_total = list(dict.fromkeys(predictions_total))  # removing duplicates from list
                 if arguments['--negative']:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=False)
+
                 else:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=True)
                 Predictions_Out(predictions_total, arguments['--model'], 'Top' + args[1:-1])
@@ -367,6 +369,7 @@ def run():
                 print('Creating single variant dataset...')
 
                 make_fasta_LS_VS('Single_variants.fasta', s_WT, Sub_LS, Val_LS)
+
             else:
                 Sub_LS = None
 
@@ -374,7 +377,7 @@ def run():
             csvaa = arguments['--csvaa']
             traj_records_folder = 'DE_record'
 
-            print('Running evolution trajectories and plotting..')
+            print('Running evolution trajectories and plotting...')
 
             run_DE_trajectories(s_WT, args_model, y_WT, num_iterations, num_trajectories,
                                 traj_records_folder, amino_acids, T, Path, Sub_LS, arguments['--nofft'],

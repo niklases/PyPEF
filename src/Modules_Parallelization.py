@@ -43,15 +43,18 @@ def Formatted_Output_Parallel(AAindex_R2_List, Minimum_R2=0.0, noFFT=False):
         raise ValueError('No model with positive R2.')
 
     data = np.array([index, value, value2, value3, value4, regr_models, parameters]).T
-    col_width = max(len(str(value)) for row in data for value in row) - 5
+    col_width = max(len(str(value)) for row in data for value in row[:-1]) + 5
 
     head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson_r', 'Regression', 'Model parameters']
     with open('Model_Results.txt', 'w') as f:
         if noFFT is not False:
             f.write("No FFT used in this model construction, performance"
                     " represents model accuracies on raw encoded sequence data.\n\n")
-        f.write("".join(caption.ljust(col_width) for caption in head) + '\n')
-        f.write(len(head)*col_width*'-' + '\n')
+
+        heading = "".join(caption.ljust(col_width) for caption in head) + '\n'
+        f.write(heading)
+        f.write(len(heading)*'-' + '\n')
+
         for row in data:
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')
 
