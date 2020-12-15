@@ -374,14 +374,18 @@ def Get_R2(X_learn, X_valid, Y_learn, Y_valid, regressor='pls'):
     R2 = r2_score(Y_valid, Y_pred)
     RMSE = np.sqrt(mean_squared_error(Y_valid, Y_pred))
     NRMSE = RMSE / np.std(Y_valid, ddof=1)
+    # ranks for Spearman's rank correlation
+    Yval_rank = np.array(Y_valid).argsort().argsort()
+    Ypred_rank = np.array(Y_pred).argsort().argsort()
     with warnings.catch_warnings():  # catching RunTime warning when there's no variance in an array, e.g. [2, 2, 2, 2]
         warnings.simplefilter("ignore")  # which would mean divide by zero
         pearson_r = np.corrcoef(Y_valid, Y_pred)[0][1]
+        spearman_rho = np.corrcoef(Yval_rank, Ypred_rank)[0][1]
 
-    return R2, RMSE, NRMSE, pearson_r, regressor, best_params
+    return R2, RMSE, NRMSE, pearson_r, spearman_rho, regressor, best_params
 
 
-def R2_List(Learning_Set, Validation_Set, regressor='pls', noFFT=False):
+def R2_List(Learning_Set, Validation_Set, regressor='pls', noFFT=False, sort='1'):
     """
     returns the sorted list of all the model parameters and
     the performance values (R2 etc.) from function Get_R2.
@@ -404,10 +408,19 @@ def R2_List(Learning_Set, Validation_Set, regressor='pls', noFFT=False):
                 x_test, y_test, _ = xy_test.Get_X_And_Y()
             else:               # X is the raw encoded of alphabetical sequence
                 _, y_test, x_test = xy_test.Get_X_And_Y()
-            r2, rmse, nrmse, pearson_r, regression_model, params = Get_R2(x_learn, x_test, y_learn, y_test, regressor)
-            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, regression_model, params])
+            r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, params = Get_R2(x_learn, x_test, y_learn,
+                                                                                        y_test, regressor)
+            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, params])
 
-    AAindex_R2_List.sort(key=lambda x: x[1], reverse=True)
+    try:
+        sort = int(sort)
+        if sort == 2 or sort == 3:
+            AAindex_R2_List.sort(key=lambda x: x[sort])
+        else:
+            AAindex_R2_List.sort(key=lambda x: x[sort], reverse=True)
+
+    except ValueError:
+        raise ValueError("Choose between options 1 to 5 (R2, RMSE, NRMSE, Pearson's r, Spearman's rho.")
 
     return AAindex_R2_List
 
@@ -419,25 +432,26 @@ def Formatted_Output(AAindex_R2_List, noFFT=False, Minimum_R2=0.0):
     a list (Model_Results.txt) of the top ranking models for the given validation set.
     """
 
-    index, value, value2, value3, value4, regression_model, params = [], [], [], [], [], [], []
+    index, value, value2, value3, value4, value5, regression_model, params = [], [], [], [], [], [], [], []
 
-    for (idx, val, val2, val3, val4, r_m, pam) in AAindex_R2_List:
+    for (idx, val, val2, val3, val4, val5, r_m, pam) in AAindex_R2_List:
         if val >= Minimum_R2:
             index.append(idx[:-4])
             value.append('{:f}'.format(val))
             value2.append('{:f}'.format(val2))
             value3.append('{:f}'.format(val3))
             value4.append('{:f}'.format(val4))
+            value5.append('{:f}'.format(val5))
             regression_model.append(r_m.upper())
             params.append(pam)
 
-    if len(value) == 0:
+    if len(value) == 0:  # Criterion of not finding suitable model is defined by Minimum_R2
         raise ValueError('No model with positive R2.')
 
-    data = np.array([index, value, value2, value3, value4, regression_model, params]).T
+    data = np.array([index, value, value2, value3, value4, value5, regression_model, params]).T
     col_width = max(len(str(value)) for row in data for value in row[:-1]) + 5
 
-    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'Regression', 'Model parameters']
+    head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson\'s r', 'Spearman\'s rho', 'Regression', 'Model parameters']
     with open('Model_Results.txt', 'w') as f:
         if noFFT is not False:
             f.write("No FFT used in this model construction, performance"
@@ -507,7 +521,7 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
     for t in range(Threshold):
         try:
             idx = AAindex_R2_List[t][0]
-            parameter = AAindex_R2_List[t][6]
+            parameter = AAindex_R2_List[t][7]
 
             # Estimating the CV performance of the n_component-fitted model on all data
             xy_learn = XY(Full_Path(idx), Learning_Set)
@@ -547,12 +561,17 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             stddev = np.std(Y_test_total, ddof=1)
             nrmse = rmse / stddev
             pearson_r = np.corrcoef(Y_test_total, Y_predicted_total)[0][1]
+            # ranks for Spearman
+            Yttotal_rank = np.array(Y_test_total).argsort().argsort()
+            Yptotal_rank = np.array(Y_predicted_total).argsort().argsort()
+            spearman_rho = np.corrcoef(Yttotal_rank, Yptotal_rank)[0][1]
             figure, ax = plt.subplots()
             ax.scatter(Y_test_total, Y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
             ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1],
                     [min(Y_predicted_total) - 1, max(Y_predicted_total) + 1], 'k', lw=2)
-            ax.legend(['R$^2$ = ' + str(round(r_squared, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +
-                       '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s $r$ = ' + str(round(pearson_r, 3))])
+            ax.legend(['$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '
+                      .format(str(round(r_squared, 3)), str(round(rmse, 3)), str(round(nrmse, 3)),
+                              str(round(pearson_r, 3))) + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))])
             ax.set_xlabel('Measured')
             ax.set_ylabel('Predicted')
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
@@ -683,8 +702,9 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
         stddev = np.std(Y_true, ddof=1)
         nrmse = rmse / stddev
         pearson_r = np.corrcoef(Y_true, Y_pred)[0][1]
-        legend = '$R^2$ = ' + str(round(R2, 3)) + '\nRMSE = ' + str(round(rmse, 3)) +\
-                 '\nNRMSE = ' + str(round(nrmse, 3)) + '\nPearson\'s $r$ = ' + str(round(pearson_r, 3))
+        legend = 'R$^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '\
+                     .format(str(round(r_squared, 3)), str(round(rmse, 3)), str(round(nrmse, 3)),
+                             str(round(pearson_r, 3))) + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
         x = np.linspace(min(Y_pred) - 1, max(Y_pred) + 1, 100)
 
         fig, ax = plt.subplots()

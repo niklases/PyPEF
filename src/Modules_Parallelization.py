@@ -27,22 +27,23 @@ def Formatted_Output_Parallel(AAindex_R2_List, Minimum_R2=0.0, noFFT=False):
     as well as the corresponding number of components for each model so that the user gets
     a list (Model_Results.txt) of the top ranking models for the given validation set.
     """
-    index, value, value2, value3, value4, regr_models, parameters = [], [], [], [], [], [], []
+    index, value, value2, value3, value4, value5, regr_models, parameters = [], [], [], [], [], [], [], []
 
-    for (idx, val, val2, val3, val4, r_m, pam) in AAindex_R2_List:
+    for (idx, val, val2, val3, val4, val5, r_m, pam) in AAindex_R2_List:
         if (val >= Minimum_R2):
             index.append(idx[:-4])
             value.append('{:f}'.format(val))
             value2.append('{:f}'.format(val2))
             value3.append('{:f}'.format(val3))
             value4.append('{:f}'.format(val4))
+            value5.append('{:f}'.format(val5))
             regr_models.append(r_m)
             parameters.append(pam)
 
     if len(value) == 0:
         raise ValueError('No model with positive R2.')
 
-    data = np.array([index, value, value2, value3, value4, regr_models, parameters]).T
+    data = np.array([index, value, value2, value3, value4, value5, regr_models, parameters]).T
     col_width = max(len(str(value)) for row in data for value in row[:-1]) + 5
 
     head = ['Index', 'R2', 'RMSE', 'NRMSE', 'Pearson_r', 'Regression', 'Model parameters']
@@ -96,13 +97,14 @@ def Parallel(d, Core, AAindices, Learning_Set, Validation_Set, regressor='pls', 
             else:  # X is the raw encoded of alphabetical sequence
                 _, y_test, x_test = xy_test.Get_X_And_Y()
 
-            r2, rmse, nrmse, pearson_r, regressor, best_params = Get_R2(x_learn, x_test, y_learn, y_test, regressor)
-            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, regressor, best_params])
+            r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params = Get_R2(x_learn, x_test, y_learn, y_test,
+                                                                                      regressor)
+            AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params])
 
     return AAindex_R2_List
 
 
-def R2_List_Parallel(Learning_Set, Validation_Set, Cores, regressor='pls', noFFT=False):
+def R2_List_Parallel(Learning_Set, Validation_Set, Cores, regressor='pls', noFFT=False, sort='1'):
     """
     Parallelization of running using the user-defined number of cores.
     Calling function Parallel to execute the parallel running and
@@ -127,9 +129,17 @@ def R2_List_Parallel(Learning_Set, Validation_Set, Cores, regressor='pls', noFFT
 
     AAindex_R2_List = []
     for core in range(Cores):
-        for j,_ in enumerate(results[core]):
+        for j, _ in enumerate(results[core]):
             AAindex_R2_List.append(results[core][j])
 
-    AAindex_R2_List.sort(key=lambda x: x[1], reverse=True)
+    try:
+        sort = int(sort)
+        if sort == 2 or sort == 3:
+            AAindex_R2_List.sort(key=lambda x: x[sort])
+        else:
+            AAindex_R2_List.sort(key=lambda x: x[sort], reverse=True)
+
+    except ValueError:
+        raise ValueError("Choose between options 1 to 5 (R2, RMSE, NRMSE, Pearson's r, Spearman's rho.")
 
     return AAindex_R2_List

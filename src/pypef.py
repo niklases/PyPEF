@@ -35,7 +35,7 @@ Usage:
     pypef.py mkps [--wtseq WT_SEQ] [--input CSV_FILE] [--drop THRESHOLD]
                                  [--drecomb] [--trecomb] [--qrecomb]
                                  [--ddiverse] [--tdiverse] [--qdiverse]
-    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--regressor TYPE] [--nofft]
+    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--regressor TYPE] [--nofft] [--sort METRIC]
                                                        [--parallel] [--cores NUMCORES]
     pypef.py --show [MODELS]
     pypef.py run --model MODEL12345 --figure VS_FOR_PLOTTING  [--label] [--color] [--ywt WT_FITNESS] [--nofft]
@@ -75,6 +75,7 @@ Options:
                                PLS R.: pls, PLS CV R.: pls_cv, Random Forest R.: rf, SVM R.: svr [default: pls].
   --nofft                      Raw sequence input, i.e. no FFT for establishing protein spectra
                                as vector inputs [default: False].
+  --sort METRIC                Rank models based on Spearman's rank correlation instead of R^2 [default: 1].
   -m --model MODEL12345        Model (pickle file) for plotting of Validation or for performing predictions.
   -f --figure VS_FOR_PLOTTING  Validation set for plotting using a trained Model.
   --label                      Label the plot instances [default: False].
@@ -125,7 +126,7 @@ def run():
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
     if arguments['--show']:
-        if arguments['MODELS'] is not str(5):
+        if arguments['MODELS'] != str(5):
             try:
                 print(read_models(int(arguments['MODELS'])))
             except ValueError:
@@ -257,14 +258,15 @@ def run():
                             Cores = 4
                     print('Using {} cores for parallel computing. Running...'.format(Cores))
                     AAindex_R2_List = R2_List_Parallel(arguments['--ls'], arguments['--vs'], Cores,
-                                                       arguments['--regressor'], arguments['--nofft'])
+                                                       arguments['--regressor'], arguments['--nofft'],
+                                                       arguments['--sort'])
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
                                arguments['--regressor'], arguments['--nofft'])
 
                 else:
                     AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
-                                              arguments['--nofft'])
+                                              arguments['--nofft'], arguments['--sort'])
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
                                arguments['--regressor'], arguments['--nofft'])
@@ -333,7 +335,7 @@ def run():
     # Metropolis-Hastings-driven directed evolution, similar to Biswas et al.:
     # Low-N protein engineering with data-efficient deep learning,
     # see https://github.com/ivanjayapurna/low-n-protein-engineering/tree/master/directed-evo
-    elif arguments['directevo']:  #
+    elif arguments['directevo']:
         if arguments['--model'] is not None:
             Path = os.getcwd()
             try:
