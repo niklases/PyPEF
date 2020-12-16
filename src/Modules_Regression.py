@@ -697,12 +697,16 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
 
         _, Names_Of_Mutations, _ = Get_Sequences(Fasta_File)
 
-        R2 = r2_score(Y_true, Y_pred)
+        r_squared = r2_score(Y_true, Y_pred)
         rmse = np.sqrt(mean_squared_error(Y_true, Y_pred))
         stddev = np.std(Y_true, ddof=1)
         nrmse = rmse / stddev
         pearson_r = np.corrcoef(Y_true, Y_pred)[0][1]
-        legend = 'R$^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '\
+        # ranks for Spearman
+        Yttotal_rank = np.array(Y_true).argsort().argsort()
+        Yptotal_rank = np.array(Y_pred).argsort().argsort()
+        spearman_rho = np.corrcoef(Yttotal_rank, Yptotal_rank)[0][1]
+        legend = '$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '\
                      .format(str(round(r_squared, 3)), str(round(rmse, 3)), str(round(nrmse, 3)),
                              str(round(pearson_r, 3))) + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
         x = np.linspace(min(Y_pred) - 1, max(Y_pred) + 1, 100)
@@ -819,7 +823,11 @@ def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter
                             AAs = aa_list
                 # Select closest Position to single AA positions
                 absolute_difference_function = lambda list_value: abs(list_value - rand_loc)
-                closest_loc = min(pos_list, key=absolute_difference_function)
+                try:
+                    closest_loc = min(pos_list, key=absolute_difference_function)
+                except ValueError:
+                    raise ValueError("No positions for recombination found. Likely no single "
+                                     "substitutional variants found in provided .csv file.")
                 rand_loc = closest_loc - 1   # - 1 as Position 17 is 16 when starting with 0 index
             rand_aa = random.choice(AAs)  # find random amino acid to mutate to
             sequence = seq
@@ -882,7 +890,7 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
     # iterate through the trial mutation steps for the directed evolution trajectory
     for i in range(num_iterations):  # num_iterations
 
-        if i == 0:
+        if i == 0:  # get first v, y, s
             # randomly choose the location of the first mutation in the trajectory
             mut_loc_seed = random.randint(0, len(s_WT))
             # m = 1 instead of (np.random.poisson(2) + 1)
@@ -899,7 +907,6 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
                 variants.append(var)
                 ys.append(predictions.get(var))
 
-
             y, var = ys[0], variants[0]  # only one entry anyway
             new_mut_loc = int(var[:-1]) - 1
             sequence = var_seq_dict.get(var)
@@ -908,7 +915,7 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
             y_traj.append(y)
             s_traj.append(sequence)
 
-        else:
+        else:  # based on first v, y, s go deeper in mutations --> new_v, new_y, new_s if accepted
             # only chose 1 mutation to introduce and not:
             # mu = np.random.uniform(1, 2.5) --> Number of Mutations = m = np.random.poisson(mu - 1) + 1
             new_var_seq_dict = mutate_sequence(sequence, 1, Model, new_mut_loc, amino_acids,
