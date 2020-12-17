@@ -75,7 +75,8 @@ Options:
                                PLS R.: pls, PLS CV R.: pls_cv, Random Forest R.: rf, SVM R.: svr [default: pls].
   --nofft                      Raw sequence input, i.e. no FFT for establishing protein spectra
                                as vector inputs [default: False].
-  --sort METRIC                Rank models based on Spearman's rank correlation instead of R^2 [default: 1].
+  --sort METRIC                Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE, 4: Pearson's r,
+                               5: Spearman's rank} [default: 1].
   -m --model MODEL12345        Model (pickle file) for plotting of Validation or for performing predictions.
   -f --figure VS_FOR_PLOTTING  Validation set for plotting using a trained Model.
   --label                      Label the plot instances [default: False].
