@@ -92,8 +92,8 @@ Options:
 """
 
 # importing own modules
-from Modules_Regression import (read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot,
-                                mutate_sequence, in_silico_de, Get_Sequences, run_DE_trajectories)
+from Modules_Regression import read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot
+from Modules_Directed_Evolution import run_DE_trajectories
 from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS,
                                          make_sub_LS_VS_randomly, make_fasta_LS_VS)
 from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
