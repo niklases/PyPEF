@@ -197,7 +197,8 @@ class XY:
     """
     converts the string sequence into a list of numericals using the AAindex translation library,
     Fourier transforming the numerical array that was translated by Get_Numerical_Sequence (Do_Fourier),
-    computing the input matrices X and Y for the PLS regressor (Get_X_And_Y)
+    computing the input matrices X and Y for the PLS regressor (Get_X_And_Y). Returns FFT-ed arrays (X),
+    labels array (Y), and raw_encoded sequences arrays (raw_numerical_sequences)
     """
     def __init__(self, AAindex_File, Fasta_File, Mult_Path=None, Prediction=False):
         aaidx = AAindex(AAindex_File)

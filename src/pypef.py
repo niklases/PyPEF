@@ -101,6 +101,7 @@ from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Trip
                                 Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
 # import Modules_Parallelization locally to avoid error when not running in parallel, thus hashed
 # from Modules_Parallelization import R2_List_Parallel
+# import ray  # ray imported later locally as is is only used for parallelized running
 
 # standard import, for all required modules see requirements.txt file(s)
 import os
@@ -111,10 +112,6 @@ from tqdm import tqdm
 from docopt import docopt
 import multiprocessing
 
-
-# import ray  # ray imported later locally as is is only used for parallelized running
-
-# --regressor
 def run():
     """
     Running the program, importing all required self-made modules and
