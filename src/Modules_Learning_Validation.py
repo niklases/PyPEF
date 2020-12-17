@@ -228,7 +228,7 @@ def make_sub_LS_VS(single_variants, single_values, higher_variants, higher_value
             if len(higher_variants) < 6:  # if less than 6 higher variants all higher variants are appended to VS
                 Sub_VS.append(higher_variants[i])
                 Val_VS.append(higher_values[i])
-            elif (i % 3) == 0 and i is not 0:  # 1/4 of higher variants to VS, 3/4 to LS - change here for LS/VS ratio change
+            elif (i % 3) == 0 and i != 0:  # 1/4 of higher variants to VS, 3/4 to LS - change here for LS/VS ratio change
                 Sub_VS.append(higher_variants[i])
                 Val_VS.append(higher_values[i])
             else:                       # 3/4 to LS
