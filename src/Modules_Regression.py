@@ -520,6 +520,15 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
     except FileExistsError:
         pass
 
+    try:
+        os.remove('CV_performance/_CV_Results.txt')
+    except FileNotFoundError:
+        pass
+    f = open('CV_performance/_CV_Results.txt', 'w')
+    f.write('5-fold cross-validated performance of top models for validation set across all data.\n\n')
+    f.close()
+
+
     for t in range(Threshold):
         try:
             idx = AAindex_R2_List[t][0]
@@ -554,7 +563,7 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
                 raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
                          "regression model options.")
 
-            # perform 5-fold cross-validation on all data
+            # perform 5-fold cross-validation on all data (on X and Y)
             n_samples = 5
             Y_test_total, Y_predicted_total = cross_validation(X, Y, regressor_, n_samples)
 
@@ -567,6 +576,14 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             Yttotal_rank = np.array(Y_test_total).argsort().argsort()
             Yptotal_rank = np.array(Y_predicted_total).argsort().argsort()
             spearman_rho = np.corrcoef(Yttotal_rank, Yptotal_rank)[0][1]
+
+
+            with open('CV_performance/_CV_Results.txt', 'a') as f:
+                f.write('Regression type: {}; Parameter: {}; Encoding index: {}\n'.format(
+                    regressor.upper(), parameter, idx[:-4]))
+                f.write('R2 = {:.5f}; RMSE = {:.5f}; NRMSE = {:.5f}; Pearson\'s r = {:.5f};'
+                        ' Spearman\'s rho = {:.5f}\n\n'.format(r_squared, rmse, nrmse, pearson_r, spearman_rho))
+
             figure, ax = plt.subplots()
             ax.scatter(Y_test_total, Y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
             ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1],
