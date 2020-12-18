@@ -526,6 +526,9 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
         pass
     f = open('CV_performance/_CV_Results.txt', 'w')
     f.write('5-fold cross-validated performance of top models for validation set across all data.\n\n')
+    if noFFT == True:
+        f.write("No FFT used in this model construction, performance represents"
+                " model accuracies on raw encoded sequence data.\n\n")
     f.close()
 
 
