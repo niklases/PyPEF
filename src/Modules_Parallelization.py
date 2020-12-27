@@ -16,7 +16,7 @@ import warnings
 
 from Modules_Regression import Full_Path, Path_AAindex_Dir, XY, Get_R2
 
-# to handle UserWarning for PLS n_components as error
+# to handle UserWarning for PLS n_components as error and general regression module warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
 

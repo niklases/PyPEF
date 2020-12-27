@@ -7,16 +7,18 @@
 # Released under Creative Commons Attribution-NonCommercial 4.0 International Public License (CC BY-NC 4.0)
 # For more information about the license see https://creativecommons.org/licenses/by-nc/4.0/legalcode
 
-from Modules_Regression import Predict
-
 import os
 import random
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
-# ignoring warnings of PLS regression using n_components
+
+from Modules_Regression import Predict
+
+# ignoring warnings of regression
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
+
 
 def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter, usecsv, csvaa):
     """
