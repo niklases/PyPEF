@@ -71,8 +71,8 @@ Options:
   --negative                   Set if more negative values define better variants [default: False].
   -l --ls LEARNING_SET         Input Learning set in .fasta format.
   -v --vs VALIDATION_SET       Input Validation set in .fasta format.
-  --regressor TYPE             Type of regression (R.) to use, options:
-                               PLS R.: pls, PLS CV R.: pls_cv, Random Forest R.: rf, SVM R.: svr [default: pls].
+  --regressor TYPE             Type of regression (R.) to use, options: PLS R.: pls, PLS CV R.: pls_cv,
+                               Random Forest R.: rf, SVM R.: svr, MLP R.: mlp [default: pls].
   --nofft                      Raw sequence input, i.e. no FFT for establishing protein spectra
                                as vector inputs [default: False].
   --sort METRIC                Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE, 4: Pearson's r,
@@ -92,18 +92,6 @@ Options:
                                requires flag "--usecsv" [default: False].
 """
 
-# importing own modules
-from Modules_Regression import read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot
-from Modules_Directed_Evolution import run_DE_trajectories
-from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS,
-                                         make_sub_LS_VS_randomly, make_fasta_LS_VS)
-from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
-                                create_split_files, Make_Combinations_Double_All_Diverse,
-                                Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
-# import Modules_Parallelization locally to avoid error when not running in parallel, thus hashed
-# from Modules_Parallelization import R2_List_Parallel
-# import ray  # ray imported later locally as is is only used for parallelized running
-
 # standard import, for all required modules see requirements.txt file(s)
 import os
 from os import listdir
@@ -112,6 +100,20 @@ import numpy as np
 from tqdm import tqdm
 from docopt import docopt
 import multiprocessing
+# import Modules_Parallelization.R2_List_Parallel locally to avoid error
+# when not running in parallel, thus commented out:
+# from Modules_Parallelization import R2_List_Parallel
+# ray imported later locally as is is only used for parallelized running, thus commented out:
+# import ray
+
+# importing own modules
+from Modules_Regression import read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot
+from Modules_Directed_Evolution import run_DE_trajectories
+from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS,
+                                         make_sub_LS_VS_randomly, make_fasta_LS_VS)
+from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
+                                create_split_files, Make_Combinations_Double_All_Diverse,
+                                Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
 
 def run():
     """
@@ -165,7 +167,8 @@ def run():
             while random_set_counter <= no_rnd:
                 print('Creating random LV and VS No. {}...'.format(random_set_counter), end='\r')
                 Sub_LS, Val_LS, Sub_VS, Val_VS = make_sub_LS_VS_randomly(single_variants, single_values,
-                                                                         higher_variants, higher_values)
+                                                                         higher_variants, higher_values
+                                                                         )
                 make_fasta_LS_VS('LS_random_' + str(random_set_counter) + '.fasta', WT_Sequence, Sub_LS, Val_LS)
                 make_fasta_LS_VS('VS_random_' + str(random_set_counter) + '.fasta', WT_Sequence, Sub_VS, Val_VS)
                 random_set_counter += 1
@@ -257,23 +260,28 @@ def run():
                     print('Using {} cores for parallel computing. Running...'.format(Cores))
                     AAindex_R2_List = R2_List_Parallel(arguments['--ls'], arguments['--vs'], Cores,
                                                        arguments['--regressor'], arguments['--nofft'],
-                                                       arguments['--sort'])
+                                                       arguments['--sort']
+                                                       )
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
-                               arguments['--regressor'], arguments['--nofft'])
+                               arguments['--regressor'], arguments['--nofft']
+                               )
 
                 else:
                     AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
-                                              arguments['--nofft'], arguments['--sort'])
+                                              arguments['--nofft'], arguments['--sort']
+                                              )
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
                     Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
-                               arguments['--regressor'], arguments['--nofft'])
+                               arguments['--regressor'], arguments['--nofft']
+                               )
                 print('\nDone!\n')
 
         elif arguments['--figure'] is not None and arguments['--model'] is not None:
             Path = os.getcwd()
             Plot(Path, arguments['--figure'], arguments['--model'], arguments['--label'], arguments['--color'],
-                 arguments['--ywt'], arguments['--nofft'])
+                 arguments['--ywt'], arguments['--nofft']
+                 )
             print('\nCreated plot!\n')
 
         # Prediction of single .fasta file
@@ -326,6 +334,7 @@ def run():
 
                 else:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=True)
+
                 Predictions_Out(predictions_total, arguments['--model'], 'Top' + args[1:-1])
                 os.chdir(Path)
             print('\nDone!\n')
@@ -365,7 +374,8 @@ def run():
                 if len(single_variants) == 0:
                     print('Found NO single substitution variants for possible recombination!')
                 Sub_LS, Val_LS, _, _ = make_sub_LS_VS(single_variants, single_values, higher_variants,
-                                                      higher_values, directed_evolution=True)
+                                                      higher_values, directed_evolution=True
+                                                      )
                 print('Creating single variant dataset...')
 
                 make_fasta_LS_VS('Single_variants.fasta', s_WT, Sub_LS, Val_LS)
@@ -382,7 +392,8 @@ def run():
             run_DE_trajectories(s_WT, args_model, y_WT, num_iterations, num_trajectories,
                                 traj_records_folder, amino_acids, T, Path, Sub_LS, arguments['--nofft'],
                                 negative=negative, save=True, usecsv=usecsv, csvaa=csvaa,
-                                print_matrix=arguments['--print'])
+                                print_matrix=arguments['--print']
+                                )
             print('\nDone!')
 
 
