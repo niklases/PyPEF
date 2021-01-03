@@ -59,7 +59,7 @@ Next, install Jupyter Notebook:
 
 `conda install ipython jupyter`  .
 
-Now you should be able to directly start with the tuorial. Change directory to ./workflow and run the .ipynb file:
+Now you should be able to directly start with the tutorial. Change directory to ./workflow and run the .ipynb file:
 
 `jupyter notebook`  
 
