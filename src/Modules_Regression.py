@@ -7,12 +7,15 @@
 # Released under Creative Commons Attribution-NonCommercial 4.0 International Public License (CC BY-NC 4.0)
 # For more information about the license see https://creativecommons.org/licenses/by-nc/4.0/legalcode
 
+import os
+import sys
 import matplotlib
 matplotlib.use('Agg')  # no plt.show(), just save plot
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pickle
+from tqdm import tqdm  # progress bars
+# import adjust_text  # only locally imported for labeled validation plots and in silico directed evolution
 from sklearn.model_selection import LeaveOneOut
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, r2_score
@@ -22,10 +25,8 @@ from sklearn.model_selection import GridSearchCV  # default: refit=True
 from sklearn.cross_decomposition import PLSRegression
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.svm import SVR
-# import adjust_text  # only locally imported for labeled validation plots and in silico directed evolution
+from sklearn.neural_network import MLPRegressor
 
-import sys
-from tqdm import tqdm  # progress bars
 import warnings
 # ignoring warnings of PLS regression using n_components
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
@@ -346,19 +347,31 @@ def Get_R2(X_learn, X_valid, Y_learn, Y_valid, regressor='pls'):
         regressor_ = GridSearchCV(PLSRegression(), param_grid=params, iid=False, cv=5)  # iid in future
                                                                                         # versions redundant
     elif regressor == 'rf':
-        params = {                      # quite similar tu Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
+        params = {                      # similar parameter grid as Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
             'random_state': [42],
-            'n_estimators': [100, 250, 500, 1000],
-            'max_features': ['auto', 'sqrt', 'log2']
+            'n_estimators': [100, 250, 500, 1000],  # number of individual decision trees in the forest
+            'max_features': ['auto', 'sqrt', 'log2']  # “auto” -> max_features=n_features,
+            # “sqrt” -> max_features=sqrt(n_features) “log2” -> max_features=log2(n_features)
         }
         regressor_ = GridSearchCV(RandomForestRegressor(), param_grid=params, iid=False, cv=5)
 
     elif regressor == 'svr':
-        params = {                      # quite similar tu Xu et al.
-            'C': [2 ** 0, 2 ** 2, 2 ** 4, 2 ** 6, 2 ** 8, 2 ** 10, 2 ** 12],
-            'gamma': [0.1, 0.01, 0.001, 0.0001, 0.00001]
+        params = {                      # similar parameter grid as Xu et al.
+            'C': [2 ** 0, 2 ** 2, 2 ** 4, 2 ** 6, 2 ** 8, 2 ** 10, 2 ** 12],  # Regularization parameter
+            'gamma': [0.1, 0.01, 0.001, 0.0001, 0.00001]  # often 1 / n_features or 1 / (n_featrues * X.var())
         }
         regressor_ = GridSearchCV(SVR(), param_grid=params, iid=False, cv=5)
+
+    elif regressor == 'mlp':
+        param_grid = {'hidden_layer_sizes': [i for i in range(1, 12)],
+                      'activation': ['relu'],
+                      'solver': ['adam', 'lbfgs'],
+                      'learning_rate': ['constant'],  # learning rate given by ‘learning_rate_init’
+                      'learning_rate_init': [0.001, 0.01, 0.1],  # only used when solver=’sgd’ or ‘adam’
+                      'max_iter': [1000, 200],  # for stochastic solvers (‘sgd’, ‘adam’) determines epochs
+                      'random_state': [42]
+                      }
+        regressor_ = GridSearchCV(MLPRegressor(), param_grid=param_grid, iid=False, cv=5)
 
     else:
         raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
@@ -411,7 +424,8 @@ def R2_List(Learning_Set, Validation_Set, regressor='pls', noFFT=False, sort='1'
             else:               # X is the raw encoded of alphabetical sequence
                 _, y_test, x_test = xy_test.Get_X_And_Y()
             r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, params = Get_R2(x_learn, x_test, y_learn,
-                                                                                        y_test, regressor)
+                                                                                        y_test, regressor
+                                                                                        )
             AAindex_R2_List.append([aaindex, r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, params])
 
     try:
@@ -524,13 +538,12 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
         os.remove('CV_performance/_CV_Results.txt')
     except FileNotFoundError:
         pass
-    f = open('CV_performance/_CV_Results.txt', 'w')
-    f.write('5-fold cross-validated performance of top models for validation set across all data.\n\n')
+    file = open('CV_performance/_CV_Results.txt', 'w')
+    file.write('5-fold cross-validated performance of top models for validation set across all data.\n\n')
     if noFFT == True:
-        f.write("No FFT used in this model construction, performance represents"
-                " model accuracies on raw encoded sequence data.\n\n")
-    f.close()
-
+        file.write("No FFT used in this model construction, performance represents"
+                   " model accuracies on raw encoded sequence data.\n\n")
+    file.close()
 
     for t in range(Threshold):
         try:
@@ -557,10 +570,21 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             elif regressor == 'rf':
                 regressor_ = RandomForestRegressor(random_state=parameter.get('random_state'),
                                                    n_estimators=parameter.get('n_estimators'),
-                                                   max_features=parameter.get('max_features'))
+                                                   max_features=parameter.get('max_features')
+                                                   )
 
             elif regressor == 'svr':
                 regressor_ = SVR(C=parameter.get('C'), gamma=parameter.get('gamma'))
+
+            elif regressor == 'mlp':
+                regressor_ = MLPRegressor(hidden_layer_sizes=parameter.get('hidden_layer_sizes'),
+                                          activation=parameter.get('activation'),
+                                          solver=parameter.get('solver'),
+                                          learning_rate=parameter.get('learning_rate'),
+                                          learning_rate_init=parameter.get('learning_rate_init'),
+                                          max_iter=parameter.get('max_iter'),
+                                          random_state=parameter.get('random_state')
+                                          )
 
             else:
                 raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
@@ -580,7 +604,6 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             Yptotal_rank = np.array(Y_predicted_total).argsort().argsort()
             spearman_rho = np.corrcoef(Yttotal_rank, Yptotal_rank)[0][1]
 
-
             with open('CV_performance/_CV_Results.txt', 'a') as f:
                 f.write('Regression type: {}; Parameter: {}; Encoding index: {}\n'.format(
                     regressor.upper(), parameter, idx[:-4]))
@@ -591,9 +614,10 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             ax.scatter(Y_test_total, Y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
             ax.plot([min(Y_test_total) - 1, max(Y_test_total) + 1],
                     [min(Y_predicted_total) - 1, max(Y_predicted_total) + 1], 'k', lw=2)
-            ax.legend(['$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '
-                      .format(str(round(r_squared, 3)), str(round(rmse, 3)), str(round(nrmse, 3)),
-                              str(round(pearson_r, 3))) + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))])
+            ax.legend(['$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '.format(
+                round(r_squared, 3), round(rmse, 3), round(nrmse, 3), round(pearson_r, 3))
+                       + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
+                       ])
             ax.set_xlabel('Measured')
             ax.set_ylabel('Predicted')
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
@@ -684,6 +708,8 @@ def Predictions_Out(Predictions, Model, Prediction_Set):
         for row in data:
             f.write("".join(str(value).ljust(col_width) for value in row) + '\n')
 
+    return ()
+
 
 def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
     """
@@ -728,9 +754,9 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
         Yttotal_rank = np.array(Y_true).argsort().argsort()
         Yptotal_rank = np.array(Y_pred).argsort().argsort()
         spearman_rho = np.corrcoef(Yttotal_rank, Yptotal_rank)[0][1]
-        legend = '$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '\
-                     .format(str(round(r_squared, 3)), str(round(rmse, 3)), str(round(nrmse, 3)),
-                             str(round(pearson_r, 3))) + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
+        legend = '$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '.format(
+            round(r_squared, 3), round(rmse, 3), round(nrmse, 3), round(pearson_r, 3)) \
+                 + r'$\rho$ = {}'.format(round(spearman_rho, 3))
         x = np.linspace(min(Y_pred) - 1, max(Y_pred) + 1, 100)
 
         fig, ax = plt.subplots()
