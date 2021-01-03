@@ -7,16 +7,18 @@
 # Released under Creative Commons Attribution-NonCommercial 4.0 International Public License (CC BY-NC 4.0)
 # For more information about the license see https://creativecommons.org/licenses/by-nc/4.0/legalcode
 
-from Modules_Regression import Predict
-
 import os
 import random
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
-# ignoring warnings of PLS regression using n_components
+
+from Modules_Regression import Predict
+
+# ignoring warnings of regression
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
+
 
 def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter, usecsv, csvaa):
     """
@@ -196,7 +198,6 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     s_records = []  # initialize list of sequence records
     y_records = []  # initialize list of fitness score records
 
-
     for i in range(num_trajectories):  #iterate through however many mutation trajectories we want to sample
         # call the directed evolution function, outputting the trajectory sequence and fitness score records
         v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, Model, amino_acids, T, Path, Sub_LS, i,
@@ -227,33 +228,35 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     fig, ax = plt.subplots()  # figsize=(10, 6)
     ax.locator_params(integer=True)
     f_len_max = 0
-    for j, f in enumerate(y_records):
+    for j, fitness_array in enumerate(y_records):
         if y_WT is not None:
-            f_len = len(f)
+            f_len = len(fitness_array)
             if f_len > f_len_max:
                 f_len_max = f_len
-            ax.plot(np.arange(1, len(f)+2, 1), np.insert(f, 0, y_WT),
+            ax.plot(np.arange(1, len(fitness_array)+2, 1), np.insert(fitness_array, 0, y_WT),  # insert y_WT at Pos. 0
                     '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(j+1))
         else:
-            ax.plot(np.arange(1, len(f)+1, 1), f,
+            ax.plot(np.arange(1, len(fitness_array)+1, 1), fitness_array,
                     '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(j+1))
 
     label_x_y_name = []
-    for k, l in enumerate(v_records):
-        for kk, ll in enumerate(l):  # kk = 1, 2, 3, ...  (=x); ll = variant name; y_records[k][kk] = fitness (=y)
+    for k, l in enumerate(v_records):  # k = 1, 2, 3, .., ; l = variant label array
+        for kk, ll in enumerate(l):  # kk = 1, 2, 3, ...  (=x); ll = variant label; y_records[k][kk] = fitness (=y)
             if y_WT is not None:     # kk+2 as enumerate starts with 0 and WT is 1 --> start labeling with 2
                 label_x_y_name.append(ax.text(kk+2, y_records[k][kk], ll))
             else:
                 label_x_y_name.append(ax.text(kk+1, y_records[k][kk], ll))
 
+    # adjusting variant text labels
     from adjustText import adjust_text
     adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
     leg = ax.legend()
     if y_WT is not None:
-        wt_tick = (['', 'WT'] + ((np.arange(1, f_len_max+1, 1)).tolist()))
-        with warnings.catch_warnings():  # catching matplotlib 3.3.1 UserWarning
-            warnings.simplefilter("ignore")
-            ax.set_xticklabels(wt_tick)
+        # plt xticks with locations and labels following: xticks(locs, labels)
+        if f_len_max > 10:
+            plt.xticks(np.arange(1, f_len_max + 2, 5), ['WT'] + ((np.arange(5, f_len_max + 1, 5)).tolist()))
+        else:
+            plt.xticks(np.arange(1, f_len_max + 2, 1), ['WT'] + ((np.arange(1, f_len_max + 1, 1)).tolist()))
 
     plt.ylabel('Predicted Fitness')
     plt.xlabel('Mutation Trial Steps')
