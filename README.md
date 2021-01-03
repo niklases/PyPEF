@@ -10,7 +10,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 
 Protein engineering by rational or random approaches generates data
 that can aid the construction of self-learned sequence-function
-landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico* .
+landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*.
 Such predictive methods can be applied for increasing the success/effectivity of an
 engineering campaign while partly offering the prospect to reveal hidden patterns or
 complex networks of epistatic effects. Here we present an engineering framework termed
@@ -26,8 +26,11 @@ used to perform directed evolution walks *in silico* (see [Church-lab implementa
 subsequently are to be designed and validated in the wet-lab.
 
 
-Detailed information is given in the following publication, PyPEF - an Integrated Framework for Data-driven Protein Engineering, and the
-workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
+Detailed information is given in the following publication, 
+
+PyPEF - an Integrated Framework for Data-driven Protein Engineering,
+
+and the workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
 ./workflow directory).  
 
 ## Tutorial
@@ -42,7 +45,7 @@ To setup a new environment you just need to specify the name of the environment 
 
 `conda create --name pypef python=3.7`  .
 
-To activate the envirionment you can define
+To activate the environment you can define
 
 `conda activate pypef`  .
 
