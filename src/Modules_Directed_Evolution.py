@@ -260,6 +260,6 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
 
     plt.ylabel('Predicted Fitness')
     plt.xlabel('Mutation Trial Steps')
-    plt.savefig(str(Model) + '_DE_trajectories.png')
+    plt.savefig(str(Model) + '_DE_trajectories.png', dpi=500)
 
     return s_records, y_records
