@@ -58,7 +58,7 @@ def Full_Path(Filename):
     e.g. path/to/AAindex/FAUJ880109.txt.
     """
     modules_path = os.path.dirname(os.path.abspath(__file__))
-    return (os.path.join(modules_path, 'AAindex/'+Filename))
+    return os.path.join(modules_path, 'AAindex/'+Filename)
 
 
 def Path_AAindex_Dir():
@@ -501,13 +501,15 @@ def cross_validation(X, Y, regressor_, n_samples=5):
         try:
             X_train, X_test = X[train_index], X[test_index]
             Y_train, Y_test = Y[train_index], Y[test_index]
+
             for numbers in Y_test:
                 Y_test_total.append(numbers)
             regressor_.fit(X_train, Y_train)  # Fitting on a random subset for Final_Model
             # (and on a subset subset for Learning_Model)
             # Predictions for samples in the test_set during that iteration
-            pred_for_test_set_samples = regressor_.predict(X[test_index])
-            for values in pred_for_test_set_samples:
+            Y_pred_for_test_set_samples = regressor_.predict(X[test_index])
+
+            for values in Y_pred_for_test_set_samples:
                 Y_predicted_total.append(float(values))
         except UserWarning:
             continue
@@ -515,8 +517,8 @@ def cross_validation(X, Y, regressor_, n_samples=5):
     return Y_test_total, Y_predicted_total
 
 
-def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, Threshold=5, regressor='pls',
-               noFFT=False):
+def Save_Model(Path, AAindex_R2_List, Learning_Set, Validation_Set, Threshold=5, regressor='pls',
+               noFFT=False, all=False):
     """
     Function Save_Model saves the best -s THRESHOLD models as 'Pickle' files (pickle.dump),
     which can be loaded again for doing predictions. Also, in Save_Model included is the def cross_validation
@@ -623,14 +625,12 @@ def Save_Model(Path, Fasta_File, AAindex_R2_List, Learning_Set, Validation_Set, 
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
             plt.close('all')
 
-            # fit on full learning set
-            xy = XY(Full_Path(idx), Fasta_File)
-            X, Y, X_raw = xy.Get_X_And_Y()
-
-            if noFFT is False:
+            # learning on all available data (learning + validation set)
+            if all == True:
                 regressor_.fit(X, Y)
             else:
-                regressor_.fit(X_raw, Y)
+                # fit on full learning set
+                regressor_.fit(x_learn, y_learn)
 
             file = open(os.path.join(Path, 'Pickles/'+idx[:-4]), 'wb')
             pickle.dump(regressor_, file)
@@ -732,7 +732,7 @@ def Plot(Path, Fasta_File, Model, Label, Color, y_WT, noFFT=False):
 
         try:
             if noFFT is False:
-                    Y_pred_ = mod.predict(X)
+                Y_pred_ = mod.predict(X)
             else:
                 Y_pred_ = mod.predict(X_raw)
         except ValueError:

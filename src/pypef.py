@@ -35,8 +35,8 @@ Usage:
     pypef.py mkps [--wtseq WT_SEQ] [--input CSV_FILE] [--drop THRESHOLD]
                                  [--drecomb] [--trecomb] [--qrecomb]
                                  [--ddiverse] [--tdiverse] [--qdiverse]
-    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--regressor TYPE] [--nofft] [--sort METRIC]
-                                                       [--parallel] [--cores NUMCORES]
+    pypef.py run --ls LEARNING_SET --vs VALIDATION_SET [--save NUMBER] [--regressor TYPE] [--nofft] [--all]
+                                                       [--sort METRIC] [--parallel] [--cores NUMCORES]
     pypef.py --show [MODELS]
     pypef.py run --model MODEL12345 --figure VS_FOR_PLOTTING  [--label] [--color] [--ywt WT_FITNESS] [--nofft]
     pypef.py run --model MODEL12345 --ps PREDICTION_SET [--nofft] [--negative] [--print]
@@ -75,6 +75,7 @@ Options:
                                Random Forest R.: rf, SVM R.: svr, MLP R.: mlp [default: pls].
   --nofft                      Raw sequence input, i.e. no FFT for establishing protein spectra
                                as vector inputs [default: False].
+  --all                        Finally training on all data [default: False]
   --sort METRIC                Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE, 4: Pearson's r,
                                5: Spearman's rank} [default: 1].
   -m --model MODEL12345        Model (pickle file) for plotting of Validation or for performing predictions.
@@ -263,8 +264,8 @@ def run():
                                                        arguments['--sort']
                                                        )
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
-                    Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
-                               arguments['--regressor'], arguments['--nofft']
+                    Save_Model(Path, AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                               arguments['--regressor'], arguments['--nofft'], arguments['--all']
                                )
 
                 else:
@@ -272,8 +273,8 @@ def run():
                                               arguments['--nofft'], arguments['--sort']
                                               )
                     Formatted_Output(AAindex_R2_List, arguments['--nofft'])
-                    Save_Model(Path, arguments['--ls'], AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
-                               arguments['--regressor'], arguments['--nofft']
+                    Save_Model(Path, AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                               arguments['--regressor'], arguments['--nofft'], arguments['--all']
                                )
                 print('\nDone!\n')
 
