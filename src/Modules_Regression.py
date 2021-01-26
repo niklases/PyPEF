@@ -625,11 +625,11 @@ def Save_Model(Path, AAindex_R2_List, Learning_Set, Validation_Set, Threshold=5,
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
             plt.close('all')
 
-            # learning on all available data (learning + validation set)
             if all == True:
+                # fit on all available data (learning + validation set; FFT or noFFT is defined already above)
                 regressor_.fit(X, Y)
             else:
-                # fit on full learning set
+                # fit (only) on full learning set (FFT or noFFT is defined already above)
                 regressor_.fit(x_learn, y_learn)
 
             file = open(os.path.join(Path, 'Pickles/'+idx[:-4]), 'wb')
