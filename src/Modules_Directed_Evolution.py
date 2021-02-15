@@ -13,14 +13,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import warnings
 
-from Modules_Regression import Predict
+from Modules_Regression import predict
 
-# ignoring warnings of regression
+# ignoring warnings of scikit-learn regression
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
 
 
-def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter, usecsv, csvaa):
+def mutate_sequence(seq, m, model, prev_mut_loc, aas, sub_ls, iteration, counter, usecsv, csvaa):
     """
     produces a mutant sequence (integer representation), given an initial sequence
     and the number of mutations to introduce ("m") for in silico directed evolution
@@ -29,7 +29,7 @@ def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter
         os.mkdir('EvoTraj')
     except FileExistsError:
         pass
-    myfile = 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iteration+1) + '.fasta'
+    myfile = 'EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iteration+1) + '.fasta'
     var_seq_list = []
     with open(myfile, 'w') as mf:
         for i in range(m):  # iterate through number of mutations to add
@@ -40,7 +40,7 @@ def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter
             if usecsv is True:  # Only perform directed evolution on positional csv variant data
                 pos_list = []
                 aa_list = []
-                for aa_positions in Sub_LS:
+                for aa_positions in sub_ls:
                     for pos in aa_positions:
                         pos_int = int(pos[1:-1])
                         if pos_int not in pos_list:
@@ -49,7 +49,7 @@ def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter
                             new_aa = str(pos[-1:])
                             if new_aa not in aa_list:
                                 aa_list.append(new_aa)
-                            AAs = aa_list
+                            aas = aa_list
                 # Select closest Position to single AA positions
                 absolute_difference_function = lambda list_value: abs(list_value - rand_loc)
                 try:
@@ -58,7 +58,7 @@ def mutate_sequence(seq, m, Model, prev_mut_loc, AAs, Sub_LS, iteration, counter
                     raise ValueError("No positions for recombination found. Likely no single "
                                      "substitutional variants found in provided .csv file.")
                 rand_loc = closest_loc - 1   # - 1 as Position 17 is 16 when starting with 0 index
-            rand_aa = random.choice(AAs)  # find random amino acid to mutate to
+            rand_aa = random.choice(aas)  # find random amino acid to mutate to
             sequence = seq
             seq_ = list(sequence)
             seq_[rand_loc] = rand_aa  # update sequence to have new amino acid at randomly chosen position
@@ -86,13 +86,13 @@ def restructure_dict(prediction_dict):
     return structured_dict
 
 
-def write_MCMC_predictions(Model, iter, predictions, counter):
+def write_mcmc_predictions(model, iteration, predictions, counter):
     """
     write predictions to EvoTraj folder to .fasta files for each iteration of evolution
     """
-    with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1)
+    with open('EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iteration+1)
               + '.fasta', 'r') as f_in:
-        with open('EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iter+1)
+        with open('EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_' + str(iteration+1)
                   + '_prediction.fasta', 'w') as f_out:
             for line in f_in:
                 f_out.write(line)
@@ -102,8 +102,8 @@ def write_MCMC_predictions(Model, iter, predictions, counter):
     return ()
 
 
-def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, counter,
-                 noFFT=False, negative=False, usecsv=False, csvaa=False, print_matrix=False):
+def in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, counter,
+                 no_fft=False, negative=False, usecsv=False, csvaa=False, print_matrix=False):
     """
     Perform directed evolution by randomly selecting a sequence position for substitution and randomly choose the
     amino acid to substitute to. New sequence gets accepted if meeting the Metropolis criterion and will be
@@ -121,15 +121,15 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
 
         if i == 0:  # get first v, y, s
             # randomly choose the location of the first mutation in the trajectory
-            mut_loc_seed = random.randint(0, len(s_WT))
+            mut_loc_seed = random.randint(0, len(s_wt))
             # m = 1 instead of (np.random.poisson(2) + 1)
-            var_seq_dict = mutate_sequence(s_WT, 1, Model, mut_loc_seed, amino_acids, Sub_LS, 0, counter, usecsv, csvaa)
+            var_seq_dict = mutate_sequence(s_wt, 1, model, mut_loc_seed, amino_acids, sub_ls, 0, counter, usecsv, csvaa)
 
-            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
-                                  + str(i+1) + '.fasta', Model, None, noFFT, print_matrix)
+            predictions = predict(path, 'EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
+                                  + str(i+1) + '.fasta', model, None, no_fft, print_matrix)
             predictions = restructure_dict(predictions)
 
-            write_MCMC_predictions(Model, i, predictions, counter)
+            write_mcmc_predictions(model, i, predictions, counter)
 
             ys, variants = [], []
             for var in predictions:
@@ -147,14 +147,14 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
         else:  # based on first v, y, s go deeper in mutations --> new_v, new_y, new_s if accepted
             # only chose 1 mutation to introduce and not:
             # mu = np.random.uniform(1, 2.5) --> Number of Mutations = m = np.random.poisson(mu - 1) + 1
-            new_var_seq_dict = mutate_sequence(sequence, 1, Model, new_mut_loc, amino_acids,
-                                               Sub_LS, i, counter, usecsv, csvaa)
+            new_var_seq_dict = mutate_sequence(sequence, 1, model, new_mut_loc, amino_acids,
+                                               sub_ls, i, counter, usecsv, csvaa)
 
-            predictions = Predict(Path, 'EvoTraj/' + str(Model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
-                                  + str(i+1) + '.fasta', Model, None, noFFT, print_matrix)
+            predictions = predict(path, 'EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
+                                  + str(i+1) + '.fasta', model, None, no_fft, print_matrix)
             predictions = restructure_dict(predictions)
 
-            write_MCMC_predictions(Model, i, predictions, counter)
+            write_mcmc_predictions(model, i, predictions, counter)
 
             new_ys, new_variants = [], []
             for var in predictions:
@@ -170,11 +170,11 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
             with warnings.catch_warnings():  # catching Overflow warning
                 warnings.simplefilter("ignore")
                 try:
-                    boltz = np.exp(((new_y - y) / T), dtype=np.longfloat)
+                    boltz = np.exp(((new_y - y) / temp), dtype=np.longfloat)
                     if negative is True:
-                        boltz = np.exp(((-new_y - -y) / T), dtype=np.longfloat)
+                        boltz = np.exp(((-new_y - -y) / temp), dtype=np.longfloat)
                 except OverflowError:
-                        boltz = 1
+                    boltz = 1
             p = min(1, boltz)
             rand_var = random.random()  # random float between 0 and 1
             if rand_var < p:  # Metropolis-Hastings update selection criterion
@@ -189,8 +189,9 @@ def in_silico_de(s_WT, num_iterations, Model, amino_acids, T, Path, Sub_LS, coun
     return v_traj, s_traj, y_traj
 
 
-def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_record_folder, amino_acids, T, Path,
-                        Sub_LS, noFFT=False, negative=False, save=False, usecsv=False, csvaa=False, print_matrix=False):
+def run_de_trajectories(s_wt, model, y_wt, num_iterations, num_trajectories, de_record_folder, amino_acids, temp, path,
+                        sub_ls, no_fft=False, negative=False, save=False, usecsv=False, csvaa=False,
+                        print_matrix=False):
     """
     Runs the directed evolution by adressing the in_silico_de function and plots the evolution trajectories.
     """
@@ -198,25 +199,25 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     s_records = []  # initialize list of sequence records
     y_records = []  # initialize list of fitness score records
 
-    for i in range(num_trajectories):  #iterate through however many mutation trajectories we want to sample
+    for i in range(num_trajectories):  # iterate through however many mutation trajectories we want to sample
         # call the directed evolution function, outputting the trajectory sequence and fitness score records
-        v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, Model, amino_acids, T, Path, Sub_LS, i,
-                                              noFFT, negative, usecsv, csvaa, print_matrix)
+        v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, i,
+                                              no_fft, negative, usecsv, csvaa, print_matrix)
 
         v_records.append(v_traj)    # update the variant naming trajectory records for this full mutagenesis trajectory
         s_records.append(s_traj)  # update the sequence trajectory records for this full mutagenesis trajectory
         y_records.append(y_traj)  # update the fitness trajectory records for this full mutagenesis trajectory
 
-        if save==True:
+        if save:
             try:
-                os.mkdir(DE_record_folder)
+                os.mkdir(de_record_folder)
             except FileExistsError:
                 pass
             # save sequence records for trajectory i
-            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1)
+            np.savetxt(de_record_folder + "/" + str(model) + "_trajectory" + str(i+1)
                        + "_seqs.txt", np.array(s_traj), fmt="%s")
             # save fitness records for trajectory i
-            np.savetxt(DE_record_folder + "/" + str(Model) + "_trajectory" + str(i+1)
+            np.savetxt(de_record_folder + "/" + str(model) + "_trajectory" + str(i+1)
                        + "_fitness.txt", np.array(y_traj))
 
     # numpy warning filter needed for arraying ragged nested sequences
@@ -229,11 +230,11 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     ax.locator_params(integer=True)
     f_len_max = 0
     for j, fitness_array in enumerate(y_records):
-        if y_WT is not None:
+        if y_wt is not None:
             f_len = len(fitness_array)
             if f_len > f_len_max:
                 f_len_max = f_len
-            ax.plot(np.arange(1, len(fitness_array)+2, 1), np.insert(fitness_array, 0, y_WT),  # insert y_WT at Pos. 0
+            ax.plot(np.arange(1, len(fitness_array)+2, 1), np.insert(fitness_array, 0, y_wt),  # insert y_WT at Pos. 0
                     '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(j+1))
         else:
             ax.plot(np.arange(1, len(fitness_array)+1, 1), fitness_array,
@@ -242,7 +243,7 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     label_x_y_name = []
     for k, l in enumerate(v_records):  # k = 1, 2, 3, .., ; l = variant label array
         for kk, ll in enumerate(l):  # kk = 1, 2, 3, ...  (=x); ll = variant label; y_records[k][kk] = fitness (=y)
-            if y_WT is not None:     # kk+2 as enumerate starts with 0 and WT is 1 --> start labeling with 2
+            if y_wt is not None:     # kk+2 as enumerate starts with 0 and WT is 1 --> start labeling with 2
                 label_x_y_name.append(ax.text(kk+2, y_records[k][kk], ll))
             else:
                 label_x_y_name.append(ax.text(kk+1, y_records[k][kk], ll))
@@ -251,7 +252,7 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
     from adjustText import adjust_text
     adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
     leg = ax.legend()
-    if y_WT is not None:
+    if y_wt is not None:
         # plt xticks with locations and labels following: xticks(locs, labels)
         if f_len_max > 10:
             plt.xticks(np.arange(1, f_len_max + 2, 5), ['WT'] + ((np.arange(5, f_len_max + 1, 5)).tolist()))
@@ -260,6 +261,6 @@ def run_DE_trajectories(s_wt, Model, y_WT, num_iterations, num_trajectories, DE_
 
     plt.ylabel('Predicted Fitness')
     plt.xlabel('Mutation Trial Steps')
-    plt.savefig(str(Model) + '_DE_trajectories.png', dpi=500)
+    plt.savefig(str(model) + '_DE_trajectories.png', dpi=500)
 
     return s_records, y_records
