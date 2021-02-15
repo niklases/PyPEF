@@ -7,7 +7,7 @@ Niklas E. Siedhoff<sup>*§*</sup>, Alexander-Maurice Illig<sup>*§*</sup>, Ulric
 # PyPEF: Pythonic Protein Engineering Framework
 
 a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering.
-![image1](workflow/test_dataset/exemplary_validation_color_plot.png)
+<img src="workflow/test_dataset/exemplary_validation_color_plot.png" alt="drawing" width="800"/>
 
 Protein engineering by rational or random approaches generates data
 that can aid the construction of self-learned sequence-function
