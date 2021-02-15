@@ -36,14 +36,14 @@ def get_wt_sequence(sequence_file):
                   ' {}.'.format(str(sequence_file)))
         except NameError:
             raise NameError("Found no input wild-type fasta sequence file (.fa) in current directory!")
-    Wild_Type_Sequence = ""
+    wild_type_sequence = ""
     with open(sequence_file, 'r') as sf:
         for lines in sf.readlines():
             if lines.startswith(">"):
                 continue
             lines = ''.join(lines.split())
-            Wild_Type_Sequence += lines
-    return Wild_Type_Sequence
+            wild_type_sequence += lines
+    return wild_type_sequence
 
 
 def csv_input(csv_file):
@@ -76,15 +76,15 @@ def drop_rows(csv_file, amino_acids, threshold_drop):
     label = df_raw.iloc[:, 1]
     sequence = df_raw.iloc[:, 0]
 
-    drop_rows = []
+    dropping_rows = []
 
     for i, row in enumerate(label):
         try:
             row = float(row)
             if row < threshold_drop:
-                drop_rows.append(i)
+                dropping_rows.append(i)
         except ValueError:
-            drop_rows.append(i)
+            dropping_rows.append(i)
 
     for i, variant in enumerate(sequence):
         try:
@@ -94,40 +94,40 @@ def drop_rows(csv_file, amino_acids, threshold_drop):
                     if splits[0].isdigit() and variant[-1] in amino_acids:
                         continue
                     elif splits[0] not in amino_acids or splits[-1] not in amino_acids:
-                        if i not in drop_rows:
-                            drop_rows.append(i)
+                        if i not in dropping_rows:
+                            dropping_rows.append(i)
                             # print('Does not know this definition of amino acid substitution: Variant:', variant)
             else:
                 if variant[0].isdigit() and variant[-1] in amino_acids:
                     continue
                 elif variant[0] not in amino_acids or variant[-1] not in amino_acids:
-                    drop_rows.append(i)
+                    dropping_rows.append(i)
                     # print('Does not know this definition of amino acid substitution: Variant:', variant)
         except TypeError:
             raise TypeError('You might consider checking the input .csv for empty first two columns,'
                             ' e.g. in the last row.')
 
-    print('No. of dropped rows: {}.'.format(len(drop_rows)), 'Total given variants: {}'.format(len(df_raw)))
+    print('No. of dropped rows: {}.'.format(len(dropping_rows)), 'Total given variants: {}'.format(len(df_raw)))
 
-    df = df_raw.drop(drop_rows)
+    df = df_raw.drop(dropping_rows)
     df.dropna(inplace=True)
     df.reset_index(drop=True, inplace=True)
 
     return df
 
 
-def get_variants(df, amino_acids, Wild_Type_Sequence):
+def get_variants(df, amino_acids, wild_type_sequence):
     """
     Gets variants and divides and counts the variant data for single substituted and higher substituted variants.
     Raises NameError if variant naming is not matching the given wild-type sequence, e.g. if variant A17C would define
     a substitution at residue Ala-17 to Cys but the wild-type sequence has no Ala at position 17.
     """
-    X = df.iloc[:, 0]
-    Y = df.iloc[:, 1]
+    x = df.iloc[:, 0]
+    y = df.iloc[:, 1]
     single_variants, higher_variants, index_higher, index_lower, higher_values, single_values = [], [], [], [], [], []
-    single, double, triple, quadruple, quintuple, sextuple, \
-    septuple, octuple, nonuple, decuple, higher = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    for i, variant in enumerate(X):
+    single, double, triple, quadruple, quintuple, sextuple, septuple,\
+    octuple, nonuple, decuple, higher = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    for i, variant in enumerate(x):
         if '/' in variant:
             count = variant.count('/')
             if count == 1:
@@ -155,11 +155,11 @@ def get_variants(df, amino_acids, Wild_Type_Sequence):
                 if splits[0].isdigit() or splits[0] in amino_acids and splits[-1] in amino_acids:
                     new = int(re.findall(r'\d+', splits)[0])
                     if splits[0] in amino_acids:
-                        if splits[0] != Wild_Type_Sequence[new - 1]:
+                        if splits[0] != wild_type_sequence[new - 1]:
                             raise NameError('Position of amino acids in given sequence does not match the given '
-                                            'positions in the input data! E.g. see position {} and position {} being {} '
-                                            'in the given sequence'.format(variant, new, Wild_Type_Sequence[new - 1]))
-                    higher_var = Wild_Type_Sequence[new - 1] + str(new) + str(splits[-1])
+                                            'positions in the input data! E.g. see position {} and position {} being {}'
+                                            ' in the given sequence'.format(variant, new, wild_type_sequence[new - 1]))
+                    higher_var = wild_type_sequence[new - 1] + str(new) + str(splits[-1])
                     m[a] = higher_var
                     if a == len(m) - 1:
                         higher_variants.append(m)
@@ -170,12 +170,12 @@ def get_variants(df, amino_acids, Wild_Type_Sequence):
             if variant[0].isdigit() or variant[0] in amino_acids and variant[-1] in amino_acids:
                 num = int(re.findall(r'\d+', variant)[0])
                 if variant[0] in amino_acids:
-                    if variant[0] != Wild_Type_Sequence[num - 1]:
+                    if variant[0] != wild_type_sequence[num - 1]:
                         raise NameError('Position of amino acids in given sequence does not match the given '
                                         'positions in the input data! E.g. see position {} and position {} being {} '
-                                        'in the given sequence.'.format(variant, num, Wild_Type_Sequence[num - 1]))
+                                        'in the given sequence.'.format(variant, num, wild_type_sequence[num - 1]))
                 try:
-                    full_variant = Wild_Type_Sequence[num - 1] + str(num) + str(variant[-1])
+                    full_variant = wild_type_sequence[num - 1] + str(num) + str(variant[-1])
                 except IndexError:
                     raise IndexError("Found variant sequence position {} in data which "
                                      "is out of range of wild-type sequence length.".format(str(num)))
@@ -186,9 +186,9 @@ def get_variants(df, amino_acids, Wild_Type_Sequence):
           'Quadruple: {}.'.format(quadruple), 'Quintuple: {}.'.format(quintuple), 'Sextuple: {}.'.format(sextuple),
           'Septuple: {}.'.format(septuple), 'Octuple: {}.'.format(octuple), 'Nonuple: {}.'.format(nonuple),
           'Decuple: {}.'.format(decuple), 'Higher: {}.'.format(higher))
-    for vals in Y[index_higher]:
+    for vals in y[index_higher]:
         higher_values.append(vals)
-    for vals in Y[index_lower]:
+    for vals in y[index_lower]:
         single_values.append(vals)
 
     single_variants, single_values = tuple(single_variants), tuple(single_values)
@@ -197,7 +197,7 @@ def get_variants(df, amino_acids, Wild_Type_Sequence):
     return single_variants, single_values, higher_variants, higher_values
 
 
-def make_sub_LS_VS(single_variants, single_values, higher_variants, higher_values, directed_evolution=False):
+def make_sub_ls_vs(single_variants, single_values, higher_variants, higher_values, directed_evolution=False):
     """
     Creates learning and validation sets, fills learning set with single substituted variants and splits
     rest (higher substituted) for learning and validation sets: 3/4 to LS and 1/4 to VS
@@ -217,28 +217,28 @@ def make_sub_LS_VS(single_variants, single_values, higher_variants, higher_value
               .format(len(higher_variants)), ' Number of given values: {}.'.format(len(higher_values)))
 
     # 1. CREATION OF LS AND VS SPLIT FOR SINGLE FOR LS AND HIGHER VARIANTS FOR VS
-    Sub_LS = list(single_variants)  # Substitutions of LS
-    Val_LS = list(single_values)    # Values of LS
+    sub_ls = list(single_variants)  # Substitutions of LS
+    val_ls = list(single_values)    # Values of LS
 
-    Sub_VS = []                     # Substitutions of VS
-    Val_VS = []                     # Values of VS
+    sub_vs = []                     # Substitutions of VS
+    val_vs = []                     # Values of VS
 
     if directed_evolution is False:
         for i in range(len(higher_variants)):
             if len(higher_variants) < 6:  # if less than 6 higher variants all higher variants are appended to VS
-                Sub_VS.append(higher_variants[i])
-                Val_VS.append(higher_values[i])
-            elif (i % 3) == 0 and i != 0:  # 1/4 of higher variants to VS, 3/4 to LS - change here for LS/VS ratio change
-                Sub_VS.append(higher_variants[i])
-                Val_VS.append(higher_values[i])
+                sub_vs.append(higher_variants[i])
+                val_vs.append(higher_values[i])
+            elif (i % 3) == 0 and i != 0:  # 1/4 of higher variants to VS, 3/4 to LS: change here for LS/VS ratio change
+                sub_vs.append(higher_variants[i])
+                val_vs.append(higher_values[i])
             else:                       # 3/4 to LS
-                Sub_LS.append(higher_variants[i])
-                Val_LS.append(higher_values[i])
+                sub_ls.append(higher_variants[i])
+                val_ls.append(higher_values[i])
 
-    return Sub_LS, Val_LS, Sub_VS, Val_VS
+    return sub_ls, val_ls, sub_vs, val_vs
 
 
-def make_sub_LS_VS_randomly(single_variants, single_values, higher_variants, higher_values):
+def make_sub_ls_vs_randomly(single_variants, single_values, higher_variants, higher_values):
     """
     Creation of learning set and validation set by randomly splitting sets
     """
@@ -256,59 +256,59 @@ def make_sub_LS_VS_randomly(single_variants, single_values, higher_variants, hig
         if j not in ls:
             vs.append(j)
 
-    Combined = single_variants + higher_variants  # Substitutions
-    Combined2 = single_values + higher_values  # Values
+    combined = single_variants + higher_variants  # Substitutions
+    combined2 = single_values + higher_values  # Values
 
-    Sub_LS = []
-    Val_LS = []
-    tot_Sub_LS, tot_Val_LS = [], []
-    tot_Sub_VS, tot_Val_VS = [], []
+    sub_ls = []
+    val_ls = []
+    tot_sub_ls, tot_val_ls = [], []
+    tot_sub_vs, tot_val_vs = [], []
 
     for i in ls:
-        Sub_LS.append(Combined[i])
-        Val_LS.append(Combined2[i])
+        sub_ls.append(combined[i])
+        val_ls.append(combined2[i])
 
-    Sub_VS = []
-    Val_VS = []
+    sub_vs = []
+    val_vs = []
     for j in vs:
-        Sub_VS.append(Combined[j])
-        Val_VS.append(Combined2[j])
+        sub_vs.append(combined[j])
+        val_vs.append(combined2[j])
 
-    for subs in Sub_LS:
-        for subs2 in Sub_VS:
+    for subs in sub_ls:
+        for subs2 in sub_vs:
             if subs == subs2:
-                print('\n<Warning> LS and VS overlap for: {} - You might want to consider checking the provided datasets'
-                      ' for multiple entries'.format(subs), end=' ')
+                print('\n<Warning> LS and VS overlap for: {} - You might want to consider checking the provided '
+                      'datasets for multiple entries'.format(subs), end=' ')
 
-    tot_Sub_LS.append(Sub_LS)
-    tot_Val_LS.append(Val_LS)
-    tot_Sub_VS.append(Sub_VS)
-    tot_Val_VS.append(Val_VS)
+    tot_sub_ls.append(sub_ls)
+    tot_val_ls.append(val_ls)
+    tot_sub_vs.append(sub_vs)
+    tot_val_vs.append(val_vs)
 
-    return tot_Sub_LS[0], tot_Val_LS[0], tot_Sub_VS[0], tot_Val_VS[0]
+    return tot_sub_ls[0], tot_val_ls[0], tot_sub_vs[0], tot_val_vs[0]
 
 
-def make_fasta_LS_VS(filename, WT, Sub, Val):   # Sub = Substitution, Val = Value
+def make_fasta_ls_vs(filename, wt, sub, val):   # Sub = Substitution, Val = Value
     """
     Creates learning and validation sets (.fasta style files)
     """
     myfile = open(filename, 'w')
-    Count = 0
-    for i in Sub:
-        temp = list(WT)
+    count = 0
+    for i in sub:
+        temp = list(wt)
         name = ''
         b = 0
         for j in i:
-            Position_Index = int(str(j)[1:-1]) - 1
-            New_Amino_Acid = str(j)[-1]
-            temp[Position_Index] = New_Amino_Acid
+            position_index = int(str(j)[1:-1]) - 1
+            new_amino_acid = str(j)[-1]
+            temp[position_index] = new_amino_acid
             if b == 0:
                 name += j
             else:
                 name += '/' + j
             b += 1
         print('>', name, file=myfile)
-        print(';', Val[Count], file=myfile)
+        print(';', val[count], file=myfile)
         print(''.join(temp), file=myfile)
-        Count += 1
+        count += 1
     myfile.close()

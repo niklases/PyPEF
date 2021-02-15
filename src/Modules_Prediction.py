@@ -12,186 +12,189 @@ import numpy as np
 from tqdm import tqdm
 
 
-def Make_Fasta_PS(filename, WT, Sub):
+def make_fasta_ps(filename, wt, substitution):
     """
     Creates prediction sets (.fasta style files)
     """
     myfile = open(filename, 'w')
-    Count = 0
-    for i in Sub:
-        Temp = list(WT)
+    count = 0
+    for i in substitution:
+        temporary = list(wt)
         name = ''
         b = 0
         for j in i:
-            Position_Index = int(str(j)[1:-1]) - 1
-            New_Amino_Acid = str(j)[-1]
-            Temp[Position_Index] = New_Amino_Acid
+            position_index = int(str(j)[1:-1]) - 1
+            new_amino_acid = str(j)[-1]
+            temporary[position_index] = new_amino_acid
             if b == 0:
                 name += j
             else:
                 name += '/' + j
             b += 1
         print('>', name, file=myfile)
-        print(''.join(Temp), file=myfile)
-        Count += 1
+        print(''.join(temporary), file=myfile)
+        count += 1
     myfile.close()
 
 
-def Make_Combinations_Double(Arr):
+def make_combinations_double(arr):
     """
     Make double recombination variants
     """
-    Doubles = []
-    for i in tqdm(range(len(Arr))):
-        for j in range(len(Arr)):
+    doubles = []
+    for i in tqdm(range(len(arr))):
+        for j in range(len(arr)):
             if j > i:
-                if (Arr[i][0])[1:-1] != (Arr[j][0])[1:-1]:
-                    Doubles.append([Arr[i][0], Arr[j][0]])
-                    if len(Doubles) >= 8E04:
-                        yield Doubles
-                        Doubles = []
-    yield Doubles
+                if (arr[i][0])[1:-1] != (arr[j][0])[1:-1]:
+                    doubles.append([arr[i][0], arr[j][0]])
+                    if len(doubles) >= 8E04:
+                        yield doubles
+                        doubles = []
+    yield doubles
 
 
-def Make_Combinations_Triple(Arr):
+def make_combinations_triple(arr):
     """
     Make triple recombination variants
     """
-    length = len(Arr)
-    Triples = []
+    length = len(arr)
+    triples = []
     for i in tqdm(range(length)):
         for j in range(length):
             for k in range(length):
                 if k > j > i:
-                    if (Arr[i][0])[1:-1] != (Arr[j][0])[1:-1] != (Arr[k][0])[1:-1]:
-                        Triples.append([Arr[i][0], Arr[j][0], Arr[k][0]])
-                        if len(Triples) >= 8E04:
-                            yield Triples
-                            Triples = []
-    yield Triples
+                    if (arr[i][0])[1:-1] != (arr[j][0])[1:-1] != (arr[k][0])[1:-1]:
+                        triples.append([arr[i][0], arr[j][0], arr[k][0]])
+                        if len(triples) >= 8E04:
+                            yield triples
+                            triples = []
+    yield triples
 
 
-def Make_Combinations_Quadruple(Arr):
+def make_combinations_quadruple(arr):
     """
     Make quadruple recombination variants
     """
-    length = len(Arr)
-    Quadruples = []
+    length = len(arr)
+    quadruples = []
     for i in tqdm(range(length)):
         for j in range(length):
             for k in range(length):
                 for l in range(length):
                     if l > k > j > i:
-                        if (Arr[i][0])[1:-1] != (Arr[j][0])[1:-1] != (Arr[k][0])[1:-1] != (Arr[l][0])[1:-1]:
-                            Quadruples.append([Arr[i][0], Arr[j][0], Arr[k][0], Arr[l][0]])
-                            if len(Quadruples) >= 8E04:
-                                yield Quadruples
-                                Quadruples = []
-    yield Quadruples
+                        if (arr[i][0])[1:-1] != (arr[j][0])[1:-1] != (arr[k][0])[1:-1] != (arr[l][0])[1:-1]:
+                            quadruples.append([arr[i][0], arr[j][0], arr[k][0], arr[l][0]])
+                            if len(quadruples) >= 8E04:
+                                yield quadruples
+                                quadruples = []
+    yield quadruples
 
 
-def Make_Directory_And_Enter(Directory):
+def make_directory_and_enter(directory):
     """
     Makes directory for recombined or diverse prediction sets
     """
-    Previous_Working_Directory = os.getcwd()
+    previous_working_directory = os.getcwd()
     try:
-        if not os.path.exists(os.path.dirname(Directory)):
-            os.mkdir(Directory)
+        if not os.path.exists(os.path.dirname(directory)):
+            os.mkdir(directory)
     except OSError:
         pass
-    os.chdir(Directory)
+    os.chdir(directory)
 
-    return (Previous_Working_Directory)
+    return previous_working_directory
 
 
-def create_split_files(array, single_variants, WT_Sequence, name, no):
+def create_split_files(array, single_variants, wt_sequence, name, no):
     """
     Creates split files from given variants for yielded recombined or diverse variants
     """
     if len(array) > 0:
-        Number_Of_Split_Files = len(array) / (len(single_variants) * 20 ** 3)
-        Number_Of_Split_Files = round(Number_Of_Split_Files)
-        if Number_Of_Split_Files == 0:
-            Number_Of_Split_Files += 1
-        Split = np.array_split(array, Number_Of_Split_Files)
-        pwd = Make_Directory_And_Enter(name + '_Split')
-        for i in Split:
+        number_of_split_files = len(array) / (len(single_variants) * 20 ** 3)
+        number_of_split_files = round(number_of_split_files)
+        if number_of_split_files == 0:
+            number_of_split_files += 1
+        split = np.array_split(array, number_of_split_files)
+        pwd = make_directory_and_enter(name + '_Split')
+        for i in split:
             name_ = name + '_Split' + str(no) + '.fasta'
-            Make_Fasta_PS(name_, WT_Sequence, i)
+            make_fasta_ps(name_, wt_sequence, i)
 
         os.chdir(pwd)
 
+        return ()
 
-def Make_Combinations_Double_All_Diverse(Arr, Aminoacids):
+
+def make_combinations_double_all_diverse(arr, aminoacids):
     """
     Make double substituted naturally diverse variants
     """
-    Doubles = []
-    for i in tqdm(range(len(Arr))):
-        for j in range(i + 1, len(Arr)):
-            for k in Aminoacids:
-                for l in Aminoacids:
-                    if ((Arr[i][0])[1:-1]) != ((Arr[j][0])[1:-1]) and\
-                            ((Arr[i][0])[:-1] + k)[0] != ((Arr[i][0])[:-1] + k)[-1] and\
-                            ((Arr[j][0])[:-1] + l)[0] != ((Arr[j][0])[:-1] + l)[-1]:
-                            Doubles.append(tuple([(Arr[i][0])[:-1] + k, (Arr[j][0])[:-1] + l]))  # tuple needed for
-                            if len(Doubles) >= 8E04:                                             # list(dict()):
-                                Doubles = list(dict.fromkeys(Doubles))  # transfer to dict removes duplicated list entries
-                                yield Doubles
-                                Doubles = []
-    Doubles = list(dict.fromkeys(Doubles))
-    yield Doubles
+    doubles = []
+    for i in tqdm(range(len(arr))):
+        for j in range(i + 1, len(arr)):
+            for k in aminoacids:
+                for l in aminoacids:
+                    if ((arr[i][0])[1:-1]) != ((arr[j][0])[1:-1]) and\
+                            ((arr[i][0])[:-1] + k)[0] != ((arr[i][0])[:-1] + k)[-1] and\
+                            ((arr[j][0])[:-1] + l)[0] != ((arr[j][0])[:-1] + l)[-1]:
+                        doubles.append(tuple([(arr[i][0])[:-1] + k, (arr[j][0])[:-1] + l]))  # tuple needed for
+                        if len(doubles) >= 8E04:                                             # list(dict()):
+                            doubles = list(dict.fromkeys(doubles))  # removes duplicated list entries
+                            yield doubles
+                            doubles = []
+    doubles = list(dict.fromkeys(doubles))
+    yield doubles
 
 
-def Make_Combinations_Triple_All_Diverse(Arr, Aminoacids):
+def make_combinations_triple_all_diverse(arr, aminoacids):
     """
     Make triple substituted naturally diverse variants
     """
-    Triples = []
-    for i in tqdm(range(len(Arr))):
-        for j in range(i + 1, len(Arr)):
-            for k in range(j + 1, len(Arr)):
-                for l in Aminoacids:
-                    for m in Aminoacids:
-                        for n in Aminoacids:
-                            if ((Arr[i][0])[1:-1]) != ((Arr[j][0])[1:-1]) != ((Arr[k][0])[1:-1]) and\
-                                    ((Arr[i][0])[:-1] + l)[0] != ((Arr[i][0])[:-1] + l)[-1] and\
-                                    ((Arr[j][0])[:-1] + m)[0] != ((Arr[j][0])[:-1] + m)[-1] and\
-                                    ((Arr[k][0])[:-1] + n)[0] != ((Arr[k][0])[:-1] + n)[-1]:
-                                    Triples.append(tuple([(Arr[i][0])[:-1] + l, (Arr[j][0])[:-1] + m, (Arr[k][0])[:-1] + n]))
-                                    if len(Triples) >= 8E04:
-                                        Triples = list(dict.fromkeys(Triples))  # transfer to dict and back to list
-                                        yield Triples
-                                        Triples = []
-    Triples = list(dict.fromkeys(Triples))
-    yield Triples
+    triples = []
+    for i in tqdm(range(len(arr))):
+        for j in range(i + 1, len(arr)):
+            for k in range(j + 1, len(arr)):
+                for l in aminoacids:
+                    for m in aminoacids:
+                        for n in aminoacids:
+                            if ((arr[i][0])[1:-1]) != ((arr[j][0])[1:-1]) != ((arr[k][0])[1:-1]) and\
+                                    ((arr[i][0])[:-1] + l)[0] != ((arr[i][0])[:-1] + l)[-1] and\
+                                    ((arr[j][0])[:-1] + m)[0] != ((arr[j][0])[:-1] + m)[-1] and\
+                                    ((arr[k][0])[:-1] + n)[0] != ((arr[k][0])[:-1] + n)[-1]:
+                                triples.append(tuple([(arr[i][0])[:-1] + l, (arr[j][0])[:-1] + m,
+                                                      (arr[k][0])[:-1] + n]))
+                                if len(triples) >= 8E04:
+                                    triples = list(dict.fromkeys(triples))  # transfer to dict and back to list
+                                    yield triples
+                                    triples = []
+    triples = list(dict.fromkeys(triples))
+    yield triples
 
 
-
-def Make_Combinations_Quadruple_All_Diverse(Arr, Aminoacids):
+def make_combinations_quadruple_all_diverse(arr, aminoacids):
     """
     Make quadruple substituted naturally diverse variants
     """
-    Quadruples = []
-    for i in tqdm(range(len(Arr))):
-        for j in range(i + 1, len(Arr)):
-            for k in range(j + 1, len(Arr)):
-                for l in range(k + 1, len(Arr)):
-                    for m in Aminoacids:
-                        for n in Aminoacids:
-                            for o in Aminoacids:
-                                for p in Aminoacids:
-                                    if ((Arr[i][0])[1:-1]) != ((Arr[j][0])[1:-1]) != ((Arr[k][0])[1:-1]) != ((Arr[l][0])[1:-1]) and\
-                                            ((Arr[i][0])[:-1] + m)[0] != ((Arr[i][0])[:-1] + m)[-1] and\
-                                            ((Arr[j][0])[:-1] + n)[0] != ((Arr[j][0])[:-1] + n)[-1] and\
-                                            ((Arr[k][0])[:-1] + o)[0] != ((Arr[k][0])[:-1] + o)[-1] and\
-                                            ((Arr[l][0])[:-1] + p)[0] != ((Arr[l][0])[:-1] + p)[-1]:
-                                                Quadruples.append(tuple([(Arr[i][0])[:-1] + m, (Arr[j][0])[:-1] + n,
-                                                                         (Arr[k][0])[:-1] + o, (Arr[l][0])[:-1] + p]))
-                                                if len(Quadruples) >= 8E04:
-                                                    Quadruples = list(dict.fromkeys(Quadruples))  # transfer to dict and back to list
-                                                    yield Quadruples
-                                                    Quadruples = []
-    Quadruples = list(dict.fromkeys(Quadruples))
-    yield Quadruples
+    quadruples = []
+    for i in tqdm(range(len(arr))):
+        for j in range(i + 1, len(arr)):
+            for k in range(j + 1, len(arr)):
+                for l in range(k + 1, len(arr)):
+                    for m in aminoacids:
+                        for n in aminoacids:
+                            for o in aminoacids:
+                                for p in aminoacids:
+                                    if ((arr[i][0])[1:-1]) != ((arr[j][0])[1:-1]) != ((arr[k][0])[1:-1]) != \
+                                            ((arr[l][0])[1:-1]) and\
+                                            ((arr[i][0])[:-1] + m)[0] != ((arr[i][0])[:-1] + m)[-1] and\
+                                            ((arr[j][0])[:-1] + n)[0] != ((arr[j][0])[:-1] + n)[-1] and\
+                                            ((arr[k][0])[:-1] + o)[0] != ((arr[k][0])[:-1] + o)[-1] and\
+                                            ((arr[l][0])[:-1] + p)[0] != ((arr[l][0])[:-1] + p)[-1]:
+                                        quadruples.append(tuple([(arr[i][0])[:-1] + m, (arr[j][0])[:-1] + n,
+                                                                 (arr[k][0])[:-1] + o, (arr[l][0])[:-1] + p]))
+                                        if len(quadruples) >= 8E04:
+                                            quadruples = list(dict.fromkeys(quadruples))  # transfer to dict
+                                            yield quadruples                              # and back to list
+                                            quadruples = []
+    quadruples = list(dict.fromkeys(quadruples))
+    yield quadruples

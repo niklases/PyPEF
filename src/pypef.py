@@ -101,20 +101,21 @@ import numpy as np
 from tqdm import tqdm
 from docopt import docopt
 import multiprocessing
-# import Modules_Parallelization.R2_List_Parallel locally to avoid error
-# when not running in parallel, thus commented out:
-# from Modules_Parallelization import R2_List_Parallel
 # ray imported later locally as is is only used for parallelized running, thus commented out:
 # import ray
 
 # importing own modules
-from Modules_Regression import read_models, Formatted_Output, R2_List, Save_Model, Predict, Predictions_Out, Plot
-from Modules_Directed_Evolution import run_DE_trajectories
-from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_LS_VS,
-                                         make_sub_LS_VS_randomly, make_fasta_LS_VS)
-from Modules_Prediction import (Make_Combinations_Double, Make_Combinations_Triple, Make_Combinations_Quadruple,
-                                create_split_files, Make_Combinations_Double_All_Diverse,
-                                Make_Combinations_Triple_All_Diverse, Make_Combinations_Quadruple_All_Diverse)
+from Modules_Regression import read_models, formatted_output, r2_list, save_model, predict, predictions_out, plot
+from Modules_Directed_Evolution import run_de_trajectories
+from Modules_Learning_Validation import (get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_ls_vs,
+                                         make_sub_ls_vs_randomly, make_fasta_ls_vs)
+from Modules_Prediction import (make_combinations_double, make_combinations_triple, make_combinations_quadruple,
+                                create_split_files, make_combinations_double_all_diverse,
+                                make_combinations_triple_all_diverse, make_combinations_quadruple_all_diverse)
+# import Modules_Parallelization.r2_list_parallel locally to avoid error
+# when not running in parallel, thus commented out:
+# from Modules_Parallelization import r2_list_parallel
+
 
 def run():
     """
@@ -123,7 +124,7 @@ def run():
     for argument parsing.
     """
     arguments = docopt(__doc__, version='PyPEF 0.1.2 (December 2020)')
-    # print(arguments)  # uncomment for printing parsed arguments
+    # print(arguments)  # uncomment for printing parsed docopt arguments
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
     if arguments['--show']:
@@ -138,25 +139,25 @@ def run():
             print(read_models(5))
 
     if arguments['mklsvs']:
-        WT_Sequence = get_wt_sequence(arguments['--wtseq'])
+        wt_sequence = get_wt_sequence(arguments['--wtseq'])
         csv_file = csv_input(arguments['--input'])
         t_drop = float(arguments['--drop'])
 
-        print('Length of provided sequence: {} amino acids.'.format(len(WT_Sequence)))
+        print('Length of provided sequence: {} amino acids.'.format(len(wt_sequence)))
         df = drop_rows(csv_file, amino_acids, t_drop)
         no_rnd = arguments['--nornd']
 
-        single_variants, single_values, higher_variants, higher_values = get_variants(df, amino_acids, WT_Sequence)
+        single_variants, single_values, higher_variants, higher_values = get_variants(df, amino_acids, wt_sequence)
         print('Number of single variants: {}.'.format(len(single_variants)))
         if len(single_variants) == 0:
             print('Found NO single substitution variants for possible recombination!')
-        Sub_LS, Val_LS, Sub_VS, Val_VS = make_sub_LS_VS(single_variants, single_values, higher_variants, higher_values)
+        sub_ls, val_ls, sub_vs, val_vs = make_sub_ls_vs(single_variants, single_values, higher_variants, higher_values)
         print('Tip: You can edit your LS and VS datasets just by cutting/pasting between the LS and VS fasta datasets.')
 
         print('Creating LS dataset...', end='\r')
-        make_fasta_LS_VS('LS.fasta', WT_Sequence, Sub_LS, Val_LS)
+        make_fasta_ls_vs('LS.fasta', wt_sequence, sub_ls, val_ls)
         print('Creating VS dataset...', end='\r')
-        make_fasta_LS_VS('VS.fasta', WT_Sequence, Sub_VS, Val_VS)
+        make_fasta_ls_vs('VS.fasta', wt_sequence, sub_vs, val_vs)
 
         try:
             no_rnd = int(no_rnd)
@@ -167,22 +168,22 @@ def run():
             no_rnd = int(no_rnd)
             while random_set_counter <= no_rnd:
                 print('Creating random LV and VS No. {}...'.format(random_set_counter), end='\r')
-                Sub_LS, Val_LS, Sub_VS, Val_VS = make_sub_LS_VS_randomly(single_variants, single_values,
+                sub_ls, val_ls, sub_vs, val_vs = make_sub_ls_vs_randomly(single_variants, single_values,
                                                                          higher_variants, higher_values
                                                                          )
-                make_fasta_LS_VS('LS_random_' + str(random_set_counter) + '.fasta', WT_Sequence, Sub_LS, Val_LS)
-                make_fasta_LS_VS('VS_random_' + str(random_set_counter) + '.fasta', WT_Sequence, Sub_VS, Val_VS)
+                make_fasta_ls_vs('LS_random_' + str(random_set_counter) + '.fasta', wt_sequence, sub_ls, val_ls)
+                make_fasta_ls_vs('VS_random_' + str(random_set_counter) + '.fasta', wt_sequence, sub_vs, val_vs)
                 random_set_counter += 1
         print('\n\nDone!\n')
 
     elif arguments['mkps']:
-        WT_Sequence = get_wt_sequence(arguments['--wtseq'])
+        wt_sequence = get_wt_sequence(arguments['--wtseq'])
         csv_file = csv_input(arguments['--input'])
         t_drop = float(arguments['--drop'])
 
         df = drop_rows(csv_file, amino_acids, t_drop)
-        print('Length of provided sequence: {} amino acids.'.format(len(WT_Sequence)))
-        single_variants, _, higher_variants, _ = get_variants(df, amino_acids, WT_Sequence)
+        print('Length of provided sequence: {} amino acids.'.format(len(wt_sequence)))
+        single_variants, _, higher_variants, _ = get_variants(df, amino_acids, wt_sequence)
         print('Number of single variants: {}.'.format(len(single_variants)))
         no_done = False
         if len(single_variants) == 0:
@@ -192,39 +193,39 @@ def run():
 
         if arguments['--drecomb']:
             print('Creating Recomb_Double_Split...')
-            for no, files in enumerate(Make_Combinations_Double(single_variants)):
-                Double_Mutants = np.array(files)
-                create_split_files(Double_Mutants, single_variants, WT_Sequence, 'Recomb_Double', no)
+            for no, files in enumerate(make_combinations_double(single_variants)):
+                double_mutants = np.array(files)
+                create_split_files(double_mutants, single_variants, wt_sequence, 'Recomb_Double', no)
 
         if arguments['--trecomb']:
             print('Creating Recomb_Triple_Split...')
-            for no, files in enumerate(Make_Combinations_Triple(single_variants)):
-                Triple_Mutants = np.array(files)
-                create_split_files(Triple_Mutants, single_variants, WT_Sequence, 'Recomb_Triple', no)
+            for no, files in enumerate(make_combinations_triple(single_variants)):
+                triple_mutants = np.array(files)
+                create_split_files(triple_mutants, single_variants, wt_sequence, 'Recomb_Triple', no)
 
         if arguments['--qrecomb']:
             print('Creating Recomb_Quadruple_Split...')
-            for no, files in enumerate(Make_Combinations_Quadruple(single_variants)):
-                Quadruple_Mutants = np.array(files)
-                create_split_files(Quadruple_Mutants, single_variants, WT_Sequence, 'Recomb_Quadruple', no)
+            for no, files in enumerate(make_combinations_quadruple(single_variants)):
+                quadruple_mutants = np.array(files)
+                create_split_files(quadruple_mutants, single_variants, wt_sequence, 'Recomb_Quadruple', no)
 
         if arguments['--ddiverse']:
             print('Creating Diverse_Double_Split...')
-            for no, files in enumerate(Make_Combinations_Double_All_Diverse(single_variants, amino_acids)):
-                Doubles = np.array(files)
-                create_split_files(Doubles, single_variants, WT_Sequence, 'Diverse_Double', no + 1)
+            for no, files in enumerate(make_combinations_double_all_diverse(single_variants, amino_acids)):
+                doubles = np.array(files)
+                create_split_files(doubles, single_variants, wt_sequence, 'Diverse_Double', no + 1)
 
         if arguments['--tdiverse']:
             print('Creating Diverse_Triple_Split...')
-            for no, files in enumerate(Make_Combinations_Triple_All_Diverse(single_variants, amino_acids)):
-                Triples = np.array(files)
-                create_split_files(Triples, single_variants, WT_Sequence, 'Diverse_Triple', no + 1)
+            for no, files in enumerate(make_combinations_triple_all_diverse(single_variants, amino_acids)):
+                triples = np.array(files)
+                create_split_files(triples, single_variants, wt_sequence, 'Diverse_Triple', no + 1)
 
         if arguments['--qdiverse']:
             print('Creating Diverse_Quadruple_Split...')
-            for no, files in enumerate(Make_Combinations_Quadruple_All_Diverse(single_variants, amino_acids)):
-                Quadruples = np.array(files)
-                create_split_files(Quadruples, single_variants, WT_Sequence, 'Diverse_Quadruple', no + 1)
+            for no, files in enumerate(make_combinations_quadruple_all_diverse(single_variants, amino_acids)):
+                quadruples = np.array(files)
+                create_split_files(quadruples, single_variants, wt_sequence, 'Diverse_Quadruple', no + 1)
 
         if arguments['--drecomb'] is False and arguments['--trecomb'] is False \
                 and arguments['--qrecomb'] is False and arguments['--ddiverse'] is False \
@@ -239,7 +240,7 @@ def run():
     elif arguments['run']:
         if arguments['--ls'] is not None and arguments['--vs'] is not None:
             if arguments['--model'] is None and arguments['--figure'] is None:
-                Path = os.getcwd()
+                path = os.getcwd()
                 try:
                     t_save = int(arguments['--save'])
                 except ValueError:
@@ -249,55 +250,55 @@ def run():
                     # import parallel modules here as ray is yet not supported for Windows
                     import ray
                     ray.init()
-                    from Modules_Parallelization import R2_List_Parallel
-                    Cores = arguments['--cores']
+                    from Modules_Parallelization import r2_list_parallel
+                    cores = arguments['--cores']
                     try:
-                        Cores = int(Cores)
+                        cores = int(cores)
                     except (ValueError, TypeError):
                         try:
-                            Cores = multiprocessing.cpu_count() // 2
+                            cores = multiprocessing.cpu_count() // 2
                         except NotImplementedError:
-                            Cores = 4
-                    print('Using {} cores for parallel computing. Running...'.format(Cores))
-                    AAindex_R2_List = R2_List_Parallel(arguments['--ls'], arguments['--vs'], Cores,
+                            cores = 4
+                    print('Using {} cores for parallel computing. Running...'.format(cores))
+                    aaindex_r2_list = r2_list_parallel(arguments['--ls'], arguments['--vs'], cores,
                                                        arguments['--regressor'], arguments['--nofft'],
                                                        arguments['--sort']
                                                        )
-                    Formatted_Output(AAindex_R2_List, arguments['--nofft'])
-                    Save_Model(Path, AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                    formatted_output(aaindex_r2_list, arguments['--nofft'])
+                    save_model(path, aaindex_r2_list, arguments['--ls'], arguments['--vs'], t_save,
                                arguments['--regressor'], arguments['--nofft'], arguments['--all']
                                )
 
                 else:
-                    AAindex_R2_List = R2_List(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
+                    aaindex_r2_list = r2_list(arguments['--ls'], arguments['--vs'], arguments['--regressor'],
                                               arguments['--nofft'], arguments['--sort']
                                               )
-                    Formatted_Output(AAindex_R2_List, arguments['--nofft'])
-                    Save_Model(Path, AAindex_R2_List, arguments['--ls'], arguments['--vs'], t_save,
+                    formatted_output(aaindex_r2_list, arguments['--nofft'])
+                    save_model(path, aaindex_r2_list, arguments['--ls'], arguments['--vs'], t_save,
                                arguments['--regressor'], arguments['--nofft'], arguments['--all']
                                )
                 print('\nDone!\n')
 
         elif arguments['--figure'] is not None and arguments['--model'] is not None:
-            Path = os.getcwd()
-            Plot(Path, arguments['--figure'], arguments['--model'], arguments['--label'], arguments['--color'],
+            path = os.getcwd()
+            plot(path, arguments['--figure'], arguments['--model'], arguments['--label'], arguments['--color'],
                  arguments['--ywt'], arguments['--nofft']
                  )
             print('\nCreated plot!\n')
 
         # Prediction of single .fasta file
         elif arguments['--ps'] is not None and arguments['--model'] is not None:
-            Path = os.getcwd()
+            path = os.getcwd()
             print(arguments['--nofft'])
-            predictions = Predict(Path, arguments['--ps'], arguments['--model'], None, arguments['--nofft'])
+            predictions = predict(path, arguments['--ps'], arguments['--model'], None, arguments['--nofft'])
             if arguments['--negative']:
                 predictions = sorted(predictions, key=lambda x: x[0], reverse=False)
-            Predictions_Out(predictions, arguments['--model'], arguments['--ps'])
+            predictions_out(predictions, arguments['--model'], arguments['--ps'])
             print('\nDone!\n')
 
         # Prediction on recombinant/diverse variant folder data
         elif arguments['--pmult'] and arguments['--model'] is not None:
-            Path = os.getcwd()
+            path = os.getcwd()
             recombs_total = []
             recomb_d, recomb_t, recomb_q = '/Recomb_Double_Split/', '/Recomb_Triple_Split/', '/Recomb_Quadruple_Split/'
             diverse_d, diverse_t, diverse_q = '/Diverse_Double_Split/', '/Diverse_Triple_Split/', \
@@ -322,11 +323,11 @@ def run():
             for args in recombs_total:
                 predictions_total = []
                 print('Running predictions for files in {}...'.format(args[1:-1]))
-                Path_recomb = Path + args
-                os.chdir(Path)
-                files = [f for f in listdir(Path_recomb) if isfile(join(Path_recomb, f)) if f.endswith('.fasta')]
+                path_recomb = path + args
+                os.chdir(path)
+                files = [f for f in listdir(path_recomb) if isfile(join(path_recomb, f)) if f.endswith('.fasta')]
                 for f in tqdm(files):
-                    predictions = Predict(Path, f, arguments['--model'], Path_recomb, arguments['--nofft'])
+                    predictions = predict(path, f, arguments['--model'], path_recomb, arguments['--nofft'])
                     for pred in predictions:
                         predictions_total.append(pred)  # perhaps implement numpy.save if array gets too large byte size
                 predictions_total = list(dict.fromkeys(predictions_total))  # removing duplicates from list
@@ -336,8 +337,8 @@ def run():
                 else:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=True)
 
-                Predictions_Out(predictions_total, arguments['--model'], 'Top' + args[1:-1])
-                os.chdir(Path)
+                predictions_out(predictions_total, arguments['--model'], 'Top' + args[1:-1])
+                os.chdir(path)
             print('\nDone!\n')
 
     # Metropolis-Hastings-driven directed evolution, similar to Biswas et al.:
@@ -345,10 +346,10 @@ def run():
     # see https://github.com/ivanjayapurna/low-n-protein-engineering/tree/master/directed-evo
     elif arguments['directevo']:
         if arguments['--model'] is not None:
-            Path = os.getcwd()
+            path = os.getcwd()
             try:
                 # "temperature" parameter: determines sensitivity of Metropolis-Hastings acceptance criteria
-                T = float(arguments['--temp'])
+                temp = float(arguments['--temp'])
                 # how many subsequent mutation trials per simulated evolution trajectory
                 num_iterations = int(arguments['--numiter'])
                 # how many separate evolution trajectories to run
@@ -357,8 +358,8 @@ def run():
                 raise ValueError("Define 'numiter' and 'numtraj' as integer and 'temp' as float.")
 
             args_model = arguments['--model']
-            s_WT = get_wt_sequence(arguments['--wtseq'])
-            y_WT = arguments['--ywt']
+            s_wt = get_wt_sequence(arguments['--wtseq'])
+            y_wt = arguments['--ywt']
             negative = arguments['--negative']
 
             # Metropolis-Hastings-driven directed evolution on single mutant position csv data
@@ -367,22 +368,22 @@ def run():
                 csv_file = csv_input(arguments['--input'])
                 t_drop = float(arguments['--drop'])
 
-                print('Length of provided sequence: {} amino acids.'.format(len(s_WT)))
+                print('Length of provided sequence: {} amino acids.'.format(len(s_wt)))
                 df = drop_rows(csv_file, amino_acids, t_drop)
 
-                single_variants, single_values, higher_variants, higher_values = get_variants(df, amino_acids, s_WT)
+                single_variants, single_values, higher_variants, higher_values = get_variants(df, amino_acids, s_wt)
                 print('Number of single variants: {}.'.format(len(single_variants)))
                 if len(single_variants) == 0:
                     print('Found NO single substitution variants for possible recombination!')
-                Sub_LS, Val_LS, _, _ = make_sub_LS_VS(single_variants, single_values, higher_variants,
+                sub_ls, val_ls, _, _ = make_sub_ls_vs(single_variants, single_values, higher_variants,
                                                       higher_values, directed_evolution=True
                                                       )
                 print('Creating single variant dataset...')
 
-                make_fasta_LS_VS('Single_variants.fasta', s_WT, Sub_LS, Val_LS)
+                make_fasta_ls_vs('Single_variants.fasta', s_wt, sub_ls, val_ls)
 
             else:
-                Sub_LS = None
+                sub_ls = None
 
             # Metropolis-Hastings-driven directed evolution on single mutant .csv amino acid substitution data
             csvaa = arguments['--csvaa']
@@ -390,8 +391,8 @@ def run():
 
             print('Running evolution trajectories and plotting...')
 
-            run_DE_trajectories(s_WT, args_model, y_WT, num_iterations, num_trajectories,
-                                traj_records_folder, amino_acids, T, Path, Sub_LS, arguments['--nofft'],
+            run_de_trajectories(s_wt, args_model, y_wt, num_iterations, num_trajectories,
+                                traj_records_folder, amino_acids, temp, path, sub_ls, arguments['--nofft'],
                                 negative=negative, save=True, usecsv=usecsv, csvaa=csvaa,
                                 print_matrix=arguments['--print']
                                 )
