@@ -208,7 +208,8 @@ class XY:
     def get_numerical_sequence(self, sequence):
         return np.array([self.dictionary[aminoacid] for aminoacid in sequence])
 
-    def do_fourier(self, sequence):
+    @staticmethod
+    def do_fourier(sequence):
         """
         This static function does the Fast Fourier Transform. Since the condition
 
@@ -276,7 +277,7 @@ class XY:
             raw_numerical_seq.append(num_appended)  # Raw encoded amino acid sequences
 
         amplitudes = np.array(amplitudes)
-        frequencies = np.array(frequencies)  # not used
+        # frequencies = np.array(frequencies)  # not used
         raw_numerical_seq = np.array(raw_numerical_seq)
 
         x = amplitudes
@@ -303,7 +304,7 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
     mean_squared_error_list = []
 
     if regressor == 'pls':
-        # PLS regression as used by Cadet et al.
+        # PLS regression with LOOCV n_components tuning as described by Cadet et al.
         # https://doi.org/10.1186/s12859-018-2407-8
         # https://doi.org/10.1038/s41598-018-35033-y
         # Hyperparameter (N component) tuning of PLS regressor
@@ -348,7 +349,7 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
         regressor_ = GridSearchCV(PLSRegression(), param_grid=params, iid=False, cv=5)  # iid in future
                                                                                         # versions redundant
     elif regressor == 'rf':
-        params = {                      # similar parameter grid as Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
+        params = {                # similar parameter grid as Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
             'random_state': [42],
             'n_estimators': [100, 250, 500, 1000],  # number of individual decision trees in the forest
             'max_features': ['auto', 'sqrt', 'log2']  # “auto” -> max_features=n_features,
@@ -364,14 +365,15 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
         regressor_ = GridSearchCV(SVR(), param_grid=params, iid=False, cv=5)
 
     elif regressor == 'mlp':
-        param_grid = {'hidden_layer_sizes': [i for i in range(1, 12)],
-                      'activation': ['relu'],
-                      'solver': ['adam', 'lbfgs'],
-                      'learning_rate': ['constant'],  # learning rate given by ‘learning_rate_init’
-                      'learning_rate_init': [0.001, 0.01, 0.1],  # only used when solver=’sgd’ or ‘adam’
-                      'max_iter': [1000, 200],  # for stochastic solvers (‘sgd’, ‘adam’) determines epochs
-                      'random_state': [42]
-                      }
+        param_grid = {
+            'hidden_layer_sizes': [i for i in range(1, 12)],
+            'activation': ['relu'],
+            'solver': ['adam', 'lbfgs'],
+            'learning_rate': ['constant'],  # learning rate given by ‘learning_rate_init’
+            'learning_rate_init': [0.001, 0.01, 0.1],  # only used when solver=’sgd’ or ‘adam’
+            'max_iter': [1000, 200],  # for stochastic solvers (‘sgd’, ‘adam’) determines epochs
+            'random_state': [42]
+        }
         regressor_ = GridSearchCV(MLPRegressor(), param_grid=param_grid, iid=False, cv=5)
 
     else:
@@ -570,27 +572,29 @@ def save_model(path, aaindex_r2_list, learning_set, validation_set, threshold=5,
                 regressor_ = PLSRegression(n_components=parameter.get('n_components'))
 
             elif regressor == 'rf':
-                regressor_ = RandomForestRegressor(random_state=parameter.get('random_state'),
-                                                   n_estimators=parameter.get('n_estimators'),
-                                                   max_features=parameter.get('max_features')
-                                                   )
+                regressor_ = RandomForestRegressor(
+                    random_state=parameter.get('random_state'),
+                    n_estimators=parameter.get('n_estimators'),
+                    max_features=parameter.get('max_features')
+                )
 
             elif regressor == 'svr':
                 regressor_ = SVR(C=parameter.get('C'), gamma=parameter.get('gamma'))
 
             elif regressor == 'mlp':
-                regressor_ = MLPRegressor(hidden_layer_sizes=parameter.get('hidden_layer_sizes'),
-                                          activation=parameter.get('activation'),
-                                          solver=parameter.get('solver'),
-                                          learning_rate=parameter.get('learning_rate'),
-                                          learning_rate_init=parameter.get('learning_rate_init'),
-                                          max_iter=parameter.get('max_iter'),
-                                          random_state=parameter.get('random_state')
-                                          )
+                regressor_ = MLPRegressor(
+                    hidden_layer_sizes=parameter.get('hidden_layer_sizes'),
+                    activation=parameter.get('activation'),
+                    solver=parameter.get('solver'),
+                    learning_rate=parameter.get('learning_rate'),
+                    learning_rate_init=parameter.get('learning_rate_init'),
+                    max_iter=parameter.get('max_iter'),
+                    random_state=parameter.get('random_state')
+                )
 
             else:
-                raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
-                         "regression model options.")
+                raise SystemError("Did not find specified regression model as valid option. "
+                                  "See '--help' for valid regression model options.")
 
             # perform 5-fold cross-validation on all data (on X and Y)
             n_samples = 5
@@ -616,10 +620,11 @@ def save_model(path, aaindex_r2_list, learning_set, validation_set, threshold=5,
             ax.scatter(y_test_total, y_predicted_total, marker='o', s=20, linewidths=0.5, edgecolor='black')
             ax.plot([min(y_test_total) - 1, max(y_test_total) + 1],
                     [min(y_predicted_total) - 1, max(y_predicted_total) + 1], 'k', lw=2)
-            ax.legend(['$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '.format(
-                round(r_squared, 3), round(rmse, 3), round(nrmse, 3), round(pearson_r, 3))
-                       + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
-                       ])
+            ax.legend([
+                '$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '.format(
+                    round(r_squared, 3), round(rmse, 3), round(nrmse, 3), round(pearson_r, 3))
+                + r'$\rho$ = {}'.format(str(round(spearman_rho, 3)))
+            ])
             ax.set_xlabel('Measured')
             ax.set_ylabel('Predicted')
             plt.savefig('CV_performance/' + idx[:-4] + '_' + str(n_samples) + '-fold-CV.png', dpi=250)
@@ -685,8 +690,8 @@ def predict(path, prediction_set, model, mult_path=None, no_fft=False, print_mat
 
     # Print FFT-ed and raw sequence vectors for directed evolution if desired
     if print_matrix:
-        print('X (FFT):\n{} len(X_raw): {}\nX_raw (noFFT):\n{} len(X): {}\n(Predicted value, Variant): {}\n\n'
-              .format(x, len(x[0]), x_raw, len(x_raw[0]), predictions))
+        print('X (FFT):\n{} len(X_raw): {}\nX_raw (noFFT):\n{} len(X): {}\n(Predicted value, Variant): {}\n\n'.format(
+            x, len(x[0]), x_raw, len(x_raw[0]), predictions))
 
     return predictions
 

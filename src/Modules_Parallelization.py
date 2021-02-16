@@ -98,8 +98,9 @@ def parallel(d, core, aa_indices, learning_set, validation_set, regressor='pls',
             else:  # X is the raw encoded of alphabetical sequence
                 _, y_test, x_test = xy_test.get_x_and_y()
 
-            r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params = get_r2(x_learn, x_test, y_learn, y_test,
-                                                                                      regressor)
+            r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params = get_r2(
+                x_learn, x_test, y_learn, y_test, regressor
+            )
             aaindex_r2_list.append([aaindex, r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params])
 
     return aaindex_r2_list
