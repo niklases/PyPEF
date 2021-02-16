@@ -123,7 +123,7 @@ def run():
     running them dependent on user-passed input arguments using docopt
     for argument parsing.
     """
-    arguments = docopt(__doc__, version='PyPEF 0.1.2 (December 2020)')
+    arguments = docopt(__doc__, version='PyPEF 0.1 (February 2021)')
     # print(arguments)  # uncomment for printing parsed docopt arguments
     amino_acids = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 
