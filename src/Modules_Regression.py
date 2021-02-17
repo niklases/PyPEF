@@ -365,7 +365,7 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
         regressor_ = GridSearchCV(SVR(), param_grid=params, iid=False, cv=5)
 
     elif regressor == 'mlp':
-        param_grid = {
+        params = {
             'hidden_layer_sizes': [i for i in range(1, 12)],
             'activation': ['relu'],
             'solver': ['adam', 'lbfgs'],
@@ -374,7 +374,7 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
             'max_iter': [1000, 200],  # for stochastic solvers (‘sgd’, ‘adam’) determines epochs
             'random_state': [42]
         }
-        regressor_ = GridSearchCV(MLPRegressor(), param_grid=param_grid, iid=False, cv=5)
+        regressor_ = GridSearchCV(MLPRegressor(), param_grid=params, iid=False, cv=5)
 
     else:
         raise SystemError("Did not find specified regression model as valid option. See '--help' for valid "
