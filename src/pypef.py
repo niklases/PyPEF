@@ -289,7 +289,6 @@ def run():
         # Prediction of single .fasta file
         elif arguments['--ps'] is not None and arguments['--model'] is not None:
             path = os.getcwd()
-            print(arguments['--nofft'])
             predictions = predict(path, arguments['--ps'], arguments['--model'], None, arguments['--nofft'])
             if arguments['--negative']:
                 predictions = sorted(predictions, key=lambda x: x[0], reverse=False)
