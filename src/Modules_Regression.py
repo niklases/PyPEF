@@ -308,7 +308,7 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
         # https://doi.org/10.1186/s12859-018-2407-8
         # https://doi.org/10.1038/s41598-018-35033-y
         # Hyperparameter (N component) tuning of PLS regressor
-        for n_comp in range(1, 10):
+        for n_comp in range(1, 10):  # n_comp = 1, 2,..., 9
             pls = PLSRegression(n_components=n_comp)
             loo = LeaveOneOut()
 
@@ -345,12 +345,12 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
 
     # other regression options (CV tuning)
     elif regressor == 'pls_cv':
-        params = {'n_components': list(np.arange(1, 10))}
+        params = {'n_components': list(np.arange(1, 10))}  # n_comp = 1, 2,..., 9
         regressor_ = GridSearchCV(PLSRegression(), param_grid=params, iid=False, cv=5)  # iid in future
                                                                                         # versions redundant
     elif regressor == 'rf':
         params = {                # similar parameter grid as Xu et al., https://doi.org/10.1021/acs.jcim.0c00073
-            'random_state': [42],
+            'random_state': [42],  # state determined
             'n_estimators': [100, 250, 500, 1000],  # number of individual decision trees in the forest
             'max_features': ['auto', 'sqrt', 'log2']  # “auto” -> max_features=n_features,
             # “sqrt” -> max_features=sqrt(n_features) “log2” -> max_features=log2(n_features)
@@ -366,9 +366,10 @@ def get_r2(x_learn, x_valid, y_learn, y_valid, regressor='pls'):
 
     elif regressor == 'mlp':
         params = {
-            'hidden_layer_sizes': [i for i in range(1, 12)],
-            'activation': ['relu'],
-            'solver': ['adam', 'lbfgs'],
+            # feedforward network trained via backpropagation – here only using a single hidden layer
+            'hidden_layer_sizes': [i for i in range(1, 12)],  # size of hidden layer [(1,), (2,), ..., (12,)]
+            'activation': ['relu'],  # rectified linear unit
+            'solver': ['adam', 'lbfgs'],  # ADAM: A Method for Stochastic Optimization , or Limited-memory BFGS
             'learning_rate': ['constant'],  # learning rate given by ‘learning_rate_init’
             'learning_rate_init': [0.001, 0.01, 0.1],  # only used when solver=’sgd’ or ‘adam’
             'max_iter': [1000, 200],  # for stochastic solvers (‘sgd’, ‘adam’) determines epochs
