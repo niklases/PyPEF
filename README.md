@@ -34,33 +34,47 @@ and the workflow procedure is explained in the [Jupyter notebook](/workflow/Work
 Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([sh installer](https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
-`bash Anaconda3-2020.07-Linux-x86_64.sh`  .
+```
+bash Anaconda3-2020.07-Linux-x86_64.sh
+```
 
 After accepting all steps, the conda setup should also be written to your `~/.bashrc`file, so that you can call anaconda typing `conda`.
 To setup a new environment you just need to specify the name of the environment and the Python version, e.g.
 
-`conda create --name pypef python=3.7`  .
+```
+conda create --name pypef python=3.7
+```
 
 To activate the environment you can define
 
-`conda activate pypef`  .
+```
+conda activate pypef
+```
 
 After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required
 packages with pip (or conda itself):
 
-`python3 -m pip install -r requirements.txt`
+```
+python3 -m pip install -r requirements.txt
+```
 
 and optionally
 
-`python3 -m pip install -r requirements_parallelization.txt`  .
+```
+python3 -m pip install -r requirements_parallelization.txt
+```
 
 Next, install Jupyter Notebook:
 
-`conda install ipython jupyter`  .
+```
+conda install ipython jupyter
+```
 
 Now you should be able to directly start with the tutorial. Change directory to ./workflow and run the .ipynb file:
 
-`jupyter notebook`  
+```
+jupyter notebook
+```
 
 and copy the notebook URL in your internet browser and select the `Workflow_PyPEF.ipynb` file.
 
