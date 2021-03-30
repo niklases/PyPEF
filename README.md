@@ -47,7 +47,7 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required packages with pip (or conda itself):
+After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required packages with pip (or conda itself) if you did not use the YAML file for creating the environment:
 
 ```
 python3 -m pip install -r requirements.txt
