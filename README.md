@@ -25,7 +25,7 @@ Before starting running the tutorial, it is a good idea to set-up a new Python e
 Change to the download directory and run the installation, e.g. in Linux:
 
 ```
-bash Anaconda3-2020.07-Linux-x86_64.sh
+bash Anaconda3-2020.11-Linux-x86_64.sh
 ```
 
 After accepting all steps, the conda setup should also be written to your `~/.bashrc`file, so that you can call anaconda typing `conda`.
@@ -61,12 +61,19 @@ python3 -m pip install -r requirements_parallelization.txt
 
 Now you should be able to directly start with the tutorial - or run pypef in your preferred command line interpreter.
 
-To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `conda install ipython jupyter`. Change directory to ./workflow (`cd workflow`) and run the .ipynb file:
+To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `conda install ipython jupyter`. To use the pypef environment as kernel inside the Jupyter Notebook, you need to install the ipykernel:
+
+```
+conda install anaconda ipykernel
+python -m ipykernel install --user --name=pypef
+```
+
+Now change the directory to ./workflow (`cd workflow`) and run the .ipynb file:
 
 ```
 jupyter notebook
 ```
 
-Copy the notebook URL in your internet browser and select the `Workflow_PyPEF.ipynb` file to open it.
+Copy the notebook URL in your internet browser and select the `Workflow_PyPEF.ipynb` file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (else you would use your standard Python version as environment, i.e., you would have to install required packages also for that interpreter). 
 
 Good luck and have fun!
