@@ -47,8 +47,7 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required
-packages with pip (or conda itself):
+After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required packages with pip (or conda itself):
 
 ```
 python3 -m pip install -r requirements.txt
@@ -60,17 +59,9 @@ and optionally:
 python3 -m pip install -r requirements_parallelization.txt
 ```
 
-
 Now you should be able to directly start with the tutorial - or run pypef in your preferred command line interpreter.
 
-
-To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you need to also install Jupyter Notebook:
-
-```
-conda install ipython jupyter
-```
-
-Change directory to ./workflow (`cd workflow`) and run the .ipynb file:
+To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `conda install ipython jupyter`. Change directory to ./workflow (`cd workflow`) and run the .ipynb file:
 
 ```
 jupyter notebook
