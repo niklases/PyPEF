@@ -259,8 +259,8 @@ def run_de_trajectories(s_wt, model, y_wt, num_iterations, num_trajectories, de_
         else:
             plt.xticks(np.arange(1, f_len_max + 2, 1), ['WT'] + ((np.arange(1, f_len_max + 1, 1)).tolist()))
 
-    plt.ylabel('Predicted Fitness')
-    plt.xlabel('Mutation Trial Steps')
+    plt.ylabel('Predicted fitness')
+    plt.xlabel('Mutation trial steps')
     plt.savefig(str(model) + '_DE_trajectories.png', dpi=500)
 
     return s_records, y_records
