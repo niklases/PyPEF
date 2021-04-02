@@ -765,7 +765,7 @@ def plot(path, fasta_file, model, label, color, y_wt, no_fft=False):
         spearman_rho = np.corrcoef(y_true_total_rank, y_pred_total_rank)[0][1]
         legend = '$R^2$ = {}\nRMSE = {}\nNRMSE = {}\nPearson\'s $r$ = {}\nSpearman\'s '.format(
             round(r_squared, 3), round(rmse, 3), round(nrmse, 3), round(pearson_r, 3)) \
-                 + r'$\rho$ = {}'.format(round(spearman_rho, 3))
+            + r'$\rho$ = {}'.format(round(spearman_rho, 3))
         x = np.linspace(min(y_pred) - 1, max(y_pred) + 1, 100)
 
         fig, ax = plt.subplots()
