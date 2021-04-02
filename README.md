@@ -1,6 +1,6 @@
 This repository contains supplementary information to
 
-Niklas E. Siedhoff<sup>*§*</sup>, Alexander-Maurice Illig<sup>*§*</sup>, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – An Integrated Framework for Data-driven Protein Engineering, 2020 
+Niklas E. Siedhoff<sup>*§*</sup>, Alexander-Maurice Illig<sup>*§*</sup>, Ulrich Schwaneberg, Mehdi D. Davari, PyPEF – an Integrated Framework for Data-driven Protein Engineering, 2020 
 
 <sup>*§*</sup><sub>equal contribution</sub>
 
@@ -47,7 +47,9 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-After activating the environment you can install required packages after changing the directory to this PyPEF directory and install required packages with pip (or conda itself):
+Download this repository (click `Code > Download ZIP` or use your bash shell `wget "https://github.com/niklases/PyPEF/archive/refs/heads/main.zip"`) and unzip the stored file (e.g., with `unzip PyPEF-main.zip`).
+
+After activating the environment you can install required packages after changing the directory to this PyPEF directory (`cd PyPEF-main`) and install required packages with pip (or conda itself) if you did not use the YAML file for creating the environment:
 
 ```
 python3 -m pip install -r requirements.txt
