@@ -47,8 +47,8 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-Download this repository (click `Code > Download ZIP` and unzip (e.g., with `unzip PyPEF-main.zip`) or use your bash shell `git clone https://github.com/niklases/PyPEF`).
-After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main` dependent on the downloaded file name) and install required packages with pip (or conda itself) if you did not use the YAML file for creating the environment:
+To download this repository click `Code > Download ZIP` and unzip the zipped file, e.g., with `unzip PyPEF-main.zip`, or just clone this repository using your bash shell to your local machine `git clone https://github.com/niklases/PyPEF`.
+After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main` dependent on the downloaded file name) and install required packages with pip if you did not use the YAML file for creating the environment:
 
 ```
 python3 -m pip install -r requirements.txt
