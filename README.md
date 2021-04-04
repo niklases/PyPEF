@@ -21,7 +21,7 @@ and the workflow procedure is explained in the [Jupyter notebook](/workflow/Work
 
 ## Tutorial
 
-Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([sh installer](https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([sh installer](https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
 ```
@@ -48,7 +48,7 @@ conda activate pypef
 ```
 
 To download this repository click `Code > Download ZIP` and unzip the zipped file, e.g., with `unzip PyPEF-main.zip`, or just clone this repository using your bash shell to your local machine `git clone https://github.com/niklases/PyPEF`.
-After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main` dependent on the downloaded file name) and install required packages with pip if you did not use the YAML file for creating the environment:
+After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main` dependent on the downloaded file name) and install required packages with pip if you did not use the YAML file for creating the environment (when using conda packages will be installed in `anaconda3/envs/pypef/lib/python3.7/site-packages`):
 
 ```
 python3 -m pip install -r requirements.txt
