@@ -1,3 +1,10 @@
+Niklas E. Siedhoff<sup>*1,§*</sup>, Alexander-Maurice Illig<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*1,\**</sup>, <br>
+PyPEF – an Integrated Framework for Data-driven Protein Engineering, *Journal of Chemical Information and Modeling* (2021) <br>
+<sup>*1*</sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
+<sup>*2*</sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
+<sup>*\**</sup><sub>Corresponding author</sub> <br>
+<sup>*§*</sup><sub>Equal contribution</sub> <br>
+
 ## Can in silico directed evolution lead to improved variants?
 Within this notebook we investigate if highly improved variants can be efficiently found using the statistical approach presented in the paper,
 which is based on the Metropolis-Hastings algorithm. To verify this, a model for an NK landscape is generated. The data for the NK landscape
