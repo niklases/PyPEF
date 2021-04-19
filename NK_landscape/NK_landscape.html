@@ -2,7 +2,7 @@
 <html>
 <head><meta charset="utf-8" />
 
-<title>NK_landsape</title>
+<title>NK_landscape</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.1.10/require.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
@@ -13077,6 +13077,12 @@ div#notebook {
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
+Niklas E. Siedhoff<sup><em>1,§</em></sup>, Alexander-Maurice Illig<sup><em>1,§</em></sup>, Ulrich Schwaneberg<sup><em>1,2</em></sup>, Mehdi D. Davari<sup><em>1,*</em></sup>, <br>
+PyPEF – an Integrated Framework for Data-driven Protein Engineering, <em>Journal of Chemical Information and Modeling</em> (2021) <br>
+<sup><em>1</em></sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
+<sup><em>2</em></sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
+<sup><em>*</em></sup><sub>Corresponding author</sub> <br>
+<sup><em>§</em></sup><sub>Equal contribution</sub> <br>
 <h1 id="Can-in-silico-directed-evolution-lead-to-improved-variants?">Can <em>in silico</em> directed evolution lead to improved variants?<a class="anchor-link" href="#Can-in-silico-directed-evolution-lead-to-improved-variants?">&#182;</a></h1><p>Within this notebook we investigate if highly improved variants can be efficiently found using the statistical approach presented in the paper, which is based on the Metropolis-Hastings algorithm. To verify this, a model for an NK landscape is generated. The data for the NK landscape was published by Adam C. Mater, Mahakaran Sandhu, and Colin Jackson and is available under <a href="https://doi.org/10.1101/2020.09.30.319780">https://doi.org/10.1101/2020.09.30.319780</a>. This landscape is then traversed using the algorithm and improved variants are collected. Since the exact fitness value for each variant is known, it can be checked whether variants can be found that have a fitness close to the global maximum.</p>
 <p>Further, we make use of some tools presented in the above mentioned publication (<a href="https://github.com/acmater/NK_Benchmarking">https://github.com/acmater/NK_Benchmarking</a>). These tools are licensed as follows:</p>
 <p>BSD 3-Clause License</p>
