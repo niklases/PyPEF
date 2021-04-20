@@ -82,7 +82,7 @@ To run the tutorial after installing required packages either from the YAML envi
 
 ```
 conda install -c anaconda ipykernel
-python -m ipykernel install --user --name=pypef
+python3 -m ipykernel install --user --name=pypef
 ```
 
 Now change the directory to ./workflow (`cd workflow`) and run the .ipynb file:
