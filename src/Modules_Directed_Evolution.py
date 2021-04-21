@@ -81,7 +81,7 @@ def mutate_sequence(seq, m, model, prev_mut_loc, aas, sub_ls, iteration, counter
 
 def restructure_dict(prediction_dict):
     """
-    Exchange key and value of a dictionary
+    Exchange "key and value" of variant-fitness "tuple dictionary"
     """
     restructured = []
     for pred in prediction_dict:
@@ -125,7 +125,6 @@ def in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, c
 
     # iterate through the trial mutation steps for the directed evolution trajectory
     for i in range(num_iterations):  # num_iterations
-
         if i == 0:  # get first v, y, s
             # randomly choose the location of the first mutation in the trajectory
             mut_loc_seed = random.randint(0, len(s_wt))
@@ -156,7 +155,6 @@ def in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, c
             # mu = np.random.uniform(1, 2.5) --> Number of Mutations = m = np.random.poisson(mu - 1) + 1
             new_var_seq_dict = mutate_sequence(sequence, 1, model, new_mut_loc, amino_acids,
                                                sub_ls, i, counter, usecsv, csvaa)
-
             predictions = predict(path, 'EvoTraj/' + str(model) + '_EvoTraj_' + str(counter+1) + '_DEiter_'
                                   + str(i+1) + '.fasta', model, None, no_fft, print_matrix)
             predictions = restructure_dict(predictions)
@@ -210,8 +208,7 @@ def run_de_trajectories(s_wt, model, y_wt, num_iterations, num_trajectories, de_
         # call the directed evolution function, outputting the trajectory sequence and fitness score records
         v_traj, s_traj, y_traj = in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, i,
                                               no_fft, negative, usecsv, csvaa, print_matrix)
-
-        v_records.append(v_traj)    # update the variant naming trajectory records for this full mutagenesis trajectory
+        v_records.append(v_traj)  # update the variant naming trajectory records for this full mutagenesis trajectory
         s_records.append(s_traj)  # update the sequence trajectory records for this full mutagenesis trajectory
         y_records.append(y_traj)  # update the fitness trajectory records for this full mutagenesis trajectory
 
