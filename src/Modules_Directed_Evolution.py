@@ -177,7 +177,7 @@ def in_silico_de(s_wt, num_iterations, model, amino_acids, temp, path, sub_ls, c
                 try:
                     boltz = np.exp(((new_y - y) / temp), dtype=np.longfloat)
                     if negative is True:
-                        boltz = np.exp(((-new_y - -y) / temp), dtype=np.longfloat)
+                        boltz = np.exp((-(new_y - y) / temp), dtype=np.longfloat)
                 except OverflowError:
                     boltz = 1
             p = min(1, boltz)
