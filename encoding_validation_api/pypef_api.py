@@ -130,7 +130,7 @@ def cross_validation(x, y, regressor_, n_samples=5):
     return y_test_total, y_predicted_total
 
 
-class AaIndex:
+class AAIndexDict:
     """
     gets all the information that are given in each AAindex file.
     For the program routine it provides the library to enable translation
@@ -210,7 +210,7 @@ class AaIndex:
                     return dict(zip(keys, values))
 
 
-class SequenceToNum:  # was class XY originally
+class AAIndexEncoding:  # was class XY originally
     """
     converts the string sequence into a list of numericals using the AAindex translation library,
     Fourier transforming the numerical array that was translated by get_numerical_sequence --> do_fourier,
@@ -218,7 +218,7 @@ class SequenceToNum:  # was class XY originally
     labels array (y), and raw_encoded sequences arrays (raw_numerical_sequences)
     """
     def __init__(self, aaindex_file, sequences):  # , value, mult_path=None, prediction=False):
-        aaidx = AaIndex(aaindex_file)
+        aaidx = AAIndexDict(aaindex_file)
         self.dictionary = aaidx.encoding_dictionary()
         # self.name, self.value = name, value  #ADD?
         self.sequences = sequences
@@ -303,142 +303,128 @@ class SequenceToNum:  # was class XY originally
         return x, raw_numerical_seq
 
 
-class AaIndexPerformance:
+def get_performance(
+        seq_learn, y_learn, seq_valid, y_valid, fft=True,
+        regressor=pls_cv_regressor(), tqdm_=False, kfold_cv_on_all=False,
+        finally_train_on_all=False, save_models=True, sort='1'
+):
 
-    def __init__(
-            self, seq_learn, y_learn, seq_valid, y_valid, fft=True,
-            regressor=pls_cv_regressor(), tqdm_=False, kfold_cv_on_all=False,
-            finally_train_on_all=False, save_model=True, sort='1'
-    ):
-        self.seq_learn = seq_learn
-        self.y_learn = y_learn
-        self.seq_valid = seq_valid
-        self.y_valid = y_valid
-        self.fft = fft
-        self.regressor = regressor
-        self.tqdm_ = tqdm_
-        self.save_model = save_model
-        self.kfold_cv_on_all = kfold_cv_on_all
-        self.finally_train_on_all = finally_train_on_all
-        self.sort = sort
+    performances = []
+    cv_performances = []
 
-    def get_performance(self):
-        performances = []
-        cv_performances = []
+    for aaindex in tqdm_runtime(tqdm_, aa_index_list()):
 
-        for aaindex in tqdm_runtime(self.tqdm_, aa_index_list()):
-
-            if self.fft:
-                x_learn, _ = SequenceToNum(aaindex, self.seq_learn).get_x_and_y()
-                x_valid, _ = SequenceToNum(aaindex, self.seq_valid).get_x_and_y()
-            else:
-                _, x_learn = SequenceToNum(aaindex, self.seq_learn).get_x_and_y()
-                _, x_valid = SequenceToNum(aaindex, self.seq_valid).get_x_and_y()
-
-            try:
-                self.regressor.fit(x_learn, self.y_learn)
-            except ValueError:
-                continue
-            # also here TRY as only CrossCVRegressor has .best_params_
-            try:
-                best_params = self.regressor.best_params_
-            except AttributeError:
-                best_params = self.regressor.get_params()
-
-            y_pred = []
-            for y_p in self.regressor.predict(x_valid):  # predict validation entries with fitted model
-                y_pred.append(float(y_p))
-
-            r2 = r2_score(self.y_valid, y_pred)
-            rmse = np.sqrt(mean_squared_error(self.y_valid, y_pred))
-            nrmse = rmse / np.std(self.y_valid, ddof=1)
-            # ranks for Spearman's rank correlation
-            y_val_rank = np.array(self.y_valid).argsort().argsort()
-            y_pred_rank = np.array(y_pred).argsort().argsort()
-            with warnings.catch_warnings():  # catching RunTime warning when there's
-                # no variance in an array, e.g. [2, 2, 2, 2]
-                warnings.simplefilter("ignore")  # which would mean divide by zero
-                pearson_r = np.corrcoef(self.y_valid, y_pred)[0][1]
-                spearman_rho = np.corrcoef(y_val_rank, y_pred_rank)[0][1]
-            try:
-                best_estimator = self.regressor.estimator
-            except AttributeError:
-                best_estimator = self.regressor
-            best_estimator = str(best_estimator.set_params(**best_params))
-
-            performances.append([aaindex[-14:-4], r2, rmse, nrmse, pearson_r,
-                                 spearman_rho, best_params, best_estimator, aaindex])
-
-            if self.kfold_cv_on_all:
-                try:
-                    self.kfold_cv_on_all = int(self.kfold_cv_on_all)
-                    n_samples = self.kfold_cv_on_all
-                    if n_samples == 1:  # min 2 splits
-                        raise SystemError("Increase kFold splits at least to the minimum (2 splits).")
-                except ValueError:
-                    n_samples = 5
-                x_all = np.concatenate((x_learn, x_valid), axis=0)
-                y_all = np.concatenate((self.y_learn, self.y_valid), axis=0)
-
-                # perform k-fold cross-validation on all data (on X and Y)
-                y_test_total, y_predicted_total = cross_validation(x_all, y_all, self.regressor, n_samples)
-
-                r2 = r2_score(y_test_total, y_predicted_total)
-                rmse = np.sqrt(mean_squared_error(y_test_total, y_predicted_total))
-                stddev = np.std(y_test_total, ddof=1)
-                nrmse = rmse / stddev
-                pearson_r = np.corrcoef(y_test_total, y_predicted_total)[0][1]
-                # ranks for Spearman correlation
-                y_test_total_rank = np.array(y_test_total).argsort().argsort()
-                y_predicted_total_rank = np.array(y_predicted_total).argsort().argsort()
-                spearman_rho = np.corrcoef(y_test_total_rank, y_predicted_total_rank)[0][1]
-                cv_performances.append([aaindex[-14:-4], r2, rmse, nrmse, pearson_r, spearman_rho])
+        if fft:
+            x_learn, _ = AAIndexEncoding(aaindex, seq_learn).get_x_and_y()
+            x_valid, _ = AAIndexEncoding(aaindex, seq_valid).get_x_and_y()
+        else:
+            _, x_learn = AAIndexEncoding(aaindex, seq_learn).get_x_and_y()
+            _, x_valid = AAIndexEncoding(aaindex, seq_valid).get_x_and_y()
 
         try:
-            sort = int(self.sort)
-            if sort == 2 or sort == 3:
-                performances.sort(key=lambda x: x[sort])
-                cv_performances.sort(key=lambda x: x[sort])
-            else:
-                performances.sort(key=lambda x: x[sort], reverse=True)
-                cv_performances.sort(key=lambda x: x[sort], reverse=True)
+            regressor.fit(x_learn, y_learn)
         except ValueError:
-            raise ValueError("Choose between options 1 to 5 (R2, RMSE, NRMSE, Pearson's r, Spearman's rho.")
+            continue
+        # also here try-except as only CrossCVRegressor has .best_params_
+        try:
+            best_params = regressor.best_params_
+        except AttributeError:
+            best_params = regressor.get_params()
 
-        if self.save_model:
+        y_pred = []
+        for y_p in regressor.predict(x_valid):  # predict validation entries with fitted model
+            y_pred.append(float(y_p))
+
+        r2 = r2_score(y_valid, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_valid, y_pred))
+        nrmse = rmse / np.std(y_valid, ddof=1)
+        # ranks for Spearman's rank correlation
+        y_val_rank = np.array(y_valid).argsort().argsort()
+        y_pred_rank = np.array(y_pred).argsort().argsort()
+        with warnings.catch_warnings():  # catching RunTime warning when there's
+            # no variance in an array, e.g. [2, 2, 2, 2]
+            warnings.simplefilter("ignore")  # which would mean divide by zero
+            pearson_r = np.corrcoef(y_valid, y_pred)[0][1]
+            spearman_rho = np.corrcoef(y_val_rank, y_pred_rank)[0][1]
+        try:
+            best_estimator = regressor.estimator
+        except AttributeError:
+            best_estimator = regressor
+        best_estimator = str(best_estimator.set_params(**best_params))
+
+        performances.append([aaindex[-14:-4], r2, rmse, nrmse, pearson_r,
+                             spearman_rho, best_params, best_estimator, aaindex])
+
+        if kfold_cv_on_all:
             try:
-                self.save_model = int(self.save_model)
-                threshold = self.save_model
+                kfold_cv_on_all = int(kfold_cv_on_all)
+                n_samples = kfold_cv_on_all
+                if n_samples == 1:  # min 2 splits
+                    raise SystemError("Increase kFold splits at least to the minimum (2 splits).")
             except ValueError:
-                threshold = 10
-            for t in range(threshold):
+                n_samples = 5
+            x_all = np.concatenate((x_learn, x_valid), axis=0)
+            y_all = np.concatenate((y_learn, y_valid), axis=0)
+
+            # perform k-fold cross-validation on all data (on X and Y)
+            y_test_total, y_predicted_total = cross_validation(x_all, y_all, regressor, n_samples)
+
+            r2 = r2_score(y_test_total, y_predicted_total)
+            rmse = np.sqrt(mean_squared_error(y_test_total, y_predicted_total))
+            stddev = np.std(y_test_total, ddof=1)
+            nrmse = rmse / stddev
+            pearson_r = np.corrcoef(y_test_total, y_predicted_total)[0][1]
+            # ranks for Spearman correlation
+            y_test_total_rank = np.array(y_test_total).argsort().argsort()
+            y_predicted_total_rank = np.array(y_predicted_total).argsort().argsort()
+            spearman_rho = np.corrcoef(y_test_total_rank, y_predicted_total_rank)[0][1]
+            cv_performances.append([aaindex[-14:-4], r2, rmse, nrmse, pearson_r, spearman_rho])
+
+    try:
+        sort = int(sort)
+        if sort == 2 or sort == 3:
+            performances.sort(key=lambda x: x[sort])
+            cv_performances.sort(key=lambda x: x[sort])
+        else:
+            performances.sort(key=lambda x: x[sort], reverse=True)
+            cv_performances.sort(key=lambda x: x[sort], reverse=True)
+    except ValueError:
+        raise ValueError("Choose between options 1 to 5 (R2, RMSE, NRMSE, Pearson's r, Spearman's rho.")
+
+    if save_models:
+        try:
+            save_model = int(save_models)
+            threshold = save_model
+        except ValueError:
+            threshold = 5
+        for t in range(threshold):
+            try:
+                idx = performances[t][0]
+                estimator = eval(performances[t][7])
+                idx_path = performances[t][8]
+
+                if fft:
+                    x_learn, _ = AAIndexEncoding(idx_path, seq_learn).get_x_and_y()
+                    x_valid, _ = AAIndexEncoding(idx_path, seq_valid).get_x_and_y()
+                else:
+                    _, x_learn = AAIndexEncoding(idx_path, seq_learn).get_x_and_y()
+                    _, x_valid = AAIndexEncoding(idx_path, seq_valid).get_x_and_y()
+
+                if finally_train_on_all:
+                    x_all = np.concatenate((x_learn, x_valid), axis=0)
+                    y_all = np.concatenate((y_learn, y_valid), axis=0)
+                    estimator.fit(x_all, y_all)
+                else:
+                    estimator.fit(x_learn, y_learn)
+
                 try:
-                    idx = performances[t][0]
-                    estimator = eval(performances[t][7])
-                    idx_path = performances[t][8]
+                    os.mkdir('Models')
+                except FileExistsError:
+                    pass
 
-                    if self.fft:
-                        x_learn, _ = SequenceToNum(idx_path, self.seq_learn).get_x_and_y()
-                        x_valid, _ = SequenceToNum(idx_path, self.seq_valid).get_x_and_y()
-                    else:
-                        _, x_learn = SequenceToNum(idx_path, self.seq_learn).get_x_and_y()
-                        _, x_valid = SequenceToNum(idx_path, self.seq_valid).get_x_and_y()
+                pickle.dump(estimator, open('Models/' + idx + '.sav', 'wb'))
 
-                    if self.finally_train_on_all:
-                        x_all = np.concatenate((x_learn, x_valid), axis=0)
-                        y_all = np.concatenate((self.y_learn, self.y_valid), axis=0)
-                        estimator.fit(x_all, y_all)
-                    else:
-                        estimator.fit(x_learn, self.y_learn)
+            except IndexError:
+                break
 
-                    try:
-                        os.mkdir('Models')
-                    except FileExistsError:
-                        pass
-
-                    pickle.dump(estimator, open('Models/' + idx + '.sav', 'wb'))
-
-                except IndexError:
-                    break
-
-        return performances, cv_performances
+    return performances, cv_performances

@@ -8,9 +8,9 @@ PyPEF – an Integrated Framework for Data-driven Protein Engineering, *Journal 
 <sup>*§*</sup><sub>Equal contribution</sub> <br>
 
 # An exemplary use of PyPEF code as an API. 
-Some classes adapted from the src/Modules_Regression.py for constructing a small API that might be useful for encoding amino acid sequences
-to generate FFT-ed sequence encodings or raw encodings that can be used for model construction and validation similar to the PyPEF routine.
+Some classes and functions adapted from the src/Modules_Regression.py for constructing a small API that might be useful for encoding amino acid sequences
+to generate FFT-ed sequence encodings or raw encodings that can subsequently be used for model construction and validation similar to the PyPEF routine.
 
-An exemplary running script is provided in run_script_example.py that uses classes of pypef_api.py. The exemplary dataset (sequences and respective 
+An exemplary running script is provided in run_script_example.py that uses a class and a function of pypef_api.py. The exemplary dataset (sequences and respective 
 labels) is imported from exemplary_dataset_B.py.
 
