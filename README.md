@@ -22,7 +22,7 @@ and the workflow procedure is explained in the [Jupyter notebook](/workflow/Work
 ./workflow directory).  
 
 ## Running example
-
+PyPEF was developed to be run using a command line interpreter:  
 ```
 python3 pypef.py --help
 python3 pypef.py mklsvs -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
@@ -34,6 +34,8 @@ python3 pypef.py mkps -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV --drecomb
 python3 pypef.py run -m MODEL12345 --pmult --drecomb
 python3 pypef.py directevo -m MODEL12345 --ywt WT_FITNESS -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV
 ```
+A small API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
+Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [src](/src) directory.
 
 ## Tutorial
 
