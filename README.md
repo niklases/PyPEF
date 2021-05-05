@@ -93,6 +93,6 @@ Now change the directory to ./workflow (`cd workflow`) and run the .ipynb file:
 jupyter notebook
 ```
 
-Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (else you would use your standard Python version as environment, i.e. you would have to install required packages also for that interpreter). 
+Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the notebook in code fields). 
 
 Good luck and have fun!
