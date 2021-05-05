@@ -22,7 +22,7 @@ and the workflow procedure is explained in the [Jupyter notebook](/workflow/Work
 ./workflow directory).  
 
 ## Running example
-PyPEF was developed to be run using a command line interpreter:  
+PyPEF was developed to be run using a command-line interface:  
 ```
 python3 pypef.py --help
 python3 pypef.py mklsvs -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
@@ -78,7 +78,7 @@ and optionally:
 python3 -m pip install -r requirements_parallelization.txt
 ```
 
-Now, after installing required packages, you should be able to directly run pypef in your preferred command line interpreter (see running example).
+Now, after installing required packages, you should be able to directly run pypef in your preferred command line interface (see running example).
 
 To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `conda install ipython jupyter`. To use the pypef environment as kernel inside the Jupyter Notebook, you need to install the ipykernel:
 
