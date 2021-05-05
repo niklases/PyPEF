@@ -78,7 +78,7 @@ and optionally:
 python3 -m pip install -r requirements_parallelization.txt
 ```
 
-Now you should be able to directly start with the tutorial - or run pypef in your preferred command line interpreter.
+Now, after installing required packages, you should be able to directly run pypef in your preferred command line interpreter (see running example).
 
 To run the tutorial after installing required packages either from the YAML environment file or the TEXT file(s), you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `conda install ipython jupyter`. To use the pypef environment as kernel inside the Jupyter Notebook, you need to install the ipykernel:
 
@@ -93,6 +93,6 @@ Now change the directory to ./workflow (`cd workflow`) and run the .ipynb file:
 jupyter notebook
 ```
 
-Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the notebook in code fields). 
+Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the notebook in provided code fields). 
 
 Good luck and have fun!
