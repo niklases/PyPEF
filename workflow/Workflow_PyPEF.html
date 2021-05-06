@@ -13192,12 +13192,13 @@ div#notebook {
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-Niklas E. Siedhoff<sup><em>1,§</em></sup>, Alexander-Maurice Illig<sup><em>1,§</em></sup>, Ulrich Schwaneberg<sup><em>1,2</em></sup>, Mehdi D. Davari<sup><em>1,*</em></sup>, <br>
+<p>Niklas E. Siedhoff<sup><em>1,§</em></sup>, Alexander-Maurice Illig<sup><em>1,§</em></sup>, Ulrich Schwaneberg<sup><em>1,2</em></sup>, Mehdi D. Davari<sup><em>1,*</em></sup>, <br>
 PyPEF – an Integrated Framework for Data-driven Protein Engineering, <em>Journal of Chemical Information and Modeling</em> (2021) <br>
 <sup><em>1</em></sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
 <sup><em>2</em></sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
 <sup><em>*</em></sup><sub>Corresponding author</sub> <br>
-<sup><em>§</em></sup><sub>Equal contribution</sub> <br>
+<sup><em>§</em></sup><sub>Equal contribution</sub> <br></p>
+
 </div>
 </div>
 </div>
@@ -13506,8 +13507,8 @@ If we plot $\Delta y_\mathrm{pred}$ against $exp(\frac{\Delta y_\mathrm{pred}}{T
 <p>For performing the program routine, it is necessary to load some functions from the modules .py scripts.
 All library requirements are listed in the <b>requirements.txt</b> file.</p>
 <ul>
-<li>numpy==1.17.3</li>
-<li>pandas==1.1.0</li>
+<li>numpy==1.19.1</li>
+<li>pandas==0.25.2</li>
 <li>scikit-learn==0.21.3</li>
 <li>scipy==1.3.1</li>
 <li>matplotlib==3.1.1</li>
@@ -13515,7 +13516,7 @@ All library requirements are listed in the <b>requirements.txt</b> file.</p>
 <li>tqdm==4.41.1</li>
 <li>adjustText==0.7.3</li>
 For parallel running:    
-<li>ray==0.7.6</li>
+<li>ray==1.2.0</li>
 <li>setproctitle==1.1.10</li>
 <li>psutil==5.7.2</li>
 </ul>
@@ -14792,7 +14793,7 @@ If prediction set and selected model are given the program will perform predicti
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Before running this protocol it is advised to create a new Python 3 environment, e.g. using <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html">Conda</a>.
+<p>Before running this protocol it is advised to create a new Python 3 environment, e.g. using <a href="https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html">Conda</a>. If you followed the README.md, you likely have already installed all required packages and running the requirements installation code fields can be skipped after changing the Kernel to 'pypef' (Kernel &gt; Change Kernel &gt; pypef). 
 For this exemplary protocol we run our workflow on the ANEH set reported by <a href="https://doi.org/10.1002/cbic.201100784">Gumulya, Sanchis, and Reetz</a>. For training, validating, and predicting the relative energy ($\Delta\Delta G^{\neq}$) of the ANEH variants
 the tool is run following a typical machine learning approach and comprises three steps:</p>
 <hr>
@@ -14810,10 +14811,11 @@ the tool is run following a typical machine learning approach and comprises thre
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
 <h2 id="Exemplary-running-in-Jupyter-Notebook:-Run-code-cells-starting-from-here">Exemplary running in Jupyter Notebook: Run code cells starting from here<a class="anchor-link" href="#Exemplary-running-in-Jupyter-Notebook:-Run-code-cells-starting-from-here">&#182;</a></h2><p>We tested this Notebook running on <a href="https://www.python.org/downloads/release/python-379/">Python 3.7.9</a>.
-To ensure you are using the correct environment, i.e., Python version, you can activate your conda environment (here exemplary termed pypef_environment_py37) and load the ipython kernel.</p>
-<p><code>conda activate pypef_environment_py37</code></p>
+To ensure you are using the correct environment, i.e., Python version, you can activate your conda environment (here exemplary termed pypef) and load the ipython kernel.</p>
+<p><code>conda activate pypef</code></p>
 <p><code>python3 -m ipykernel install --user</code></p>
-<p>To check your current working directory, this should be inside the folder <em>workflow</em> at this point.</p>
+<p>To check your current working directory, this should be inside the folder <em>workflow</em> at this point.
+(Also you can run this cell later on to ensure that you are in the correct directory, followed by changing directory to test_dataset).</p>
 
 </div>
 </div>
@@ -14947,7 +14949,7 @@ run model training and validation and saving 10 best models (using single CPU):<
 <div class="cell border-box-sizing text_cell rendered"><div class="prompt input_prompt">
 </div><div class="inner_cell">
 <div class="text_cell_render border-box-sizing rendered_html">
-<p>Here, by default PLS was used as regressor and the model was tuned performing LOOCV (time intensive) and Fourier transform of the encoded sequences. You can define the regressor you want to use using the flag <code>--regressor {pls, pls_cv, rf, svr}</code> (pls_cv, rf, svr tuned with GridSearchCV) and the encoding when no FFT is desired using flag <code>--nofft</code> (likely <code>--nofft</code> better option when using RF and SVR). For the tutorial we stick to the PLS regressor.</p>
+<p>Here, by default PLS was used as regressor and the model was tuned performing LOOCV (time intensive) and Fourier transform of the encoded sequences. You can define the regressor you want to use using the flag <code>--regressor {pls, pls_cv, rf, svr, mlp}</code> (pls_cv, rf, svr tuned with GridSearchCV) and the encoding when no FFT is desired using flag <code>--nofft</code> (likely <code>--nofft</code> better option when using RF and SVR). For the tutorial we stick to the PLS regressor.</p>
 
 </div>
 </div>
