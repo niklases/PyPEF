@@ -34,7 +34,7 @@ python3 pypef.py mkps -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV --drecomb
 python3 pypef.py run -m MODEL12345 --pmult --drecomb
 python3 pypef.py directevo -m MODEL12345 --ywt WT_FITNESS -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV
 ```
-A small API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
+PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies). A small API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [src](/src) directory.
 
 ## Tutorial
