@@ -114,9 +114,9 @@ Good luck and have fun!
 - *to be implemented*
 - *to be implemented*
 
-## Model hyperparmeters
+## Model hyperparameters
 
-The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for improved model generalization:
+The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for optimized model generalization:
 |Regression model|Hyperparameter grid|
 |:--------------:|:-----------------:|
 | PLS | N_components= {1, 2, 3, ..., 9} |
