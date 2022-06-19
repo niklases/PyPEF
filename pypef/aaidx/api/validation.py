@@ -17,6 +17,8 @@
 import os
 import numpy as np
 import pickle
+
+from sklearn.model_selection import KFold
 from tqdm import tqdm
 from scipy.stats import spearmanr
 from sklearn.metrics import mean_squared_error, r2_score
@@ -27,8 +29,8 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import Ridge, LassoLars
 
-from pypef.api.encoding import aa_index_list, AAIndexEncoding
-from pypef.api.cv_regression_options import pls_cv_regressor
+from pypef.aaidx.api.encoding import aa_index_list, AAIndexEncoding
+from pypef.aaidx.api.cv_regression_options import pls_cv_regressor
 
 import warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')

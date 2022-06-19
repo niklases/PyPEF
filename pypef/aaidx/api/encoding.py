@@ -81,7 +81,7 @@ def get_variant_seqs(wild_type_sequence, sub):  # sub = list of single/higher su
                         if variant[0] != wild_type_sequence[num - 1]:
                             raise NameError('Position of amino acids in given sequence does not match the given '
                                             'positions in the input data! E.g. see position {} and position {} being {}'
-                                            ' in the given sequence.'.format(variant, num, wt[num - 1]))
+                                            ' in the given sequence.'.format(variant, num, wild_type_sequence[num - 1]))
                     except IndexError:
                         raise IndexError("Found variant sequence position {} in data which "
                                          "is out of range of wild-type sequence length.".format(str(num)))
