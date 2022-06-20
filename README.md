@@ -110,8 +110,23 @@ Good luck and have fun!
 
 ## Encoding technique options
 
-- Sequence encoding based on AAindex descriptor sets; e.g., sequence 'ACDEFGACDEFG' --> [0.61, 1.07, 0.46, 0.47, 2.02, 0.07, 0.61, 1.07, 0.46, 0.47, 2.02, 0.07] using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without FFT (and 'ACDEFGACDEFG' -->  [1.253E-32, 1.076E-03, 3.281E-02, 1.507E-01, 7.837E-34, 1.000E00, 7.787E-01, 1.521E-01] with FFT)
-- *to be implemented*
+- AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without FFT:<br> 
+    &nbsp;&nbsp;sequence 'MKLLF' --> [1.18, 1.15,	1.53,	1.53,	2.02]<br>
+    and with FFT:<br> 
+    &nbsp;&nbsp;sequence 'MKLLF' --> [0,	1,	0.143500117,	0.309997416]<br>
+- OneHot: Occurence of a specific amino acid at a specific residue position indicated as a 1 and elso as a 0:<br> 
+    &nbsp;&nbsp;sequence 'MKLLF' --><br>
+    [&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
+    
+- DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
+  &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
+    
+![image](https://user-images.githubusercontent.com/60261497/174650520-ce7358c8-e87a-4091-a820-256027683aa2.png)
+
 - *to be implemented*
 
 ## Model hyperparameters
