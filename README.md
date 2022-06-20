@@ -127,7 +127,14 @@ Good luck and have fun!
     
 ![image](https://user-images.githubusercontent.com/60261497/174650520-ce7358c8-e87a-4091-a820-256027683aa2.png)
 
-- *to be implemented*
+
+## Modeling techniques
+
+### Machine learning (ML) modeling
+*to be described*
+
+### Hybrid modeling 
+*to be described*
 
 ## Model hyperparameters
 
@@ -138,6 +145,7 @@ The following model hyperparameter ranges are tested during (*k*-fold) cross-val
 | RF | N_trees = {100, 250, 500, 1000}, max. features = {all features, all features, log2(all features)} |
 | SVR | regularization param. = {2^0, 2^2, 2^4, 2^6, 2^8, 2^10, 2^12}, kernel coefficient = {1E−01, 1E−02, 1E−03, 1E−04, 1E−05} |
 | MLP | single hidden layer size = {1, 2, ..., 12}, solver = {ADAM, L-BFGS}, initial learning rate = {0.001, 0.01, 0.1} |
-| LassoLars | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))*, *to be implemented*|
-| Ridge | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))*, *to be implemented* |
+| LassoLars | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))*|
+| Ridge | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
+| ElasticNet | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
 
