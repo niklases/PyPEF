@@ -67,19 +67,7 @@ Usage:
         [--threads THREADS] [--start START_POS]
         [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-    pypef hybrid encode --input CSV_FILE --params PLMC_FILE
-        [--threads THREADS] [--start START_POS] [--sep CSV_COLUMN_SEPARATOR]
-        [--fitness_key FITNESS_KEY]
-    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE
-        [--train_size TRAIN_SIZE] [--train_val_size TRAIN_VAL_SIZE] [--test_size TEST_SIZE]
-        [--threads THREADS] [--start START_POS] [--sep CSV_COLUMN_SEPARATOR]
-        [--fitness_key FITNESS_KEY]
-    pypef hybrid low_n --input ENCODED_CSV_FILE
-        [--wt_pos WT_POSITION] [--threads THREADS] [--rnd_splits RND_SPLITS] [--sep CSV_COLUMN_SEPARATOR]
-        [--mutation_sep MUTATION_SEPARATOR]
-    pypef hybrid extrapolation --input ENCODED_CSV_FILE
-        [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--conc]
-    pypef hybrid --ls LEARNING_SET --ts TEST_SET --params PLMC_FILE
+        pypef hybrid --ls LEARNING_SET --ts TEST_SET --params PLMC_FILE
         [--label] [--threads THREADS] [--start START_POS]
     pypef hybrid --model MODEL --params PLMC_FILE
         [--ts TEST_SET] [--ps PREDICTION_SET]
@@ -89,6 +77,15 @@ Usage:
         [--model MODEL12345] [--y_wt WT_FITNESS] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
+    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE
+        [--train_size TRAIN_SIZE] [--train_val_size TRAIN_VAL_SIZE] [--test_size TEST_SIZE]
+        [--threads THREADS] [--start START_POS] [--sep CSV_COLUMN_SEPARATOR]
+        [--fitness_key FITNESS_KEY]
+    pypef hybrid low_n --input ENCODED_CSV_FILE
+        [--wt_pos WT_POSITION] [--threads THREADS] [--rnd_splits RND_SPLITS] [--sep CSV_COLUMN_SEPARATOR]
+        [--mutation_sep MUTATION_SEPARATOR]
+    pypef hybrid extrapolation --input ENCODED_CSV_FILE
+        [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--conc]
     pypef ml --encoding ENCODING_TECHNIQUE --ls LEARNING_SET --ts TEST_SET
         [--save NUMBER] [--regressor TYPE] [--nofft] [--all] [--params PLMC_FILE]
         [--sort METRIC_INT] [--threads THREADS]
@@ -104,9 +101,9 @@ Usage:
     pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL12345 --wt WT_SEQ --input CSV_FILE
         [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PLMC_FILE]
-    pypef ml extrapolation --input ENCODED_CSV_FILE --regressor TYPE
-        [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--conc]
-    pypef ml low_n --input ENCODED_CSV_FILE --regressor TYPE
+    pypef ml low_n --input ENCODED_CSV_FILE
+        [--regressor TYPE] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]
+    pypef ml extrapolation --input ENCODED_CSV_FILE [--regressor TYPE]
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--conc]
 
 

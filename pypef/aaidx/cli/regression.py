@@ -44,10 +44,7 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import Ridge, LassoLars, ElasticNet
 
-from pypef.utils.variant_data import (
-    amino_acids, get_sequences_from_file, remove_nan_encoded_positions,
-    count_mutation_levels_and_get_dfs, process_df_encoding
-)
+from pypef.utils.variant_data import amino_acids, get_sequences_from_file, remove_nan_encoded_positions
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel
 from pypef.dca.model import DCAHybridModel
 

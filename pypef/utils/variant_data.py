@@ -178,6 +178,8 @@ def read_csv(
     df = pd.read_csv(file_name, sep=';', comment='#')
     if df.shape[1] == 1:
         df = pd.read_csv(file_name, sep=',', comment='#')
+    if df.shape[1] == 1:
+        df = pd.read_csv(file_name, sep='\t', comment='#')
     if fitness_key is not None:
         fitnesses = df[fitness_key].to_numpy(dtype=float)
     else:
@@ -193,6 +195,7 @@ def generate_dataframe_and_save_csv(
         sequence_encodings,
         fitnesses,
         csv_file: str,
+        encoding_type: str = '',
         save_df_as_csv: bool = True
 ) -> pd.DataFrame:
     """
@@ -233,7 +236,7 @@ def generate_dataframe_and_save_csv(
     df_dca = pd.concat([df_dca, pd.DataFrame(feature_dict)], axis=1)
 
     if save_df_as_csv:
-        filename = f'{get_basename(csv_file)}_encoded.csv'
+        filename = f'{get_basename(csv_file)}_{encoding_type}_encoded.csv'
         df_dca.to_csv(filename, sep=';', index=False)
 
     return df_dca
@@ -256,54 +259,3 @@ def process_df_encoding(df_encoding) -> tuple[np.ndarray, np.ndarray, np.ndarray
         df_encoding.iloc[:, 2:].to_numpy(),
         df_encoding.iloc[:, 1].to_numpy()
     )
-
-
-def count_mutation_levels_and_get_dfs(df_encoding) -> tuple:
-    """
-    """
-    single_variants_index, all_higher_variants_index = [], []
-    double_i, triple_i, quadruple_i, quintuple_i, sextuple_i, \
-    septuple_i, octuple_i, nonuple_i, higher_nine_i = [], [], [], [], [], [], [], [], []
-    for i, row in enumerate(df_encoding.iloc[:, 0]):  # iterate over variant column
-        if '/' in row:  # TypeError: argument of type 'float' is not iterable if empty columns are (at end of) CSV
-            all_higher_variants_index.append(i)
-            if row.count('/') == 1:
-                double_i.append(i)
-            elif row.count('/') == 2:
-                triple_i.append(i)
-            elif row.count('/') == 3:
-                quadruple_i.append(i)
-            elif row.count('/') == 4:
-                quintuple_i.append(i)
-            elif row.count('/') == 5:
-                sextuple_i.append(i)
-            elif row.count('/') == 6:
-                septuple_i.append(i)
-            elif row.count('/') == 7:
-                octuple_i.append(i)
-            elif row.count('/') == 8:
-                nonuple_i.append(i)
-            elif row.count('/') >= 9:
-                higher_nine_i.append(i)
-        else:
-            single_variants_index.append(i)
-    print(f'No. Singles: {len(single_variants_index)}\nNo. All higher: {len(all_higher_variants_index)}\n'
-          f'2: {len(double_i)}\n3: {len(triple_i)}\n4: {len(quadruple_i)}\n'
-          f'5: {len(quintuple_i)}\n6: {len(sextuple_i)}\n7: {len(septuple_i)}\n'
-          f'8: {len(octuple_i)}\n9: {len(nonuple_i)}\n>=10: {len(higher_nine_i)}')
-    return (
-        df_encoding.iloc[single_variants_index, :],
-        df_encoding.iloc[double_i, :],
-        df_encoding.iloc[triple_i, :],
-        df_encoding.iloc[quadruple_i, :],
-        df_encoding.iloc[quintuple_i, :],
-        df_encoding.iloc[sextuple_i, :],
-        df_encoding.iloc[septuple_i, :],
-        df_encoding.iloc[octuple_i, :],
-        df_encoding.iloc[nonuple_i, :],
-        df_encoding.iloc[higher_nine_i, :],
-        df_encoding.iloc[all_higher_variants_index, :],
-    )
-
-
-

@@ -314,7 +314,8 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
             variants=variants,
             sequence_encodings=encoded_sequences,
             fitnesses=fitnesses,
-            csv_file=arguments['--input']
+            csv_file=arguments['--input'],
+            encoding_type=arguments['--encoding']
         )
 
     print('\nDone!')

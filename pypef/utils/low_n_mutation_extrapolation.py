@@ -17,6 +17,7 @@
 # §Equal contribution
 
 
+import os
 from itertools import chain
 import random
 import pandas as pd
@@ -27,10 +28,9 @@ import pickle
 from tqdm import tqdm
 import ray
 
-from pypef.aaidx.cli.regression import (
-    cv_regression_options, count_mutation_levels_and_get_dfs, process_df_encoding
-)
+from pypef.aaidx.cli.regression import cv_regression_options
 from pypef.dca.model import DCAHybridModel
+from pypef.utils.variant_data import process_df_encoding
 
 
 def split_train_sizes_for_multiprocessing(train_sizes, n_cores):
@@ -297,6 +297,54 @@ def low_n(
     return train_sizes, avg_spearmanr, stddev_spearmanr
 
 
+def count_mutation_levels_and_get_dfs(df_encoding) -> tuple:
+    """
+    """
+    single_variants_index, all_higher_variants_index = [], []
+    double_i, triple_i, quadruple_i, quintuple_i, sextuple_i, \
+    septuple_i, octuple_i, nonuple_i, higher_nine_i = [], [], [], [], [], [], [], [], []
+    for i, row in enumerate(df_encoding.iloc[:, 0]):  # iterate over variant column
+        if '/' in row:  # TypeError: argument of type 'float' is not iterable if empty columns are (at end of) CSV
+            all_higher_variants_index.append(i)
+            if row.count('/') == 1:
+                double_i.append(i)
+            elif row.count('/') == 2:
+                triple_i.append(i)
+            elif row.count('/') == 3:
+                quadruple_i.append(i)
+            elif row.count('/') == 4:
+                quintuple_i.append(i)
+            elif row.count('/') == 5:
+                sextuple_i.append(i)
+            elif row.count('/') == 6:
+                septuple_i.append(i)
+            elif row.count('/') == 7:
+                octuple_i.append(i)
+            elif row.count('/') == 8:
+                nonuple_i.append(i)
+            elif row.count('/') >= 9:
+                higher_nine_i.append(i)
+        else:
+            single_variants_index.append(i)
+    print(f'No. Singles: {len(single_variants_index)}\nNo. All higher: {len(all_higher_variants_index)}\n'
+          f'2: {len(double_i)}\n3: {len(triple_i)}\n4: {len(quadruple_i)}\n'
+          f'5: {len(quintuple_i)}\n6: {len(sextuple_i)}\n7: {len(septuple_i)}\n'
+          f'8: {len(octuple_i)}\n9: {len(nonuple_i)}\n>=10: {len(higher_nine_i)}')
+    return (
+        df_encoding.iloc[single_variants_index, :],
+        df_encoding.iloc[double_i, :],
+        df_encoding.iloc[triple_i, :],
+        df_encoding.iloc[quadruple_i, :],
+        df_encoding.iloc[quintuple_i, :],
+        df_encoding.iloc[sextuple_i, :],
+        df_encoding.iloc[septuple_i, :],
+        df_encoding.iloc[octuple_i, :],
+        df_encoding.iloc[nonuple_i, :],
+        df_encoding.iloc[higher_nine_i, :],
+        df_encoding.iloc[all_higher_variants_index, :],
+    )
+
+
 def performance_mutation_extrapolation(
         encoded_csv: str,
         cv_regressor: str = None,
@@ -306,6 +354,12 @@ def performance_mutation_extrapolation(
         hybrid_modeling: bool = False
 ) -> tuple:
     df = pd.read_csv(encoded_csv, sep=';', comment='#')
+    df_mut_lvl = count_mutation_levels_and_get_dfs(df)
+    if save_model:
+        try:
+            os.mkdir('Pickles')
+        except FileExistsError:
+            pass
     if cv_regressor:
         if cv_regressor == 'pls_loocv':
             raise SystemError('PLS LOOCV is not (yet) implemented '
@@ -318,14 +372,15 @@ def performance_mutation_extrapolation(
     data, data_conc = {}, {}
     # run extrapolation // implement train_size and n_runs?
     collected_levels = []
-    for i_m, mutation_level_df in enumerate(count_mutation_levels_and_get_dfs(df)):
+    for i_m, mutation_level_df in enumerate(df_mut_lvl):
         if mutation_level_df.shape[0] != 0:
             collected_levels.append(i_m)
     train_idx_appended = []
     # train_df_appended = pd.DataFrame()
     if len(collected_levels) > 1:
         train_idx = collected_levels[0]
-        train_df = df[train_idx]
+        print(train_idx)
+        train_df = df_mut_lvl[train_idx]
         train_variants, X_train, y_train = process_df_encoding(train_df)
         if hybrid_modeling:
             x_wt = train_variants[0]
@@ -346,65 +401,62 @@ def performance_mutation_extrapolation(
             if save_model:
                 print(f'Save model as... HYBRID_LVL_1.pkl')
                 pickle.dump(regressor, open('Pickles/ML_LVL_1', 'wb'))  # Pickles/ not there construction try os.mkdir
-        for i, _ in enumerate(collected_levels):
-            if i < len(collected_levels) - 1:  # not last i for training
-                print(i)
-                # For training on distinct iterated level i, uncomment:
-                # train_idx = collected_levels[i]
-                # train_df = self.mutation_level_dfs[train_idx]
-                # train_variants, X_train, y_train = self._process_df_encoding(train_df)
+        for i, _ in enumerate(tqdm(collected_levels)):
+            if i < len(collected_levels) - 1:  # not last i else error, last entry is: lvl 1 --> all higher variants
                 test_idx = collected_levels[i + 1]
-                test_df = df[test_idx]
+                test_df = df_mut_lvl[test_idx]
                 test_variants, X_test, y_test = process_df_encoding(test_df)
-                if hybrid_model:
-                    if beta_2 == 0.0:
-                        alpha = np.nan
-                    else:
-                        alpha = reg.alpha
-                    data.update(
-                        {f'single_level_{test_idx + 1}_size_{len(y_test)}':
-                            {
-                                'test_mut_level': test_idx + 1,
-                                'n_y_train': len(y_train),
-                                'n_y_test': len(y_test),
-                                'spearman_rho': hybrid_model.spearmanr(
-                                    y_test,
-                                    hybrid_model.predict(X_test, reg, beta_1, beta_2)
-                                ),
-                                'beta_1': beta_1,
-                                'beta_2': beta_2,
-                                'alpha': alpha
-                            }
-                        }
-                    )
-                else:  # ML
-                    data.update(
-                        {f'single_level_{test_idx + 1}_size_{len(y_test)}':
-                            {
-                                'test_mut_level': test_idx + 1,
-                                'n_y_train': len(y_train),
-                                'n_y_test': len(y_test),
-                                'spearman_rho': stats.spearmanr(
-                                    y_test,                    # Call predict on the BaseSearchCV estimator
-                                    regressor.predict(X_test)  # with the best found parameters
-                                )[0]
-                            }
-                        }
-                    )
+                if not conc:
+                    # For training on distinct iterated level i, uncomment:
+                    # train_idx = collected_levels[i]
+                    # train_df = self.mutation_level_dfs[train_idx]
+                    # train_variants, X_train, y_train = self._process_df_encoding(train_df)
+                    if hybrid_modeling:
+                        if beta_2 == 0.0:
+                            alpha = np.nan
+                        else:
+                            alpha = reg.alpha
+                        data.update({
+                            test_idx + 1:
+                                {
+                                    'max_train_lvl': train_idx + 1,
+                                    'n_y_train': len(y_train),
+                                    'test_lvl': test_idx + 1,
+                                    'n_y_test': len(y_test),
+                                    'spearman_rho': hybrid_model.spearmanr(
+                                        y_test,
+                                        hybrid_model.predict(X_test, reg, beta_1, beta_2)
+                                    ),
+                                    'beta_1': beta_1,
+                                    'beta_2': beta_2,
+                                    'alpha': alpha
+                                }
+                        })
+                    else:  # ML
+                        data.update({
+                            test_idx + 1:
+                                {
+                                    'max_train_lvl': train_idx + 1,
+                                    'n_y_train': len(y_train),
+                                    'test_lvl': test_idx + 1,
+                                    'n_y_test': len(y_test),
+                                    'spearman_rho': stats.spearmanr(
+                                        y_test,                    # Call predict on the BaseSearchCV estimator
+                                        regressor.predict(X_test)  # with the best found parameters
+                                    )[0]
+                                }
+                        })
 
-                if conc:  # training on mutational levels i: 1, ..., max(i)-1
-                    print('CONC MODE')
+                else:  # conc mode, training on mutational levels i: 1, ..., max(i)-1
                     train_idx_appended.append(collected_levels[i])
-                    print(train_idx_appended)
-                    if i != 0 and i < len(collected_levels) - 1:  # not the last (all_higher)
+                    if i < len(collected_levels) - 2:  # -2 as not the last (all_higher)  ## i != 0 and
                         train_df_appended_conc = pd.DataFrame()
                         for idx in train_idx_appended:
                             train_df_appended_conc = pd.concat(
-                                [train_df_appended_conc, df[idx]])
+                                [train_df_appended_conc, df_mut_lvl[idx]])
                         train_variants_conc, X_train_conc, y_train_conc = \
                             process_df_encoding(train_df_appended_conc)
-                        print(len(X_train_conc) + len(y_test))
-                        if hybrid_model:  # updating hybrid model params with newly inputted concatenated train data
+                        if hybrid_modeling:  # updating hybrid model params with newly inputted concatenated train data
                             beta_1_conc, beta_2_conc, reg_conc = hybrid_model.settings(X_train_conc, y_train_conc)
                             if beta_2_conc == 0.0:
                                 alpha = np.nan
@@ -412,11 +464,12 @@ def performance_mutation_extrapolation(
                                 # if save_model:
                                 #    pickle.dumps(reg_conc)
                                 alpha = reg_conc.alpha
-                            data_conc.update(
-                                {f'conc_level_up_to_{test_idx + 1}_size_{len(y_test)}':
+                            data_conc.update({
+                                test_idx + 1:
                                     {
-                                        'conc_test_mut_level': test_idx + 1,
+                                        'max_train_lvl': train_idx_appended[-1] + 1,
                                         'n_y_train': len(y_train_conc),
+                                        'test_lvl': test_idx + 1,
                                         'n_y_test': len(y_test),
                                         # 'rnd_state': random_state,
                                         'spearman_rho': hybrid_model.spearmanr(
@@ -427,22 +480,22 @@ def performance_mutation_extrapolation(
                                         'beta_2': beta_2_conc,
                                         'alpha': alpha
                                     }
-                                }
-                            )
+                            })
                         else:  # ML updating pureML regression model params with newly inputted concatenated train data
                             regressor.fit(X_train_conc, y_train_conc)
-                            data.update(
-                                {f'single_level_{test_idx + 1}_size_{len(y_test)}':
-                                    {
-                                        'test_mut_level': test_idx + 1,
-                                        'n_y_train': len(y_train),
-                                        'n_y_test': len(y_test),
-                                        'spearman_rho': stats.spearmanr(
-                                            y_test,  # Call predict on the BaseSearchCV estimator
-                                            regressor.predict(X_test)  # with the best found parameters
+                            data.update({
+                                test_idx + 1:
+                                {
+                                    'max_train_lvl': train_idx_appended[-1] + 1,
+                                    'n_y_train': len(y_train_conc),
+                                    'test_lvl': test_idx + 1,
+                                    'n_y_test': len(y_test),
+                                    'spearman_rho': stats.spearmanr(
+                                        y_test,  # Call predict on the BaseSearchCV estimator
+                                        regressor.predict(X_test)  # with the best found parameters
                                         )[0]
-                                    }
                                 }
-                            )
-
+                            })
+    for d in data.items():
+        print(d)
     return data, data_conc
