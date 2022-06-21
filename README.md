@@ -1,13 +1,20 @@
-This repository contains supplementary information to
+This repository contains the source files and supplementary information for the PyPEF framework, which is described in<br>
 
-Niklas E. Siedhoff<sup>*1,§*</sup>, Alexander-Maurice Illig<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*1,\**</sup>, <br>
+Niklas E. Siedhoff<sup>*1,§*</sup>, Alexander-Maurice Illig<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*3,\**</sup>, <br>
 PyPEF – An Integrated Framework for Data-Driven Protein Engineering, *J. Chem. Inf. Model.* 2021, 61, 3463-3476 <br>
-https://doi.org/10.1021/acs.jcim.1c00099 <br>
+https://doi.org/10.1021/acs.jcim.1c00099<br>
+
+as well as additional framework features described in the preprint<br>
+
+Alexander-Maurice Illig<sup>*1,§*</sup>, Niklas E. Siedhoff<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*3,\**</sup>, <br>
+A hybrid model combining evolutionary probability and machine learning leverages data-driven protein engineering, *To be published*<br>
+Preprint available at bioRxiv: https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1.
+
 <sup>*1*</sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
 <sup>*2*</sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
+<sup>*3*</sup><sub>Department of Bioorganic Chemistry, Leibniz Institute of Plant Biochemistry, Weinberg 3, 06120 Halle, Germany</sub> <br>
 <sup>*\**</sup><sub>Corresponding author</sub> <br>
 <sup>*§*</sup><sub>Equal contribution</sub> <br>
-
 
 # PyPEF: Pythonic Protein Engineering Framework
 
