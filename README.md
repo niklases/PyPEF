@@ -41,7 +41,7 @@ pypef --help
 The detailed routine for setting up a new virtual environment using Anaconda, installing required Python packages for that environment, and running the Jupyter Notebook tutorial is given below in the Tutorial section.
 
 ## Setting up the scripts yourself
-PyPEF was developed to be run from a command-line interface while `python3 ./pypef/cli/run.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
+PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
 Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
 ```
 wget https://github.com/niklases/PyPEF/archive/main.zip
