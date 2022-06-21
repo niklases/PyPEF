@@ -32,7 +32,7 @@ Tutorial section below and the ./workflow directory).
 
 <img src="workflow/Splitting_Workflow.png" alt="drawing" width="1000"/>
 
-## Quick installation
+## Quick Installation
 A quick installation of the PyPEF command line framework using PyPI (tested for Linux and Windows for Python 3.7–3.9) can be performed with:
 
 ```
@@ -45,38 +45,10 @@ After successful installation, PyPEF should work by calling `pypef` in the shell
 pypef --help
 ```
 
-The detailed routine for setting up a new virtual environment using Anaconda, installing required Python packages for that environment, and running the Jupyter Notebook tutorial is given below in the Tutorial section.
+The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter Notebook tutorial can be found below in the Tutorial section, and setting up the source files can be found in the Setting Up the Scripts Yourself section.
 
-## Setting up the scripts yourself
-PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
-Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
-```
-wget https://github.com/niklases/PyPEF/archive/main.zip
-```
-Unzipping (manually or e.g. with `unzip`):
-```
-unzip main.zip
-```
-Setting the Pythonpath:<br>
-&nbsp;&nbsp;Windows (example path)
-```
-$env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
-```
-&nbsp;&nbsp;Linux (example path)
-```
-export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
-```
-Running the main script (from PyPEF-main directory):<br>
-&nbsp;&nbsp;Windows
-```
-py .\pypef\main.py
-```
-&nbsp;&nbsp;Linux
-```
-python3 ./pypef/main.py
-```
 
-## Running examples
+## Running Examples
 Printing the help function:   
 ```
 pypef --help
@@ -182,7 +154,7 @@ Copy the Notebook URL in your internet browser and select the Workflow_PyPEF.ipy
 
 Good luck and have fun!
 
-## Encoding technique options
+## Encoding Technique Options
 
 - AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without FFT:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [1.18, 1.15,	1.53,	1.53,	2.02]<br>
@@ -199,10 +171,39 @@ Good luck and have fun!
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
   &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
 
+## Setting Up the Scripts Yourself
+PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
+Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
+```
+wget https://github.com/niklases/PyPEF/archive/main.zip
+```
+Unzipping (manually or e.g. with `unzip`):
+```
+unzip main.zip
+```
+Setting the Pythonpath:<br>
+&nbsp;&nbsp;Windows (example path)
+```
+$env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
+```
+&nbsp;&nbsp;Linux (example path)
+```
+export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
+```
+Running the main script (from PyPEF-main directory):<br>
+&nbsp;&nbsp;Windows
+```
+py .\pypef\main.py
+```
+&nbsp;&nbsp;Linux
+```
+python3 ./pypef/main.py
+```
 
-## Modeling techniques
 
-### Machine learning (ML) modeling
+## Modeling Techniques
+
+### Machine Learning (ML) Modeling
 Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
 Regression models are trained, i.e., model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples.
 Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see section Model hyperparameters below):
@@ -215,12 +216,12 @@ Following regression options from [Scikit-learn](https://scikit-learn.org/stable
 - [Multilayer-Perceptron Regression ("Deep" learning with a single hidden layer, nonlinear model)](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html)
 
 
-### Hybrid modeling 
+### Hybrid Modeling 
 Optimization of two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see our [Preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)):
 - DCA-based statistics-based prediction (see [EVmutation](https://github.com/debbiemarkslab/EVmutation))
 - ML-based supervised training on training subsets of encoded sequences and the corresponding fitness values (as described herein)
 
-## Model hyperparameters
+## Model Hyperparameters
 
 The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for optimized model generalization:
 |Regression model|Hyperparameter grid|
