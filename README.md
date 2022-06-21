@@ -69,7 +69,7 @@ Show the model performance(s) (reads the created Model_Results.txt):
 pypef ml --show
 ```
 
-Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values (`-m MODEL`is the saved model Pickle file name, for `-e aaidx` this will be the AAindex to use for encoding, e.g. ARGP820101, for `-e onehot` it will be `-m ONEHOT` and for `-e dca` it will be `DCAMODEL`):
+Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values (`-m MODEL`is the saved model Pickle file name, for `-e aaidx` this will be the AAindex to use for encoding, e.g. `-m ARGP820101`, for `-e onehot` it will be `-m ONEHOT` and for `-e dca` it will be `DCAMODEL`):
 ```
 pypef ml -e aaidx -m MODEL -f TEST_SET.FASTA
 ```
@@ -134,7 +134,7 @@ conda env create --file pypef_environment.yml
 or you can create a new environment yourself. You just need to specify the name of the environment and the Python version, e.g.:
 
 ```
-conda create --name pypef python=3.7
+conda create --name pypef python=3.9
 ```
 
 To activate the environment you can define:
@@ -184,7 +184,7 @@ Good luck and have fun!
      &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
      &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
     
-- DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
+- DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features. DCA-based features will be generated from the local and coupling terms of the parameter file (paramfile) output by [PLMC](https://github.com/debbiemarkslab/plmc) for each target variant sequence. This encoding technique generally outperforms the other encoding techniques described here, but depends on finding and aligning a minimum set of evolutionarily related/homologous sequences - which is not possible for every target sequence. Preprocessing steps for generating the paramfile based on a target sequence are described in the [hybrid model repository](https://github.com/Protein-Engineering-Framework/Hybrid_Model/blob/main/Examples/example_pabp.ipynb). This encoding technique is further also provided for constructing a pure ML model:<br> 
   &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
 
 ## Modeling Techniques
@@ -201,14 +201,12 @@ Following regression options from [Scikit-learn](https://scikit-learn.org/stable
 - [Random Forest Regression (nonlinear ensemble model)](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html)
 - [Multilayer-Perceptron Regression ("Deep" learning with a single hidden layer, nonlinear model)](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html)
 
-
 ### Hybrid Modeling 
-Optimization of two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see our [Preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)):
+Optimization of two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see the [hybrid model preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)):
 - DCA-based statistics-based prediction (see [EVmutation](https://github.com/debbiemarkslab/EVmutation))
 - ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (as described in the preprint)
 
 ## Model Hyperparameters
-
 The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for optimized model generalization:
 |Regression model|Hyperparameter grid|
 |:--------------:|:-----------------:|
