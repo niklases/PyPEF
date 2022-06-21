@@ -205,7 +205,7 @@ Following regression options from [Scikit-learn](https://scikit-learn.org/stable
 ### Hybrid Modeling 
 Optimization of two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see our [Preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)):
 - DCA-based statistics-based prediction (see [EVmutation](https://github.com/debbiemarkslab/EVmutation))
-- ML-based supervised training on training subsets of encoded sequences and the corresponding fitness values (as described herein)
+- ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (as described in the preprint)
 
 ## Model Hyperparameters
 
