@@ -156,17 +156,17 @@ Good luck and have fun!
 
 ## Encoding Technique Options
 
-- AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without FFT:<br> 
+- AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without subsequent fast Fourier transform (FFT) of the encoded sequence:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [1.18, 1.15,	1.53,	1.53,	2.02]<br>
-    and with FFT:<br> 
+    and with FFT of the encoded sequence:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [0,	1,	0.143500117,	0.309997416]<br>
 - OneHot: Occurence of a specific amino acid at a specific residue position indicated as a 1 and elso as a 0:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --><br>
-    [&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
-     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
-     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
-     &nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
-     &nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
+    &nbsp;&nbsp;[&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
+     &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
     
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
   &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
