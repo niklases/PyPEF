@@ -171,36 +171,6 @@ Good luck and have fun!
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
   &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
 
-## Setting Up the Scripts Yourself
-PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
-Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
-```
-wget https://github.com/niklases/PyPEF/archive/main.zip
-```
-Unzipping (manually or e.g. with `unzip`):
-```
-unzip main.zip
-```
-Setting the Pythonpath:<br>
-&nbsp;&nbsp;Windows (example path)
-```
-$env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
-```
-&nbsp;&nbsp;Linux (example path)
-```
-export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
-```
-Running the main script (from PyPEF-main directory):<br>
-&nbsp;&nbsp;Windows
-```
-py .\pypef\main.py
-```
-&nbsp;&nbsp;Linux
-```
-python3 ./pypef/main.py
-```
-
-
 ## Modeling Techniques
 
 ### Machine Learning (ML) Modeling
@@ -234,3 +204,31 @@ The following model hyperparameter ranges are tested during (*k*-fold) cross-val
 | Ridge | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
 | ElasticNet | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
 
+## Setting Up the Scripts Yourself
+PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
+Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
+```
+wget https://github.com/niklases/PyPEF/archive/main.zip
+```
+Unzipping (manually or e.g. with `unzip`):
+```
+unzip main.zip
+```
+Setting the Pythonpath:<br>
+&nbsp;&nbsp;Windows (example path)
+```
+$env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
+```
+&nbsp;&nbsp;Linux (example path)
+```
+export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
+```
+Running the main script (from PyPEF-main directory):<br>
+&nbsp;&nbsp;Windows
+```
+py .\pypef\main.py
+```
+&nbsp;&nbsp;Linux
+```
+python3 ./pypef/main.py
+```
