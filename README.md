@@ -158,17 +158,27 @@ Good luck and have fun!
     
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features:<br> 
   &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
-    
-![image](https://user-images.githubusercontent.com/60261497/174650520-ce7358c8-e87a-4091-a820-256027683aa2.png)
 
 
 ## Modeling techniques
 
 ### Machine learning (ML) modeling
-*to be described*
+Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
+Regression models are trained, i.e., model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples.
+Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see section Model hyperparameters below):
+- [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
+- [Lasso Regression (fit with Least Angle Regression, L1-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LassoLars.html)
+- [Ridge Regression (L2-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
+- [ElasticNet Regression (combined L1- and L2-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.ElasticNet.html)
+- [Support Vector Machines Regression (nonlinear model)](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVR.html)
+- [Random Forest Regression (nonlinear ensemble model)](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestRegressor.html)
+- [Multilayer-Perceptron Regression ("Deep" learning with a single hidden layer, nonlinear model)](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html)
+
 
 ### Hybrid modeling 
-*to be described*
+Optimization of two model contributions to the final hybrid model:
+- DCA-based statistics-based prediction (see EVmutation)
+- ML
 
 ## Model hyperparameters
 
