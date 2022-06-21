@@ -25,8 +25,52 @@ Tutorial section below and the ./workflow directory).
 
 <img src="workflow/Splitting_Workflow.png" alt="drawing" width="1000"/>
 
+## Quick installation
+A quick installation of the PyPEF command line framework using PyPI (tested for Linux and Windows for Python 3.7–3.9) can be performed with:
+
+```
+pip install -U pypef
+```
+
+After successful installation, PyPEF should work by calling `pypef` in the shell, e.g.:
+
+```
+pypef --help
+```
+
+The detailed routine for setting up a new virtual environment using Anaconda, installing required Python packages for that environment, and running the Jupyter Notebook tutorial is given below in the Tutorial section.
+
+## Setting up the scripts yourself
+PyPEF was developed to be run from a command-line interface while `python3 ./pypef/cli/run.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
+Downloading/cloning the repository files (manually or with `wget`/`git clone`):<br>
+```
+wget https://github.com/niklases/PyPEF/archive/main.zip
+```
+Unzipping (manually or e.g. with `unzip`):
+```
+unzip main.zip
+```
+Setting the Pythonpath:<br>
+&nbsp;&nbsp;Windows (example path)
+```
+$env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
+```
+&nbsp;&nbsp;Linux (example path)
+```
+export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
+```
+Running the main script (from PyPEF-main directory):<br>
+&nbsp;&nbsp;Windows
+```
+py .\pypef\main.py
+```
+&nbsp;&nbsp;Linux
+```
+python3 ./pypef/main.py
+```
+
 ## Running example
-PyPEF was developed to be run from a command-line interface while `python3 ./pypef/cli/run.py` (when using the downloaded version of this repository) should be equal to `pypef` when installed with pip.    
+   
 ```
 pypef --help
 pypef mklsvs -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
@@ -40,20 +84,10 @@ pypef directevo -m MODEL12345 --ywt WT_FITNESS -w WT_SEQUENCE.FASTA --usecsv -i 
 ```
 Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies). A small example of using the encoding API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [pypef source](/pypef) directory.
-A quick installation of the PyPEF command line framework using PyPI (tested for Linux OS and Python 3.7–3.9) can be performed with:
-```
-pip install pypef
-```
-After successful installation, PyPEF should work by calling `pypef` in the shell, e.g.:
-```
-pypef --help
-```
-The detailed routine for setting up a new virtual environment using Anaconda, installing required Python packages for that environment, and running the Jupyter Notebook tutorial is given below.
 
 As standard input files, PyPEF requires the target protein wild-type sequence in [FASTA](https://en.wikipedia.org/wiki/FASTA) format and variant-fitness data in [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format to create learning and validation split files that resemble the aligned FASTA format and additionally contain lines indicating the fitness of each corresponding variant (see [sample files](workflow/test_dataset)).
 
 ## Tutorial
-
 Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([Anaconda3-2020.11-Linux-x86_64.sh installer download](https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
