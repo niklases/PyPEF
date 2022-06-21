@@ -59,24 +59,24 @@ Creating sets for model learning and testing:
 pypef mklsts -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
 ```
 
-Training and testing a model (regressor type, e.g. `pls`, `ridge`, or `svr`):
+Training and testing a model (encoding technique = {`aaidx`, `onehot`, `dca`}; regressor type, e.g. `pls`, `ridge`, or `svr`):
 ```
-pypef run -l LEARNING_SET.FASTA -t TEST_SET.FASTA --regressor TYPE 
+pypef ml -e aaidx -l LEARNING_SET.FASTA -t TEST_SET.FASTA --regressor pls 
 ```
 
 Show the model performance(s) (reads the created Model_Results.txt):
 ```
-pypef --show
+pypef ml --show
 ```
 
-Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values:
+Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values (`-m MODEL`is the saved model Pickle file name, for `-e aaidx` this will be the AAindex to use for encoding, e.g. ARGP820101, for `-e onehot` it will be `-m ONEHOT` and for `-e dca` it will be `DCAMODEL`):
 ```
-pypef run -m MODEL12345 -f TEST_SET.FASTA
+pypef ml -e aaidx -m MODEL -f TEST_SET.FASTA
 ```
 
 Load a trained model and use it for predicting the fitness of sequences of a prediction set (with unknown corresponding fitness):
 ```
-pypef run -m MODEL12345 -p PREDICTION_SET.FASTA
+pypef ml -e aaidx -m MODEL -p PREDICTION_SET.FASTA
 ```
 
 Systematic creation of prediction sets (double, triple, quadruple recombinations (`--drecomb`, `--trecomb`, `--qarecomb`) of amino acid substitutions or naturally diverse combination of the 20 canonical amino acids (`--ddiverse`, `--tdiverse`, `--qadiverse`) at the identified positions): 
@@ -86,18 +86,34 @@ pypef mkps -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV --drecomb
 
 Systematic prediction of such (re-)combination prediction sets:
 ```
-pypef run -m MODEL12345 --pmult --drecomb
+pypef ml -e aaidx -m MODEL --pmult --drecomb
 ```
 
-Altertive way of prediction and variant identification: *In silico* [directed evolution](https://en.wikipedia.org/wiki/Directed_evolution) using the [Metropolis-Hastings](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) algorithm:
+Alternative way of prediction and variant identification: *In silico* [directed evolution](https://en.wikipedia.org/wiki/Directed_evolution) using the [Metropolis-Hastings](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) algorithm:
 ```
-pypef directevo -m MODEL12345 --ywt WT_FITNESS -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV
+pypef directevo ml -e -m MODEL -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV --ywt WT_FITNESS
 ```
 
-Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies). A small example of using the encoding API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
+Encoding a variant-fitness CSV file (for the different encodings, for `-e aaidx`provide also the AAindex name with the `-m` option):
+
+```
+pypef encode -i VARIANT-FITNESS_DATA.CSV -w WT_SEQUENCE.FASTA -e aaidx -m MODEL
+```
+
+Using the variant-encoded sequence-fitness data stored in the CSV file for a simulated "low *N*" engineering task:
+```
+pypef ml low_n -i VARIANT-FITNESS-ENCODING_DATA.CSV --regressor pls
+```
+
+Using the variant-encoded sequence-fitness data stored in the CSV file for a simulated "mutation extrapolation" task (requires higher/deeply-substituted variants):
+```
+pypef ml extrapolation -i VARIANT-FITNESS-ENCODING_DATA.CSV --regressor pls
+```
+
+Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [pypef source](/pypef) directory.
 
-As standard input files, PyPEF requires the target protein wild-type sequence in [FASTA](https://en.wikipedia.org/wiki/FASTA) format and variant-fitness data in [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format to create learning and validation split files that resemble the aligned FASTA format and additionally contain lines indicating the fitness of each corresponding variant (see [sample files](workflow/test_dataset)).
+As standard input files, PyPEF requires the target protein wild-type sequence in [FASTA](https://en.wikipedia.org/wiki/FASTA) format and variant-fitness data in [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format to split the collected variant-fitness data in learning and test sets that resemble the aligned FASTA format and additionally contain lines indicating the fitness of each corresponding variant (see [sample files](workflow/test_dataset)).
 
 ## Tutorial
 Before starting running the tutorial, it is a good idea to set-up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/products/individual) ([Anaconda3-2020.11-Linux-x86_64.sh installer download](https://repo.anaconda.com/archive/Anaconda3-2020.11-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
@@ -133,7 +149,7 @@ After activating the environment you can install required packages after changin
 python3 -m pip install -r requirements.txt
 ```
 
-Note that the package [Ray](https://github.com/ray-project/ray) that we use for parallelization of the model validation routine does not yet fully support [running on Windows](https://docs.ray.io/en/latest/installation.html#windows-support) and does not need to be used when running on a single core (no `--parallel`flag).
+Note that the package [Ray](https://github.com/ray-project/ray) which we use for parallelizing sequence encoding and model validation of AAindices on the test set, is in beta status for [Windows](https://docs.ray.io/en/latest/installation.html#windows-support).
 
 Now, after installing required packages, you should be able to directly run pypef in your preferred command-line interface (see running example).
 
