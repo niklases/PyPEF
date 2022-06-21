@@ -191,7 +191,7 @@ Good luck and have fun!
 
 ### Pure Machine Learning (ML)-based Modeling
 Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
-Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** while cross-validation and using a model implementing a penalty will be necessary for better model generalization behavior.
+Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** – while cross-validation and using a model implementing a penalty will be necessary for better model generalization behavior.
 Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see section Model hyperparameters below):
 - [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
 - [Lasso Regression (fit with Least Angle Regression, L1-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LassoLars.html)
