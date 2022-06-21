@@ -8,7 +8,7 @@ as well as additional framework features described in the preprint<br>
 
 Alexander-Maurice Illig<sup>*1,§*</sup>, Niklas E. Siedhoff<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*3,\**</sup>, <br>
 A hybrid model combining evolutionary probability and machine learning leverages data-driven protein engineering, *To be published*<br>
-Preprint available at bioRxiv: https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1.
+Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 
 <sup>*1*</sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
 <sup>*2*</sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
@@ -189,9 +189,9 @@ Good luck and have fun!
 
 ## Modeling Techniques
 
-### Machine Learning (ML) Modeling
+### Pure Machine Learning (ML)-based Modeling
 Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
-Regression models are trained, i.e., model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples.
+Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** while cross-validation and using a model implementing a penalty will be necessary for better model generalization behavior.
 Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see section Model hyperparameters below):
 - [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
 - [Lasso Regression (fit with Least Angle Regression, L1-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LassoLars.html)
