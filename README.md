@@ -16,7 +16,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 <img src="workflow/test_dataset/exemplary_validation_color_plot.png" alt="drawing" width="500"/>
 
 
-Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic effects. Here we present an engineering framework termed PyPEF for assisting the supervised training and testing of regression models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning algorithms from the [scikit-learn](https://github.com/scikit-learn/scikit-learn) package. As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the identified variants as CSV (or FASTA-like datasets following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), support vector machines (SVR), random forest (RF), Ridge, LassoLars, and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. *Additional sequence- and system-specific encoding techniques will be added in future*. Finally, the selected or best identified model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant sequences that subsequently are to be designed and validated in the wet-lab.
+Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic effects. Here we present an engineering framework termed PyPEF for assisting the supervised training and testing of regression models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning algorithms from the [Scikit-learn](https://github.com/scikit-learn/scikit-learn) package. As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the identified variants as CSV (or FASTA-like datasets following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), support vector machines (SVR), random forest (RF), Ridge, LassoLars, and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. *Additional sequence- and system-specific encoding techniques will be added in future*. Finally, the selected or best identified model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant sequences that subsequently are to be designed and validated in the wet-lab.
 
 For detailed information, please refer to the above-mentioned publication and related Supporting Information.
 
@@ -69,19 +69,52 @@ py .\pypef\main.py
 python3 ./pypef/main.py
 ```
 
-## Running example
-   
+## Running examples
+Printing the help function:   
 ```
 pypef --help
-pypef mklsvs -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
-pypef run -l LEARNING_SET.FASTA -v VALIDATION_SET.FASTA --regressor TYPE 
+```
+
+Creating sets for model learning and testing:
+```
+pypef mklsts -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
+```
+
+Training and testing a model (regressor type, e.g. `pls`, `ridge`, or `svr`):
+```
+pypef run -l LEARNING_SET.FASTA -t TEST_SET.FASTA --regressor TYPE 
+```
+
+Show the model performance(s) (reads the created Model_Results.txt):
+```
 pypef --show
-pypef run -m MODEL12345 -f VALIDATION_SET.FASTA
+```
+
+Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values:
+```
+pypef run -m MODEL12345 -f TEST_SET.FASTA
+```
+
+Load a trained model and use it for predicting the fitness of sequences of a prediction set (with unknown corresponding fitness):
+```
 pypef run -m MODEL12345 -p PREDICTION_SET.FASTA
+```
+
+Systematic creation of prediction sets (double, triple, quadruple recombinations (`--drecomb`, `--trecomb`, `--qarecomb`) of amino acid substitutions or naturally diverse combination of the 20 canonical amino acids (`--ddiverse`, `--tdiverse`, `--qadiverse`) at the identified positions): 
+```
 pypef mkps -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV --drecomb
+```
+
+Systematic prediction of such (re-)combination prediction sets:
+```
 pypef run -m MODEL12345 --pmult --drecomb
+```
+
+Altertive way of prediction and variant identification: *In silico* [directed evolution](https://en.wikipedia.org/wiki/Directed_evolution) using the [Metropolis-Hastings](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) algorithm:
+```
 pypef directevo -m MODEL12345 --ywt WT_FITNESS -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV
 ```
+
 Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies). A small example of using the encoding API for sequence encoding and model validation is provided in the [encoding_validation_api](/encoding_validation_api) directory.
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [pypef source](/pypef) directory.
 
