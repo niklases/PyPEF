@@ -27,7 +27,7 @@ Protein engineering by rational or random approaches generates data that can aid
 
 For detailed information, please refer to the above-mentioned publications and related Supporting Information.
 
-The workflow procedure is explained in the [Jupyter Notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
+The workflow procedure is explained in the [Jupyter notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
 Tutorial section below).
 
 <img src="workflow/Splitting_Workflow.png" alt="drawing" width="1000"/>
@@ -45,7 +45,7 @@ After successful installation, PyPEF should work by calling `pypef` in the shell
 pypef --help
 ```
 
-The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter Notebook tutorial can be found below in the Tutorial section.
+The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter notebook tutorial can be found below in the Tutorial section.
 
 
 ## Running Examples
@@ -117,7 +117,7 @@ The use of the hybrid model (`pypef hybrid`) - instead of a pure ML model (`pype
 pypef hybrid -l LEARNING_SET.FASTA -t TEST_SET.FASTA --params PLMC_FILE
 ``` 
 
-Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
+Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the [source code](/pypef).
 
 As standard input files, PyPEF requires the target protein wild-type sequence in [FASTA](https://en.wikipedia.org/wiki/FASTA) format and variant-fitness data in [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format to split the collected variant-fitness data in learning and test sets that resemble the aligned FASTA format and additionally contain lines indicating the fitness of each corresponding variant (see [sample files](workflow/test_dataset)).
@@ -160,7 +160,7 @@ Note that the package [Ray](https://github.com/ray-project/ray) which we use for
 
 Now, after installing required packages, you should be able to directly run pypef in the command-line interface.
 
-To run the tutorial after installing required packages either from the conda YAML environment file, the TEXT requirement file, or after installing packages using the pip version of PyPEF, open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `python3 -m pip install ipython jupyter`. To use the pypef environment as a specified kernel inside the Jupyter Notebook, you need to install ipykernel and set the kernel name:
+To run the tutorial after installing required packages either from the conda YAML environment file, the TEXT requirement file, or after installing packages using the pip version of PyPEF, open a Jupyter notebook. If you have installed Anaconda, Jupyter notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `python3 -m pip install ipython jupyter`. To use the pypef environment as a specified kernel inside the Jupyter notebook, you need to install `ipykernel` and set the kernel name:
 
 ```
 python3 -m pip install ipykernel
@@ -173,10 +173,10 @@ Now change the directory to ./workflow (`cd workflow`) and run the .ipynb file:
 jupyter-notebook
 ```
 
-Copy the Notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the Notebook in provided code fields). 
+Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the notebook in provided code fields). 
 
 ## Encoding Technique Options
-- AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without subsequent fast Fourier transform (FFT) of the encoded sequence:<br> 
+- AAindex: Sequence encoding based on AAindex descriptor sets; e.g. using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without subsequent fast Fourier transform (FFT) of the encoded sequence:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [1.18, 1.15,	1.53,	1.53,	2.02]<br>
     and with FFT of the encoded sequence:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [0.0000,	1.0000,	0.1435,	0.3010]<br>
@@ -189,11 +189,11 @@ Copy the Notebook URL in your internet browser and select the Workflow_PyPEF.ipy
      &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
     
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features. DCA-based features will be generated from the local and coupling terms of the parameter file (paramfile) output by [PLMC](https://github.com/debbiemarkslab/plmc) for each target variant sequence. This encoding technique generally outperforms the other encoding techniques described here, but depends on finding and aligning a minimum set of evolutionarily related/homologous sequences - which is not possible for every target sequence. Preprocessing steps for generating the paramfile based on a target sequence are described in the [hybrid model repository](https://github.com/Protein-Engineering-Framework/Hybrid_Model/blob/main/Examples/example_pabp.ipynb). This encoding technique is further also provided for constructing a pure ML model:<br> 
-  &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.3445, 1.3294, 1.6245, 0.8901, 3.2317]
+  &nbsp;&nbsp;e.g. sequence 'MKLLF' --> [2.3445, 1.3294, 1.6245, 0.8901, 3.2317]
 
 ## Modeling Techniques
 ### Pure Machine Learning (ML)-based Modeling
-Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
+Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e. encoded sequences. 
 Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** – while cross-validation and/or using a model implementing a penalty will be necessary for better model generalization behavior.
 Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see Model Hyperparameters section below):
 - [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
