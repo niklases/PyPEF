@@ -23,12 +23,12 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 <img src="workflow/test_dataset/exemplary_validation_color_plot.png" alt="drawing" width="500"/>
 
 
-Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic effects. Here we present an engineering framework termed PyPEF for assisting the supervised training and testing of regression models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning algorithms from the [Scikit-learn](https://github.com/scikit-learn/scikit-learn) package. As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the identified variants as CSV (or FASTA-like datasets following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), Ridge, Lasso, Elastic net, support vector machines (SVR), random forest (RF), and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. In addition, one-hot and [direct coupling analysis](https://en.wikipedia.org/wiki/Direct_coupling_analysis)-based feature generation are implemented as sequence encoding techniques. Finally, the selected or best identified model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant sequences that subsequently are to be designed and validated in the wet-lab.
+Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic effects. Here we present an engineering framework termed PyPEF for assisting the supervised training and testing of regression models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning algorithms from the [Scikit-learn](https://github.com/scikit-learn/scikit-learn) package. As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the identified variants as CSV (or FASTA-like datasets following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), Ridge, Lasso, Elastic net, support vector machines (SVR), random forest (RF), and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. In addition, one-hot and [direct coupling analysis](https://en.wikipedia.org/wiki/Direct_coupling_analysis)-based feature generation are implemented as sequence encoding techniques, which often outperform AAindex-based encoding techniques. Finally, the selected or best identified encoding technique and regression model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant variant sequences that subsequently are to be designed and validated in the wet-lab.
 
 For detailed information, please refer to the above-mentioned publications and related Supporting Information.
 
 The workflow procedure is explained in the [Jupyter Notebook](/workflow/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
-Tutorial section below and the ./workflow directory).
+Tutorial section below).
 
 <img src="workflow/Splitting_Workflow.png" alt="drawing" width="1000"/>
 
@@ -39,13 +39,13 @@ A quick installation of the PyPEF command line framework using PyPI (tested for 
 pip install -U pypef
 ```
 
-After successful installation, PyPEF should work by calling `pypef` in the shell, e.g.:
+After successful installation, PyPEF should work by calling `pypef` in the shell:
 
 ```
 pypef --help
 ```
 
-The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter Notebook tutorial can be found below in the Tutorial section, and setting up the source files can be found in the Setting Up the Scripts Yourself section.
+The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter Notebook tutorial can be found below in the Tutorial section.
 
 
 ## Running Examples
@@ -59,65 +59,66 @@ Creating sets for model learning and testing:
 pypef mklsts -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV 
 ```
 
-Training and testing a model (encoding technique = {`aaidx`, `onehot`, `dca`}; regressor type, e.g. `pls`, `ridge`, or `svr`):
+Training and testing a model (encoding technique = {`aaidx`, `onehot`, `dca`}, regression model = {`pls`, `ridge`, `lasso`, `elasticnet`, `svr`, `rf`, `mlp`}):
 ```
 pypef ml -e aaidx -l LEARNING_SET.FASTA -t TEST_SET.FASTA --regressor pls 
 ```
 
-Show the model performance(s) (reads the created Model_Results.txt):
+Show the model performance(s) (reads and prints the created Model_Results.txt file):
 ```
 pypef ml --show
 ```
 
-Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values (`-m MODEL`is the saved model Pickle file name, for `-e aaidx` this will be the AAindex to use for encoding, e.g. `-m ARGP820101`, for `-e onehot` it will be `-m ONEHOT` and for `-e dca` it will be `DCAMODEL`):
+Load a trained model, predict fitness of test sequences using that model, and plot the measured versus the predicted fitness values:
 ```
 pypef ml -e aaidx -m MODEL -f TEST_SET.FASTA
 ```
+`-m MODEL`is the saved model Pickle file name, for `-e aaidx` this will be the AAindex to use for encoding, e.g. `-m ARGP820101`, for `-e onehot` it will be `-m ONEHOTMODEL` and for `-e dca` it will be `DCAMODEL`.
 
 Load a trained model and use it for predicting the fitness of sequences of a prediction set (with unknown corresponding fitness):
 ```
 pypef ml -e aaidx -m MODEL -p PREDICTION_SET.FASTA
 ```
 
-Systematic creation of prediction sets (double, triple, quadruple recombinations (`--drecomb`, `--trecomb`, `--qarecomb`) of amino acid substitutions or naturally diverse combination of the 20 canonical amino acids (`--ddiverse`, `--tdiverse`, `--qadiverse`) at the identified positions): 
+Systematic creation of prediction sets – double, triple, or quadruple substituted variant recombinations of already identified amino acid substitutions (`--drecomb`, `--trecomb`, `--qarecomb`) or naturally diverse combinations of all 20 canonical amino acids at the identified positions (`--ddiverse`, `--tdiverse`, `--qadiverse`): 
 ```
 pypef mkps -w WT_SEQUENCE.FASTA -i VARIANT-FITNESS_DATA.CSV --drecomb
 ```
 
-Systematic prediction of such (re-)combination prediction sets:
+Systematic prediction of the created (re)combination prediction sets:
 ```
 pypef ml -e aaidx -m MODEL --pmult --drecomb
 ```
 
-Alternative way of prediction and variant identification: *In silico* [directed evolution](https://en.wikipedia.org/wiki/Directed_evolution) using the [Metropolis-Hastings](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) algorithm:
+An alternative way of prediction and variant identification is the *in silico* [directed evolution](https://en.wikipedia.org/wiki/Directed_evolution) using the [Metropolis-Hastings](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) algorithm:
 ```
 pypef directevo ml -e -m MODEL -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_DATA.CSV --ywt WT_FITNESS
 ```
 
-Encoding a variant-fitness CSV file (for the different encodings, for `-e aaidx`provide also the AAindex name with the `-m` option):
+Encoding a variant-fitness CSV file and writing it to a new CSV file (for the different encodings, also specify the AAindex name with the `-m` option next to `-e aaidx`):
 
 ```
 pypef encode -i VARIANT-FITNESS_DATA.CSV -w WT_SEQUENCE.FASTA -e aaidx -m MODEL
 ```
 
-Using the variant-encoded sequence-fitness data stored in the CSV file for a simulated "low *N*" engineering task:
+Using the created variant-encoded sequence-fitness CSV file for a simulated "low *N*" engineering task:
 ```
 pypef ml low_n -i VARIANT-FITNESS-ENCODING_DATA.CSV --regressor pls
 ```
 
-Using the variant-encoded sequence-fitness data stored in the CSV file for a simulated "mutation extrapolation" task (requires higher/deeply-substituted variants):
+Using the created variant-encoded sequence-fitness CSV file for a simulated "mutation extrapolation" task (requires higher/deeply-substituted variants):
 ```
 pypef ml extrapolation -i VARIANT-FITNESS-ENCODING_DATA.CSV --regressor pls
 ```
 
-The use of the hybrid model (`pypef hybrid`) instead of a pure ML model (`pypef ml`) is very similar to the steps above, but does not require the definition of the `-e`/`--encoding` and the `--regressor` flags, since it depends on a specific encoding technique (DCA) and uses Ridge regression for modeling. However, DCA-based encoding of sequences always requires a parameter file as input, which comes from the preprocessing of multiple sequence alignments (MSAs) and results in the parameter file generated by [PLMC](https://github.com/debbiemarkslab/plmc). E.g. for training a model on a learning set and testing it on a test set the command is:
+The use of the hybrid model (`pypef hybrid`) - instead of a pure ML model (`pypef ml`) as described in the steps above - is quite similar in terms of commands, but does not require the definition of the `-e`/`--encoding` and the `--regressor` flags, since it depends only on the DCA-based encoding technique and (so far) only uses Ridge regression for modeling. However, DCA-based encoding of sequences always requires a parameter file as input, which comes from the preprocessing of a query-specific multiple sequence alignment (MSA) and results in the parameter file generated by [PLMC](https://github.com/debbiemarkslab/plmc). E.g. for training a model on a learning set and testing it on a test set, the command for hybrid modeling is:
 
 ```
 pypef hybrid -l LEARNING_SET.FASTA -t TEST_SET.FASTA --params PLMC_FILE
 ``` 
 
 Sample files for testing PyPEF routines are provided in the [workflow/test_dataset](/workflow/test_dataset) directory, which is also used when running the Notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
-Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the source code provided in the [pypef source](/pypef) directory.
+Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the [source code](/pypef).
 
 As standard input files, PyPEF requires the target protein wild-type sequence in [FASTA](https://en.wikipedia.org/wiki/FASTA) format and variant-fitness data in [CSV](https://en.wikipedia.org/wiki/Comma-separated_values) format to split the collected variant-fitness data in learning and test sets that resemble the aligned FASTA format and additionally contain lines indicating the fitness of each corresponding variant (see [sample files](workflow/test_dataset)).
 
@@ -149,7 +150,7 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main`) and install required packages with pip if you did not use the YAML file for creating the environment (when using conda packages will be installed in anaconda3/envs/pypef/lib/python3.7/site-packages):
+After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main`) and install required packages with pip if you did not use the YAML file for creating the environment (if using conda, packages will be installed in anaconda3/envs/pypef/lib/python3.9/site-packages):
 
 ```
 python3 -m pip install -r requirements.txt
@@ -157,9 +158,9 @@ python3 -m pip install -r requirements.txt
 
 Note that the package [Ray](https://github.com/ray-project/ray) which we use for parallelizing sequence encoding and model validation of AAindices on the test set, is in beta status for [Windows](https://docs.ray.io/en/latest/installation.html#windows-support).
 
-Now, after installing required packages, you should be able to directly run pypef in your preferred command-line interface (see running example).
+Now, after installing required packages, you should be able to directly run pypef in the command-line interface.
 
-To run the tutorial after installing required packages either from the conda YAML environment file, the TEXT requirement file, or after installing packages using the pip version of PyPEF, you have to open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `python3 -m pip install ipython jupyter`. To use the pypef environment as kernel inside the Jupyter Notebook, you need to install the ipykernel:
+To run the tutorial after installing required packages either from the conda YAML environment file, the TEXT requirement file, or after installing packages using the pip version of PyPEF, open a Jupyter Notebook. If you have installed Anaconda, Jupyter Notebook and other commonly used packages for scientific computing and data science should be already installed in Python. If not, you can also install Jupyter via `python3 -m pip install ipython jupyter`. To use the pypef environment as a specified kernel inside the Jupyter Notebook, you need to install ipykernel and set the kernel name:
 
 ```
 python3 -m pip install ipykernel
@@ -174,14 +175,11 @@ jupyter-notebook
 
 Copy the Notebook URL in your internet browser and select the Workflow_PyPEF.ipynb file to open it. Now you can select the pypef Python environment at the top Notebook menu: Kernel > Change kernel > pypef (otherwise you would use your default Python version as environment, i.e. you would have to install the required packages for this interpreter as well; for this case the installation of the prerequisite packages can also be done within the Notebook in provided code fields). 
 
-Good luck and have fun!
-
 ## Encoding Technique Options
-
 - AAindex: Sequence encoding based on AAindex descriptor sets; e.g., using AAindex https://www.genome.jp/entry/aaindex:ARGP820101 for encoding and without subsequent fast Fourier transform (FFT) of the encoded sequence:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --> [1.18, 1.15,	1.53,	1.53,	2.02]<br>
     and with FFT of the encoded sequence:<br> 
-    &nbsp;&nbsp;sequence 'MKLLF' --> [0,	1,	0.143500117,	0.309997416]<br>
+    &nbsp;&nbsp;sequence 'MKLLF' --> [0.0000,	1.0000,	0.1435,	0.3010]<br>
 - OneHot: Occurence of a specific amino acid at a specific residue position indicated as a 1 and elso as a 0:<br> 
     &nbsp;&nbsp;sequence 'MKLLF' --><br>
     &nbsp;&nbsp;[&nbsp;0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, <br>
@@ -191,14 +189,13 @@ Good luck and have fun!
      &nbsp;&nbsp;&nbsp;&nbsp;0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0&nbsp;]<br>
     
 - DCA: Direct coupling analysis of multiple sequence alignments to extract evolutionary query-specific features. DCA-based features will be generated from the local and coupling terms of the parameter file (paramfile) output by [PLMC](https://github.com/debbiemarkslab/plmc) for each target variant sequence. This encoding technique generally outperforms the other encoding techniques described here, but depends on finding and aligning a minimum set of evolutionarily related/homologous sequences - which is not possible for every target sequence. Preprocessing steps for generating the paramfile based on a target sequence are described in the [hybrid model repository](https://github.com/Protein-Engineering-Framework/Hybrid_Model/blob/main/Examples/example_pabp.ipynb). This encoding technique is further also provided for constructing a pure ML model:<br> 
-  &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.34453, 1.3294, 1.6245, 0.8901, 3.2317]
+  &nbsp;&nbsp;e.g., sequence 'MKLLF' --> [2.3445, 1.3294, 1.6245, 0.8901, 3.2317]
 
 ## Modeling Techniques
-
 ### Pure Machine Learning (ML)-based Modeling
 Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e., encoded sequences. 
 Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** – while cross-validation and/or using a model implementing a penalty will be necessary for better model generalization behavior.
-Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see section Model hyperparameters below):
+Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see Model Hyperparameters section below):
 - [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
 - [Lasso Regression (fit with Least Angle Regression, L1-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LassoLars.html)
 - [Ridge Regression (L2-penalty regularized linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.linear_model.Ridge.html)
@@ -208,21 +205,21 @@ Following regression options from [Scikit-learn](https://scikit-learn.org/stable
 - [Multilayer-Perceptron Regression ("Deep" learning with a single hidden layer, nonlinear model)](https://scikit-learn.org/stable/modules/generated/sklearn.neural_network.MLPRegressor.html)
 
 ### Hybrid Modeling 
-Optimization of two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see the [hybrid model preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)); only based on DCA-derived features (therefore no definition of the flag `-e`, `--encoding` necessary for hybrid modeling):
-- DCA-based statistics-based prediction (see [EVmutation](https://github.com/debbiemarkslab/EVmutation))
-- ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (as described in the preprint)
+Optimization of the two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see the [hybrid model preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1)); only based on DCA-derived features (therefore no definition of the flag `-e`, `--encoding` necessary for hybrid modeling):
+- DCA-based statistical prediction of the evolutionary energy of a variant relative to the wild type (see [EVmutation](https://marks.hms.harvard.edu/evmutation/); [EVmutation repository](https://github.com/debbiemarkslab/EVmutation)/[EVcouplings repository](https://github.com/debbiemarkslab/EVcouplings)).
+- ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression)
 
 ## Model Hyperparameters
 The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for optimized model generalization:
 |Regression model|Hyperparameter grid|
 |:--------------:|:-----------------:|
 | PLS | N_components= {1, 2, 3, ..., 9} |
-| RF | N_trees = {100, 250, 500, 1000}, max. features = {all features, sqrt(all features), log2(all features)} |
-| SVR | regularization param. = {2^0, 2^2, 2^4, 2^6, 2^8, 2^10, 2^12}, kernel coefficient = {1E−01, 1E−02, 1E−03, 1E−04, 1E−05} |
-| MLP | single hidden layer size = {1, 2, ..., 12}, solver = {ADAM, L-BFGS}, initial learning rate = {0.001, 0.01, 0.1} |
-| LassoLars | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))*|
 | Ridge | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
+| LassoLars | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
 | ElasticNet | regularization param. = {1.000E-06, 1.322E-06, 1.748E-06, ..., 1.000E06} *(numpy.logspace(-6, 6, 100))* |
+| SVR | regularization param. = {2^0, 2^2, 2^4, 2^6, 2^8, 2^10, 2^12}, kernel coefficient = {1E−01, 1E−02, 1E−03, 1E−04, 1E−05} |
+| RF | N_trees = {100, 250, 500, 1000}, max. features = {all features, sqrt(all features), log2(all features)} |
+| MLP | single hidden layer size = {1, 2, ..., 12}, solver = {ADAM, L-BFGS}, initial learning rate = {0.001, 0.01, 0.1} |
 
 ## Setting Up the Scripts Yourself
 PyPEF was developed to be run from a command-line interface while `python3 ./pypef/main.py` (when using the downloaded version of this repository and setting the `PYTHONPATH`) is equal to `pypef` when installed with pip. 
@@ -230,24 +227,29 @@ Downloading/cloning the repository files (manually or with `wget`/`git clone`):<
 ```
 wget https://github.com/niklases/PyPEF/archive/main.zip
 ```
-Unzipping (manually or e.g. with `unzip`):
+
+Unzipping the zipped file (manually or e.g. with `unzip`):
 ```
 unzip main.zip
 ```
-Setting the Pythonpath:<br>
+
+Setting the `PYTHONPATH` (so that no import errors occur stating that the package `pypef` and thus dependent absolute imports are unknown):<br>
 &nbsp;&nbsp;Windows (example path)
 ```
 $env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
 ```
+
 &nbsp;&nbsp;Linux (example path)
 ```
 export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
 ```
+
 Running the main script (from PyPEF-main directory):<br>
 &nbsp;&nbsp;Windows
 ```
 py .\pypef\main.py
 ```
+
 &nbsp;&nbsp;Linux
 ```
 python3 ./pypef/main.py
