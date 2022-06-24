@@ -25,6 +25,7 @@ import os
 import random
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.stats import rankdata
 import warnings
 
 from pypef.aaidx.cli.regression import predict
@@ -168,7 +169,10 @@ class DirectedEvolution:
         Making sure that sequence mutations have been introduced correctly.
         """
         for i, variant in enumerate(v_traj[1:]):  # [1:] as not checking for WT
-            variant_position = int(variant[:-1]) - 1  # -1 as 0-indexed
+            if type(v_traj[-1][0]) == str:  # checking format: e.g. 'A123C' or '123C'
+                variant_position = int(variant[1:-1]) - 1  # -1 as 0-indexed
+            else:
+                variant_position = int(variant[:-1]) - 1  # -1 as 0-indexed
             variant_amino_acid = str(variant[-1])
             assert variant_amino_acid == s_traj[i+1][variant_position]  # checking AA of last trajactory sequence
 
@@ -195,10 +199,13 @@ class DirectedEvolution:
 
             if accepted == 0:
                 prior_mutation_location = random.randint(0, len(self.s_wt))  # not really "prior" as first
-            else:
-                prior_mutation_location = int(v_traj[-1][:-1])
-            prior_y = y_traj[-1]                  # old y, always at [-1]
-            prior_sequence = s_traj[-1]           # old sequence, always at [-1]
+            else:  # check variant naming scheme, i.e., if str+int+str or just int+str
+                if type(v_traj[-1][0]) == str:
+                    prior_mutation_location = int(v_traj[-1][1:-1])
+                else:
+                    prior_mutation_location = int(v_traj[-1][:-1])
+            prior_y = y_traj[-1]  # prior y, always at [-1]
+            prior_sequence = s_traj[-1]  # prior sequence, always at [-1]
 
             new_var_seq = self.mutate_sequence(
                 seq=prior_sequence,
@@ -227,6 +234,8 @@ class DirectedEvolution:
                     regressor_pkl=self.model
                 )
 
+            if predictions == 'skip':  # skip if variant cannot be encoded by DCA-based encoding technique
+                continue
             new_y, new_var = predictions[0][0], predictions[0][1]  # new_var == new_variant nonetheless
             # probability function for trial sequence
             # The lower the fitness (y) of the new variant, the higher are the chances to get excluded
@@ -234,13 +243,13 @@ class DirectedEvolution:
                 warnings.simplefilter("ignore")
                 try:
                     boltz = np.exp(((new_y - prior_y) / self.temp), dtype=np.longfloat)
-                    if self.negative is True:
+                    if self.negative:
                         boltz = np.exp((-(new_y - prior_y) / self.temp), dtype=np.longfloat)
                 except OverflowError:
                     boltz = 1
             p = min(1, boltz)
             rand_var = random.random()  # random float between 0 and 1
-            if rand_var < p:  # Metropolis-Hastings update selection criterion
+            if rand_var < p:  # Metropolis-Hastings update selection criterion, else do nothing (do not accept variant)
                 v_traj.append(new_var)       # update the variant naming trajectory
                 y_traj.append(new_y)         # update the fitness trajectory records
                 s_traj.append(new_sequence)  # update the sequence trajectory records
@@ -251,7 +260,7 @@ class DirectedEvolution:
 
     def run_de_trajectories(self):
         """
-        Runs the directed evolution by adressing the in_silico_de
+        Runs the directed evolution by addressing the in_silico_de
         function and plots the evolution trajectories.
         """
         v_records = []  # initialize list of sequence variant names
@@ -280,42 +289,48 @@ class DirectedEvolution:
         # predicted fitness ranks matter and not associated fitness values
         fig, ax = plt.subplots()  # figsize=(10, 6)
         ax.locator_params(integer=True)
+        y_records_ = []
         for i, fitness_array in enumerate(y_records):
-            if self.encoding == 'aaidx':
-                ax.plot(np.arange(1, len(fitness_array) + 1, 1), fitness_array,
-                        '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(i + 1))
-            elif self.encoding == 'dca':
-                ax.plot(np.arange(1, len(fitness_array), 1), fitness_array[1:],
-                        '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(i + 1))
+            if self.ml_or_hybrid == 'hybrid':
+                # Just plotting ranks as hybrid model is only trained for Spearman correlation
+                # and variants fitness might be very close (e.g. in orders of E-06).
+                fitness_array = rankdata(fitness_array).astype(int)
+                if self.negative:
+                    fitness_array = len(fitness_array) - fitness_array + 1
 
+            ax.plot(np.arange(1, len(fitness_array) + 1, 1), fitness_array,
+                    '-o', alpha=0.7, markeredgecolor='black', label='EvoTraj' + str(i + 1))
+            y_records_.append(fitness_array)
         label_x_y_name = []
         traj_max_len = 0
         for i, v_record in enumerate(v_records):  # i = 1, 2, 3, .., ; v_record = variant label array
             for j, v in enumerate(v_record):      # j = 1, 2, 3, ..., ; v = variant name; y_records[i][j] = fitness
                 if len(v_record) > traj_max_len:
                     traj_max_len = len(v_record)
-                if self.encoding == 'aaidx':
-                    if i == 0:                      # j + 1 -> x axis position shifted by 1
-                        label_x_y_name.append(ax.text(j + 1, y_records[i][j], v, size=9))
-                    else:
-                        if v != 'WT':  # only print 'WT' name once
-                            label_x_y_name.append(ax.text(j + 1, y_records[i][j], v, size=9))
-                else:  # do not show 'WT' and WT-fitness as only ranks matter for DCA-based HybridModel
-                    if j >= 1:
-                        label_x_y_name.append(ax.text(j, y_records[i][j], v, size=9))
-
+                if i == 0:                      # j + 1 -> x axis position shifted by 1
+                    label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=9))
+                else:
+                    if v != 'WT':  # only print 'WT' name once
+                        label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=9))
+                #else:
+                #    #if j >= 1:  # DCA-based encoding: do not show 'WT' and WT-fitness as only ranks matter using the HybridModel
+                #    y_records_ranked = rankdata(y_records[i]).astype(int)
+                #    label_x_y_name.append(ax.text(j, y_records_ranked[j], v, size=9))
+        for bla in label_x_y_name:
+            print(bla)
         # adjusting variant text labels
         from adjustText import adjust_text
         adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
         ax.legend()
-        if self.encoding == 'aaidx':
-            plt.xticks(np.arange(1,  traj_max_len + 1, 1), np.arange(1, traj_max_len + 1, 1))
-        else:
-            plt.xticks(np.arange(1, traj_max_len+1, 1), np.arange(1, traj_max_len+1, 1))
+        #if self.encoding == 'aaidx' or self.encoding == 'onehot':
+        plt.xticks(np.arange(1,  traj_max_len + 1, 1), np.arange(1, traj_max_len + 1, 1))
+        #else:
+        #    plt.xticks(np.arange(1, traj_max_len+1, 1), np.arange(1, traj_max_len+1, 1))
 
         plt.ylabel('Predicted fitness')
         plt.xlabel('Mutation trial steps')
         plt.savefig(str(self.model) + '_DE_trajectories.png', dpi=500)
+        plt.clf()
 
         with open('Trajectories.csv', 'w') as file:
             file.write('Trajectory;Variant;Sequence;Fitness\n')

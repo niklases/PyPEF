@@ -20,7 +20,7 @@ import os
 import numpy as np
 import re
 
-from pypef.utils.variant_data import amino_acids, read_csv, generate_dataframe_and_save_csv
+from pypef.utils.variant_data import amino_acids, generate_dataframe_and_save_csv
 
 from pypef.utils.learning_test_sets import (
     get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_ls_ts,

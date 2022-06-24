@@ -16,8 +16,8 @@
 # *Corresponding author
 # §Equal contribution
 
-from pypef.utils.variant_data import read_csv, generate_dataframe_and_save_csv
-from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence
+from pypef.utils.variant_data import read_csv
+from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel
 from pypef.dca.model import performance_ls_ts, predict_ps, get_model_and_save_pkl
 from pypef.utils.low_n_mutation_extrapolation import performance_mutation_extrapolation, low_n
 

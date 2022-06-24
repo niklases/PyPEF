@@ -233,8 +233,9 @@ class CouplingsModel:
             self.__read_plmc_v2(filename, precision)
         except TypeError:
             raise TypeError("Did not find (specified) PLMC parameter file. "
-                            "The parameter file is required for encoding and"
-                            "can be provided via the flag --params PLMC_FILE.")
+                            "The parameter file is required for DCA-based "
+                            "encoding and can be provided via the flag "
+                            "--params PLMC_FILE.")
         self.alphabet_map = {s: i for i, s in enumerate(self.alphabet)}
 
         # in non-gap mode, focus sequence is still coded with a gap character,
@@ -678,7 +679,7 @@ def get_encoded_sequence(
     """
     Description
     -----------
-    Gets encoded sequence based on input variant name and an preexisting
+    Gets encoded sequence based on input variant name and a preexisting
     DCAEncoding instance.
 
     Parameters

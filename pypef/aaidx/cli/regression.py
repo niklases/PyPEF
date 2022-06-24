@@ -20,14 +20,12 @@
 Main modules for regression/ML including featurization,
 validation, tuning, prediction, and plotting routines.
 """
-
+import copy
 import os
-import time
 import matplotlib
 matplotlib.use('Agg')  # no plt.show(), just save plot
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from scipy import stats
 import pickle
 from tqdm import tqdm  # progress bars
@@ -44,9 +42,8 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import Ridge, LassoLars, ElasticNet
 
-from pypef.utils.variant_data import amino_acids, get_sequences_from_file, remove_nan_encoded_positions
+from pypef.utils.variant_data import amino_acids, get_sequences_from_file, remove_nan_encoded_positions, get_basename
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel
-from pypef.dca.model import DCAHybridModel
 
 import warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='numpy')
@@ -481,8 +478,10 @@ def get_r2(x_learn, x_test, y_learn, y_test, regressor='pls'):
     # other regression options (k-fold CV tuning)
     else:
         regressor_ = cv_regression_options(regressor)
-
-    regressor_.fit(x_learn, y_learn)  # fit model
+    try:
+        regressor_.fit(x_learn, y_learn)  # fit model
+    except ValueError:  # scipy/linalg/decomp_svd.py --> ValueError('illegal value in %dth argument of internal gesdd'
+        return [None, None, None, None, None, regressor, None]
 
     if regressor != 'pls_loocv':  # take best parameters for the regressor and the AAindex
         best_params = regressor_.best_params_
@@ -603,7 +602,7 @@ def formatted_output(
 
     for (idx, val, val2, val3, val4, val5, r_m, pam) in aaindex_r2_list:
         if val >= minimum_r2:
-            index.append(idx[:-4])
+            index.append(get_basename(idx))
             value.append('{:f}'.format(val))
             value2.append('{:f}'.format(val2))
             value3.append('{:f}'.format(val3))
@@ -854,7 +853,7 @@ def save_model(
             if encoding == 'onehot' or encoding == 'dca':
                 name = idx
             else:
-                name = idx[:4]
+                name = get_basename(idx)
             with open('CV_performance/_CV_Results.txt', 'a') as f:
                 f.write('Regression type: {}; Parameter: {}; Encoding index: {}\n'.format(
                     regressor.upper(), parameter, name))
@@ -945,8 +944,11 @@ def predict(
             variants, x, _ = get_dca_data_parallel(variants, list(np.zeros(len(variants))), x_dca, threads)
         else:
             x = x_dca.collect_encoded_sequences(variants)
-            x, variants = list(remove_nan_encoded_positions(x, variants))
+            x, variants = remove_nan_encoded_positions(x, list(variants))
+            print(len(x), len(variants))
             x_raw = None
+        if not x:
+            return 'skip'
 
     assert len(variants) == len(x)
 
@@ -954,6 +956,7 @@ def predict(
         if no_fft and encoding == 'aaidx':  # predict using raw AAidx encoding (without FFT)
             ys = loaded_model.predict(x_raw)
         else:  # predict AAidx-FFTed or onehot or DCA-based encoding
+            print('x =',x)
             ys = loaded_model.predict(x)
     except ValueError:
         raise ValueError(
@@ -1036,8 +1039,8 @@ def plot(
             variants_test, x, y_test = get_dca_data_parallel(variants_test, y_test, x_dca, threads)
         else:
             x_ = x_dca.collect_encoded_sequences(variants_test)
-            x, variants_test = remove_nan_encoded_positions(x_, variants_test)
-            x, y_test = remove_nan_encoded_positions(x_, y_test)
+            x, variants_test = remove_nan_encoded_positions(copy.copy(x_), variants_test)
+            x, y_test = remove_nan_encoded_positions(copy.copy(x_), y_test)
             assert len(x) == len(variants_test) == len(y_test)
 
     try:

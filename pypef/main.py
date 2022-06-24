@@ -19,7 +19,7 @@ PyPEF provides three encoding options:
                amino acid at a sequence position as a single 1 and 19 0's.
 
 Further, DCA-based necoding allows a pure ML-based modeling as well as a hybrid
-modeling approach (for details, see doi: https://doi.org/10.1101/2022.06.07.495081).
+modeling approach; for details, see https://doi.org/10.1101/2022.06.07.495081
 
 If an MSA can be constructed for the target sequence, e.g., using Jackhmmer,
 encoding option I will likely outperform encoding option II.
@@ -67,7 +67,7 @@ Usage:
         [--threads THREADS] [--start START_POS]
         [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-        pypef hybrid --ls LEARNING_SET --ts TEST_SET --params PLMC_FILE
+    pypef hybrid --ls LEARNING_SET --ts TEST_SET --params PLMC_FILE
         [--label] [--threads THREADS] [--start START_POS]
     pypef hybrid --model MODEL --params PLMC_FILE
         [--ts TEST_SET] [--ps PREDICTION_SET]
@@ -88,18 +88,18 @@ Usage:
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--conc]
     pypef ml --encoding ENCODING_TECHNIQUE --ls LEARNING_SET --ts TEST_SET
         [--save NUMBER] [--regressor TYPE] [--nofft] [--all] [--params PLMC_FILE]
-        [--sort METRIC_INT] [--threads THREADS]
+        [--sort METRIC_INT] [--threads THREADS] [--color]
     pypef ml --show
         [MODELS]
-    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --figure VS_FOR_PLOTTING
+    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --figure TS_FOR_PLOTTING
         [--label] [--color] [--y_wt WT_FITNESS] [--nofft] [--params PLMC_FILE] [--threads THREADS]
     pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --ps PREDICTION_SET
         [--nofft] [--negative]
     pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --pmult
         [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse] [--nofft] [--negative] [--params PLMC_FILE]
-    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL12345 --wt WT_SEQ --input CSV_FILE
-        [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
+    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL12345 --wt WT_SEQ
+        [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PLMC_FILE]
     pypef ml low_n --input ENCODED_CSV_FILE
         [--regressor TYPE] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]

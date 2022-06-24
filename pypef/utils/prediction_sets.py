@@ -40,7 +40,11 @@ import numpy as np
 from tqdm import tqdm
 
 
-def make_fasta_ps(filename, wt, substitution):
+def make_fasta_ps(
+        filename,
+        wt,
+        substitution
+):
     """
     Creates prediction sets (.fasta style files)
     """
@@ -176,7 +180,6 @@ def make_recombinations_quintuple(arr):
     yield quintuples
 
 
-
 def make_directory_and_enter(directory):
     """
     Makes directory for recombined or diverse prediction sets
@@ -192,7 +195,13 @@ def make_directory_and_enter(directory):
     return previous_working_directory
 
 
-def create_split_files(array, single_variants, wt_sequence, name, no):
+def create_split_files(
+        array,
+        single_variants,
+        wt_sequence,
+        name,
+        no
+):
     """
     Creates split files from given variants for yielded recombined or diverse variants
     """
@@ -228,7 +237,6 @@ def make_combinations_double_all_diverse(arr, aminoacids):
     """
     doubles = []
     for i in tqdm(range(len(arr))):
-        print(i)
         for j in range(i + 1, len(arr)):
             for k in aminoacids:
                 for l in aminoacids:
@@ -291,8 +299,6 @@ def make_combinations_double_all_diverse_and_all_positions(wt_seq, aminoacids):
                             yield doubles
                             doubles = []
     doubles = list(dict.fromkeys(doubles))
-    print(counter)
-    print(len(wt_seq))
     yield doubles
 
 
