@@ -73,7 +73,7 @@ def make_recombinations_double(arr: tuple) -> list:
     """
     Description
     -----------
-    Make double recombinant variants
+    Make double recombinant variants.
 
     Parameters
     ----------
@@ -100,16 +100,24 @@ def make_recombinations_double(arr: tuple) -> list:
     yield doubles
 
 
-def make_recombinations_triple(arr):
+def make_recombinations_triple(arr: list):
     """
-    Make triple recombinant variants
+    Description
+    -----------
+    Make triple recombinant variants.
 
-    :parameter arr: List of single substitutions in tuple, e.g.,
-    (['L215F'], ['A217N'], ['R219S'], ['L249Y'])
+    Parameters
+    ----------
+    arr: list
+        List of single substitutions in tuple, e.g.,
+        (['L215F'], ['A217N'], ['R219S'], ['L249Y'])
 
-    :returns triples: List of triple substitution lists, e.g.,
-    [['L215F', 'A217N', 'R219S'], ['L215F', 'A217N', 'L249Y'],
-    ['L215F', 'R219S', 'L249Y'], ['A217N', 'R219S', 'L249Y']]
+    Returns
+    -------
+    triples: list
+        List of triple substitution lists, e.g.,
+        [['L215F', 'A217N', 'R219S'], ['L215F', 'A217N', 'L249Y'],
+        ['L215F', 'R219S', 'L249Y'], ['A217N', 'R219S', 'L249Y']]
     """
     length = len(arr)
     triples = []
@@ -127,13 +135,21 @@ def make_recombinations_triple(arr):
 
 def make_recombinations_quadruple(arr):
     """
-    Make quadruple recombination variants
+    Description
+    -----------
+    Make quadruple recombination variants.
 
-    :parameter arr: List of single substitutions in tuple, e.g.,
-    (['L215F'], ['A217N'], ['R219S'], ['L249Y'])
+    Parameters
+    ----------
+    arr: list
+        List of single substitutions in tuple, e.g.,
+        (['L215F'], ['A217N'], ['R219S'], ['L249Y'])
 
-    :returns quadruples: List of quadruple substitution lists, e.g.,
-    [['L215F', 'A217N', 'R219S', 'L249Y']]
+    Returns
+    -------
+    quadruples: list
+        List of quadruple substitution lists, e.g.,
+        [['L215F', 'A217N', 'R219S', 'L249Y']]
     """
     length = len(arr)
     quadruples = []
@@ -152,7 +168,7 @@ def make_recombinations_quadruple(arr):
 
 def make_recombinations_quintuple(arr):
     """
-    Make quadruple recombination variants
+    Make quintuple recombination variants.
 
     :parameter arr: List of single substitutions in tuple, e.g.,
     (['L215F'], ['A217N'], ['R219S'], ['L249Y'], ['P252I])

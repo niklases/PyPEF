@@ -39,14 +39,12 @@ Mutation effects predicted from sequence co-variation. Nature Biotechnology, in 
 
 
 from collections.abc import Iterable  # originally imported 'from collections'
-from typing import Any
 
-import pandas as pd
 import numpy as np
-import os
 import ray
-from numpy import ndarray
 from tqdm import tqdm
+from pypef.utils.variant_data import amino_acids
+
 
 _SLICE = np.s_[:]
 np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)
@@ -103,15 +101,15 @@ class ActiveSiteError(Exception):
             super().__init__(self.message)
 
 
-"""
-Valid characters for one letter codes of amino acids. 
-"""
-amino_acids_olc = [
-    'A', 'C', 'D', 'E', 'F',
-    'G', 'H', 'I', 'K', 'L',
-    'M', 'N', 'P', 'Q', 'R',
-    'S', 'T', 'V', 'W', 'Y'
-]
+#"""
+#Valid characters for one letter codes of amino acids.
+#"""
+#amino_acids_olc = [
+#    'A', 'C', 'D', 'E', 'F',
+#    'G', 'H', 'I', 'K', 'L',
+#    'M', 'N', 'P', 'Q', 'R',
+#    'S', 'T', 'V', 'W', 'Y'
+#]
 
 
 def is_valid_substitution(substitution: str) -> bool:
@@ -136,10 +134,10 @@ def is_valid_substitution(substitution: str) -> bool:
     -------
     boolian
     """
-    if not substitution[0] in amino_acids_olc:  # not accepting format IntegerAA, e.g., 123D
+    if not substitution[0] in amino_acids:  # not accepting format IntegerAA, e.g., 123D
         return False
 
-    if not substitution[-1] in amino_acids_olc:
+    if not substitution[-1] in amino_acids:
         return False
 
     try:
@@ -231,11 +229,13 @@ class CouplingsModel:
         self.verbose = verbose
         try:
             self.__read_plmc_v2(filename, precision)
-        except TypeError:
-            raise TypeError("Did not find (specified) PLMC parameter file. "
-                            "The parameter file is required for DCA-based "
-                            "encoding and can be provided via the flag "
-                            "--params PLMC_FILE.")
+        except TypeError or FileNotFoundError:
+            raise SystemError(
+                "Did not find (specified) PLMC parameter file. "
+                "The parameter file is required for DCA-based "
+                "encoding and can be provided via the flag "
+                "--params PLMC_FILE."
+            )
         self.alphabet_map = {s: i for i, s in enumerate(self.alphabet)}
 
         # in non-gap mode, focus sequence is still coded with a gap character,
@@ -289,26 +289,24 @@ class CouplingsModel:
 
             # Analyzing Positions included in the PLMC file (based on the MSA)
             not_valid, valid = [], []
-            for index in self.index_list:
-                if index not in range(self.index_list[0], self.index_list[-1] + 1, 1):
-                    not_valid.append(index)
+            for num in range(self.index_list[0], self.index_list[-1] + 1, 1):
+                if num not in self.index_list:
+                    not_valid.append(num)
                 else:
-                    valid.append(index)
+                    valid.append(num)
             if self.verbose:
                 print(f'Evaluating gap content of PLMC parameter file... '
                       f'First amino acid position used in the MSA (PLMC params file) is '
                       f'{self._target_seq[0]}{self.index_list[0]} and the last position '
                       f'used is {self._target_seq[-1]}{self.index_list[-1]}.')
                 if len(not_valid) > 0:
-                    print(f'Further, non-included positions are:\n')
-                    for pos in not_valid:
-                        print(f'{self._target_seq[pos]}{self.index_list[pos]}')
-
-                    print(f'Summary of all effective positions represented in the MSA '
+                    print(f'\nFurther, non-included positions are:')
+                    print(str(not_valid)[1:-1])
+                    print(f'\nSummary of all effective positions represented in the MSA '
                           f'based on wild-type sequence ({len(valid)} encoded positions):')
                     for aa, pos in zip(self._target_seq, self.index_list):
                         print(f'{aa + str(pos)}', end=' ')
-                    print()
+                    print('\n')
 
             # single site frequencies f_i and fields h_i
             self.f_i, = np.fromfile(
@@ -346,6 +344,19 @@ class CouplingsModel:
                     self.J_ij[j, i] = self.J_ij[i, j].T
 
     def get_target_seq_and_index(self):
+        """
+        Gets and returns the target sequence of encodeable positions as
+        well as the index list of encodeable positions that are the
+        corresponding amino acid positions of the wild type sequence (1-indexed).
+
+        Returns
+        ----------
+        self._target_seq: list
+            List of single letter strings of the wild-type amino acids
+            at the encodeable positions
+        self._index_list: list
+            List of integers of encodeable amino acid positions
+        """
         return self._target_seq, self._index_list
 
     @property
@@ -655,7 +666,11 @@ class DCAEncoding(CouplingsModel):
             arrays/lists for training and testing the model.
         """
         encoded_sequences = []
-        for i, variant in enumerate(tqdm(variants)):
+        if len(variants) == 1:  # do not show progress bar for single variant
+            set_silence = True  # thus, also not for directed evolution
+        else:
+            set_silence = False
+        for i, variant in enumerate(tqdm(variants, disable=set_silence)):
             try:
                 encoded_sequences.append(self.encode_variant(variant))
             except ActiveSiteError:

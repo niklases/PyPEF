@@ -23,8 +23,10 @@ import pandas as pd
 
 
 amino_acids = [
-    'A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L',
-    'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y'
+    'A', 'C', 'D', 'E', 'F',
+    'G', 'H', 'I', 'K', 'L',
+    'M', 'N', 'P', 'Q', 'R',
+    'S', 'T', 'V', 'W', 'Y'
 ]
 
 
@@ -47,24 +49,28 @@ def read_models(number):
         return "No Model_Results.txt found."
 
 
-def full_path(filename):
+def absolute_path_cwd_file(file):
     """
-    returns the path of an index inside the folder /AAindex/,
-    e.g. path/to/AAindex/FAUJ880109.txt.
+    Get the current working directory
+    """
+    if file is None:
+        return None
+    return os.getcwd() + '/' + file
+
+
+def path_aaidx_txt_path_from_utils(filename):
+    """
+    returns the relative path to the /AAindex folder from the utils directory,
+    e.g. path/to/pypef/utils/../aaidx/AAindex/FAUJ880104.txt.
     """
     modules_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(modules_path, '../AAindex/' + filename)
+    return os.path.join(modules_path, '../aaidx/AAindex/' + filename + '.txt')
 
 
-def path_aaindex_dir():
-    """
-    returns the absolute path to the /AAindex folder,
-    e.g. c/users/name/path/to/AAindex/.
-    """
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), '../AAindex')
-
-
-def get_sequences_from_file(fasta, mult_path=None):
+def get_sequences_from_file(
+        fasta,
+        mult_path=None
+):
     """
     "Get_Sequences" reads (learning and test).fasta format
     files and extracts the name, the target value and the
@@ -114,7 +120,10 @@ def get_sequences_from_file(fasta, mult_path=None):
     return sequences, names_of_mutations, values
 
 
-def remove_nan_encoded_positions(xs: list, ys: list = None):
+def remove_nan_encoded_positions(
+        xs: list,
+        ys: list = None
+):
     """
     Removes encoded sequence (x) of sequence list xs when NaNs occur in x.
     Also removes the corresponding fitness value y (f(x) --> y) at position i.
@@ -191,9 +200,9 @@ def read_csv(
 
 
 def generate_dataframe_and_save_csv(
-        variants,
-        sequence_encodings,
-        fitnesses,
+        variants: list,
+        sequence_encodings: list,
+        fitnesses: list,
         csv_file: str,
         encoding_type: str = '',
         save_df_as_csv: bool = True
@@ -212,10 +221,13 @@ def generate_dataframe_and_save_csv(
         Variant names.
     fitnesses: list
         Sequence-associated fitness value.
-    Encoded sequence: list
+    sequence_encodings: list
         Sequence encodings (feature matrix) of sequences.
     csv_file : str
         Name of the csv file containing variant names and associated fitness values.
+    encoding_type: str = ''
+        Defines name for saved CSV file based on the chosen encoding technique:
+        'aaidx', 'onehot', or 'dca'.
     save_df_as_csv : bool
         Writing DataFrame (Substitution;Fitness;Encoding_Features) to CSV (False/True).
 

@@ -316,8 +316,6 @@ class DirectedEvolution:
                 #    #if j >= 1:  # DCA-based encoding: do not show 'WT' and WT-fitness as only ranks matter using the HybridModel
                 #    y_records_ranked = rankdata(y_records[i]).astype(int)
                 #    label_x_y_name.append(ax.text(j, y_records_ranked[j], v, size=9))
-        for bla in label_x_y_name:
-            print(bla)
         # adjusting variant text labels
         from adjustText import adjust_text
         adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)

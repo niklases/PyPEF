@@ -19,8 +19,12 @@
 import os
 import numpy as np
 import re
+import copy
 
-from pypef.utils.variant_data import amino_acids, generate_dataframe_and_save_csv
+from pypef.utils.variant_data import (
+    amino_acids, generate_dataframe_and_save_csv,
+    remove_nan_encoded_positions, path_aaidx_txt_path_from_utils
+)
 
 from pypef.utils.learning_test_sets import (
     get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_ls_ts,
@@ -38,21 +42,21 @@ from pypef.dca.encoding import DCAEncoding
 from pypef.utils.sto2a2m import convert_sto2a2m
 
 from pypef.dca.encoding import get_dca_data_parallel, get_encoded_sequence
-from pypef.aaidx.cli.regression import OneHotEncoding, AAIndexEncoding, full_path
+from pypef.aaidx.cli.regression import OneHotEncoding, AAIndexEncoding
 
 
-def run_pypef_utils(arguments):  # CONSTRUCTION
+def run_pypef_utils(arguments):
     if arguments['mklsts']:
         wt_sequence = get_wt_sequence(arguments['--wt'])
         t_drop = float(arguments['--drop'])
 
-        print('Length of provided sequence: {} amino acids.'.format(len(wt_sequence)))
+        print(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
         df = drop_rows(arguments['--input'], amino_acids, t_drop)
         no_rnd = arguments['--numrnd']
 
         single_variants, single_values, higher_variants, higher_values = get_variants(
             df, amino_acids, wt_sequence)
-        print('Number of single variants: {}.'.format(len(single_variants)))
+        print(f'Number of single variants: {len(single_variants)}.')
         if len(single_variants) == 0:
             print('Found NO single substitution variants for possible recombination!')
         sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts(
@@ -73,7 +77,7 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
             random_set_counter = 1
             no_rnd = int(no_rnd)
             while random_set_counter <= no_rnd:
-                print('Creating random LS and TS No. {}...'.format(random_set_counter), end='\r')
+                print(f'Creating random LS and TS No. {random_set_counter}...', end='\r')
                 sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts_randomly(
                     single_variants, single_values,
                     higher_variants, higher_values
@@ -98,11 +102,9 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
         single_variants, _, higher_variants, _ = get_variants(df, amino_acids, wt_sequence)
         print('Using single substitution variants for (re-)combination. '
               'Number of single variants: {}.'.format(len(single_variants)))
-        no_done = False
         if len(single_variants) == 0:
             print('Found NO single substitution variants for possible recombination! '
                   'No prediction files can be created!')
-            no_done = True
 
         if arguments['--drecomb']:
             print('Creating Recomb_Double_Split...')
@@ -132,7 +134,8 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
 
         if arguments['--ddiverse']:
             print('Creating Diverse_Double_Split...')
-            #for no, files in enumerate(make_recombinations_double_all_diverse_and_all_positions(wt_sequence, amino_acids)):
+            # for no, files in enumerate(
+            #     make_recombinations_double_all_diverse_and_all_positions(wt_sequence, amino_acids)):
             for no, files in enumerate(make_combinations_double_all_diverse(single_variants, amino_acids)):
                 doubles = np.array(files)
                 create_split_files(doubles, single_variants, wt_sequence, 'Diverse_Double', no + 1)
@@ -201,7 +204,7 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
         if usecsv:
             csv_file = csv_input(arguments['--input'])
             t_drop = float(arguments['--drop'])
-            print('Length of provided sequence: {} amino acids.'.format(len(s_wt)))
+            print(f'Length of provided sequence: {len(s_wt)} amino acids.')
             df = drop_rows(csv_file, amino_acids, t_drop)
             drop_wt = []
             for i in range(len(df)):
@@ -212,7 +215,7 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
             df = df.drop(drop_wt).reset_index(drop=True)
             single_variants, single_values, higher_variants, higher_values = \
                 get_variants(df, amino_acids, s_wt)
-            print('Number of single variants: {}.'.format(len(single_variants)))
+            print(f'Number of single variants: {len(single_variants)}.')
             if len(single_variants) == 0:
                 print('Found NO single substitution variants for possible recombination!')
             single_vars, single_ys = list(single_variants), list(single_values)  # only tuples to lists
@@ -220,7 +223,7 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
         else:
             single_vars = None  # What happens now? (Full diverse?)
         # Metropolis-Hastings-driven directed evolution on single mutant .csv amino acid substitution data
-        csvaa = arguments['--csvaa']  # only use substitutions known from CSV
+        csvaa = arguments['--csvaa']  # only use identified substitutions --> taken from CSV file
         print('Running evolution trajectories and plotting...')
         DirectedEvolution(
             ml_or_hybrid=ml_or_hybrid,
@@ -257,10 +260,9 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
 
         df = drop_rows(arguments['--input'], amino_acids, arguments['--drop'])
         wt_sequence = get_wt_sequence(arguments['--wt'])
-        print('Length of provided sequence: {} amino acids.'.format(len(wt_sequence)))
+        print(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
         single_variants, single_values, higher_variants, higher_values = get_variants(
             df, amino_acids, wt_sequence)
-        print(len(single_variants))
         variants = list(single_variants) + list(higher_variants)
         fitnesses = list(single_values) + list(higher_values)
         variants, fitnesses, sequences = get_seqs_from_var_name(wt_sequence, variants, fitnesses)
@@ -269,24 +271,28 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
         if arguments['--encoding'] == 'dca':
 
             dca_encode = DCAEncoding(
-                starting_position=arguments['--start'],
                 params_file=arguments['--params'],
-                separator=arguments['--mutation_sep']
+                separator=arguments['--mutation_sep'],
+                starting_position=arguments['--start']
             )
-
-            variants, encoded_sequences, fitnesses = get_dca_data_parallel(
-                variants=variants,
-                fitnesses=fitnesses,
-                dca_encode=dca_encode,
-                threads=threads,
-            )
+            if threads > 1:
+                variants, encoded_sequences, fitnesses = get_dca_data_parallel(
+                    variants=variants,
+                    fitnesses=fitnesses,
+                    dca_encode=dca_encode,
+                    threads=threads,
+                )
+            else:
+                x_ = dca_encode.collect_encoded_sequences(variants)
+                encoded_sequences, variants = remove_nan_encoded_positions(copy.copy(x_), variants)
+                encoded_sequences, fitnesses = remove_nan_encoded_positions(copy.copy(x_), fitnesses)
+                assert len(encoded_sequences) == len(variants) == len(fitnesses)
 
             if variants[0][0] != variants[0][-1]:  # WT is required for DCA-based hybrid modeling
                 if arguments['--y_wt'] is not None:
                     y_wt = arguments['--y_wt']
                 else:
                     y_wt = 1
-                print()
                 # better using re then: wt = variants[0][0] + str(variants[0][1:-1] + variants[0][0])
                 wt = variants[0][0] + re.findall(r"\d+", variants[0])[0] + variants[0][0]
                 x_wt = get_encoded_sequence(variant=wt, dca_encode=dca_encode)
@@ -300,10 +306,13 @@ def run_pypef_utils(arguments):  # CONSTRUCTION
 
         elif arguments['--encoding'] == 'aaidx':
             if arguments['--model'] is None:
-                raise SystemError("Define the AAindex to use for encoding "
-                                  "with the flag --model AAINDEX, e.g.: "
-                                  "--model CORJ870104.")
-            aa_index_encoder = AAIndexEncoding(full_path(arguments['--model'] + '.txt'), sequences)
+                raise SystemError(
+                    "Define the AAindex to use for encoding with the "
+                    "flag --model AAINDEX, e.g.: --model CORJ870104."
+                )
+            aa_index_encoder = AAIndexEncoding(
+                path_aaidx_txt_path_from_utils(arguments['--model']), sequences
+            )
             x_fft, x_raw = aa_index_encoder.collect_encoded_sequences()
             if arguments['--nofft']:
                 encoded_sequences = x_raw

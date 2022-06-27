@@ -20,16 +20,17 @@
 import os
 from os import listdir
 from os.path import isfile, join
-from tqdm import tqdm
+
 # ray imported later locally as only used for parallelized running, thus commented out:
 # import ray
 
 # importing own modules
 from pypef.aaidx.cli.regression import (
-    read_models, formatted_output, r2_list, save_model, predict,
+    read_models, formatted_output, performance_list, save_model, predict,
     predictions_out, plot
 )
 from pypef.utils.low_n_mutation_extrapolation import low_n, performance_mutation_extrapolation
+from pypef.utils.variant_data import absolute_path_cwd_file
 # import Modules_Parallelization.r2_list_parallel locally to avoid error
 # when not running in parallel, thus commented out:
 # from pypef.cli.parallelization import r2_list_parallel
@@ -70,7 +71,7 @@ def run_pypef_pure_ml(arguments):
                     ray.init()
                     from pypef.aaidx.cli.parallelization import r2_list_parallel
                     print('Using {} threads for parallel computing. Running...'.format(threads))
-                    aaindex_r2_list = r2_list_parallel(
+                    encoding_performance_list = r2_list_parallel(
                         train_set=arguments['--ls'],
                         test_set=arguments['--ts'],
                         cores=threads,
@@ -80,7 +81,7 @@ def run_pypef_pure_ml(arguments):
                     )
 
                 else:  # run using a single core or use onehot or DCA-based encoding for model construction
-                    aaindex_r2_list = r2_list(
+                    encoding_performance_list = performance_list(
                         train_set=arguments['--ls'],
                         test_set=arguments['--ts'],
                         encoding=arguments['--encoding'],
@@ -92,13 +93,13 @@ def run_pypef_pure_ml(arguments):
                     )
 
                 formatted_output(
-                    aaindex_r2_list=aaindex_r2_list,
+                    performance_list=encoding_performance_list,
                     no_fft=arguments['--nofft'],
                     minimum_r2=0.0
                 )
                 save_model(
                     path=path,
-                    aaindex_r2_list=aaindex_r2_list,
+                    performance_list=encoding_performance_list,
                     training_set=arguments['--ls'],
                     test_set=arguments['--ts'],
                     threshold=t_save,
@@ -181,19 +182,20 @@ def run_pypef_pure_ml(arguments):
 
             for args in recombs_total:
                 predictions_total = []
-                print('Running predictions for files in {}...'.format(args[1:-1]))
+                print(f'Running predictions for files in {args[1:-1]}...')
                 path_recomb = path + args
                 os.chdir(path)
                 files = [f for f in listdir(path_recomb) if isfile(join(path_recomb, f)) if f.endswith('.fasta')]
-                for f in tqdm(files):
+                for i, file in enumerate(files):
+                    print(f'Encoding files ({i+1}/{len(files)}) for prediction...')
                     predictions = predict(
                         path=path,
-                        prediction_set=f,
+                        prediction_set=file,
                         model=arguments['--model'],
                         encoding=arguments['--encoding'],
                         mult_path=path_recomb,
                         no_fft=arguments['--nofft'],
-                        couplings_file=arguments['--params'],  # only for DCA
+                        couplings_file=absolute_path_cwd_file(arguments['--params']),  # only for DCA
                         threads=threads  # only for DCA
                     )
                     for pred in predictions:

@@ -16,10 +16,14 @@
 # *Corresponding author
 # §Equal contribution
 
+
 """
-Main modules for regression/ML including featurization,
-validation, tuning, prediction, and plotting routines.
+Main modules for regression/ML including feature generation
+(i.e. sequence encoding), cross-validation-based hyperparameter
+tuning, prediction, and plotting routines.
 """
+
+
 import copy
 import os
 import matplotlib
@@ -29,7 +33,7 @@ import numpy as np
 from scipy import stats
 import pickle
 from tqdm import tqdm  # progress bars
-# import adjust_text  # only locally imported for labeled validation plots and in silico directed evolution
+from adjustText import adjust_text
 from sklearn.model_selection import LeaveOneOut
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error, r2_score
@@ -42,12 +46,15 @@ from sklearn.svm import SVR
 from sklearn.neural_network import MLPRegressor
 from sklearn.linear_model import Ridge, LassoLars, ElasticNet
 
-from pypef.utils.variant_data import amino_acids, get_sequences_from_file, remove_nan_encoded_positions, get_basename
+from pypef.utils.variant_data import (
+    amino_acids, get_sequences_from_file,
+    remove_nan_encoded_positions, get_basename
+)
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel
 
 import warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='numpy')
-# ignoring warnings of PLS regression using n_components
+# ignoring warnings of PLS regression when using n_components
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
 warnings.filterwarnings(action='ignore', category=DeprecationWarning, module='sklearn')
@@ -76,10 +83,10 @@ def read_models(number):
         return "No Model_Results.txt found."
 
 
-def full_path(filename):
+def full_aaidx_txt_path(filename):
     """
     returns the path of an index inside the folder /AAindex/,
-    e.g. path/to/AAindex/FAUJ880109.txt.
+    e.g. path/to/pypef/aaidx/cli/../AAindex/FAUJ880104.txt.
     """
     modules_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(modules_path, '../AAindex/' + filename)
@@ -87,7 +94,8 @@ def full_path(filename):
 
 def path_aaindex_dir():
     """
-    returns the path to the /AAindex folder, e.g. path/to/AAindex/.
+    returns the absolute path to the /AAindex folder,
+    e.g. c/users/name/path/to/AAindex/.
     """
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), '../AAindex')
 
@@ -498,7 +506,7 @@ def get_r2(x_learn, x_test, y_learn, y_test, regressor='pls'):
     return r2, rmse, nrmse, pearson_r, spearman_rho, regressor, best_params
 
 
-def r2_list(
+def performance_list(
         train_set,
         test_set,
         encoding='aaidx',
@@ -512,7 +520,7 @@ def r2_list(
     returns the sorted list of all the model parameters and
     the performance values (r2 etc.) from function get_r2.
     """
-    aaindex_r2_list = []
+    performance_list = []
     train_sequences, train_variants, y_train = get_sequences_from_file(train_set)
     test_sequences, test_variants, y_test = get_sequences_from_file(test_set)
     if encoding == 'onehot':  # OneHot-based encoding
@@ -523,7 +531,7 @@ def r2_list(
         r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, \
             params = get_r2(x_train, x_test, y_train, y_test, regressor)
         if r2 is not None:  # get_r2() returns None for metrics if MSE can't be calculated
-            aaindex_r2_list.append([
+            performance_list.append([
                 'ONEHOTMODEL', r2, rmse, nrmse, pearson_r,
                 spearman_rho, regression_model, params
             ])
@@ -542,7 +550,7 @@ def r2_list(
         r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, \
             params = get_r2(x_train, x_test, y_train, y_test, regressor)
         if r2 is not None:  # get_r2() returns None for metrics if MSE can't be calculated
-            aaindex_r2_list.append([
+            performance_list.append([
                 'DCAMODEL', r2, rmse, nrmse, pearson_r,
                 spearman_rho, regression_model, params
             ])
@@ -553,12 +561,12 @@ def r2_list(
         # can be seen as a AAindex hyperparameter search on the test set  --> also see CV performance
         # in created folder across all data to ensure a relatively well generalizable model
         for index, aaindex in enumerate(tqdm(aa_indices)):
-            x_aaidx_train = AAIndexEncoding(full_path(aaindex), train_sequences)
+            x_aaidx_train = AAIndexEncoding(full_aaidx_txt_path(aaindex), train_sequences)
             if not no_fft:  # X is FFT-ed of encoded alphabetical sequence
                 x_train, _ = x_aaidx_train.collect_encoded_sequences()
             else:  # X is raw encoded of alphabetical sequence
                 _, x_train = x_aaidx_train.collect_encoded_sequences()
-            x_aaidx_test = AAIndexEncoding(full_path(aaindex), test_sequences)
+            x_aaidx_test = AAIndexEncoding(full_aaidx_txt_path(aaindex), test_sequences)
             if not no_fft:  # X is FFT-ed of the encoded alphabetical sequence
                 x_test, _ = x_aaidx_test.collect_encoded_sequences()
             else:  # X is the raw encoded of alphabetical sequence
@@ -569,7 +577,7 @@ def r2_list(
             r2, rmse, nrmse, pearson_r, spearman_rho, regression_model, \
                 params = get_r2(x_train, x_test, y_train, y_test, regressor)
             if r2 is not None:  # get_r2() returns None for metrics if MSE can't be calculated
-                aaindex_r2_list.append([
+                performance_list.append([
                     aaindex, r2, rmse, nrmse, pearson_r,
                     spearman_rho, regression_model, params
                 ])
@@ -577,18 +585,18 @@ def r2_list(
     try:
         sort = int(sort)
         if sort == 2 or sort == 3:
-            aaindex_r2_list.sort(key=lambda x: x[sort])
+            performance_list.sort(key=lambda x: x[sort])
         else:
-            aaindex_r2_list.sort(key=lambda x: x[sort], reverse=True)
+            performance_list.sort(key=lambda x: x[sort], reverse=True)
 
     except ValueError:
         raise ValueError("Choose between options 1 to 5 (R2, RMSE, NRMSE, Pearson's r, Spearman's rho.")
 
-    return aaindex_r2_list
+    return performance_list
 
 
 def formatted_output(
-        aaindex_r2_list,
+        performance_list,
         no_fft=False,
         minimum_r2=0.0
 ):
@@ -600,7 +608,7 @@ def formatted_output(
 
     index, value, value2, value3, value4, value5, regression_model, params = [], [], [], [], [], [], [], []
 
-    for (idx, val, val2, val3, val4, val5, r_m, pam) in aaindex_r2_list:
+    for (idx, val, val2, val3, val4, val5, r_m, pam) in performance_list:
         if val >= minimum_r2:
             index.append(get_basename(idx))
             value.append('{:f}'.format(val))
@@ -765,7 +773,7 @@ def get_regressor(regressor: str, parameter: dict):
 
 def save_model(
         path,
-        aaindex_r2_list,
+        performance_list,
         training_set,
         test_set,
         threshold=5,
@@ -809,32 +817,32 @@ def save_model(
     file.close()
     for t in range(threshold):
         try:
-            idx = aaindex_r2_list[t][0]
-            parameter = aaindex_r2_list[t][7]
+            idx = performance_list[t][0]
+            parameter = performance_list[t][7]
 
             # Estimating the CV performance of the n_component-fitted model on all data
             sequences_train, variants_train, y_train = get_sequences_from_file(training_set)
             sequences_test, variants_test, y_test = get_sequences_from_file(test_set)
-            if encoding == 'aaidx':  # AAindex
-                x_aaidx_train = AAIndexEncoding(full_path(idx), sequences_train)
-                x_aaidx_test = AAIndexEncoding(full_path(idx), sequences_test)
+            if encoding == 'aaidx':  # AAindex encoding technique
+                x_aaidx_train = AAIndexEncoding(full_aaidx_txt_path(idx), sequences_train)
+                x_aaidx_test = AAIndexEncoding(full_aaidx_txt_path(idx), sequences_test)
                 if no_fft is False:  # use FFT on encoded sequences (default)
                     x_train, _ = x_aaidx_train.collect_encoded_sequences()
                     x_test, _ = x_aaidx_test.collect_encoded_sequences()
                 else:  # use raw encoding (no FFT used on encoded sequences)
                     _, x_train = x_aaidx_train.collect_encoded_sequences()
                     _, x_test = x_aaidx_test.collect_encoded_sequences()
-            elif encoding == 'onehot':  # OneHot
+            elif encoding == 'onehot':  # OneHot encoding technique
                 x_onehot_train = OneHotEncoding(sequences_train)
                 x_onehot_test = OneHotEncoding(sequences_test)
                 x_train = x_onehot_train.collect_encoded_sequences()
                 x_test = x_onehot_test.collect_encoded_sequences()
             else:  # DCA
                 x_dca = DCAEncoding(couplings_file, verbose=False)
-                if threads > 1:  # NaNs are already being removed by the called function
+                if threads > 1:  # parallelization of encoding, NaNs are already being removed by the called function
                     train_variants, x_train, y_train = get_dca_data_parallel(variants_train, y_train, x_dca, threads)
                     test_variants, x_test, y_test = get_dca_data_parallel(variants_test, y_test, x_dca, threads)
-                else:
+                else:  # encode using a single thread
                     x_train = x_dca.collect_encoded_sequences(variants_train)
                     x_test = x_dca.collect_encoded_sequences(variants_test)
                     x_train, y_train = remove_nan_encoded_positions(x_train, y_train)
@@ -919,7 +927,7 @@ def predict(
         file = open(os.path.join(path, 'Pickles/' + str(model)), 'rb')
         loaded_model = pickle.load(file)
         file.close()
-        aaidx = full_path(str(model) + '.txt')
+        aaidx = full_aaidx_txt_path(str(model) + '.txt')
     else:
         aaidx = None
         loaded_model = None
@@ -935,17 +943,15 @@ def predict(
         x = x_onehot.collect_encoded_sequences()
         x_raw = None
     else:  # DCA
-        print(variants)
         if dca_encoder is not None:
             x_dca = dca_encoder
         else:
             x_dca = DCAEncoding(couplings_file)
-        if threads > 1:  # NaNs are already being removed by the called function, for ys just filling 0's
+        if threads > 1:  # parallel encoding of variants, NaNs are already being removed by the called function
             variants, x, _ = get_dca_data_parallel(variants, list(np.zeros(len(variants))), x_dca, threads)
-        else:
+        else:  # single thread running
             x = x_dca.collect_encoded_sequences(variants)
             x, variants = remove_nan_encoded_positions(x, list(variants))
-            print(len(x), len(variants))
             x_raw = None
         if not x:
             return 'skip'
@@ -956,7 +962,6 @@ def predict(
         if no_fft and encoding == 'aaidx':  # predict using raw AAidx encoding (without FFT)
             ys = loaded_model.predict(x_raw)
         else:  # predict AAidx-FFTed or onehot or DCA-based encoding
-            print('x =',x)
             ys = loaded_model.predict(x)
     except ValueError:
         raise ValueError(
@@ -1023,7 +1028,7 @@ def plot(
     """
     sequences_test, variants_test, y_test = get_sequences_from_file(fasta_file)
     if encoding == 'aaidx':  # AAindex-based encoding
-        aaidx = full_path(str(model) + '.txt')
+        aaidx = full_aaidx_txt_path(str(model) + '.txt')
         aaidx_encoded = AAIndexEncoding(aaidx, sequences_test)
         x, x_raw = aaidx_encoded.collect_encoded_sequences()
     elif encoding == 'onehot':  # OneHot-based encoding
@@ -1082,8 +1087,7 @@ def plot(
     ax.scatter(y_test, y_pred,
                label=legend, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.8)
     ax.plot(x, x, color='black', linewidth=0.5)  # plot diagonal line
-    if label is not False:  # CONSTRUCTION
-        from adjustText import adjust_text
+    if label is not False:
         print('Adjusting variant labels for plotting can take some '
               'time (the limit for labeling is 150 data points)...')
         if len(y_test) < 150:

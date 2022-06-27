@@ -97,7 +97,7 @@ Usage:
         [--nofft] [--negative]
     pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --pmult
         [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
-        [--ddiverse] [--tdiverse] [--qdiverse] [--nofft] [--negative] [--params PLMC_FILE]
+        [--ddiverse] [--tdiverse] [--qdiverse] [--nofft] [--negative] [--params PLMC_FILE] [--threads THREADS]
     pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL12345 --wt WT_SEQ
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PLMC_FILE]

@@ -28,16 +28,11 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 import matplotlib.pyplot as plt
-from tqdm import tqdm
-import ray
-from itertools import chain
 from pypef.utils.variant_data import get_sequences_from_file
 from pypef.utils.variant_data import remove_nan_encoded_positions
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence
 
-
 np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)
-# how about new predictions? function that converts variant name to encoded sequence needed
 
 
 class DCAHybridModel:
@@ -46,7 +41,6 @@ class DCAHybridModel:
 
     def __init__(
             self,
-            sep: str = ';',
             alphas=alphas,
             parameter_range=None,
             X_train: np.ndarray = None,
@@ -114,12 +108,12 @@ class DCAHybridModel:
     #    """
     #    Extracts the array of names, encoded sequences, and fitness values
     #    of the variants from the dataframe 'self.df_encoding'.
-#
+    #
     #    It is mandatory that 'df_encoding' contains the names of the
     #    variants in the first column, the associated fitness value in the
     #    second column, and the encoded sequence starting from the third
     #    column.
-#
+    #
     #    Returns
     #    -------
     #    Tuple of variant names, encoded sequences, and fitness values.

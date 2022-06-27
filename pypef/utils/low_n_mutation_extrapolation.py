@@ -199,14 +199,13 @@ def get_train_sizes(number_variants) -> np.ndarray:
     -------
     Numpy array of train sizes up to 80% (i.e. 0.8 * N_variants).
     """
-    eighty_percent = int(number_variants) * 0.8
+    eighty_percent = int(number_variants * 0.8)
     train_sizes = np.sort(np.concatenate([
         np.arange(15, 50, 5), np.arange(50, 100, 10),
         np.arange(100, 150, 20), [160, 200, 250, 300, eighty_percent],
         np.arange(400, 1100, 100)
     ]))
     idx_max = np.where(train_sizes >= eighty_percent)[0][0] + 1
-
     return train_sizes[:idx_max]
 
 
@@ -355,7 +354,8 @@ def performance_mutation_extrapolation(
         conc: bool = False,
         save_model: bool = True,
         hybrid_modeling: bool = False
-) -> tuple:
+) -> dict:
+    name=''
     df = pd.read_csv(encoded_csv, sep=';', comment='#')
     df_mut_lvl = count_mutation_levels_and_get_dfs(df)
     if save_model:
@@ -364,6 +364,7 @@ def performance_mutation_extrapolation(
         except FileExistsError:
             pass
     if cv_regressor:
+        name = 'ml_' + cv_regressor
         if cv_regressor == 'pls_loocv':
             raise SystemError('PLS LOOCV is not (yet) implemented '
                               'for the extrapolation task. Please choose'
@@ -372,7 +373,8 @@ def performance_mutation_extrapolation(
         beta_1, beta_2 = None, None
     else:
         regressor = None
-    data, data_conc = {}, {}
+        name = 'hybrid_ridge'
+    data = {}
     # run extrapolation // implement train_size and n_runs?
     collected_levels = []
     for i_m, mutation_level_df in enumerate(df_mut_lvl):
@@ -397,12 +399,12 @@ def performance_mutation_extrapolation(
             beta_1, beta_2, reg = hybrid_model.settings(
                 X_train, y_train, train_size_train=train_size)
             if save_model:
-                print(f'Save model as... HYBRID_LVL_1.pkl')
+                print(f'Save model as Pickle file: HYBRID_LVL_1')
                 pickle.dump(reg, open('Pickles/HYBRID_LVL_1', 'wb'))  # Pickles/ not there construction try os.mkdir
         elif cv_regressor:
             regressor.fit(X_train, y_train)
             if save_model:
-                print(f'Save model as... HYBRID_LVL_1.pkl')
+                print(f'Save model as Pickle file: ML_LVL_1')
                 pickle.dump(regressor, open('Pickles/ML_LVL_1', 'wb'))  # Pickles/ not there construction try os.mkdir
         for i, _ in enumerate(tqdm(collected_levels)):
             if i < len(collected_levels) - 1:  # not last i else error, last entry is: lvl 1 --> all higher variants
@@ -467,7 +469,7 @@ def performance_mutation_extrapolation(
                                 # if save_model:
                                 #    pickle.dumps(reg_conc)
                                 alpha = reg_conc.alpha
-                            data_conc.update({
+                            data.update({
                                 test_idx + 1:
                                     {
                                         'max_train_lvl': train_idx_appended[-1] + 1,
@@ -499,6 +501,36 @@ def performance_mutation_extrapolation(
                                         )[0]
                                 }
                             })
-    for d in data.items():
-        print(d)
-    return data, data_conc
+    plot_extrapolation(data, name, conc)
+    return data
+
+
+def plot_extrapolation(extrapolation_data: dict, name: str = '', conc=False):
+    """
+    Plot extrapolation results
+    """
+    test_lvls, spearman_rhos, label_infos = [], [], []
+    for test_lvl, result_dict in extrapolation_data.items():
+        if result_dict['spearman_rho'] is np.nan:
+            continue
+        test_lvls.append(test_lvl)
+        spearman_rhos.append(result_dict['spearman_rho'])
+        label_infos.append(
+            r'$\leq$' + str(result_dict['max_train_lvl']) + r'$\rightarrow$' + str(result_dict['test_lvl']) +
+            '\n(' + str(result_dict['n_y_train']) + r'$\rightarrow$' + str(result_dict['n_y_test']) + ')'
+        )
+    label_infos[0] = 'Lvl: ' + label_infos[0].split('(')[0] + r'$N$: (' + label_infos[0].split('(')[1]
+    if not conc:
+        label_infos[-1] = label_infos[-1][6] + r'$\rightarrow$' + '>' + \
+                          label_infos[-1][6] + '\n(' + label_infos[-1].split('(')[1]
+    plt.plot(test_lvls, spearman_rhos, 'x--', markeredgecolor='k', linewidth=0.7, markersize=4)
+    plt.fill_between(
+        np.array(test_lvls),
+        np.repeat(min(spearman_rhos), len(spearman_rhos)),
+        np.array(spearman_rhos),
+        alpha=0.3
+    )
+    plt.xticks(test_lvls, label_infos, fontsize=6)
+    plt.ylabel(r"Spearman's $\rho$")
+    plt.savefig(name + '_extrapolation.png', dpi=500)
+    plt.clf()

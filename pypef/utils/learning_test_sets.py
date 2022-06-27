@@ -70,7 +70,11 @@ def csv_input(csv_file):
     return csv_file
 
 
-def drop_rows(csv_file, amino_acids, threshold_drop):
+def drop_rows(
+        csv_file,
+        amino_acids,
+        threshold_drop
+):
     """
     Drops rows from .csv data if below defined fitness threshold or if
     amino acid/variant name is unknown or if fitness label is not a digit.
@@ -121,8 +125,8 @@ def drop_rows(csv_file, amino_acids, threshold_drop):
             raise TypeError('You might consider checking the input .csv for empty first two columns,'
                             ' e.g. in the last row.')
 
-    print('No. of dropped rows: {}.'.format(len(dropping_rows)), 'Total given variants '
-                                                                 '(if provided plus WT): {}'.format(len(df_raw)))
+    print(f'No. of dropped rows: {len(dropping_rows)}. '
+          f'Total given variants (if provided plus WT): {len(df_raw)}')
 
     df = df_raw.drop(dropping_rows)
     df.dropna(inplace=True)
@@ -131,18 +135,25 @@ def drop_rows(csv_file, amino_acids, threshold_drop):
     return df
 
 
-def get_variants(df, amino_acids, wild_type_sequence):
+def get_variants(
+        df,
+        amino_acids,
+        wild_type_sequence
+):
     """
-    Gets variants and divides and counts the variant data for single substituted and higher substituted variants.
-    Raises NameError if variant naming is not matching the given wild-type sequence, e.g. if variant A17C would define
-    a substitution at residue Ala-17 to Cys but the wild-type sequence has no Ala at position 17.
+    Gets variants and divides and counts the variant data for single substituted
+    and higher substituted variants. Raises NameError if variant naming is not
+    matching the given wild-type sequence, e.g. if variant A17C would define
+    a substitution at residue Ala-17 to Cys but the wild-type sequence has no Ala
+    at position 17.
     """
     x = df.iloc[:, 0]
     y = df.iloc[:, 1]
     wt_position = None
-    single_variants, higher_variants, index_higher, index_lower, higher_values, single_values = [], [], [], [], [], []
+    single_variants, higher_variants, index_higher, index_lower, \
+        higher_values, single_values = [], [], [], [], [], []
     single, double, triple, quadruple, quintuple, sextuple, septuple,\
-    octuple, nonuple, decuple, higher = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        octuple, nonuple, decuple, higher = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for i, variant in enumerate(x):
         if '/' in variant:
             count = variant.count('/')
@@ -268,10 +279,10 @@ def make_sub_ls_ts(
             sub_ls = list(single_variants)  # Substitutions of LS
             values_ls = list(single_values)  # Values of LS
             for i in range(len(higher_variants)):
-                if len(higher_variants) < 6:  # if less than 6 higher variants --> all higher variants are appended to TS
+                if len(higher_variants) < 6:  # if less than 6 higher variants --> all higher variants to TS
                     sub_ts.append(higher_variants[i])
                     values_ts.append(higher_values[i])
-                elif (i % 3) == 0 and i != 0:  # 1/4 of higher variants to TS, 3/4 to LS: change here for LS/TS ratio change
+                elif (i % 3) == 0 and i != 0:  # 1/4 of higher variants to TS, 3/4 to LS
                     sub_ts.append(higher_variants[i])
                     values_ts.append(higher_values[i])
                 else:                       # 3/4 to LS
@@ -295,7 +306,12 @@ def make_sub_ls_ts(
     return sub_ls, values_ls, sub_ts, values_ts
 
 
-def make_sub_ls_ts_randomly(single_variants, single_values, higher_variants, higher_values):
+def make_sub_ls_ts_randomly(
+        single_variants,
+        single_values,
+        higher_variants,
+        higher_values
+):
     """
     Creation of learning set and test set by randomly splitting sets
     """
@@ -346,7 +362,12 @@ def make_sub_ls_ts_randomly(single_variants, single_values, higher_variants, hig
     return tot_sub_ls[0], tot_values_ls[0], tot_sub_ts[0], tot_values_ts[0]
 
 
-def make_fasta_ls_ts(filename, wt, sub, val):  # sub = substitution, val = value
+def make_fasta_ls_ts(
+        filename,
+        wt,
+        sub,
+        val
+):  # sub = substitution, val = value
     """
     Creates learning and test sets (.fasta style files)
 
@@ -380,7 +401,11 @@ def make_fasta_ls_ts(filename, wt, sub, val):  # sub = substitution, val = value
     myfile.close()
 
 
-def get_seqs_from_var_name(wt, sub, val) -> tuple[list, list, list]:
+def get_seqs_from_var_name(
+        wt,
+        sub,
+        val
+) -> tuple[list, list, list]:
     """
     Similar to function above but just returns sequences
 
