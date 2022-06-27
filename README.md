@@ -243,6 +243,16 @@ $env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
 ```
 export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
 ```
+Installing the requirements:
+&nbsp;&nbsp;Windows
+```
+py -m pip install -r requirements.txt
+```
+
+&nbsp;&nbsp;Linux
+```
+python3 -m pip install -r requirements.txt
+```
 
 Running the main script (from PyPEF-main directory):<br>
 &nbsp;&nbsp;Windows
@@ -253,4 +263,37 @@ py .\pypef\main.py
 &nbsp;&nbsp;Linux
 ```
 python3 ./pypef/main.py
+```
+
+## Preprocessing for DCA-based Sequence Encoding
+
+1. Downloading sequence database (e.g. UniRef100):
+```
+wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz
+```
+
+2. Extracting sequence database:
+```
+gunzip uniref100.fasta.gz
+```
+
+3. After installing jackhmmer, construct an MSA for your target sequence provided in FASTA format (and for example set `--incT` to half the sequence length (0.5*L*) and the number of used CPUs for computing):
+```
+jackhmmer --incT 199 --cpu 16 --noali -A ANEH_jhmmer.sto Sequence_WT_ANEH.fasta /path/to/uniref100.fasta
+```
+
+4. Convert the created MSA from Stockholm (.sto) format to A2M format:
+```
+pypef sto2a2m --sto ANEH_jhmmer.sto
+```
+
+5. After installing PLMC, generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
+
+```
+plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
+```
+
+Done! The outputted `.params`file can bes used for encoding sequences using the DCA-based encoding technique by providing it to PyPEF; e.g.: 
+```
+pypef encode -i 37_ANEH_variants.csv -e dca -m DCAMODEL -w Sequence_WT_ANEH.fa --params ANEH_72.6.params
 ```
