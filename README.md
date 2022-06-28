@@ -98,7 +98,7 @@ pypef directevo ml -e -m MODEL -w WT_SEQUENCE.FASTA --usecsv -i VARIANT-FITNESS_
 Encoding a variant-fitness CSV file and writing it to a new CSV file (for the different encodings, also specify the AAindex name with the `-m` option next to `-e aaidx`):
 
 ```
-pypef encode -i VARIANT-FITNESS_DATA.CSV -w WT_SEQUENCE.FASTA -e aaidx -m MODEL
+pypef encode -i VARIANT-FITNESS_DATA.CSV -w WT_SEQUENCE.FASTA -e aaidx
 ```
 
 Using the created variant-encoded sequence-fitness CSV file for a simulated "low *N*" engineering task:
@@ -234,7 +234,7 @@ unzip main.zip
 ```
 
 Setting the `PYTHONPATH` (so that no import errors occur stating that the package `pypef` and thus dependent absolute imports are unknown):<br>
-&nbsp;&nbsp;Windows (example path)
+&nbsp;&nbsp;Windows (example path, PowerShell)
 ```
 $env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
 ```
@@ -244,7 +244,7 @@ $env:PYTHONPATH="C:\Users\name\path\to\PyPEF-main"
 export PYTHONPATH="${PYTHONPATH}:/home/name/path/to/PyPEF-main"
 ```
 Installing the requirements:
-&nbsp;&nbsp;Windows
+&nbsp;&nbsp;Windows (PowerShell)
 ```
 py -m pip install -r requirements.txt
 ```
@@ -255,7 +255,7 @@ python3 -m pip install -r requirements.txt
 ```
 
 Running the main script (from PyPEF-main directory):<br>
-&nbsp;&nbsp;Windows
+&nbsp;&nbsp;Windows (PowerShell)
 ```
 py .\pypef\main.py
 ```
@@ -277,7 +277,7 @@ wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fa
 gunzip uniref100.fasta.gz
 ```
 
-3. After installing jackhmmer, construct an MSA for your target sequence provided in FASTA format (and for example set `--incT` to half the sequence length (0.5*L*) and the number of used CPUs for computing):
+3. After [installing jackhmmer as part of the HMMER package](http://hmmer.org/documentation.html), construct an MSA for your target sequence provided in FASTA format (and for example set `--incT` to half the sequence length (0.5*L*) and the number of used CPUs for computing):
 ```
 jackhmmer --incT 199 --cpu 16 --noali -A ANEH_jhmmer.sto Sequence_WT_ANEH.fasta /path/to/uniref100.fasta
 ```
@@ -287,13 +287,13 @@ jackhmmer --incT 199 --cpu 16 --noali -A ANEH_jhmmer.sto Sequence_WT_ANEH.fasta 
 pypef sto2a2m --sto ANEH_jhmmer.sto
 ```
 
-5. After installing PLMC, generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
+5. After [installing PLMC](https://github.com/debbiemarkslab/plmc#compilation), generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
 
 ```
 plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
 ```
 
-Done! The outputted `.params`file can bes used for encoding sequences using the DCA-based encoding technique by providing it to PyPEF; e.g.: 
+Done! The output `.params` file can be used for encoding sequences with the DCA-based encoding technique by providing it to PyPEF; e.g.: 
 ```
-pypef encode -i 37_ANEH_variants.csv -e dca -m DCAMODEL -w Sequence_WT_ANEH.fa --params ANEH_72.6.params
+pypef -e dca -l LS.fasta -t TS.fasta --regressor pls --params ANEH_72.6.params
 ```
