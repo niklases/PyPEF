@@ -18,7 +18,7 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 
 # PyPEF: Pythonic Protein Engineering Framework
 
-a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence.
+a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence. Written by Niklas Siedhoff and Alexander-Maurice Illig.
 
 <img src="workflow/test_dataset/exemplary_validation_color_plot.png" alt="drawing" width="500"/>
 
@@ -209,7 +209,7 @@ Optimization of the two model contributions to the final hybrid model using the 
 - DCA-based statistical prediction of the evolutionary energy of a variant relative to the wild type (see [EVmutation](https://marks.hms.harvard.edu/evmutation/); [EVmutation repository](https://github.com/debbiemarkslab/EVmutation)/[EVcouplings repository](https://github.com/debbiemarkslab/EVcouplings)).
 - ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression)
 
-## Model Hyperparameters
+## Model Hyperparameter Grids for Training
 The following model hyperparameter ranges are tested during (*k*-fold) cross-validation for optimized model generalization:
 |Regression model|Hyperparameter grid|
 |:--------------:|:-----------------:|
@@ -293,7 +293,7 @@ pypef sto2a2m --sto ANEH_jhmmer.sto
 plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
 ```
 
-Done! The output `.params` file can be used for encoding sequences with the DCA-based encoding technique by providing it to PyPEF; e.g.: 
+Done! The output `.params` file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g.: 
 ```
 pypef -e dca -l LS.fasta -t TS.fasta --regressor pls --params ANEH_72.6.params
 ```
