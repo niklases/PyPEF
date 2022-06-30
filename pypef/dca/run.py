@@ -16,9 +16,12 @@
 # *Corresponding author
 # §Equal contribution
 
-from pypef.utils.variant_data import read_csv
+
+import copy
+
+from pypef.utils.variant_data import read_csv, remove_nan_encoded_positions
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel
-from pypef.dca.model import performance_ls_ts, predict_ps, get_model_and_save_pkl
+from pypef.dca.hybrid_model import performance_ls_ts, predict_ps, get_model_and_save_pkl
 from pypef.utils.low_n_mutation_extrapolation import performance_mutation_extrapolation, low_n
 
 
@@ -37,10 +40,8 @@ def run_pypef_hybrid_modeling(arguments):
             ls_fasta=arguments['--ls'],
             ts_fasta=arguments['--ts'],
             threads=threads,
-            starting_position=arguments['--start'],
             params_file=arguments['--params'],
-            separator=arguments['--mutation_sep'],
-            label=arguments['--label']
+            separator=arguments['--mutation_sep']
         )
 
     if arguments['--params'] and arguments['--model']:
@@ -58,39 +59,45 @@ def run_pypef_hybrid_modeling(arguments):
         predict_ps(
             prediction_dict=prediction_dict,
             params_file=arguments['--params'],
-            prediction_set=arguments['--ps'],
-            test_set=arguments['--ts'],
             threads=threads,
-            starting_position=arguments['--start'],
             separator=arguments['--mutation_sep'],
-            regressor_pkl=arguments['--model']
+            hybrid_model_data_pkl=arguments['--model'],
+            test_set=arguments['--ts'],
+            prediction_set=arguments['--ps'],
+            figure=arguments['--figure'],
+            label=arguments['--label'],
+            negative=arguments['--negative']
         )
 
     if arguments['train_and_save']:
         dca_encode = DCAEncoding(
-            starting_position=arguments['--start'],
             params_file=arguments['--params'],
             separator=arguments['--mutation_sep']
         )
 
-        variants, fitnesses, _ = read_csv(
-            arguments['--input']
-        )
+        variants, fitnesses, _ = read_csv(arguments['--input'])
 
-        variants, encoded_sequences, fitnesses = get_dca_data_parallel(
-            variants=variants,
-            fitnesses=fitnesses,
-            dca_encode=dca_encode,
-            threads=threads,
-        )
+        if threads > 1:  # Hyperthreading, NaNs are already being removed by the called function
+            variants, encoded_sequences, fitnesses = get_dca_data_parallel(
+                variants=variants,
+                fitnesses=fitnesses,
+                dca_encode=dca_encode,
+                threads=threads,
+            )
+        else:  # Single thread, requires deletion of NaNs
+            encoded_sequences_ = dca_encode.collect_encoded_sequences(variants)
+            encoded_sequences, variants = remove_nan_encoded_positions(copy.copy(encoded_sequences_), variants)
+            encoded_sequences, fitnesses = remove_nan_encoded_positions(copy.copy(encoded_sequences_), fitnesses)
+        assert len(encoded_sequences) == len(variants) == len(fitnesses)
 
         get_model_and_save_pkl(
-            Xs=encoded_sequences,
+            xs=encoded_sequences,
             ys=fitnesses,
-            dca_encoding_instance=dca_encode,
-            train_percent_fitting=arguments['--train_size'],
-            test_percent=arguments['--test_size']
-        )  # CONSTRUCTION
+            dca_encoder=dca_encode,
+            train_percent_fit=arguments['--fit_size'],
+            test_percent=arguments['--test_size'],
+            random_state=arguments['--rnd_state']
+        )
 
     if arguments['low_n'] or arguments['extrapolation']:
         if arguments['low_n']:
@@ -98,10 +105,12 @@ def run_pypef_hybrid_modeling(arguments):
                 encoded_csv=arguments['--input'],
                 hybrid_modeling=arguments['hybrid']
             )
-
         elif arguments['extrapolation']:
             performance_mutation_extrapolation(
                 encoded_csv=arguments['--input'],
-                cv_regressor=arguments['regressor'],
-                conc=arguments['--conc']
+                cv_regressor=arguments['--regressor'],
+                conc=arguments['--conc'],
+                hybrid_modeling=arguments['hybrid']
             )
+
+    print('\nDone!\n')

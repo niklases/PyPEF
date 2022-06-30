@@ -23,13 +23,12 @@ modified for parallelization with Ray.
 
 import matplotlib
 matplotlib.use('Agg')
-import numpy as np
 import os
 import ray
 import warnings
 
 from pypef.utils.variant_data import get_sequences_from_file
-from pypef.aaidx.cli.regression import full_path, path_aaindex_dir, AAIndexEncoding, get_r2
+from pypef.ml.regression import full_aaidx_txt_path, path_aaindex_dir, AAIndexEncoding, get_r2
 
 # to handle UserWarning for PLS n_components as error and general regression module warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklearn')
@@ -108,8 +107,8 @@ def parallel(
         aaindex = aa_indices[i]  # Parallelization of AAindex iteration
         sequences_train, _, y_train = get_sequences_from_file(train_set)
         sequences_test, _, y_test = get_sequences_from_file(test_set)
-        x_aaidx_train = AAIndexEncoding(full_path(aaindex), sequences_train)
-        x_aaidx_test = AAIndexEncoding(full_path(aaindex), sequences_test)
+        x_aaidx_train = AAIndexEncoding(full_aaidx_txt_path(aaindex), sequences_train)
+        x_aaidx_test = AAIndexEncoding(full_aaidx_txt_path(aaindex), sequences_test)
 
         if not no_fft:  # X is FFT-ed of encoded alphabetical sequence
             x_train, _ = x_aaidx_train.collect_encoded_sequences()

@@ -86,18 +86,18 @@ def read_models(number):
 def full_aaidx_txt_path(filename):
     """
     returns the path of an index inside the folder /AAindex/,
-    e.g. path/to/pypef/aaidx/cli/../AAindex/FAUJ880104.txt.
+    e.g. /path/to/pypef/ml/AAindex/FAUJ880104.txt.
     """
     modules_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(modules_path, '../AAindex/' + filename)
+    return os.path.join(modules_path, 'AAindex', filename)
 
 
 def path_aaindex_dir():
     """
     returns the absolute path to the /AAindex folder,
-    e.g. c/users/name/path/to/AAindex/.
+    e.g. /path/to/AAindex/.
     """
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), '../AAindex')
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), 'AAindex')
 
 
 class AAIndex:
@@ -107,20 +107,20 @@ class AAIndex:
     of the alphabetical amino acid sequence to an array of numericals.
     """
     def __init__(self, filename):
-        self.File = filename
-        self.Accession_Number = None
-        self.Data_Description = None
-        self.PMID = None
-        self.Authors = None
-        self.Title_Of_Article = None
-        self.Journal_Reference = None
+        self.file = filename
+        self.accession_number = None
+        self.data_description = None
+        self.pmid = None
+        self.authors = None
+        self.title_of_article = None
+        self.journal_reference = None
 
     def general_information(self):
         """
         Gets and allocates general information based on the AAindex file
         format defined by file sections 'H', 'D', 'E', 'A', 'T', 'J'
         """
-        with open(self.File, 'r') as f:
+        with open(self.file, 'r') as f:
             for line in f:
                 # try/ except "removes" empty lines.
                 try:
@@ -131,24 +131,24 @@ class AAIndex:
 
                 # Extract some general information about AAindex file.
                 if id_letter == 'H':
-                    self.Accession_Number = words[1]
+                    self.accession_number = words[1]
                 elif id_letter == 'D':
-                    self.Data_Description = words[1]
+                    self.data_description = words[1]
                 elif id_letter == 'E':
-                    self.PMID = words[1:]
+                    self.pmid = words[1:]
                 elif id_letter == 'A':
-                    self.Authors = ' '.join(words[1:])
+                    self.authors = ' '.join(words[1:])
                 elif id_letter == 'T':
-                    self.Title_Of_Article = ' '.join(words[1:])
+                    self.title_of_article = ' '.join(words[1:])
                 elif id_letter == 'J':
-                    self.Journal_Reference = ' '.join(words[1:])
+                    self.journal_reference = ' '.join(words[1:])
 
     def encoding_dictionary(self):
         """
         Get numerical values of AAindex for each amino acid
         """
         try:
-            with open(self.File, 'r') as f:
+            with open(self.file, 'r') as f:
                 for line in f:
                     # try/ except "removes" empty lines
                     try:
@@ -329,7 +329,10 @@ class OneHotEncoding:
         return encoded_sequences
 
 
-def pls_loocv(x_train, y_train) -> tuple[PLSRegression, dict]:
+def pls_loocv(
+        x_train,
+        y_train
+) -> tuple[PLSRegression, dict]:
     """
     PLS regression with LOOCV n_components tuning as described by Cadet et al.
     https://doi.org/10.1186/s12859-018-2407-8
@@ -459,7 +462,13 @@ def cv_regression_options(regressor):
     return regressor_
 
 
-def get_r2(x_learn, x_test, y_learn, y_test, regressor='pls'):
+def get_r2(
+        x_learn,
+        x_test,
+        y_learn,
+        y_test,
+        regressor='pls'
+):
     """
     The function Get_R2 takes features and labels from the
     learning and validation set.
@@ -647,7 +656,11 @@ def formatted_output(
     return ()
 
 
-def cross_validation(x, y, regressor_, n_samples=5):
+def cross_validation(
+        x: np.ndarray,
+        y: np.ndarray,
+        regressor_,  # Union[PLSRegression, Ridge, LassoLars, ElasticNet etc.]
+        n_samples: int = 5):
     # perform k-fold cross-validation on all data
     # k = Number of splits, change for changing k in k-fold split-up, default=5
     y_test_total = []
@@ -946,7 +959,7 @@ def predict(
         if dca_encoder is not None:
             x_dca = dca_encoder
         else:
-            x_dca = DCAEncoding(couplings_file)
+            x_dca = DCAEncoding(params_file=couplings_file)
         if threads > 1:  # parallel encoding of variants, NaNs are already being removed by the called function
             variants, x, _ = get_dca_data_parallel(variants, list(np.zeros(len(variants))), x_dca, threads)
         else:  # single thread running
@@ -984,7 +997,8 @@ def predict(
 def predictions_out(
         predictions,
         model,
-        prediction_set
+        prediction_set,
+        path='./'
 ):
     """
     Writes predictions (of the new sequence space) to text file(s).
@@ -998,7 +1012,7 @@ def predictions_out(
     col_width = max(len(str(value)) for row in data for value in row) + 5
 
     head = ['Name', 'Prediction']
-    with open('Predictions_' + str(model) + '_' + str(prediction_set)[:-6] + '.txt', 'w') as f:
+    with open(path + 'Predictions_' + str(model) + '_' + str(prediction_set)[:-6] + '.txt', 'w') as f:
         f.write("".join(caption.ljust(col_width) for caption in head) + '\n')
         f.write(len(head)*col_width*'-' + '\n')
         for row in data:
@@ -1151,5 +1165,3 @@ def plot(
     plt.ylabel('Predicted')
     plt.legend(prop={'size': 8})
     plt.savefig(str(model) + '_' + str(fasta_file[:-6]) + '.png', dpi=500)
-
-    return ()

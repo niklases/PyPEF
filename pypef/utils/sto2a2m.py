@@ -1,11 +1,38 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Created on 05 October 2020
+# @author: Niklas Siedhoff, Alexander-Maurice Illig
+# <n.siedhoff@biotec.rwth-aachen.de>, <a.illig@biotec.rwth-aachen.de>
+# PyPEF - Pythonic Protein Engineering Framework
+# Released under Creative Commons Attribution-NonCommercial 4.0 International Public License (CC BY-NC 4.0)
+# For more information about the license see https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+# PyPEF – An Integrated Framework for Data-Driven Protein Engineering
+# Journal of Chemical Information and Modeling, 2021, 61, 3463-3476
+# https://doi.org/10.1021/acs.jcim.1c00099
+# Niklas E. Siedhoff1,§, Alexander-Maurice Illig1,§, Ulrich Schwaneberg1,2, Mehdi D. Davari1,*
+# 1Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany
+# 2DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany
+# *Corresponding author
+# §Equal contribution
+
 import numpy as np
 from tqdm import tqdm
 from Bio import AlignIO
 
 
-def convert_sto2a2m(sto_file: str, inter_gap: float, intra_gap: float):
+def convert_sto2a2m(
+        sto_file: str,
+        inter_gap: float,
+        intra_gap: float
+):
+    """
+    Converts alignment in format STO to A2M format.
+    Removes specific sequences with inter and/or intra gaps
+    over specific thresholds.
+    """
     # Generate the a2m output filename
-    a2m_file = "%s.a2m" % (sto_file.split(".sto")[0])
+    a2m_file = f"{sto_file.split('.sto')[0]}.a2m"
 
     # Load the stockholm alignment
     print('Loading MSA in stockholm format...')
@@ -41,25 +68,19 @@ def convert_sto2a2m(sto_file: str, inter_gap: float, intra_gap: float):
     delete = np.where(gap_content > intra_gap)[0]
     msa_final = np.delete(msa_trimmed_inter_gap, delete, axis=0)
     seqs_cls = [seq_cls for idx, seq_cls in enumerate(sto_alignment) if not idx in delete]
-    chunkSize = 60
+    chunk_size = 60
     with open(a2m_file, 'w') as f:
         for seq, seq_cls in zip(msa_final, seqs_cls):
             f.write('>' + seq_cls.id + '\n')
-            for chunk in [seq[x:x + chunkSize] for x in range(0, len(seq), chunkSize)]:
+            for chunk in [seq[x:x + chunk_size] for x in range(0, len(seq), chunk_size)]:
                 f.write("".join(chunk) + '\n')
 
-    # Get number of sequences and active sites in the aligment
+    # Get number of sequences and effective sites in the alignment
     n_seqs = msa_final.shape[0]
     n_sites = sum(1 for char in msa_final[0] if char.isupper())
     print(f'Generated trimmed MSA {a2m_file} in A2M format:')
-    print(f'N_seqs: {n_seqs}')
-    print(f'N_active_sites: {n_active_sites} (out of {n_sites} sites)')
-    print(f'-le: {0.2 * (n_active_sites - 1):.1f}')
+    print(f'No. seqs: {n_seqs}')
+    print(f'No. effective sites: {n_sites} (out of {target_len} sites)')
+    print(f'-le: {0.2 * (n_sites - 1):.1f}')
 
     return n_seqs, n_sites, target_len
-
-
-if __name__ == "__main__":
-    n_seqs, n_active_sites, n_sites = convert_sto2a2m(args.sto, args.inter_gap, args.intra_gap)
-
-

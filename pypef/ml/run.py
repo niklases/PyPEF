@@ -22,10 +22,12 @@ from os import listdir
 from os.path import isfile, join
 
 # ray imported later locally as only used for parallelized running, thus commented out:
-# import ray
+import ray
+ray.init()
+from pypef.ml.parallelization import r2_list_parallel
 
 # importing own modules
-from pypef.aaidx.cli.regression import (
+from pypef.ml.regression import (
     read_models, formatted_output, performance_list, save_model, predict,
     predictions_out, plot
 )
@@ -66,10 +68,6 @@ def run_pypef_pure_ml(arguments):
                     t_save = 5
                 # Parallelization of AAindex iteration if threads is not None (but int)
                 if threads > 1 and arguments['--encoding'] == 'aaidx':
-                    # import parallel modules here as ray is not yet fully supported for Windows
-                    import ray
-                    ray.init()
-                    from pypef.aaidx.cli.parallelization import r2_list_parallel
                     print('Using {} threads for parallel computing. Running...'.format(threads))
                     encoding_performance_list = r2_list_parallel(
                         train_set=arguments['--ls'],
@@ -137,7 +135,7 @@ def run_pypef_pure_ml(arguments):
                 encoding=arguments['--encoding'],
                 mult_path=None,
                 no_fft=arguments['--nofft'],
-                couplings_file=['--params'],  # only for DCA
+                couplings_file=arguments['--params'],  # only for DCA
                 threads=threads  # only for DCA
             )
             if arguments['--negative']:
@@ -182,12 +180,12 @@ def run_pypef_pure_ml(arguments):
 
             for args in recombs_total:
                 predictions_total = []
-                print(f'Running predictions for files in {args[1:-1]}...')
+                print(f'Running predictions for variant-sequence files in directory {args[1:-1]}...')
                 path_recomb = path + args
                 os.chdir(path)
                 files = [f for f in listdir(path_recomb) if isfile(join(path_recomb, f)) if f.endswith('.fasta')]
                 for i, file in enumerate(files):
-                    print(f'Encoding files ({i+1}/{len(files)}) for prediction...')
+                    print(f'Encoding files ({i+1}/{len(files)}) for prediction...\n')
                     predictions = predict(
                         path=path,
                         prediction_set=file,
@@ -203,7 +201,6 @@ def run_pypef_pure_ml(arguments):
                 predictions_total = list(dict.fromkeys(predictions_total))  # removing duplicates from list
                 if arguments['--negative']:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=False)
-
                 else:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=True)
 

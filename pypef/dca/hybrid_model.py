@@ -21,16 +21,20 @@
 # Code available at: https://github.com/Protein-Engineering-Framework/Hybrid_Model
 
 import os
+import copy
 import pickle
+from os import listdir
+from os.path import isfile, join
+
 import numpy as np
 from scipy.stats import spearmanr
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 import matplotlib.pyplot as plt
-from pypef.utils.variant_data import get_sequences_from_file
-from pypef.utils.variant_data import remove_nan_encoded_positions
-from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence
+from pypef.utils.variant_data import get_sequences_from_file, remove_nan_encoded_positions
+from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence, ActiveSiteError
+from pypef.ml.regression import predictions_out
 
 np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)
 
@@ -57,8 +61,8 @@ class DCAHybridModel:
         self.y_train = y_train
         self.X_test = X_test
         self.y_test = y_test
-        self.X = self.X_train
-        self.y = self.y_train
+        self.X = np.concatenate((X_train, X_test), axis=0) if self.X_test is not None else self.X_train
+        self.y = np.concatenate((y_train, y_test), axis=0) if self.y_test is not None else self.y_train
         self.x_wild_type = X_wt
         self._spearmanr_dca = self._spearmanr_dca()
 
@@ -103,27 +107,6 @@ class DCAHybridModel:
         """
         return np.subtract(x, np.mean(x, axis=axis)) / np.std(x, axis=axis, ddof=1)
 
-    #@staticmethod
-    #def _process_df_encoding(df_encoding) -> tuple:
-    #    """
-    #    Extracts the array of names, encoded sequences, and fitness values
-    #    of the variants from the dataframe 'self.df_encoding'.
-    #
-    #    It is mandatory that 'df_encoding' contains the names of the
-    #    variants in the first column, the associated fitness value in the
-    #    second column, and the encoded sequence starting from the third
-    #    column.
-    #
-    #    Returns
-    #    -------
-    #    Tuple of variant names, encoded sequences, and fitness values.
-    #    """
-    #    return (
-    #        df_encoding.iloc[:, 0].to_numpy(),
-    #        df_encoding.iloc[:, 2:].to_numpy(),
-    #        df_encoding.iloc[:, 1].to_numpy()
-    #    )
-
     def _delta_X(
             self,
             X: np.ndarray
@@ -142,7 +125,6 @@ class DCAHybridModel:
         Array of encoded variant sequences with substracted encoded
         wild-type sequence.
         """
-        # print('(sum(X[0]) - sum(self.x_wild_type)) =', sum(X[0]) - sum(self.x_wild_type))
         return np.subtract(X, self.x_wild_type)
 
     def _delta_E(
@@ -166,16 +148,19 @@ class DCAHybridModel:
         Difference of the statistical energy between variant 
         and wild-type.
         """
-        # print('np.sum(self._delta_X(X), axis=1)[0] = ', np.sum(self._delta_X(X), axis=1)[:5])
         return np.sum(self._delta_X(X), axis=1)
 
     def _spearmanr_dca(self) -> float:
         """
         Returns
         -------
-        Spearman's rank correlation coefficient of the (full)
-        data and the DCA predictions (difference of statistical
-        energies).
+        Spearman's rank correlation coefficient of the full
+        data and the statistical DCA predictions (difference
+        of statistical energies). Used to adjust the sign
+        of hybrid predictions, i.e.
+            beta_1 * y_dca + beta_2 * y_ridge
+        or
+            beta_1 * y_dca - beta_2 * y_ridge.
         """
         y_dca = self._delta_E(self.X)
         return self.spearmanr(self.y, y_dca)
@@ -234,10 +219,13 @@ class DCAHybridModel:
         The predicted fitness value-representatives of the hybrid
         model.
         """
+        # Uncomment lines below to see if correlation between
+        # y_true and y_dca is positive or negative:
+        # print(f'Positive or negative correlation of (all data) y_true '
+        #       f'and y_dca (+/-?): {self._spearmanr_dca:.3f}')
         if self._spearmanr_dca >= 0:
             return beta_1 * y_dca + beta_2 * y_ridge
-
-        else:
+        else:  # negative correlation
             return beta_1 * y_dca - beta_2 * y_ridge
 
     def _adjust_betas(
@@ -273,7 +261,7 @@ class DCAHybridModel:
             self,
             X_train: np.ndarray,
             y_train: np.ndarray,
-            train_size_train=0.66,
+            train_size_fit=0.66,
             random_state=42
     ) -> tuple:
         """
@@ -304,7 +292,7 @@ class DCAHybridModel:
         try:
             X_ttrain, X_ttest, y_ttrain, y_ttest = train_test_split(
                 X_train, y_train,
-                train_size=train_size_train,
+                train_size=train_size_fit,
                 random_state=random_state
             )
 
@@ -337,7 +325,7 @@ class DCAHybridModel:
         beta1, beta2 = self._adjust_betas(y_ttest, y_dca_ttest, y_ridge_ttest)
         return beta1, beta2, ridge
 
-    def predict(
+    def hybrid_prediction(
             self,
             X: np.ndarray,
             reg: object,  # any regression-based estimator (from sklearn)
@@ -370,6 +358,7 @@ class DCAHybridModel:
             y_ridge = np.random.random(len(y_dca))  # in order to suppress error
         else:
             y_ridge = reg.predict(X)
+        # adjusting: + or - on all data --> +-beta_1 * y_dca + beta_2 * y_ridge
         return self._y_hybrid(y_dca, y_ridge, beta_1, beta_2)
 
     def split_performance(
@@ -391,17 +380,14 @@ class DCAHybridModel:
             Number of different splits to perform.
         seed : int (default=42)
             Seed for random generator.
-        verbose : bool (default=False)
-            Controls information content to be returned.
         save_model : bool (default=False)
             If True, model is saved using pickle, else not.
 
         Returns
         -------
-        Returns array of spearman rank correlation coefficients
-        if verbose=False, otherwise returns array of spearman
-        rank correlation coefficients, cs, alphas, number of 
-        samples in the training and testing set, respectively.
+        data : dict
+            Contains information about hybrid model parameters
+            and performance results.
         """
         data = {}
         np.random.seed(seed)
@@ -410,7 +396,6 @@ class DCAHybridModel:
             X_train, X_test, y_train, y_test = train_test_split(
                 self.X, self.y, train_size=train_size, random_state=random_state)
             beta_1, beta_2, reg = self.settings(X_train, y_train)
-            print(beta_1, beta_2, reg)
             if beta_2 == 0.0:
                 alpha = np.nan
             else:
@@ -424,7 +409,11 @@ class DCAHybridModel:
                         'n_y_train': len(y_train),
                         'n_y_test': len(y_test),
                         'rnd_state': random_state,
-                        'spearman_rho': self.spearmanr(y_test, self.predict(X_test, reg, beta_1, beta_2)),
+                        'spearman_rho': self.spearmanr(
+                            y_test, self.hybrid_prediction(
+                                X_test, reg, beta_1, beta_2
+                            )
+                        ),
                         'beta_1': beta_1,
                         'beta_2': beta_2,
                         'alpha': alpha
@@ -440,9 +429,16 @@ class DCAHybridModel:
     ):
         if data is None:
             data = {}
-        beta_1, beta_2, reg = self.settings(self.X_train, self.y_train)
-        print(f'beta_1 (DCA): {beta_1:.3f}, beta_2 (ML): {beta_2:.3f}, '
-              f'regressor: Ridge(alpha={reg.alpha:.3f})')
+        beta_1, beta_2, reg = self.settings(
+            X_train=self.X_train,
+            y_train=self.y_train
+        )
+        if reg is None:
+            alpha_ = 'None'
+        else:
+            alpha_ = f'{reg.alpha:.3f}'
+        print(f'Beta 1 (DCA): {beta_1:.3f}, Beta 2 (ML): {beta_2:.3f} ( '
+              f'regressor: Ridge(alpha={alpha_}))')
         if beta_2 == 0.0:
             alpha = np.nan
         else:
@@ -453,19 +449,22 @@ class DCAHybridModel:
                     'n_y_train': len(self.y_train),
                     'n_y_test': len(self.y_test),
                     'spearman_rho': self.spearmanr(
-                        self.y_test, self.predict(self.X_test, reg, beta_1, beta_2)),
+                        self.y_test, self.hybrid_prediction(
+                            self.X_test, reg, beta_1, beta_2)
+                    ),
                     'beta_1': beta_1,
                     'beta_2': beta_2,
+                    'regressor': reg,
                     'alpha': alpha
                 }
             }
         )
 
-        return data, self.predict(self.X_test, reg, beta_1, beta_2)
+        return data, self.hybrid_prediction(self.X_test, reg, beta_1, beta_2)
 
-    def train_and_save_pkl(
+    def train_and_test(
             self,
-            train_percent_train: float = 0.66,
+            train_percent_fit: float = 0.66,
             random_state: int = 42
     ):
         """
@@ -508,18 +507,17 @@ class DCAHybridModel:
         beta_1, beta_2, reg = self.settings(
             X_train=self.X_train,
             y_train=self.y_train,
-            train_size_train=train_percent_train,
+            train_size_fit=train_percent_fit,
             random_state=random_state
         )
 
         if len(self.y_test) > 0:
             test_spearman_r = self.spearmanr(
                 self.y_test,
-                self.predict(self.X_test, reg, beta_1, beta_2)
+                self.hybrid_prediction(self.X_test, reg, beta_1, beta_2)
             )
         else:
             test_spearman_r = None
-
         return beta_1, beta_2, reg, self._spearmanr_dca, test_spearman_r
 
     def get_train_sizes(self) -> np.ndarray:
@@ -569,10 +567,10 @@ Below: Some helper functions that call or are dependent on the DCAHybridModel cl
 
 
 def get_model_and_save_pkl(
-        Xs,
+        xs,
         ys,
-        dca_encoding_instance: DCAEncoding,
-        train_percent_fitting: float = 0.66,  # percent of all data: 0.8 * 0.66
+        dca_encoder: DCAEncoding,
+        train_percent_fit: float = 0.66,  # percent of all data: 0.8 * 0.66
         test_percent: float = 0.2,
         random_state: int = 42
 ):
@@ -587,7 +585,7 @@ def get_model_and_save_pkl(
     test_percent:
     df: pandas.DataFrame
         DataFrame of form Substitution;Fitness;Encoding_Features.
-    train_percent: float
+    train_percent_fit: float
         Percent of DataFrame data to train on.
         The remaining data is used for validation.
     random_state: int
@@ -602,44 +600,54 @@ def get_model_and_save_pkl(
     # getting target (WT) sequence and encoding it to provide it as
     # relative value for pure DCA based predictions (difference in sums
     # of sequence encodings: variant - WT)
-    target_seq, index = dca_encoding_instance.get_target_seq_and_index()
+    target_seq, index = dca_encoder.get_target_seq_and_index()
     wt_name = target_seq[0] + str(index[0]) + target_seq[0]
-    wt_X = get_encoded_sequence(wt_name, dca_encoding_instance)
+    x_wt = get_encoded_sequence(wt_name, dca_encoder)
 
-    print(f'Train size (fitting) :{train_percent_fitting} % '
-          f'(overall {(1 - test_percent)*train_percent_fitting} %), '
-          f'Train size validation: {1 - train_percent_fitting} % '
-          f'(overall {(1 - test_percent)*(1 - train_percent_fitting)} %), '
-          f'Test size: {test_percent} %, '
-          f'(overall {test_percent} %), '
-          f'Random state: {random_state}...\n')
+    print(
+        f'Train size (fitting): {train_percent_fit*100:.1f} % of training data '
+        f'({((1 - test_percent)*train_percent_fit)*100:.1f} % of all data),\n'
+        f'Train size validation: {(1 - train_percent_fit)*100:.1f} % of training data '
+        f'({((1 - test_percent)*(1 - train_percent_fit))*100:.1f} % of all data),\n'
+        f'Test size: {test_percent*100:.1f} % ({test_percent*100:.1f} % of all data),\n'
+        f'(Random state: {random_state})...\n'
+    )
 
     X_train, X_test, y_train, y_test = train_test_split(
-        Xs, ys, test_size=test_percent)
+        xs, ys, test_size=test_percent, random_state=random_state
+    )
 
-    model = DCAHybridModel(
+    hybrid_model = DCAHybridModel(
         X_train=X_train,
         y_train=y_train,
         X_test=X_test,
         y_test=y_test,
-        X_wt=wt_X
+        X_wt=x_wt
     )
 
-    beta_1, beta_2, reg, spearman_dca, test_spearman_r = model.train_and_save_pkl(
-        train_percent_train=train_percent_fitting, random_state=random_state)
-    print(f'Individual model weigths and regressor hyperparameters:')
-    print(f'beta_1 (DCA): {beta_1:.3f}, beta_2 (ML): {beta_2:.3f}, '
-          f'regressor: Ridge(alpha={reg.alpha:.3f})')
-    print('Testing performance...')
-    print(f'Spearman\'s rho = {test_spearman_r:.4f}')
+    beta_1, beta_2, reg, spearman_dca, test_spearman_r = hybrid_model.train_and_test(
+        train_percent_fit=train_percent_fit,
+        random_state=random_state
+    )
+    if reg is None:
+        alpha_ = 'None'
+    else:
+        alpha_ = f'{reg.alpha:.3f}'
+    print(
+        f'Individual model weights and regressor hyperparameters:\n'
+        f'Hybrid model individual model contributions:\nBeta1 (DCA): '
+        f'{beta_1:.3f}, Beta2 (ML): {beta_2:.3f} ('
+        f'regressor: Ridge(alpha={alpha_}))\n'
+        f'Test performance: Spearman\'s rho = {test_spearman_r:.3f}'
+    )
     try:
         os.mkdir('Pickles')
     except FileExistsError:
         pass
     print(f'Save model as Pickle file... HYBRIDMODEL')  # CONSTRUCTION : Name Pickle file as PLMC paramas file?
     pickle.dump(
-        {'dca_hybrid_model': model, 'beta_1': beta_1, 'beta_2': beta_2,
-         'spearman_dca': spearman_dca, 'reg': reg},
+        {'hybrid_model': hybrid_model, 'beta_1': beta_1, 'beta_2': beta_2,
+         'spearman_rho': test_spearman_r, 'regressor': reg},
         open('Pickles/HYBRIDMODEL', 'wb')
     )
 
@@ -651,15 +659,14 @@ def plot_y_true_vs_y_pred(
         label=False
 ):
     spearman_rho = spearmanr(y_true, y_pred)[0]
-    print(spearman_rho)
 
     figure, ax = plt.subplots()
-    ax.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black',
+    ax.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7,
                label=fr'$\rho$ = {spearman_rho:.3f}')
     ax.legend()
     ax.set_xlabel(r'$y_\mathrm{true}$' + fr' ($N$ = {len(y_true)})')
     ax.set_ylabel(r'$y_\mathrm{pred}$' + fr' ($N$ = {len(y_pred)})')
-    print('Plotting...')
+    print('\nPlotting...')
     if label:
         from adjustText import adjust_text
         print('Adjusting variant labels for plotting can take some '
@@ -673,10 +680,10 @@ def plot_y_true_vs_y_pred(
             print("Terminating label process. Too many variants "
                   "(> 150) for plotting (labels would overlap).")
     file_name = 'DCA_Hybrid_Model_LS_TS_Performance.png'
-    i = 1
-    while os.path.isfile(file_name):
-        i += 1  # iterate until finding an unused file name
-        file_name = f'DCA_Hybrid_Model_LS_TS_Performance({i}).png'
+    # i = 1
+    # while os.path.isfile(file_name):
+    #     i += 1  # iterate until finding an unused file name
+    #     file_name = f'DCA_Hybrid_Model_LS_TS_Performance({i}).png'
     plt.savefig(file_name, dpi=500)
 
 
@@ -684,10 +691,8 @@ def performance_ls_ts(
         ls_fasta: str,
         ts_fasta: str,
         threads: int,
-        starting_position: int,
         params_file: str,
-        separator: str,
-        label: bool
+        separator: str
 ):
     """
     Description
@@ -709,8 +714,6 @@ def performance_ls_ts(
         measured and predicted fitness values).
     n_cores: int
         Number of threads to use for parallel computing using Ray.
-    starting_position: int
-        Shift os position (not really needed, error tells user wrong input).
     params_file: str
         PLMC parameter file (containing evolutionary, i.e. MSA-based local
         and coupling terms.
@@ -733,7 +736,6 @@ def performance_ls_ts(
 
     dca_encode = DCAEncoding(
         params_file=params_file,
-        starting_position=starting_position,
         separator=separator
     )
 
@@ -745,7 +747,7 @@ def performance_ls_ts(
     wt_name = target_seq[0] + str(index[0]) + target_seq[0]
     x_wt = get_encoded_sequence(wt_name, dca_encode)
     if threads > 1:
-        # NaNs are already being removed by the called function
+        # Hyperthreading, NaNs are already being removed by the called function
         train_variants, x_train, y_train = get_dca_data_parallel(
             train_variants, y_train, dca_encode, threads)
         test_variants, x_test, y_test = get_dca_data_parallel(
@@ -754,12 +756,12 @@ def performance_ls_ts(
         x_train_ = dca_encode.collect_encoded_sequences(train_variants)
         x_test_ = dca_encode.collect_encoded_sequences(test_variants)
         # NaNs must still be removed
-        x_train, train_variants = remove_nan_encoded_positions(x_train_, train_variants)
-        x_train, y_train = remove_nan_encoded_positions(x_train_, y_train)
-        x_test, test_variants = remove_nan_encoded_positions(x_test_, test_variants)
-        x_test, y_test = remove_nan_encoded_positions(x_test_, y_test)
-        assert len(x_train) == len(train_variants) == len(y_train)
-        assert len(x_test) == len(test_variants) == len(y_test)
+        x_train, train_variants = remove_nan_encoded_positions(copy.copy(x_train_), train_variants)
+        x_train, y_train = remove_nan_encoded_positions(copy.copy(x_train_), y_train)
+        x_test, test_variants = remove_nan_encoded_positions(copy.copy(x_test_), test_variants)
+        x_test, y_test = remove_nan_encoded_positions(copy.copy(x_test_), y_test)
+    assert len(x_train) == len(train_variants) == len(y_train)
+    assert len(x_test) == len(test_variants) == len(y_test)
 
     hybrid_model = DCAHybridModel(
         X_train=x_train,
@@ -770,21 +772,43 @@ def performance_ls_ts(
     )
 
     data, y_pred = hybrid_model.ls_ts_performance()
-    y_pred = np.abs(y_pred)
-
-    plot_y_true_vs_y_pred(y_test, y_pred, test_variants, label)
-    hybrid_model.train_and_save_pkl()
+    result = data['ls_ts']
+    test_spearman_r = result['spearman_rho']
+    beta_1 = result['beta_1']
+    beta_2 = result['beta_2']
+    reg = result['regressor']
+    if reg is None:
+        alpha_ = 'None'
+    else:
+        alpha_ = f'{reg.alpha:.3f}'
+    print(f'Individual model weights and regressor hyperparameters:')
+    print(f'Hybrid model individual model contributions: Beta1 (DCA): {beta_1:.3f}, Beta2 (ML): {beta_2:.3f} ('
+          f'regressor: Ridge(alpha={alpha_}))')
+    print('\nTesting performance...')
+    print(f'Spearman\'s rho = {test_spearman_r:.3f}')
+    try:
+        os.mkdir('Pickles')
+    except FileExistsError:
+        pass
+    print(f'Save model as Pickle file... HYBRIDMODEL')
+    pickle.dump(
+        {'hybrid_model': hybrid_model, 'beta_1': beta_1, 'beta_2': beta_2,
+         'spearman_rho': test_spearman_r, 'regressor': reg},
+        open('Pickles/HYBRIDMODEL', 'wb')
+    )
 
 
 def predict_ps(  # "predict pmult"
         prediction_dict: dict,
         params_file: str,
-        prediction_set: str,
-        test_set: str,
         threads: int,
-        starting_position: int,
         separator: str,
-        regressor_pkl: str
+        hybrid_model_data_pkl: str,
+        test_set: str = None,
+        prediction_set: str = None,
+        figure: str = None,
+        label: bool = False,
+        negative: bool = False
 ):
     """
     Description
@@ -800,11 +824,11 @@ def predict_ps(  # "predict pmult"
     Parameters
     -----------
     prediction_dict: dict,
+        contains arguments which directory to predict, e.g. {'drecomb': True}
     params_file: str,
     prediction_set: str,
     validation_set: str,
     n_cores: int,
-    starting_position: int,
     separator: str,
     regressor_pkl: str
 
@@ -817,42 +841,67 @@ def predict_ps(  # "predict pmult"
 
     """
     dca_encode = DCAEncoding(
-        starting_position=starting_position,
         params_file=params_file,
         separator=separator
     )
-    reg = pickle.load(open('Pickles/' + regressor_pkl, "rb"))
-    if type(reg) == dict:
-        reg = reg['reg']    # CONSTRUCTION: PREDICT USING HYBRID MODEL PREDICTION FUNCTION
-    print(f'Taking regression model from Pickle file: {reg}...')
-    write_to_file = lambda f, ff: open(f'{f}/variants_fitness.csv', 'a').write(ff)
-    pmult = ['Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split', 'Recomb_Quintuple_Split',
-             'Diverse_Double_Split', 'Diverse_Triple_Split', 'Diverse_Quadruple_Split']
-    print(prediction_dict.values(), pmult)
+    print(f'Taking regression model from saved model (Pickle file): {hybrid_model_data_pkl}...')
+    hybrid_data = pickle.load(open('Pickles/' + hybrid_model_data_pkl, "rb"))
+    hybrid_model = hybrid_data['hybrid_model']
+    test_spearman_r = hybrid_data['spearman_rho']
+    beta_1 = hybrid_data['beta_1']
+    beta_2 = hybrid_data['beta_2']
+    reg = hybrid_data['regressor']
+    if reg is None:
+        alpha_ = 'None'
+    else:
+        alpha_ = f'{reg.alpha:.3f}'
+    print(
+        f'Individual model weights and regressor hyperparameters:\n'
+        f'Hybrid model individual model contributions: Beta1 (DCA): {beta_1:.3f}, '
+        f'Beta2 (ML): {beta_2:.3f} (regressor: Ridge(alpha={alpha_})), '
+        f'Train->Test performance: Spearman\'s rho = {test_spearman_r:.3f}.'
+    )
+    pmult = [
+        'Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split',
+        'Recomb_Quintuple_Split', 'Diverse_Double_Split', 'Diverse_Triple_Split',
+        'Diverse_Quadruple_Split'
+    ]
     if True in prediction_dict.values():
         for ps, path in zip(prediction_dict.values(), pmult):
-            print(str(path) + ': ' + str(ps))
-            if ps:
-                write_to_file(path, 'variant;y_pred\n')
-                print('ENTERING:', str(path) + ': ' + str(ps))
-                for file in os.listdir(path):
-                    print('file:', file)
-                    if not file.endswith('.csv'):
-                        file_path = os.path.join(path, file)
-                        sequences, variants, _ = get_sequences_from_file(file_path)
-                        if threads > 1:
-                            # NaNs are already being removed by the called function
-                            variants, xs, _ = get_dca_data_parallel(
-                                variants, list(np.zeros(len(variants))), dca_encode, threads)
-                        else:
-                            xs = dca_encode.collect_encoded_sequences(variants)
-                            # NaNs must still be removed
-                            xs, variants = remove_nan_encoded_positions(xs, variants)
-                        for i, (variant, x) in enumerate(zip(variants, xs)):
-                            write_to_file(path, f'{variant};{reg.predict([x])[0]}\n')
-            else:
+            if ps:  # if True, run prediction in this directory, e.g. for drecomb
+                print(f'Running predictions for variant-sequence files in directory {path}...')
+                all_y_v_pred = []
+                files = [f for f in listdir(path) if isfile(join(path, f)) if f.endswith('.fasta')]
+                for i, file in enumerate(files):  # collect and predict for each file in the directory
+                    print(f'Encoding files ({i+1}/{len(files)}) for prediction...\n')
+                    file_path = os.path.join(path, file)
+                    sequences, variants, _ = get_sequences_from_file(file_path)
+                    if threads > 1:  # parallel execution
+                        # NaNs are already being removed by the called function
+                        variants, xs, _ = get_dca_data_parallel(
+                            variants, list(np.zeros(len(variants))), dca_encode, threads)
+                    else:  # single thread execution
+                        xs = dca_encode.collect_encoded_sequences(variants)
+                        # NaNs must still be removed
+                        xs, variants = remove_nan_encoded_positions(xs, variants)
+                    assert len(xs) == len(variants)
+                    ys_pred = hybrid_model.hybrid_prediction(xs, reg, beta_1, beta_2)
+                    for i, y in enumerate(ys_pred):
+                        all_y_v_pred.append((ys_pred[i], variants[i]))
+                if negative:  # sort by fitness value
+                    all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=False)
+                else:
+                    all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=True)
+                predictions_out(
+                    predictions=all_y_v_pred,
+                    model='hybrid',
+                    prediction_set=prediction_set,
+                    path=path + '/'
+                )
+            else:  # check next task to do, e.g. predicting trecomb
                 continue
-    elif prediction_set:
+
+    elif prediction_set is not None:
         sequences, variants, _ = get_sequences_from_file(prediction_set)
         # NaNs are already being removed by the called function
         if threads > 1:
@@ -863,63 +912,74 @@ def predict_ps(  # "predict pmult"
             xs = dca_encode.collect_encoded_sequences(variants)
             # NaNs must still be removed
             xs, variants = remove_nan_encoded_positions(xs, variants)
-        for i, (variant, x) in enumerate(zip(variants, xs)):
-            write_to_file(prediction_set + 'predicted.txt', f'{variant};{reg.predict([x])[0]}\n')
-
-    elif test_set:
-        sequences, variants, y_true = get_sequences_from_file(test_set)
-        # NaNs are already being removed by the called function
-        if threads > 1:
-            variants, xs, y_true = get_dca_data_parallel(
-                variants, y_true, dca_encode, threads)
+            assert len(xs) == len(variants)
+        if prediction_set is not None:
+            #for i, (variant, x) in enumerate(zip(variants, xs)):
+            #    write_to_file(get_basename(prediction_set) + '_predicted.txt', f'{variant};{reg.predict([x])[0]}\n')
+            y_pred = hybrid_model.hybrid_prediction(xs, reg, beta_1, beta_2)
+            y_v_pred = zip(y_pred, variants)
+            y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
+            predictions_out(
+                predictions=y_v_pred,
+                model='hybrid',
+                prediction_set=prediction_set
+            )
+    elif test_set is not None or figure is not None:
+        if test_set is not None:
+            loaded_set = test_set
         else:
-            # NaNs must still be removed
-            xs_ = dca_encode.collect_encoded_sequences(variants)
-            xs, variants = remove_nan_encoded_positions(xs_, variants)
-            xs, y_test = remove_nan_encoded_positions(xs_, y_true)
-            assert len(xs) == len(variants) == len(y_test)
+            loaded_set = figure
+        sequences, variants, y_true = get_sequences_from_file(loaded_set)
+        # NaNs are already being removed by the called function
+        try:
+            if threads > 1:
+                variants, xs, y_true = get_dca_data_parallel(
+                    variants, y_true, dca_encode, threads)
+            else:
+                # NaNs must still be removed
+                xs_ = dca_encode.collect_encoded_sequences(variants)
+                xs, variants = remove_nan_encoded_positions(copy.copy(xs_), variants)
+                xs, y_test = remove_nan_encoded_positions(copy.copy(xs_), y_true)
+                assert len(xs) == len(variants) == len(y_test)
+        except IndexError:
+            raise SystemError("Potentially, you provided a prediction set for plotting the figure "
+                              "instead of a test set (including measured fitness values, i.e. y_true).")
 
-        y_pred = reg.predict(xs)
+        y_pred = hybrid_model.hybrid_prediction(xs, reg, beta_1, beta_2)
 
-
-        #n_y_true_dict = dict(zip(variants, y_true))
-        #n_y_pred_dict = dict(zip(variants, y_pred))
-        #y_true = []
-        #y_pred = []
-        #variants = []
-        #for key_true, value_true in n_y_true_dict.items():
-        #    for key_pred, value_pred in n_y_pred_dict.items():
-        #        if key_true == key_pred:
-        #            y_true.append(value_true)
-        #            y_pred.append(value_pred)
-        #            variants.append(key_true)
-
+        print('Testing performance...')
         print(f'Spearman\'s rho = {spearmanr(y_true, y_pred)[0]:.3f}')
-        plot_y_true_vs_y_pred(np.array(y_true), np.array(y_pred), np.array(variants))
+        if figure is not None:
+            plot_y_true_vs_y_pred(np.array(y_true), np.array(y_pred), np.array(variants), label)
 
 
 def predict_directed_evolution(
         encoder: DCAEncoding,
         variant: str,
-        regressor_pkl: str
+        hybrid_model_data_pkl: str
 ):
     """
-
+    Perform directed in silico evolution and predict the fitness of a
+    (randomly) selected variant using the hybrid model. This function opens
+    the stored DCAHybridModel and the model parameters to predict the fitness
+    of the variant encoded herein using the DCAEncoding class. If the variant
+    cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
+    returning the predicted fitness value and the variant name.
     """
-    X = encoder.encode_variant(variant)
+    try:
+        x = encoder.encode_variant(variant)
+    except ActiveSiteError:
+        return 'skip'
 
-    #print(variant[0] + variant[1:-1] + variant[0])
-    model_dict = pickle.load(open('Pickles/' + regressor_pkl, "rb"))
-    model = model_dict['dca_hybrid_model']
-    ridge = model_dict['reg']
-    #print(ridge.coef_)
-    #print(ridge.intercept_)
+    model_dict = pickle.load(open('Pickles/' + hybrid_model_data_pkl, "rb"))
+    model = model_dict['hybrid_model']
+    reg = model_dict['regressor']
     beta_1 = model_dict['beta_1']
     beta_2 = model_dict['beta_2']
 
-    y_pred = model.predict(  # 2d as only single variant
-        X=np.atleast_2d(X),  # e.g., np.atleast_2d(3.0) --> array([[3.]])
-        reg=ridge,  # RidgeRegressor
+    y_pred = model.hybrid_prediction(  # 2d as only single variant
+        X=np.atleast_2d(x),  # e.g., np.atleast_2d(3.0) --> array([[3.]])
+        reg=reg,  # RidgeRegressor
         beta_1=beta_1,  # DCA model prediction weight
         beta_2=beta_2  # ML model prediction weight
     )[0]

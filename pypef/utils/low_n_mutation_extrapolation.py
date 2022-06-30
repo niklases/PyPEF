@@ -18,7 +18,6 @@
 
 
 import os
-from itertools import chain
 import random
 import pandas as pd
 import numpy as np
@@ -26,170 +25,174 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import pickle
 from tqdm import tqdm
-import ray
 
-from pypef.aaidx.cli.regression import cv_regression_options
-from pypef.dca.model import DCAHybridModel
+from pypef.ml.regression import cv_regression_options
+from pypef.dca.hybrid_model import DCAHybridModel
 from pypef.utils.variant_data import process_df_encoding
 
 
-def split_train_sizes_for_multiprocessing(train_sizes, n_cores):
-    sum_training_sizes = sum(train_sizes)
-    sum_single = 0
-    train_splits, total_train_splits = [], []
-    for single in train_sizes:
-        sum_single += single
-        if sum_single <= sum_training_sizes // n_cores:
-            train_splits.append(single)
-        else:
-            train_splits.append(single)
-            total_train_splits.append(train_splits)
-            train_splits = []
-            sum_single = 0
-    len_train_splits = len(list(chain.from_iterable(total_train_splits)))
-    remaining_train_sizes = train_sizes[len_train_splits:]
-    for remain in remaining_train_sizes:
-        total_train_splits.append([remain])
-    total_train_splits = [x for x in total_train_splits if x != []]
-    while len(total_train_splits) < n_cores:
-        split_1 = total_train_splits[0][:int(len(total_train_splits[0]) * 3 / 4)]
-        split_2 = total_train_splits[0][int(len(total_train_splits[0]) * 3 / 4):]
-        total_train_splits[0] = split_1
-        total_train_splits.insert(1, split_2)
-    while len(total_train_splits) > n_cores:
-        total_train_splits[0] = total_train_splits[0] + total_train_splits[1]
-        total_train_splits.pop(1)
+#def plot(
+#        data: dict,
+#        dataset: str,
+#        n_runs: int = 10,
+#        mut_extrapol: bool = False,
+#        conc: bool = False
+#):
+#    """
+#    Description
+#    ----------
+#    Plots mutation extrapolation performances (measured
+#    vs. predicted fitness values of variants) at different levels/degrees
+#    of substitutions, e.g. trained on single substituional variants
+#    and predicting double, triple, and higher substituted variants.
+#    Further, 'conc' allows to learn on concatenated levels of substitutions,
+#    e.g. fist learning on single and predicting double, then learning on
+#    single+double and predicting triple, then learning on single+double+triple
+#    and predicting quadruple substituted variants, and so on.
+#
+#
+#    Parameters
+#    ----------
+#
+#    Returns
+#    ----------
+#    None
+#        Just plots the performances.
+#    """
+#
+#    def get_mean_and_std(
+#        x: list,
+#        sort_arr: np.ndarray,
+#    ) -> tuple:
+#        x = [s for _, s in sorted(zip(sort_arr, x))]
+#        x = np.array(x)
+#        x = np.split(np.array(x), int(len(x) / n_runs))
+#        x = np.vstack(x)
+#        return np.mean(x, axis=1), np.std(x, axis=1, ddof=1, dtype=float)
+#
+#    training_sizes, testing_sizes, spearmanrs, \
+#        beta_1s, beta_2s, alphas, lvl = [], [], [], [], [], [], []
+#    for key in data.keys():
+#        training_sizes.append(data[key]['n_y_train'])
+#        testing_sizes.append(data[key]['n_y_test'])
+#        spearmanrs.append(data[key]['spearman_rho'])
+#        beta_1s.append(data[key]['beta_1'])
+#        beta_2s.append(data[key]['beta_2'])
+#        alphas.append(data[key]['alpha'])
+#        if mut_extrapol:
+#            if not conc:
+#                lvl.append(data[key]['test_mut_level'])
+#            else:
+#                lvl.append(data[key]['conc_test_mut_level'])
+#    sort_arr = np.argsort(training_sizes)
+#
+#    x_training, _ = get_mean_and_std(training_sizes, sort_arr)
+#    x_testing, _ = get_mean_and_std(testing_sizes, sort_arr)
+#
+#    srs, srs_yerr = get_mean_and_std(spearmanrs, sort_arr)
+#
+#    fig, ax = plt.subplots()
+#
+#    if not mut_extrapol:
+#        ax.scatter(x_training, srs, marker='x')
+#        ax.errorbar(x_training, srs, yerr=srs_yerr, linestyle='', capsize=3, color='gray')
+#        ax.set_xscale('log')
+#        ax.set_ylim(-0.05, 1.05)
+#        ax.set_xlabel('Number of datapoints in the training set', size=12)
+#
+#        ax2 = ax.twiny()
+#        ax2.scatter(x_training / (x_testing + x_training), srs, marker='')
+#        ax2.set_xlabel('Relative size of the training set', size=12)
+#
+#    else:
+#        ax.scatter(lvl, srs, marker='x')
+#        ax.set_xticks([item for item in lvl], labels=[item for item in lvl])
+#        ax.set_xlabel('Mutational lvl of test set', size=12)
+#        labels = [item.get_text() for item in ax.get_xticklabels()]
+#        labels[-1] = 'All'
+#        ax.set_xticklabels(labels)
+#
+#        for l, s, tr, te in zip(lvl, srs, training_sizes, testing_sizes):
+#            ax.annotate(f'N_train = {tr}\nN_test = {te}', xy=(l, s), textcoords='offset points', size=4)
+#
+#        # if conc:
+#        #    ax2.scatter(lvl_conc, srs_conc, marker='')
+#
+#    ax.set_ylabel(r"Spearman's $\rho$", size=12)
+#    plt.savefig('%s.png' % dataset, dpi=500, bbox_inches='tight')
+#    plt.clf()
+#
+#
+#def split_train_sizes_for_multiprocessing(
+#        train_sizes,
+#        n_cores
+#):
+#    """
+#    Splitting of train sizes for hyperthreading of the low-N
+#    engineering task for hybrid modeling.
+#    """
+#    sum_training_sizes = sum(train_sizes)
+#    sum_single = 0
+#    train_splits, total_train_splits = [], []
+#    for single in train_sizes:
+#        sum_single += single
+#        if sum_single <= sum_training_sizes // n_cores:
+#            train_splits.append(single)
+#        else:
+#            train_splits.append(single)
+#            total_train_splits.append(train_splits)
+#            train_splits = []
+#            sum_single = 0
+#    len_train_splits = len(list(chain.from_iterable(total_train_splits)))
+#    remaining_train_sizes = train_sizes[len_train_splits:]
+#    for remain in remaining_train_sizes:
+#        total_train_splits.append([remain])
+#    total_train_splits = [x for x in total_train_splits if x != []]
+#    while len(total_train_splits) < n_cores:
+#        split_1 = total_train_splits[0][:int(len(total_train_splits[0]) * 3 / 4)]
+#        split_2 = total_train_splits[0][int(len(total_train_splits[0]) * 3 / 4):]
+#        total_train_splits[0] = split_1
+#        total_train_splits.insert(1, split_2)
+#    while len(total_train_splits) > n_cores:
+#        total_train_splits[0] = total_train_splits[0] + total_train_splits[1]
+#        total_train_splits.pop(1)
+#
+#    return total_train_splits
 
-    return total_train_splits
 
-
-def plot(
-        data: dict,
-        dataset: str,
-        n_runs: int = 10,
-        mut_extrapol: bool = False,
-        conc: bool = False
-):
-    """
-    Description
-    ----------
-    Plots mutation extrapolation performances (measured
-    vs. predicted fitness values of variants) at different levels/degrees
-    of substitutions, e.g. trained on single substituional variants
-    and predicting double, triple, and higher substituted variants.
-    Further, 'conc' allows to learn on concatenated levels of substitutions,
-    e.g. fist learning on single and predicting double, then learning on
-    single+double and predicting triple, then learning on single+double+triple
-    and predicting quadruple substituted variants, and so on.
-
-
-    Parameters
-    ----------
-
-    Returns
-    ----------
-    None
-        Just plots the performances.
-    """
-
-    def get_mean_and_std(
-        x: list,
-        sort_arr: np.ndarray,
-    ) -> tuple:
-        x = [s for _, s in sorted(zip(sort_arr, x))]
-        x = np.array(x)
-        x = np.split(np.array(x), int(len(x) / n_runs))
-        x = np.vstack(x)
-        return np.mean(x, axis=1), np.std(x, axis=1, ddof=1, dtype=float)
-
-    training_sizes, testing_sizes, spearmanrs, \
-        beta_1s, beta_2s, alphas, lvl = [], [], [], [], [], [], []
-    for key in data.keys():
-        print(key)
-        training_sizes.append(data[key]['n_y_train'])
-        testing_sizes.append(data[key]['n_y_test'])
-        spearmanrs.append(data[key]['spearman_rho'])
-        beta_1s.append(data[key]['beta_1'])
-        beta_2s.append(data[key]['beta_2'])
-        alphas.append(data[key]['alpha'])
-        if mut_extrapol:
-            if not conc:
-                lvl.append(data[key]['test_mut_level'])
-            else:
-                lvl.append(data[key]['conc_test_mut_level'])
-    for k in [training_sizes, testing_sizes, spearmanrs, beta_1s, beta_2s, alphas, lvl]:
-        print(k)
-    sort_arr = np.argsort(training_sizes)
-
-    x_training, _ = get_mean_and_std(training_sizes, sort_arr)
-    x_testing, _ = get_mean_and_std(testing_sizes, sort_arr)
-
-    srs, srs_yerr = get_mean_and_std(spearmanrs, sort_arr)
-
-    fig, ax = plt.subplots()
-
-    if not mut_extrapol:
-        ax.scatter(x_training, srs, marker='x')
-        ax.errorbar(x_training, srs, yerr=srs_yerr, linestyle='', capsize=3, color='gray')
-        ax.set_xscale('log')
-        ax.set_ylim(-0.05, 1.05)
-        ax.set_xlabel('Number of datapoints in the training set', size=12)
-
-        ax2 = ax.twiny()
-        ax2.scatter(x_training / (x_testing + x_training), srs, marker='')
-        ax2.set_xlabel('Relative size of the training set', size=12)
-
-    else:
-        ax.scatter(lvl, srs, marker='x')
-        ax.set_xticks([item for item in lvl], labels=[item for item in lvl])
-        ax.set_xlabel('Mutational lvl of test set', size=12)
-        labels = [item.get_text() for item in ax.get_xticklabels()]
-        labels[-1] = 'All'
-        ax.set_xticklabels(labels)
-
-        for l, s, tr, te in zip(lvl, srs, training_sizes, testing_sizes):
-            ax.annotate(f'N_train = {tr}\nN_test = {te}', xy=(l, s), textcoords='offset points', size=4)
-
-        # if conc:
-        #    ax2.scatter(lvl_conc, srs_conc, marker='')
-
-    ax.set_ylabel(r"Spearman's $\rho$", size=12)
-    plt.savefig('%s.png' % dataset, dpi=500, bbox_inches='tight')
-    plt.clf()
-
-
-@ray.remote
-def _low_n_parallel_hybrid(hybrid_model: DCAHybridModel, train_sizes):
-    return hybrid_model.run(train_sizes=train_sizes)
-
-
-def low_n_hybrid_model(
-        hybrid_model: DCAHybridModel,
-        n_cores: int,
-        out_files: str = 'out',
-        n_runs: int = 10
-):
-    train_sizes = hybrid_model.get_train_sizes()
-    if n_cores != 1:  # hyperthreading
-        if len(train_sizes) < n_cores:
-            n_cores = len(train_sizes)
-        train_size_splits = split_train_sizes_for_multiprocessing(train_sizes, n_cores)
-        results = ray.get([
-            _low_n_parallel_hybrid.remote(
-                hybrid_model,
-                train_size_splits[i]) for i in range(len(train_size_splits))
-        ])
-        data = {}
-        for r in results:
-            data.update(r)
-    else:
-        data = {}
-        for train_size in tqdm(train_sizes):
-            data.update(hybrid_model.run(list(np.atleast_1d(train_size))))
-            print('len data sc', len(data))
-
-    np.save(f'{out_files}_hybrid_model_data.npy', data)
-    plot(data, f'{out_files}', n_runs=n_runs)
+#@ray.remote
+#def _low_n_parallel_hybrid(hybrid_model: DCAHybridModel, train_sizes):
+#    return hybrid_model.run(train_sizes=train_sizes)
+#
+#
+#def low_n_hybrid_model(
+#        hybrid_model: DCAHybridModel,
+#        n_cores: int,
+#        out_files: str = 'out',
+#        n_runs: int = 10
+#):
+#    train_sizes = hybrid_model.get_train_sizes()
+#    if n_cores != 1:  # hyperthreading
+#        if len(train_sizes) < n_cores:
+#            n_cores = len(train_sizes)
+#        train_size_splits = split_train_sizes_for_multiprocessing(
+#            train_sizes, n_cores
+#        )
+#        results = ray.get([
+#            _low_n_parallel_hybrid.remote(
+#                hybrid_model,
+#                train_size_splits[i]) for i in range(len(train_size_splits))
+#        ])
+#        data = {}
+#        for r in results:
+#            data.update(r)
+#    else:
+#        data = {}
+#        for train_size in tqdm(train_sizes):
+#            data.update(hybrid_model.run(list(np.atleast_1d(train_size))))
+#            print('len data sc', len(data))
+#    np.save(f'{out_files}_hybrid_model_data.npy', data)
+#    plot(data, f'{out_files}', n_runs=n_runs)
 
 
 def get_train_sizes(number_variants) -> np.ndarray:
@@ -210,11 +213,15 @@ def get_train_sizes(number_variants) -> np.ndarray:
 
 
 def plot_low_n(
-        train_sizes,
-        avg_spearmanr,
-        stddev_spearmanr,
+        train_sizes: list,
+        avg_spearmanr: list,
+        stddev_spearmanr: list,
         plt_name: str = ''
 ):
+    """
+    Plot the performance results of the low N engineering task.
+    """
+    print('\nPlotting...\n')
     plt.plot(train_sizes, avg_spearmanr, 'ko--', linewidth=1, markersize=1.5)
     plt.fill_between(
         np.array(train_sizes),
@@ -236,7 +243,18 @@ def low_n(
         hybrid_modeling: bool = False,
         train_size_train: float = 0.66
 ):
+    """
+    Performs the "low N protein engineering task" learning on distinct
+    numbers of encoded_variant_sequences-fitness data to predict the
+    left out data (full dataset - train dataset). Maximum sizes of
+    learning sets is 0.8 * full dataset (and thus maximal size of test
+    set 0.2 * full dataset).
+    """
     df = pd.read_csv(encoded_csv, sep=';', comment='#')
+    if df.shape[1] == 1:
+        df = pd.read_csv(encoded_csv, sep=',', comment='#')
+    if df.shape[1] == 1:
+        df = pd.read_csv(encoded_csv, sep='\t', comment='#')
     if cv_regressor:
         name = 'ml_' + cv_regressor
         if cv_regressor == 'pls_loocv':
@@ -247,8 +265,9 @@ def low_n(
     elif hybrid_modeling:
         name = 'hybrid_ridge'
     n_variants = df.shape[0]
-    train_sizes = get_train_sizes(n_variants)
+    train_sizes = get_train_sizes(n_variants).tolist()
     variants, X, y = process_df_encoding(df)
+
     avg_spearmanr, stddev_spearmanr = [], []
     # test_sizes = [n_variants - size for size in train_sizes]
     for size in tqdm(train_sizes):
@@ -267,16 +286,18 @@ def low_n(
                 hybrid_model = DCAHybridModel(
                     X_train=X_train,
                     y_train=y_train,
-                    X_test=None,
-                    y_test=None,
+                    X_test=X_test,  # only used for adjusting +/- sign of y_dca, can also be None
+                    y_test=y_test,  # only used for adjusting +/- sign of y_dca, can also be None
                     X_wt=x_wt
                 )
                 beta_1, beta_2, reg = hybrid_model.settings(
-                    X_train, y_train, train_size_train=train_size_train)
+                    X_train, y_train, train_size_fit=train_size_train)
                 spearmanr_nruns.append(
                     hybrid_model.spearmanr(
                         y_test,
-                        hybrid_model.predict(X_test, reg, beta_1, beta_2)
+                        hybrid_model.hybrid_prediction(
+                            X_test, reg, beta_1, beta_2
+                        )
                     )
                 )
 
@@ -285,7 +306,6 @@ def low_n(
                 # Best CV params: best_params = regressor.best_params_
                 y_pred = regressor.predict(X_test)
                 spearmanr_nruns.append(stats.spearmanr(y_test, y_pred)[0])
-
         avg_spearmanr.append(np.mean(spearmanr_nruns))
         stddev_spearmanr.append(np.std(spearmanr_nruns, ddof=1))
 
@@ -301,6 +321,9 @@ def low_n(
 
 def count_mutation_levels_and_get_dfs(df_encoding) -> tuple:
     """
+    The input dataframe (from the sequence encoding CSV file) is split
+    according to levels of variant substitutions. Substitution seperator
+    is '/'.
     """
     single_variants_index, all_higher_variants_index = [], []
     double_i, triple_i, quadruple_i, quintuple_i, sextuple_i, \
@@ -355,15 +378,30 @@ def performance_mutation_extrapolation(
         save_model: bool = True,
         hybrid_modeling: bool = False
 ) -> dict:
-    name=''
+    """
+    Train on distinct mutation levels, e.g. only single-substituted samples
+    of encoded_variant_sequences-fitness data to predict distinct levels
+    of higher substituted variants (i.e. 1->2, 1->3, 1->4 etc.). Also can
+    train on concatenated levels of substitution-fitness data using the flag
+    --conc, i.e. conc = True (i.e. 1->2, 1+2->3, 1+2+3->4, etc.).
+    """
     df = pd.read_csv(encoded_csv, sep=';', comment='#')
+    if df.shape[1] == 1:
+        df = pd.read_csv(encoded_csv, sep=',', comment='#')
+    if df.shape[1] == 1:
+        df = pd.read_csv(encoded_csv, sep='\t', comment='#')
+
     df_mut_lvl = count_mutation_levels_and_get_dfs(df)
+    name = ''
     if save_model:
         try:
             os.mkdir('Pickles')
         except FileExistsError:
             pass
-    if cv_regressor:
+    if hybrid_modeling:
+        regressor = None
+        name = 'hybrid_ridge'
+    elif cv_regressor:
         name = 'ml_' + cv_regressor
         if cv_regressor == 'pls_loocv':
             raise SystemError('PLS LOOCV is not (yet) implemented '
@@ -373,34 +411,35 @@ def performance_mutation_extrapolation(
         beta_1, beta_2 = None, None
     else:
         regressor = None
-        name = 'hybrid_ridge'
+        hybrid_model = None
     data = {}
-    # run extrapolation // implement train_size and n_runs?
     collected_levels = []
     for i_m, mutation_level_df in enumerate(df_mut_lvl):
         if mutation_level_df.shape[0] != 0:
             collected_levels.append(i_m)
     train_idx_appended = []
-    # train_df_appended = pd.DataFrame()
     if len(collected_levels) > 1:
         train_idx = collected_levels[0]
-        print(train_idx)
         train_df = df_mut_lvl[train_idx]
         train_variants, X_train, y_train = process_df_encoding(train_df)
+        all_higher_df = df_mut_lvl[-1]  # only used for adjusting +/- of y_dca
+        all_higher_variants, X_all_higher, y_all_higher = process_df_encoding(all_higher_df)
         if hybrid_modeling:
-            x_wt = train_variants[0]
+            x_wt = X_train[0]
             hybrid_model = DCAHybridModel(
                 X_train=X_train,
                 y_train=y_train,
-                X_test=None,
-                y_test=None,
+                X_test=X_all_higher,  # only used for adjusting +/- of y_dca, can also be None but
+                y_test=y_all_higher,  # higher risk of wrong sign assignment of beta_1 (y_dca)
                 X_wt=x_wt
             )
             beta_1, beta_2, reg = hybrid_model.settings(
-                X_train, y_train, train_size_train=train_size)
-            if save_model:
-                print(f'Save model as Pickle file: HYBRID_LVL_1')
-                pickle.dump(reg, open('Pickles/HYBRID_LVL_1', 'wb'))  # Pickles/ not there construction try os.mkdir
+                X_train, y_train, train_size_fit=train_size)
+            pickle.dump(
+                {'hybrid_model': hybrid_model, 'beta_1': beta_1, 'beta_2': beta_2,
+                 'spearman_rho': float('nan'), 'regressor': reg},
+                open('Pickles/HYBRID_LVL_1', 'wb')
+            )
         elif cv_regressor:
             regressor.fit(X_train, y_train)
             if save_model:
@@ -412,7 +451,7 @@ def performance_mutation_extrapolation(
                 test_df = df_mut_lvl[test_idx]
                 test_variants, X_test, y_test = process_df_encoding(test_df)
                 if not conc:
-                    # For training on distinct iterated level i, uncomment:
+                    # For training on distinct iterated level i, uncomment lines below:
                     # train_idx = collected_levels[i]
                     # train_df = self.mutation_level_dfs[train_idx]
                     # train_variants, X_train, y_train = self._process_df_encoding(train_df)
@@ -424,23 +463,27 @@ def performance_mutation_extrapolation(
                         data.update({
                             test_idx + 1:
                                 {
+                                    'hybrid_model': hybrid_model,
                                     'max_train_lvl': train_idx + 1,
                                     'n_y_train': len(y_train),
                                     'test_lvl': test_idx + 1,
                                     'n_y_test': len(y_test),
                                     'spearman_rho': hybrid_model.spearmanr(
                                         y_test,
-                                        hybrid_model.predict(X_test, reg, beta_1, beta_2)
+                                        hybrid_model.hybrid_prediction(
+                                            X_test, reg, beta_1, beta_2
+                                        )
                                     ),
                                     'beta_1': beta_1,
                                     'beta_2': beta_2,
-                                    'alpha': alpha
+                                    'regressor': reg
                                 }
                         })
                     else:  # ML
                         data.update({
                             test_idx + 1:
                                 {
+                                    'regressor': regressor,
                                     'max_train_lvl': train_idx + 1,
                                     'n_y_train': len(y_train),
                                     'test_lvl': test_idx + 1,
@@ -462,28 +505,32 @@ def performance_mutation_extrapolation(
                         train_variants_conc, X_train_conc, y_train_conc = \
                             process_df_encoding(train_df_appended_conc)
                         if hybrid_modeling:  # updating hybrid model params with newly inputted concatenated train data
-                            beta_1_conc, beta_2_conc, reg_conc = hybrid_model.settings(X_train_conc, y_train_conc)
+                            beta_1_conc, beta_2_conc, reg_conc = hybrid_model.settings(
+                                X_train_conc,
+                                y_train_conc,
+                                train_size_fit=train_size
+                            )
                             if beta_2_conc == 0.0:
                                 alpha = np.nan
                             else:
-                                # if save_model:
-                                #    pickle.dumps(reg_conc)
                                 alpha = reg_conc.alpha
                             data.update({
                                 test_idx + 1:
                                     {
+                                        'hybrid_model': hybrid_model,
                                         'max_train_lvl': train_idx_appended[-1] + 1,
                                         'n_y_train': len(y_train_conc),
                                         'test_lvl': test_idx + 1,
                                         'n_y_test': len(y_test),
-                                        # 'rnd_state': random_state,
                                         'spearman_rho': hybrid_model.spearmanr(
                                             y_test,
-                                            hybrid_model.predict(X_test, reg_conc, beta_1_conc, beta_2_conc)
+                                            hybrid_model.hybrid_prediction(
+                                                X_test, reg_conc, beta_1_conc, beta_2_conc
+                                            )
                                         ),
                                         'beta_1': beta_1_conc,
                                         'beta_2': beta_2_conc,
-                                        'alpha': alpha
+                                        'regressor': reg_conc
                                     }
                             })
                         else:  # ML updating pureML regression model params with newly inputted concatenated train data
@@ -498,17 +545,24 @@ def performance_mutation_extrapolation(
                                     'spearman_rho': stats.spearmanr(
                                         y_test,  # Call predict on the BaseSearchCV estimator
                                         regressor.predict(X_test)  # with the best found parameters
-                                        )[0]
+                                        )[0],
+                                    'regressor': regressor
                                 }
                             })
     plot_extrapolation(data, name, conc)
+
     return data
 
 
-def plot_extrapolation(extrapolation_data: dict, name: str = '', conc=False):
+def plot_extrapolation(
+        extrapolation_data: dict,
+        name: str = '',
+        conc=False
+):
     """
-    Plot extrapolation results
+    Plot extrapolation results.
     """
+    print('\nPlotting...\n')
     test_lvls, spearman_rhos, label_infos = [], [], []
     for test_lvl, result_dict in extrapolation_data.items():
         if result_dict['spearman_rho'] is np.nan:
@@ -530,7 +584,11 @@ def plot_extrapolation(extrapolation_data: dict, name: str = '', conc=False):
         np.array(spearman_rhos),
         alpha=0.3
     )
-    plt.xticks(test_lvls, label_infos, fontsize=6)
+    if conc:
+        name += '_train_concat_lvls'
+    else:
+        name += '_train_lvl_1'
+    plt.xticks(test_lvls, label_infos, fontsize=5)
     plt.ylabel(r"Spearman's $\rho$")
     plt.savefig(name + '_extrapolation.png', dpi=500)
     plt.clf()

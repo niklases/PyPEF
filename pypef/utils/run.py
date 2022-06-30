@@ -23,7 +23,8 @@ import copy
 
 from pypef.utils.variant_data import (
     amino_acids, generate_dataframe_and_save_csv,
-    remove_nan_encoded_positions, path_aaidx_txt_path_from_utils
+    remove_nan_encoded_positions, path_aaidx_txt_path_from_utils,
+    get_basename
 )
 
 from pypef.utils.learning_test_sets import (
@@ -34,15 +35,15 @@ from pypef.utils.prediction_sets import (
     make_fasta_ps, make_recombinations_double, make_recombinations_triple,
     make_recombinations_quadruple, make_recombinations_quintuple,
     create_split_files, make_combinations_double_all_diverse,
-    make_combinations_triple_all_diverse, make_combinations_quadruple_all_diverse,
-    make_combinations_double_all_diverse_and_all_positions
-)
+    make_combinations_triple_all_diverse, make_combinations_quadruple_all_diverse
+)   # not yet implemented: make_combinations_double_all_diverse_and_all_positions
+
 from pypef.utils.directed_evolution import DirectedEvolution
 from pypef.dca.encoding import DCAEncoding
 from pypef.utils.sto2a2m import convert_sto2a2m
 
 from pypef.dca.encoding import get_dca_data_parallel, get_encoded_sequence
-from pypef.aaidx.cli.regression import OneHotEncoding, AAIndexEncoding
+from pypef.ml.regression import OneHotEncoding, AAIndexEncoding
 
 
 def run_pypef_utils(arguments):
@@ -134,6 +135,7 @@ def run_pypef_utils(arguments):
 
         if arguments['--ddiverse']:
             print('Creating Diverse_Double_Split...')
+            # if functions required, uncomment the next two lines and comment the other ones
             # for no, files in enumerate(
             #     make_recombinations_double_all_diverse_and_all_positions(wt_sequence, amino_acids)):
             for no, files in enumerate(make_combinations_double_all_diverse(single_variants, amino_acids)):
@@ -160,7 +162,7 @@ def run_pypef_utils(arguments):
                 and arguments['--qdiverse'] is False:
             print(f'\nMaking prediction set fasta file from {csv_file}...\n')
             make_fasta_ps(
-                filename=f'{csv_file}_prediction_set.fasta',
+                filename=f'{get_basename(csv_file)}_prediction_set.fasta',
                 wt=wt_sequence,
                 substitution=tuple(list(single_variants)+list(higher_variants))
             )
@@ -172,8 +174,7 @@ def run_pypef_utils(arguments):
         if arguments['hybrid'] or arguments['--encoding'] == 'dca':
             dca_encoder = DCAEncoding(
                 params_file=arguments['--params'],
-                separator=arguments['--sep'],
-                starting_position=arguments['--start']
+                separator=arguments['--sep']
             )
             if arguments['ml']:
                 ml_or_hybrid = 'ml'
@@ -224,7 +225,7 @@ def run_pypef_utils(arguments):
             single_vars = None  # What happens now? (Full diverse?)
         # Metropolis-Hastings-driven directed evolution on single mutant .csv amino acid substitution data
         csvaa = arguments['--csvaa']  # only use identified substitutions --> taken from CSV file
-        print('Running evolution trajectories and plotting...')
+        print('Running evolution trajectories and plotting...\n')
         DirectedEvolution(
             ml_or_hybrid=ml_or_hybrid,
             encoding=arguments['--encoding'],
@@ -272,8 +273,7 @@ def run_pypef_utils(arguments):
 
             dca_encode = DCAEncoding(
                 params_file=arguments['--params'],
-                separator=arguments['--mutation_sep'],
-                starting_position=arguments['--start']
+                separator=arguments['--mutation_sep']
             )
             if threads > 1:
                 variants, encoded_sequences, fitnesses = get_dca_data_parallel(
@@ -327,4 +327,4 @@ def run_pypef_utils(arguments):
             encoding_type=arguments['--encoding']
         )
 
-    print('\nDone!')
+    print('\nDone!\n')

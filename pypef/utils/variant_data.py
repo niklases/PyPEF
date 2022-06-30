@@ -55,7 +55,7 @@ def absolute_path_cwd_file(file):
     """
     if file is None:
         return None
-    return os.getcwd() + '/' + file
+    return os.path.join(os.getcwd(), file)
 
 
 def path_aaidx_txt_path_from_utils(filename):
@@ -64,7 +64,7 @@ def path_aaidx_txt_path_from_utils(filename):
     e.g. path/to/pypef/utils/../aaidx/AAindex/FAUJ880104.txt.
     """
     modules_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(modules_path, '../aaidx/AAindex/' + filename + '.txt')
+    return os.path.join(modules_path, '..', 'ml', 'AAindex', f'{filename}.txt')
 
 
 def get_sequences_from_file(
@@ -116,6 +116,8 @@ def get_sequences_from_file(
             print('Number of sequences: {}, Number of target values: {}.'.format(
                 str(len(sequences)), str(len(values))))
             sys.exit()
+    if mult_path is not None:
+        os.chdir('..')
 
     return sequences, names_of_mutations, values
 
@@ -262,6 +264,7 @@ def process_df_encoding(df_encoding) -> tuple[np.ndarray, np.ndarray, np.ndarray
     variants in the first column, the associated fitness value in the
     second column, and the encoded sequence starting from the third
     column.
+
     Returns
     -------
     Tuple of variant names, encoded sequences, and fitness values.

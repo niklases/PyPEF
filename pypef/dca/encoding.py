@@ -93,23 +93,12 @@ class ActiveSiteError(Exception):
         self.position = position
         self.variant = variant
         self.verbose = verbose
-        message = f"The position '{self.position}' of variant '{self.variant}' is " \
+        message = f"The position {self.position} of variant '{self.variant}' is " \
                   f"not an effective site in the DCA model and thus cannot be predicted."
         if self.verbose:
             print(message)
             self.message = message
             super().__init__(self.message)
-
-
-#"""
-#Valid characters for one letter codes of amino acids.
-#"""
-#amino_acids_olc = [
-#    'A', 'C', 'D', 'E', 'F',
-#    'G', 'H', 'I', 'K', 'L',
-#    'M', 'N', 'P', 'Q', 'R',
-#    'S', 'T', 'V', 'W', 'Y'
-#]
 
 
 def is_valid_substitution(substitution: str) -> bool:
@@ -196,7 +185,6 @@ def get_single_substitutions(variant: str, separator='/') -> Iterable:
 
     else:
         raise InvalidVariantError(variant)
-
 
 
 class CouplingsModel:
@@ -294,6 +282,9 @@ class CouplingsModel:
                     not_valid.append(num)
                 else:
                     valid.append(num)
+            self.wt_aa_pos = []
+            for aa, pos in zip(self._target_seq, self.index_list):
+                self.wt_aa_pos.append(str(aa) + str(pos))
             if self.verbose:
                 print(f'Evaluating gap content of PLMC parameter file... '
                       f'First amino acid position used in the MSA (PLMC params file) is '
@@ -304,8 +295,8 @@ class CouplingsModel:
                     print(str(not_valid)[1:-1])
                     print(f'\nSummary of all effective positions represented in the MSA '
                           f'based on wild-type sequence ({len(valid)} encoded positions):')
-                    for aa, pos in zip(self._target_seq, self.index_list):
-                        print(f'{aa + str(pos)}', end=' ')
+                    for aa_pos in self.wt_aa_pos:
+                        print(f'{aa_pos}', end=' ')
                     print('\n')
 
             # single site frequencies f_i and fields h_i
@@ -514,8 +505,6 @@ class DCAEncoding(CouplingsModel):
 
     Attributes
     ----------
-    starting_position: int
-        Number of leading residue of the fasta sequence used for model construction.
     params_file: str
         Binary parameter file outputted by PLMC.
     """
@@ -524,13 +513,12 @@ class DCAEncoding(CouplingsModel):
             self,
             params_file: str,
             separator: str = '/',
-            starting_position: int = 1,
             verbose: bool = True
     ):
         self.verbose = verbose
-        self.starting_position = starting_position  # not necessary anymore?!
         self.separator = separator
-        super().__init__(params_file, verbose=verbose)  # inherit functions and variables from class 'CouplingsModel'
+        super().__init__(filename=params_file, verbose=verbose)  # inherit functions and variables
+        # from class 'CouplingsModel'
 
     def _get_position_internal(self, position: int):
         """
@@ -553,7 +541,7 @@ class DCAEncoding(CouplingsModel):
         None
             If the requested position is not an active site.
         """
-        offset = self.starting_position - 1
+        offset = 0
         i = position - offset
         if i in self.index_list:
             return i
@@ -605,6 +593,23 @@ class DCAEncoding(CouplingsModel):
         """
         return substitution[0], int(substitution[1:-1]), substitution[-1]
 
+    def check_substitution_naming_against_wt(self, substitution: str, variant: str):
+        """
+        Checks whether the amino acid to substitute of the variant matches
+        the amino acid of the wild type at this position.
+        """
+        if substitution[:-1] not in self.wt_aa_pos:
+            wild_type_aa, position, A_i = self._unpack_substitution(substitution)
+            raise SystemError(
+                f"The variant naming scheme is not fitting to the DCAEncoding "
+                f"scheme. Substitution {substitution} of variant {variant} has "
+                f"the amino acid {wild_type_aa} at position {position}, which "
+                f"does not match the wild type sequence; see summary of (effective) "
+                f"wild-type positions and amino acids above. Please check your input "
+                f"variant data."
+            )
+
+
     def encode_variant(self, variant: str) -> np.ndarray:
         """
         Description
@@ -630,8 +635,9 @@ class DCAEncoding(CouplingsModel):
 
             i = self._get_position_internal(position)
             if not i:
-                raise ActiveSiteError(position, variant, self.verbose)  # CONSTRUCTION: Or just put 0 ?  -> Eased positioning
+                raise ActiveSiteError(position, variant, self.verbose)
 
+            self.check_substitution_naming_against_wt(substitution, variant)
             i_mapped = self.index_map[i]
             sequence[i_mapped] = A_i
 
@@ -783,13 +789,6 @@ def get_dca_data_parallel(
     """
     print(f'{len(variants)} input variants.')
     print(f'Encoding variant sequences. This might take some time...')
-    #target_seq, target_idx = dca_encode.get_target_seq_and_index()
-    #wt_name = target_seq[0] + str(target_idx[0]) + target_seq[0]
-    #x_wt = get_encoded_sequence(wt_name, dca_encode)
-
-    # print mapping dict from MSA for Couplings
-    #dict_ = dict(zip(target_idx, target_seq))
-    #dict_ = {k: v for k, v in sorted(dict_.items(), key=lambda item: item[0])}
 
     idxs_nan = np.array([i for i, b in enumerate(np.isnan(fitnesses)) if b])  # find fitness NaNs
     if idxs_nan.size > 0:  # remove NaNs if present
