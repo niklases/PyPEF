@@ -33,7 +33,7 @@ Tutorial section below).
 <img src="workflow/Splitting_Workflow.png" alt="drawing" width="1000"/>
 
 ## Quick Installation
-A quick installation of the PyPEF command line framework using PyPI (tested for Linux and Windows for Python 3.7–3.9) can be performed with:
+A quick installation of the PyPEF command line framework using PyPI (tested for Linux and Windows for Python 3.7–3.10) can be performed with:
 
 ```
 pip install -U pypef
