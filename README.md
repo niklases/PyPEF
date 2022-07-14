@@ -306,7 +306,12 @@ pypef sto2a2m --sto ANEH_jhmmer.sto
 plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
 ```
 
-Done! The output `.params` file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g.: 
+Done! The output `.params` file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g. for pure ML modeling:
 ```
-pypef -e dca -l LS.fasta -t TS.fasta --regressor pls --params ANEH_72.6.params
+pypef ml -e dca -l LS.fasta -t TS.fasta --regressor pls --params ANEH_72.6.params
 ```
+Or for hybrid modeling:
+```
+pypef hybrid -l LS.fasta -t TS.fasta --params ANEH_72.6.params
+```
+
