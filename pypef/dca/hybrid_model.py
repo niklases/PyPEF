@@ -32,7 +32,6 @@ from scipy.stats import spearmanr
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
-import matplotlib.pyplot as plt
 from pypef.utils.variant_data import get_sequences_from_file, remove_nan_encoded_positions
 from pypef.dca.encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence, ActiveSiteError
 from pypef.ml.regression import predictions_out, plot_y_true_vs_y_pred

@@ -394,8 +394,8 @@ def make_fasta_ls_ts(
                 else:
                     name += '/' + single_var
                 separation += 1
-        print('>', name, file=myfile)
-        print(';', val[i], file=myfile)
+        print(f'>{name}', file=myfile)
+        print(f';{val[i]}', file=myfile)
         print(''.join(temp), file=myfile)
         # print(name+';'+str(val[i])+';'+''.join(temp), file=myfile)  # output: CSV format
     myfile.close()
