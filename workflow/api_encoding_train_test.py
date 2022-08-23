@@ -1,3 +1,7 @@
+"""
+An exemplary script for using PyPEF as an API for encoding sequences to
+train and test ML models and the hybrid model.
+"""
 import os
 import pandas as pd
 import numpy as np
@@ -18,8 +22,8 @@ wt_sequence = 'MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTL' \
               'VTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLV' \
               'NRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLAD' \
               'HYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK'
-variant_fitness_data = pd.read_csv('avGFP.csv', sep=';')  # Exepmplary taking avGFP dataset
-variants = variant_fitness_data.iloc[:2000, 0]  # e.g., taking 2000 variants
+variant_fitness_data = pd.read_csv('avGFP.csv', sep=';')  # taking the avGFP dataset
+variants = variant_fitness_data.iloc[:2000, 0]  # "just" using 2000 variants for faster processing
 fitnesses = variant_fitness_data.iloc[:2000, 1]
 
 variants_split = []
