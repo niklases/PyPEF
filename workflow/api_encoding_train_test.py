@@ -51,11 +51,13 @@ try:
         params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
         verbose=False
     )
-except ValueError:
-    raise ValueError(
+except (ValueError, FileNotFoundError):
+    raise SystemError(
         "The couplings .params file for DCA-based encoding has to be downloaded separately and "
-        "saved in ./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params\n Download from Git LFS: "
-        "https://github.com/niklases/PyPEF/raw/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params")
+        "saved in ./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params\n E.g., create "
+        "the MSA using Jackhmmer and coupling terms using plmc or download from Git LFS:\n"
+        "https://github.com/niklases/PyPEF/raw/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params"
+    )
 x_dca_ = dca_encoder.collect_encoded_sequences(variants)
 x_dca, fitnesses = remove_nan_encoded_positions(copy(x_dca_), fitnesses)
 x_dca, variants = remove_nan_encoded_positions(copy(x_dca_), variants)
