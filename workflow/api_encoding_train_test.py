@@ -2,6 +2,7 @@
 An exemplary script for using PyPEF as an API for encoding sequences to
 train and test ML models and the hybrid model.
 """
+
 import os
 import pandas as pd
 import numpy as np
@@ -45,10 +46,16 @@ train_val_splits_indices, test_splits_indices = [], []
 # and split the variant fitness data so that sizes of the data sets are same for
 # all encoding techniques tested.
 print('\nTesting DCA-based sequence encoding...')
-dca_encoder = DCAEncoding(
-    params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
-    verbose=False
-)
+try:
+    dca_encoder = DCAEncoding(
+        params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
+        verbose=False
+    )
+except ValueError:
+    raise ValueError(
+        "The couplings .params file for DCA-based encoding has to be downloaded separately and "
+        "saved in ./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params\n Download from Git LFS: "
+        "https://github.com/niklases/PyPEF/raw/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params")
 x_dca_ = dca_encoder.collect_encoded_sequences(variants)
 x_dca, fitnesses = remove_nan_encoded_positions(copy(x_dca_), fitnesses)
 x_dca, variants = remove_nan_encoded_positions(copy(x_dca_), variants)
