@@ -22,7 +22,7 @@ wt_sequence = 'MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTL' \
               'VTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLV' \
               'NRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLAD' \
               'HYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK'
-variant_fitness_data = pd.read_csv('avGFP.csv', sep=';')  # taking the avGFP dataset
+variant_fitness_data = pd.read_csv('./test_dataset_avgfp/avGFP.csv', sep=';')  # taking the avGFP dataset
 variants = variant_fitness_data.iloc[:2000, 0]  # "just" using 2000 variants for faster processing
 fitnesses = variant_fitness_data.iloc[:2000, 1]
 
@@ -46,7 +46,7 @@ train_val_splits_indices, test_splits_indices = [], []
 # all encoding techniques tested.
 print('\nTesting DCA-based sequence encoding...')
 dca_encoder = DCAEncoding(
-    params_file='./workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
+    params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
     verbose=False
 )
 x_dca_ = dca_encoder.collect_encoded_sequences(variants)
