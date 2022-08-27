@@ -385,7 +385,6 @@ def make_fasta_ls_ts(
     fitness_values: list
         List of ints/floats of the variant fitness values, e.g. for two variants: [1.4, 0.8]
     """
-    print(fitness_values)
     myfile = open(filename, 'w')
     for i, var in enumerate(substitutions):  # var are lists of (single or multiple) substitutions
         temp = list(wt_seq)

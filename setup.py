@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# for installation run me with: pip install . --use-feature=in-tree-build
+# for installation run me with: pip install .
 
 
 from setuptools import setup, find_packages
