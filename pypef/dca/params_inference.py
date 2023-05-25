@@ -1,0 +1,499 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Created on 17 May 2023
+# @authors: Niklas Siedhoff, Alexander-Maurice Illig
+# @contact: <n.siedhoff@biotec.rwth-aachen.de>
+# PyPEF - Pythonic Protein Engineering Framework
+# Released under Creative Commons Attribution-NonCommercial 4.0 International Public License (CC BY-NC 4.0)
+# For more information about the license see https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+# PyPEF – An Integrated Framework for Data-Driven Protein Engineering
+# Journal of Chemical Information and Modeling, 2021, 61, 3463-3476
+# https://doi.org/10.1021/acs.jcim.1c00099
+# Niklas E. Siedhoff1,§, Alexander-Maurice Illig1,§, Ulrich Schwaneberg1,2, Mehdi D. Davari1,*
+# 1Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany
+# 2DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany
+# *Corresponding author
+# §Equal contribution
+
+
+"""
+Code taken from GREMLIN repository available at https://github.com/sokrypton/GREMLIN_CPP/
+adapted (rewritten from TensorFlow to full NumPy processing and put functions into a class
+called GREMLIN) and used under the "THE BEER-WARE LICENSE" (Revision 42).
+# ----------------------------------------------------------------------------------------
+# "THE BEER-WARE LICENSE" (Revision 42):
+# <so@fas.harvard.edu> wrote this file.  As long as you retain this notice you
+# can do whatever you want with this stuff. If we meet some day, and you think
+# this stuff is worth it, you can buy me a beer in return.  Sergey Ovchinnikov
+# ----------------------------------------------------------------------------------------
+# --> Thanks for sharing the great code, I will gladly provide you a beer or two. (Niklas)
+# https://github.com/sokrypton/GREMLIN_CPP/blob/master/GREMLIN_TF.ipynb
+
+GREMLIN Reference:
+Hetunandan Kamisetty, Sergey Ovchinnikov, David Baker
+Assessing the utility of coevolution-based residue–residue contact predictions in a
+sequence- and structure-rich era
+Proceedings of the National Academy of Sciences, 2013, 110, 15674-15679
+https://www.pnas.org/doi/10.1073/pnas.1314045110
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.spatial.distance import pdist, squareform
+from scipy.special import logsumexp
+from scipy.stats import spearmanr, boxcox
+
+from pypef.utils.variant_data import get_sequences_from_file
+from pypef.utils.learning_test_sets import get_wt_sequence
+import tensorflow as tf
+
+
+class GREMLIN:
+    def __init__(
+            self,
+            alignment: str,
+            char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
+            wt_seq = None,
+            optimize=False,
+            gap_cutoff = 0.5,
+            eff_cutoff = 0.8,
+            opt_iter = 1000
+    ):
+        self.char_alphabet = char_alphabet
+        self.wt_seq = wt_seq
+        self.gap_cutoff = gap_cutoff
+        self.eff_cutoff = eff_cutoff
+        self.opt_iter = opt_iter
+        self.states = len(self.char_alphabet)
+        self.a2n = self.a2n_dict()
+        self.seqs, _, _ = get_sequences_from_file(alignment)
+        self.msa_ori = self.get_msa_ori()
+        self.msa_trimmed, self.v_idx, self.w_idx = self.filt_gaps(self.msa_ori)
+        self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
+        self.n_eff = np.sum(self.msa_weights)
+        self.n_row = self.msa_trimmed.shape[0]
+        self.n_col = self.msa_trimmed.shape[1]
+        self.n_col_ori = self.msa_ori.shape[1]
+        self.v_ini, self.w_ini = self.initialize_v_w(remove_gap_entries=False)
+        self.optimize = optimize
+        if self.optimize:
+            self.v_opt, self.w_opt = self.run_opt_tf()
+
+    def a2n_dict(self):
+        a2n = {}
+        for a, n in zip(self.char_alphabet, range(self.states)):
+            a2n[a] = n
+        return a2n
+
+    def aa2int(self, aa):
+        """convert single aa into numerical integer value, e.g.
+        "A" -> 0 or "-" to 21 dependent on char_alphabet"""
+        if aa in self.a2n:
+            return self.a2n[aa]
+        else:  # for unknown characters insert Gap character
+            return self.a2n['-']
+
+    def str2int(self, x):
+        """
+        convert a list of strings into list of integers
+        Example: ["ACD","EFG"] -> [[0,4,3], [6,13,7]]
+        """
+        if x.dtype.type is np.str_:
+            if x.ndim == 0:  # single seq
+                return np.array([self.aa2int(aa) for aa in x])
+            else:  # list of seqs
+                return np.array([[self.aa2int(aa) for aa in seq] for seq in x])
+        else:
+            return x
+
+    def get_msa_ori(self):
+        """converts list of sequences to msa"""
+        msa_ori = []
+        for seq in self.seqs:
+            msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
+        msa_ori = np.array(msa_ori)
+        return msa_ori
+
+    def filt_gaps(self, msa_ori):
+        """filters alignment to remove gappy positions"""
+        tmp = (msa_ori == self.states - 1).astype(float)
+        non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
+
+        gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] > self.gap_cutoff)[0]
+        print('GAP Positions (Removed from MSA):', gaps)
+        ncol_trimmed = len(gaps)
+        v_idx = non_gaps
+        w_idx = non_gaps[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
+        return msa_ori[:, non_gaps], v_idx, w_idx
+
+    def get_eff_msa_weights(self, msa):
+        """compute effective weight for each sequence"""
+        # pairwise identity
+        pdistance_msa = pdist(msa, "hamming")
+        msa_sm = 1.0 - squareform(pdistance_msa)
+        # weight for each sequence
+        msa_w = (msa_sm >= self.eff_cutoff).astype(float)
+        msa_w = 1 / np.sum(msa_w, -1)
+        return msa_w
+
+    @staticmethod
+    def l2(x):
+        return np.sum(np.square(x))
+
+    def objective(self, v, w=None, flattened=True):
+        if w is None:
+            w = self.w_ini
+        onehot_cat_msa = np.eye(self.states)[self.msa_trimmed]
+        if flattened:
+            v = np.reshape(v, (self.n_col, self.states))
+            w = np.reshape(w, (self.n_col, self.states, self.n_col, self.states))
+        ########################################
+        # Pseudo-Log-Likelihood
+        ########################################
+        # V + W
+        vw = v + np.tensordot(onehot_cat_msa, w, 2)
+        # Hamiltonian
+        h = np.sum(np.multiply(onehot_cat_msa, vw), axis=(1, 2))
+        # local Z (partition function)
+        z = np.sum(np.log(np.sum(np.exp(vw), axis=2)), axis=1)
+        # Pseudo-Log-Likelihood
+        pll = h - z
+        ########################################
+        # Regularization
+        ########################################
+        l2_v = 0.01 * self.l2(v)
+        l2_w = 0.01 * self.l2(w) * 0.5 * (self.n_col - 1) * (self.states - 1)
+        # loss function to minimize
+        loss = -np.sum(pll * self.msa_weights) / np.sum(self.msa_weights)
+        loss = loss + (l2_v + l2_w) / self.n_eff
+        return loss
+
+
+    @staticmethod
+    def opt_adam(loss, name, var_list=None, lr=1.0, b1=0.9, b2=0.999, b_fix=False):
+        """Adam optimizer [https://arxiv.org/abs/1412.6980]
+        Note by GREMLIN authors: this is a modified version of adam optimizer.
+        More specifically, we replace "vt" with sum(g*g) instead of (g*g).
+        Furthermore, we find that disabling the bias correction
+        (b_fix=False) speeds up convergence for our case."""
+
+        if var_list is None:
+            var_list = tf.compat.v1.trainable_variables()
+        gradients = tf.gradients(loss, var_list)
+        if b_fix:
+            t = tf.Variable(0.0, "t")
+        opt = []
+        for n, (x, g) in enumerate(zip(var_list, gradients)):
+            if g is not None:
+                ini = dict(initializer=tf.zeros_initializer, trainable=False)
+                mt = tf.compat.v1.get_variable(name + "_mt_" + str(n), shape=list(x.shape), **ini)
+                vt = tf.compat.v1.get_variable(name + "_vt_" + str(n), shape=[], **ini)
+
+                mt_tmp = b1 * mt + (1 - b1) * g
+                vt_tmp = b2 * vt + (1 - b2) * tf.reduce_sum(tf.square(g))
+                lr_tmp = lr / (tf.sqrt(vt_tmp) + 1e-8)
+
+                if b_fix:
+                    lr_tmp = lr_tmp * tf.sqrt(1 - tf.pow(b2, t)) / (1 - tf.pow(b1, t))
+
+                opt.append(x.assign_add(-lr_tmp * mt_tmp))
+                opt.append(vt.assign(vt_tmp))
+                opt.append(mt.assign(mt_tmp))
+
+        if b_fix:
+            opt.append(t.assign_add(1.0))
+        return tf.group(opt)
+
+    @staticmethod
+    def sym_w(w):
+        """symmetrize input matrix of shape (x,y,x,y)"""
+        x = w.shape[0]
+        w = w * np.reshape(1 - np.eye(x), (x, 1, x, 1))
+        w = w + tf.transpose(w, [2, 3, 0, 1])
+        return w
+
+    @staticmethod
+    def l2_tf(x):
+        return tf.reduce_sum(tf.square(x))
+
+    def run_opt_tf(self, opt_rate=1.0, batch_size=None):  # 0: 0.6181657606497697 // 10: 0.597841185145002 // 100: 0.6357746768946049 / 1000:
+        """
+        For optimization of V and W ADAM is used here (L-BFGS-B not (yet) implemented
+        for TF 2.x, e.g. using scipy.optimize.minimize).
+        Gaps (char '-' respectively '21') included.
+        """
+        ##############################################################
+        # SETUP COMPUTE GRAPH
+        ##############################################################
+        # kill any existing tensorflow graph
+        tf.compat.v1.reset_default_graph()
+        tf.compat.v1.disable_eager_execution()
+
+        # msa (multiple sequence alignment)
+        MSA = tf.compat.v1.placeholder(tf.int32, shape=(None, self.n_col), name="msa")
+
+        # one-hot encode msa
+        OH_MSA = tf.one_hot(MSA, self.states)
+
+        # msa weights
+        MSA_weights = tf.compat.v1.placeholder(tf.float32, shape=(None,), name="msa_weights")
+
+        # 1-body-term of the MRF
+        V = tf.compat.v1.get_variable(name="V",
+                                      shape=[self.n_col, self.states],
+                                      initializer=tf.compat.v1.zeros_initializer)
+
+        # 2-body-term of the MRF
+        W = tf.compat.v1.get_variable(name="W",
+                                      shape=[self.n_col, self.states, self.n_col, self.states],
+                                      initializer=tf.compat.v1.zeros_initializer)
+
+        # symmetrize W
+        W = self.sym_w(W)
+
+        ########################################
+        # Pseudo-Log-Likelihood
+        ########################################
+        # V + W
+        VW = V + tf.tensordot(OH_MSA, W, 2)
+
+        # hamiltonian
+        H = tf.reduce_sum(tf.multiply(OH_MSA, VW), axis=(1, 2))
+        # local Z (parition function)
+        Z = tf.reduce_sum(tf.reduce_logsumexp(VW, axis=2), axis=1)
+
+        # Pseudo-Log-Likelihood
+        PLL = H - Z
+
+        ########################################
+        # Regularization
+        ########################################
+        L2_V = 0.01 * self.l2_tf(V)
+        L2_W = 0.01 * self.l2_tf(W) * 0.5 * (self.n_col - 1) * (self.states - 1)
+
+        # loss function to minimize
+        loss = -tf.reduce_sum(PLL * MSA_weights) / tf.reduce_sum(MSA_weights)
+        loss = loss + (L2_V + L2_W) / self.n_eff
+
+        ##############################################################
+        # MINIMIZE LOSS FUNCTION
+        ##############################################################
+        opt = self.opt_adam(loss, "adam", lr=opt_rate)
+        # initialize V
+        msa_cat = tf.keras.utils.to_categorical(self.msa_trimmed, self.states)
+        pseudo_count = 0.01 * np.log(self.n_eff)
+        V_ini = np.log(np.sum(msa_cat.T * self.msa_weights, -1).T + pseudo_count)
+        V_ini = V_ini - np.mean(V_ini, -1, keepdims=True)
+
+        # generate input/feed
+        def feed(feed_all=False):
+            if batch_size is None or feed_all:
+                return {MSA: self.msa_trimmed, MSA_weights: self.msa_weights}
+            else:
+                idx = np.random.randint(0, self.n_row, size=batch_size)
+                return {MSA: self.msa_trimmed[idx], MSA_weights: self.msa_weights[idx]}
+
+        with tf.compat.v1.Session() as sess:
+            # initialize variables V and W
+            sess.run(tf.compat.v1.global_variables_initializer())
+            sess.run(V.assign(V_ini))
+            # compute loss across all data
+            get_loss = lambda: round(sess.run(loss, feed(feed_all=True)) * self.n_eff, 2)
+            print("starting", get_loss())
+            for i in range(self.opt_iter):
+                sess.run(opt, feed())
+                try:
+                    if (i + 1) % int(self.opt_iter / 10) == 0:
+                        print("iter", (i + 1), get_loss())
+                except ZeroDivisionError:
+                    print("iter", (i + 1), get_loss())
+            # save the V and W parameters of the MRF
+            v_opt = sess.run(V)
+            w_opt = sess.run(W)
+
+        no_gap_states = self.states - 1
+        return v_opt[:, :no_gap_states], w_opt[:, :no_gap_states, :, :no_gap_states]
+
+    def initialize_v_w(self, remove_gap_entries=True):
+        """
+        For optimization of V and W ADAM is used here (L-BFGS-B not (yet)
+        implemented for TF 2.x, e.g. using scipy.optimize.minimize).
+        Gaps (char '-' respectively '21') included.
+        """
+        w_ini = np.zeros(shape=(self.n_col, self.states, self.n_col, self.states))
+        onehot_cat_msa = np.eye(self.states)[self.msa_trimmed]
+        pseudo_count = 0.01 * np.log(self.n_eff)
+        v_ini = np.log(np.sum(onehot_cat_msa.T * self.msa_weights, -1).T + pseudo_count)
+        v_ini = v_ini - np.mean(v_ini, -1, keepdims=True)
+        loss_score = self.objective(v_ini, w_ini, flattened=False)
+        print('loss score initial:', loss_score)  # 382.31
+        print('loss score initial times neff:', loss_score * self.n_eff)  # starting 55926.04
+
+        if remove_gap_entries:
+            no_gap_states = self.states - 1
+            v_ini = v_ini[:, :no_gap_states]
+            w_ini = w_ini[:, :no_gap_states, :, :no_gap_states]
+
+        return v_ini, w_ini
+
+    def get_v_w_opt(self):
+        return self.v_opt, self.w_opt
+
+    def get_wt_score(self, wt_seq, v, w):
+        wt_seq = np.array([wt_seq])
+        return self.get_score(wt_seq, v, w)
+
+    def get_score(self, test_seqs, v=None, w=None, v_idx=None, w_idx=None, h_wt_seq=0.0, recompute_z=False):
+        if v is None or w is None:
+            v, w = self.initialize_v_w()
+        if v_idx is None or w_idx is None:
+            v_idx, w_idx = self.v_idx, self.w_idx
+        seqs_int = self.str2int(test_seqs)
+        # if length of sequence != length of model use only
+        # valid positions (v_idx) from the trimmed alignment
+        if seqs_int.shape[-1] != len(v_idx):
+            seqs_int = seqs_int[..., v_idx]
+
+        # one hot encode
+        x = np.eye(self.states)[seqs_int]
+        # aa_pos_counts = np.sum(x, axis=0)
+
+        # get non-gap positions
+        # no_gap = 1.0 - x[..., -1]
+
+        # remove gap from one-hot-encoding
+        x = x[..., :-1]
+
+        # compute score
+        vw = v + np.tensordot(x, w, 2)
+
+        # ============================================================================================
+        # Note, Z (the partition function) is a constant. In GREMLIN, V, W & Z are estimated using all
+        # the original weighted input sequence(s). It is NOT recommended to recalculate Z with a
+        # different set of sequences. Given the common ERROR of recomputing Z, we include the option
+        # to do so, for comparison.
+        # ============================================================================================
+        h = np.sum(np.multiply(x, vw), axis=-1)
+        if recompute_z:
+            z = logsumexp(vw, axis=-1)
+            return np.sum((h - z), axis=-1) - h_wt_seq
+        else:
+            return np.sum(h, axis=-1) - h_wt_seq
+
+    @staticmethod
+    def normalize(apc_mat):
+        """
+        Normalization of APC matrix for getting Z-Score matrix
+        """
+        zscore_mat = []
+        for x in apc_mat:
+            x, _ = boxcox(x - np.amin(x) + 1.0)
+            x_mean = np.mean(x)
+            x_std = np.std(x)
+            x = (x - x_mean) / x_std
+            zscore_mat.append(x)
+        zscore_mat = np.array(zscore_mat)
+        return zscore_mat
+
+    def get_correlation_matrix(self, matrix_type: str='apc'):
+        """
+        Requires optimized W matrix (of shape (L, 20, L, 20))
+        inputs
+        ------------------------------------------------------
+        w           : coevolution       shape=(L,A,L,A)
+        ------------------------------------------------------
+        outputs
+        ------------------------------------------------------
+        raw         : l2norm(w)         shape=(L,L)
+        apc         : apc(raw)          shape=(L,L)
+        zscore      : normalize(apc)    shape=(L,L)
+        """
+        # l2norm of 20x20 matrices (note: gaps already excluded)
+        raw = np.sqrt(np.sum(np.square(self.w_opt),(1,3)))
+
+        # apc (average product correction)
+        ap = np.sum(raw, 0, keepdims=True) * np.sum(raw, 1, keepdims=True) / np.sum(raw)
+        apc = raw - ap
+        apc_diag = np.sum(np.diag(apc))
+        diag_ = np.diag(apc)
+        if matrix_type=='apc':
+            return apc
+        elif matrix_type=='raw':
+            return raw
+        elif matrix_type=='zscore' or matrix_type=='z_score':
+            return self.normalize(apc)
+
+    def plot_correlation_matrix(self, matrix_type: str='apc', set_diag_zero=True):
+        matrix = self.get_correlation_matrix(matrix_type)
+        if set_diag_zero:
+            np.fill_diagonal(matrix, 0.0)
+
+        fig, ax = plt.subplots(figsize=(5, 5))
+
+        if matrix_type=='zscore' or matrix_type=='z_score':
+            ax.imshow(matrix, cmap='Blues', interpolation='none', vmin=1, vmax=3)
+        else:
+            ax.imshow(matrix, cmap='Blues')
+        tick_pos = ax.get_xticks()
+        tick_pos[2:] -= 1
+        ax.set_xticks(tick_pos)
+        ax.set_yticks(tick_pos)
+        labels = [item.get_text() for item in ax.get_xticklabels()]
+        labels = [labels[0]] + [str(int(label) + 1) for label in labels[1:]]
+        ax.set_xticklabels(labels)
+        ax.set_yticklabels(labels)
+        ax.set_xlim(-1, matrix.shape[0])
+        ax.set_ylim(-1, matrix.shape[0])
+        plt.title(matrix_type)
+        plt.savefig(f'{matrix_type}.png', dpi=500)
+
+
+
+
+
+def run_():
+    import time
+    from datetime import timedelta
+    start_time = time.time()
+    alignment = '/path/to/fasta_alignment/AV_GFP_alignment.fas'
+    gremlin = GREMLIN(alignment, optimize=True, opt_iter=1)
+    #v_ini, w_ini = gremlin.initialize_v_w(remove_gap_entries=True)
+    #v_opt, w_opt = gremlin.run_opt_tf()
+    import pickle
+    with open('pkl_gremlin.pkl', 'wb') as write_pkl_file: # test writing and loading GREMLIN model
+        pickle.dump(gremlin, write_pkl_file)
+    with open('pkl_gremlin.pkl', 'rb') as read_pkl_file:
+        gremlin = pickle.load(read_pkl_file)
+    v_ini, w_ini = gremlin.initialize_v_w(remove_gap_entries=True)
+    v_opt, w_opt = gremlin.get_v_w_opt()
+
+    wt_seq = get_wt_sequence('/path/to/wild_type_fasta/P42212_F64L.fasta')
+    h_wt_seq_v_ini_w_ini = gremlin.get_wt_score(wt_seq, v_ini, w_ini)
+    h_wt_seq_v_opt_w_opt = gremlin.get_wt_score(wt_seq, v_opt, w_opt)
+
+    test_data = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/TEST.fasl'
+    test_seqs, test_names, test_ys = get_sequences_from_file(test_data)
+    pred_scores_v_ini_w_ini = gremlin.get_score(test_seqs, v_ini, w_ini, h_wt_seq=h_wt_seq_v_ini_w_ini)
+    pred_scores_v_opt_w_opt = gremlin.get_score(test_seqs, v_opt, w_opt, h_wt_seq=h_wt_seq_v_opt_w_opt)
+    plt.scatter(test_ys, pred_scores_v_ini_w_ini, s=3, alpha=0.3, label='v_0 (fi), w_0(fij 0\'s)')
+    plt.scatter(test_ys, pred_scores_v_opt_w_opt, s=3, alpha=0.3, label='v_opt, w_opt')
+    plt.legend()
+    plt.xlabel("fitness")
+    plt.ylabel("GREMLIN score")
+    plt.savefig('v0_w0_vs_vOpt_wOpt.png', dpi=500)
+
+    print(spearmanr(test_ys, pred_scores_v_ini_w_ini))  # SignificanceResult(statistic=0.6417551098995459, pvalue=0.0)
+    print(spearmanr(test_ys, pred_scores_v_opt_w_opt))  #SignificanceResult(statistic=0.6541114305302851, pvalue=0.0)
+
+    gremlin.plot_correlation_matrix(matrix_type='raw')
+    gremlin.plot_correlation_matrix(matrix_type='apc')
+    gremlin.plot_correlation_matrix(matrix_type='zscore')
+
+    elapsed = str(timedelta(seconds=time.time() - start_time)).split(".")[0]
+    elapsed = f'{elapsed.split(":")[0]} h {elapsed.split(":")[1]} min {elapsed.split(":")[2]} s'
+    print(elapsed)
+
+
+if __name__ == '__main__':
+    run_()

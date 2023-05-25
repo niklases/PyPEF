@@ -78,7 +78,9 @@ def csv_input(csv_file):
 def drop_rows(
         csv_file,
         amino_acids,
-        threshold_drop
+        threshold_drop,
+        csv_sep: str = ';',
+        mutation_sep: str = '/'
 ):
     """
     Drops rows from .csv data if below defined fitness threshold or if
@@ -92,8 +94,8 @@ def drop_rows(
         df_raw = pd.read_csv(csv_file, sep=separator, usecols=[0, 1])
     except FileNotFoundError:
         raise FileNotFoundError(
-            "Specify the input CSV file containing the variant-fitness data. "
-            "Required CSV format: variant;fitness.")
+            f"Specify the input CSV file containing the variant-fitness data. "
+            f"Required CSV format: variant{csv_sep}fitness.")
 
     label = df_raw.iloc[:, 1]
     sequence = df_raw.iloc[:, 0]
@@ -110,22 +112,24 @@ def drop_rows(
 
     for i, variant in enumerate(sequence):
         try:
-            if '/' in variant:
-                m = re.split(r'/', variant)
+            if mutation_sep in variant:
+                m = re.split(rf'{mutation_sep}', variant)
                 for a, splits in enumerate(m):
                     if splits[0].isdigit() and variant[-1] in amino_acids:
                         continue
                     elif splits[0] not in amino_acids or splits[-1] not in amino_acids:
                         if i not in dropping_rows:
                             dropping_rows.append(i)
-                            # print('Does not know this definition of amino acid substitution: Variant:', variant)
             else:
+                if ',' in variant or ';' in variant or '\t' in variant:
+                    raise SystemError("Found invalid characters (';', ',', or tabulator) in variants. "
+                                      "Check the --mutation_sep flag and try specifying it, e.g. --mutation_sep \',\'.")
                 if variant[0].isdigit() and variant[-1] in amino_acids:
                     continue
                 elif variant not in ['wt', 'wild_type']:
                     if variant[0] not in amino_acids or variant[-1] not in amino_acids:
                         dropping_rows.append(i)
-                        # print('Does not know this definition of amino acid substitution: Variant:', variant)
+
         except TypeError:
             raise TypeError('You might consider checking the input .csv for empty first two columns,'
                             ' e.g. in the last row.')
@@ -143,7 +147,8 @@ def drop_rows(
 def get_variants(
         df,
         amino_acids,
-        wild_type_sequence
+        wild_type_sequence,
+        mutation_sep: str = '/'
 ):
     """
     Gets variants and divides and counts the variant data for single substituted
@@ -160,8 +165,8 @@ def get_variants(
     single, double, triple, quadruple, quintuple, sextuple, septuple,\
         octuple, nonuple, decuple, higher = 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     for i, variant in enumerate(x):
-        if '/' in variant:
-            count = variant.count('/')
+        if mutation_sep in variant:
+            count = variant.count(mutation_sep)
             if count == 1:
                 double += 1
             elif count == 2:
@@ -182,7 +187,7 @@ def get_variants(
                 decuple += 1
             else:
                 higher += 1
-            m = re.split(r'/', variant)
+            m = re.split(rf'{mutation_sep}', variant)
             for a, splits in enumerate(m):
                 if splits[0].isdigit() or splits[0] in amino_acids and splits[-1] in amino_acids:
                     new = int(re.findall(r'\d+', splits)[0])

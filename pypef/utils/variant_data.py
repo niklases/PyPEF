@@ -325,6 +325,7 @@ def process_df_encoding(df_encoding) -> tuple[np.ndarray, np.ndarray, np.ndarray
 def read_csv_and_shift_pos_ints(
         infile: str,
         offset: int = 0,
+        col_sep: str = ';',
         substitution_sep: str = '/',
         target_column: int = 1
 ):
@@ -333,12 +334,17 @@ def read_csv_and_shift_pos_ints(
     CSV file and saves the position-shifted variants with the corresponding fitness
     values to a new CSV file.
     """
-    df = pd.read_csv(infile, sep=';', comment='#')
+    df = pd.read_csv(infile, sep=col_sep, comment='#')
     if df.shape[1] == 1:
         df = pd.read_csv(infile, sep=',', comment='#')
     if df.shape[1] == 1:
         df = pd.read_csv(infile, sep='\t', comment='#')
-    df = df.dropna(subset=df.columns[[target_column]])  # if specific column has a NaN drop entire row
+    try:
+        df = df.dropna(subset=df.columns[[target_column]])  # if specific column has a NaN drop entire row
+    except IndexError:
+        raise IndexError("Did only detect a single column which might indicate a missing "
+                         "target value column / a wrong specification of the CSV column "
+                         "spearator character (e.g., --sep \';\').")
 
     column_1 = df.iloc[:, 0]
     column_2 = df.iloc[:, target_column].to_numpy()
@@ -356,7 +362,7 @@ def read_csv_and_shift_pos_ints(
             new_variant = ''
             for i, v in enumerate(split_vars_list):
                 if i != len(split_vars_list) - 1:
-                    new_variant += f'{v}{substitution_sep}'
+                    new_variant += f'{v}/'  # substitution_sep replaced by '/'
                 else:
                     new_variant += v
             new_col.append(new_variant)
@@ -367,4 +373,4 @@ def read_csv_and_shift_pos_ints(
 
     data = np.array([new_col, column_2]).T
     new_df = pd.DataFrame(data, columns=['variant', 'fitness'])
-    new_df.to_csv(infile[:-4] + '_' + df.columns[target_column] + infile[-4:], sep=';', index=False)
+    new_df.to_csv(infile[:-4] + '_new' + infile[-4:], sep=';', index=False)

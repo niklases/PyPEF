@@ -56,11 +56,12 @@ def run_pypef_utils(arguments):
         t_drop = float(arguments['--drop'])
 
         logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
-        df = drop_rows(arguments['--input'], amino_acids, t_drop)
+        df = drop_rows(arguments['--input'], amino_acids, t_drop, arguments['--sep'], arguments['--mutation_sep'])
         no_rnd = arguments['--numrnd']
 
         single_variants, single_values, higher_variants, higher_values = get_variants(
-            df, amino_acids, wt_sequence)
+            df, amino_acids, wt_sequence, arguments['--mutation_sep']
+        )
         logger.info(f'Number of single variants: {len(single_variants)}.')
         if len(single_variants) == 0:
             logger.info('Found NO single substitution variants for possible recombination!')
@@ -257,10 +258,19 @@ def run_pypef_utils(arguments):
             intra_gap=arguments['--intra_gap']
         )
 
+    elif arguments['reformat_csv']:
+        read_csv_and_shift_pos_ints(
+            infile=arguments['--input'],
+            offset=0,
+            col_sep=arguments['--sep'],
+            substitution_sep=arguments['--mutation_sep']
+        )
+
     elif arguments['shift_pos']:
         read_csv_and_shift_pos_ints(
             infile=arguments['--input'],
             offset=arguments['--offset'],
+            col_sep=arguments['--sep'],
             substitution_sep=arguments['--mutation_sep']
         )
 
