@@ -43,6 +43,7 @@ import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import spearmanr, boxcox
+import pandas as pd
 
 from pypef.utils.variant_data import get_sequences_from_file
 from pypef.utils.learning_test_sets import get_wt_sequence
@@ -69,7 +70,7 @@ class GREMLIN:
         self.a2n = self.a2n_dict()
         self.seqs, _, _ = get_sequences_from_file(alignment)
         self.msa_ori = self.get_msa_ori()
-        self.msa_trimmed, self.v_idx, self.w_idx = self.filt_gaps(self.msa_ori)
+        self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
         self.n_row = self.msa_trimmed.shape[0]
@@ -107,6 +108,9 @@ class GREMLIN:
         else:
             return x
 
+    def get_v_idx_w_idx(self):
+        return self.v_idx, self.w_idx
+
     def get_msa_ori(self):
         """converts list of sequences to msa"""
         msa_ori = []
@@ -121,11 +125,12 @@ class GREMLIN:
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
 
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] > self.gap_cutoff)[0]
-        print('GAP Positions (Removed from MSA):', gaps)
-        ncol_trimmed = len(gaps)
+        print('GAP Positions (Removed from msa):', gaps)
+        ncol_trimmed = len(non_gaps)
         v_idx = non_gaps
-        w_idx = non_gaps[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
-        return msa_ori[:, non_gaps], v_idx, w_idx
+        w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
+        w_rel_idx = np.stack(np.triu_indices(ncol_trimmed, 1), -1)
+        return msa_ori[:, non_gaps], v_idx, w_idx, w_rel_idx, gaps
 
     def get_eff_msa_weights(self, msa):
         """compute effective weight for each sequence"""
@@ -151,11 +156,11 @@ class GREMLIN:
         ########################################
         # Pseudo-Log-Likelihood
         ########################################
-        # V + W
+        # v + w
         vw = v + np.tensordot(onehot_cat_msa, w, 2)
         # Hamiltonian
         h = np.sum(np.multiply(onehot_cat_msa, vw), axis=(1, 2))
-        # local Z (partition function)
+        # local z (partition function)
         z = np.sum(np.log(np.sum(np.exp(vw), axis=2)), axis=1)
         # Pseudo-Log-Likelihood
         pll = h - z
@@ -219,7 +224,7 @@ class GREMLIN:
 
     def run_opt_tf(self, opt_rate=1.0, batch_size=None):  # 0: 0.6181657606497697 // 10: 0.597841185145002 // 100: 0.6357746768946049 / 1000:
         """
-        For optimization of V and W ADAM is used here (L-BFGS-B not (yet) implemented
+        For optimization of v and w ADAM is used here (L-BFGS-B not (yet) implemented
         for TF 2.x, e.g. using scipy.optimize.minimize).
         Gaps (char '-' respectively '21') included.
         """
@@ -231,73 +236,73 @@ class GREMLIN:
         tf.compat.v1.disable_eager_execution()
 
         # msa (multiple sequence alignment)
-        MSA = tf.compat.v1.placeholder(tf.int32, shape=(None, self.n_col), name="msa")
+        msa = tf.compat.v1.placeholder(tf.int32, shape=(None, self.n_col), name="msa")
 
         # one-hot encode msa
-        OH_MSA = tf.one_hot(MSA, self.states)
+        oh_msa = tf.one_hot(msa, self.states)
 
         # msa weights
-        MSA_weights = tf.compat.v1.placeholder(tf.float32, shape=(None,), name="msa_weights")
+        msa_weights = tf.compat.v1.placeholder(tf.float32, shape=(None,), name="msa_weights")
 
         # 1-body-term of the MRF
-        V = tf.compat.v1.get_variable(name="V",
+        v = tf.compat.v1.get_variable(name="v",
                                       shape=[self.n_col, self.states],
                                       initializer=tf.compat.v1.zeros_initializer)
 
         # 2-body-term of the MRF
-        W = tf.compat.v1.get_variable(name="W",
+        w = tf.compat.v1.get_variable(name="w",
                                       shape=[self.n_col, self.states, self.n_col, self.states],
                                       initializer=tf.compat.v1.zeros_initializer)
 
-        # symmetrize W
-        W = self.sym_w(W)
+        # symmetrize w
+        w = self.sym_w(w)
 
         ########################################
         # Pseudo-Log-Likelihood
         ########################################
-        # V + W
-        VW = V + tf.tensordot(OH_MSA, W, 2)
+        # v + w
+        vw = v + tf.tensordot(oh_msa, w, 2)
 
         # hamiltonian
-        H = tf.reduce_sum(tf.multiply(OH_MSA, VW), axis=(1, 2))
-        # local Z (parition function)
-        Z = tf.reduce_sum(tf.reduce_logsumexp(VW, axis=2), axis=1)
+        h = tf.reduce_sum(tf.multiply(oh_msa, vw), axis=(1, 2))
+        # local z (parition function)
+        z = tf.reduce_sum(tf.reduce_logsumexp(vw, axis=2), axis=1)
 
         # Pseudo-Log-Likelihood
-        PLL = H - Z
+        pll = h - z
 
         ########################################
         # Regularization
         ########################################
-        L2_V = 0.01 * self.l2_tf(V)
-        L2_W = 0.01 * self.l2_tf(W) * 0.5 * (self.n_col - 1) * (self.states - 1)
+        l2_v = 0.01 * self.l2_tf(v)
+        lw_w = 0.01 * self.l2_tf(w) * 0.5 * (self.n_col - 1) * (self.states - 1)
 
         # loss function to minimize
-        loss = -tf.reduce_sum(PLL * MSA_weights) / tf.reduce_sum(MSA_weights)
-        loss = loss + (L2_V + L2_W) / self.n_eff
+        loss = -tf.reduce_sum(pll * msa_weights) / tf.reduce_sum(msa_weights)
+        loss = loss + (l2_v + lw_w) / self.n_eff
 
         ##############################################################
         # MINIMIZE LOSS FUNCTION
         ##############################################################
         opt = self.opt_adam(loss, "adam", lr=opt_rate)
-        # initialize V
+        # initialize v
         msa_cat = tf.keras.utils.to_categorical(self.msa_trimmed, self.states)
         pseudo_count = 0.01 * np.log(self.n_eff)
-        V_ini = np.log(np.sum(msa_cat.T * self.msa_weights, -1).T + pseudo_count)
-        V_ini = V_ini - np.mean(V_ini, -1, keepdims=True)
+        v_ini = np.log(np.sum(msa_cat.T * self.msa_weights, -1).T + pseudo_count)
+        v_ini = v_ini - np.mean(v_ini, -1, keepdims=True)
 
         # generate input/feed
         def feed(feed_all=False):
             if batch_size is None or feed_all:
-                return {MSA: self.msa_trimmed, MSA_weights: self.msa_weights}
+                return {msa: self.msa_trimmed, msa_weights: self.msa_weights}
             else:
                 idx = np.random.randint(0, self.n_row, size=batch_size)
-                return {MSA: self.msa_trimmed[idx], MSA_weights: self.msa_weights[idx]}
+                return {msa: self.msa_trimmed[idx], msa_weights: self.msa_weights[idx]}
 
         with tf.compat.v1.Session() as sess:
             # initialize variables V and W
             sess.run(tf.compat.v1.global_variables_initializer())
-            sess.run(V.assign(V_ini))
+            sess.run(v.assign(v_ini))
             # compute loss across all data
             get_loss = lambda: round(sess.run(loss, feed(feed_all=True)) * self.n_eff, 2)
             print("starting", get_loss())
@@ -308,16 +313,16 @@ class GREMLIN:
                         print("iter", (i + 1), get_loss())
                 except ZeroDivisionError:
                     print("iter", (i + 1), get_loss())
-            # save the V and W parameters of the MRF
-            v_opt = sess.run(V)
-            w_opt = sess.run(W)
+            # save the v and w parameters of the MRF
+            v_opt = sess.run(v)
+            w_opt = sess.run(w)
 
         no_gap_states = self.states - 1
         return v_opt[:, :no_gap_states], w_opt[:, :no_gap_states, :, :no_gap_states]
 
     def initialize_v_w(self, remove_gap_entries=True):
         """
-        For optimization of V and W ADAM is used here (L-BFGS-B not (yet)
+        For optimization of v and w ADAM is used here (L-BFGS-B not (yet)
         implemented for TF 2.x, e.g. using scipy.optimize.minimize).
         Gaps (char '-' respectively '21') included.
         """
@@ -338,17 +343,22 @@ class GREMLIN:
         return v_ini, w_ini
 
     def get_v_w_opt(self):
-        return self.v_opt, self.w_opt
+        try:
+            return self.v_opt, self.w_opt
+        except AttributeError:
+            raise SystemError("No v_opt and w_opt available, this means GREMLIN "
+                              "has not been initialized setting ooptimize to True, "
+                              "e.g., try GREMLIN('Alignment.fasta', optimize=True).")
 
     def get_wt_score(self, wt_seq, v, w):
         wt_seq = np.array([wt_seq])
         return self.get_score(wt_seq, v, w)
 
-    def get_score(self, test_seqs, v=None, w=None, v_idx=None, w_idx=None, h_wt_seq=0.0, recompute_z=False):
+    def get_score(self, test_seqs, v=None, w=None, v_idx=None, h_wt_seq=0.0, recompute_z=False):
         if v is None or w is None:
             v, w = self.initialize_v_w()
-        if v_idx is None or w_idx is None:
-            v_idx, w_idx = self.v_idx, self.w_idx
+        if v_idx is None:
+            v_idx = self.v_idx
         seqs_int = self.str2int(test_seqs)
         # if length of sequence != length of model use only
         # valid positions (v_idx) from the trimmed alignment
@@ -370,7 +380,7 @@ class GREMLIN:
 
         # ============================================================================================
         # Note, Z (the partition function) is a constant. In GREMLIN, V, W & Z are estimated using all
-        # the original weighted input sequence(s). It is NOT recommended to recalculate Z with a
+        # the original weighted input sequence(s). It is NOT recommended to recalculate z with a
         # different set of sequences. Given the common ERROR of recomputing Z, we include the option
         # to do so, for comparison.
         # ============================================================================================
@@ -384,21 +394,20 @@ class GREMLIN:
     @staticmethod
     def normalize(apc_mat):
         """
-        Normalization of APC matrix for getting Z-Score matrix
+        Normalization of APC matrix for getting z-Score matrix
         """
-        zscore_mat = []
-        for x in apc_mat:
-            x, _ = boxcox(x - np.amin(x) + 1.0)
-            x_mean = np.mean(x)
-            x_std = np.std(x)
-            x = (x - x_mean) / x_std
-            zscore_mat.append(x)
-        zscore_mat = np.array(zscore_mat)
-        return zscore_mat
+        dim = apc_mat.shape[0]
+        apc_mat_flat = apc_mat.flatten()
+        x, _ = boxcox(apc_mat_flat - np.amin(apc_mat_flat) + 1.0)
+        x_mean = np.mean(x)
+        x_std = np.std(x)
+        x = (x - x_mean) / x_std
+        x = x.reshape(dim, dim)
+        return x
 
     def get_correlation_matrix(self, matrix_type: str='apc'):
         """
-        Requires optimized W matrix (of shape (L, 20, L, 20))
+        Requires optimized w matrix (of shape (L, 20, L, 20))
         inputs
         ------------------------------------------------------
         w           : coevolution       shape=(L,A,L,A)
@@ -417,12 +426,14 @@ class GREMLIN:
         apc = raw - ap
         apc_diag = np.sum(np.diag(apc))
         diag_ = np.diag(apc)
-        if matrix_type=='apc':
+        if matrix_type == 'apc':
             return apc
-        elif matrix_type=='raw':
+        elif matrix_type == 'raw':
             return raw
-        elif matrix_type=='zscore' or matrix_type=='z_score':
+        elif matrix_type == 'zscore' or matrix_type == 'z_score':
             return self.normalize(apc)
+        else:
+            raise SystemError("Unknown matrix type. Choose between 'apc', 'raw', or 'zscore'.")
 
     def plot_correlation_matrix(self, matrix_type: str='apc', set_diag_zero=True):
         matrix = self.get_correlation_matrix(matrix_type)
@@ -431,7 +442,7 @@ class GREMLIN:
 
         fig, ax = plt.subplots(figsize=(5, 5))
 
-        if matrix_type=='zscore' or matrix_type=='z_score':
+        if matrix_type == 'zscore' or matrix_type == 'z_score':
             ax.imshow(matrix, cmap='Blues', interpolation='none', vmin=1, vmax=3)
         else:
             ax.imshow(matrix, cmap='Blues')
@@ -448,7 +459,50 @@ class GREMLIN:
         plt.title(matrix_type)
         plt.savefig(f'{matrix_type}.png', dpi=500)
 
+    def get_top_coevolving_residues(self, wt_seq=None, min_distance=0, sort_by="apc", save_csv=True):
+        if wt_seq is None:
+            wt_seq = self.wt_seq
+        if wt_seq is None:
+            raise SystemError("Getting top co-evolving residues requires "
+                              "the wild type sequence as input.")
+        raw = self.get_correlation_matrix(matrix_type='raw')
+        apc = self.get_correlation_matrix(matrix_type='apc')
+        zscore = self.get_correlation_matrix(matrix_type='zscore')
+        self.v_idx
+        # Explore top co-evolving residue pairs
 
+        i_rel_idx = self.w_rel_idx[:, 0]
+        j_rel_idx = self.w_rel_idx[:, 1]
+
+        apc_flat = []
+        zscore_flat = []
+        raw_flat = []
+        for i, _ in enumerate(i_rel_idx):
+            raw_flat.append(raw[i_rel_idx[i]][j_rel_idx[i]])
+            apc_flat.append(apc[i_rel_idx[i]][j_rel_idx[i]])
+            zscore_flat.append(zscore[i_rel_idx[i]][j_rel_idx[i]])
+
+        i_idx = self.w_idx[:, 0]
+        j_idx = self.w_idx[:, 1]
+
+        i_aa = [f"{wt_seq[i]}_{i + 1}" for i in i_idx]
+        j_aa = [f"{wt_seq[j]}_{j + 1}" for j in j_idx]
+
+        # load mtx into pandas dataframe
+        mtx = {
+            "i": i_idx, "j": j_idx, "apc": apc_flat, "zscore": zscore_flat,
+            "raw": raw_flat, "i_aa": i_aa, "j_aa": j_aa
+        }
+        df_mtx = pd.DataFrame(mtx, columns=["i", "j", "apc", "zscore", "raw", "i_aa", "j_aa"])
+        df_mtx_sorted = df_mtx.sort_values(sort_by, ascending=False)
+
+        # get contacts with sequence separation > min_distance, sort
+        df_mtx_sorted_mindist = df_mtx_sorted.loc[df_mtx['j'] - df_mtx['i'] > min_distance]
+
+        if save_csv:
+            df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv")
+
+        return df_mtx_sorted_mindist
 
 
 
@@ -456,39 +510,43 @@ def run_():
     import time
     from datetime import timedelta
     start_time = time.time()
-    alignment = '/path/to/fasta_alignment/AV_GFP_alignment.fas'
-    gremlin = GREMLIN(alignment, optimize=True, opt_iter=1)
-    #v_ini, w_ini = gremlin.initialize_v_w(remove_gap_entries=True)
-    #v_opt, w_opt = gremlin.run_opt_tf()
+    alignment = '/mnt/d/sciebo/dev/params_inference/alignments/4FAZA.fas'
+    #alignment = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/uref100_avgfp_jhmmer_119.fas'
+    gremlin = GREMLIN(alignment, optimize=True, opt_iter=100)
+
     import pickle
-    with open('pkl_gremlin.pkl', 'wb') as write_pkl_file: # test writing and loading GREMLIN model
+    with open('pkl_gremlin.pkl', 'wb') as write_pkl_file:
         pickle.dump(gremlin, write_pkl_file)
     with open('pkl_gremlin.pkl', 'rb') as read_pkl_file:
         gremlin = pickle.load(read_pkl_file)
     v_ini, w_ini = gremlin.initialize_v_w(remove_gap_entries=True)
     v_opt, w_opt = gremlin.get_v_w_opt()
 
-    wt_seq = get_wt_sequence('/path/to/wild_type_fasta/P42212_F64L.fasta')
+    #wt_seq = get_wt_sequence('/mnt/d/sciebo/dev/params_inference/alignments/avgfp/P42212_F64L.fasta')
+    wt_seq = get_wt_sequence('/mnt/d/sciebo/dev/params_inference/alignments/4FAZA_WT.fasta')
     h_wt_seq_v_ini_w_ini = gremlin.get_wt_score(wt_seq, v_ini, w_ini)
     h_wt_seq_v_opt_w_opt = gremlin.get_wt_score(wt_seq, v_opt, w_opt)
 
-    test_data = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/TEST.fasl'
-    test_seqs, test_names, test_ys = get_sequences_from_file(test_data)
-    pred_scores_v_ini_w_ini = gremlin.get_score(test_seqs, v_ini, w_ini, h_wt_seq=h_wt_seq_v_ini_w_ini)
-    pred_scores_v_opt_w_opt = gremlin.get_score(test_seqs, v_opt, w_opt, h_wt_seq=h_wt_seq_v_opt_w_opt)
-    plt.scatter(test_ys, pred_scores_v_ini_w_ini, s=3, alpha=0.3, label='v_0 (fi), w_0(fij 0\'s)')
-    plt.scatter(test_ys, pred_scores_v_opt_w_opt, s=3, alpha=0.3, label='v_opt, w_opt')
-    plt.legend()
-    plt.xlabel("fitness")
-    plt.ylabel("GREMLIN score")
-    plt.savefig('v0_w0_vs_vOpt_wOpt.png', dpi=500)
-
-    print(spearmanr(test_ys, pred_scores_v_ini_w_ini))  # SignificanceResult(statistic=0.6417551098995459, pvalue=0.0)
-    print(spearmanr(test_ys, pred_scores_v_opt_w_opt))  #SignificanceResult(statistic=0.6541114305302851, pvalue=0.0)
+    #test_data = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/TEST.fasl'
+    test_data = None
+    if test_data:
+        test_seqs, test_names, test_ys = get_sequences_from_file(test_data)
+        pred_scores_v_ini_w_ini = gremlin.get_score(test_seqs, v_ini, w_ini, h_wt_seq=h_wt_seq_v_ini_w_ini)
+        pred_scores_v_opt_w_opt = gremlin.get_score(test_seqs, v_opt, w_opt, h_wt_seq=h_wt_seq_v_opt_w_opt)
+        plt.scatter(test_ys, pred_scores_v_ini_w_ini, s=3, alpha=0.3, label='v_0 (fi), w_0(fij 0\'s)')
+        plt.scatter(test_ys, pred_scores_v_opt_w_opt, s=3, alpha=0.3, label='v_opt, w_opt')
+        plt.legend()
+        plt.xlabel("fitness")
+        plt.ylabel("GREMLIN score")
+        plt.show()
+        print(spearmanr(test_ys, pred_scores_v_ini_w_ini))  # SignificanceResult(statistic=0.6417551098995459, pvalue=0.0)
+        print(spearmanr(test_ys, pred_scores_v_opt_w_opt))  #SignificanceResult(statistic=0.6541114305302851, pvalue=0.0)
 
     gremlin.plot_correlation_matrix(matrix_type='raw')
     gremlin.plot_correlation_matrix(matrix_type='apc')
     gremlin.plot_correlation_matrix(matrix_type='zscore')
+
+    gremlin.get_top_coevolving_residues(wt_seq=wt_seq, min_distance=5, sort_by="zscore")
 
     elapsed = str(timedelta(seconds=time.time() - start_time)).split(".")[0]
     elapsed = f'{elapsed.split(":")[0]} h {elapsed.split(":")[1]} min {elapsed.split(":")[2]} s'

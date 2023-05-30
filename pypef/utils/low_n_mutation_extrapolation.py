@@ -428,6 +428,6 @@ def plot_extrapolation(
         name += '_train_lvl_1'
     plt.xticks(test_lvls, label_infos, fontsize=5)
     plt.ylabel(r"Spearman's $\rho$")
-    name = name + '_extrapolation.png'
-    plt.savefig(name.replace("\\", "").replace(".", ""), dpi=500)
+    name = name.replace("\\", "").replace(".", "") + '_extrapolation.png'
+    plt.savefig(name, dpi=500)
     plt.clf()
