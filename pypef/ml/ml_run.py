@@ -22,15 +22,15 @@ from os import listdir
 from os.path import isfile, join
 
 import logging
-logger = logging.getLogger('pypef.ml.run')
+logger = logging.getLogger('pypef.ml.ml_run')
 import ray
 from pypef.ml.parallelization import aaindex_performance_parallel
 
 # importing own modules
 from pypef.ml.regression import (
-    read_models, formatted_output, performance_list, save_model, predict,
-    predictions_out, predict_and_plot
+    read_models, formatted_output, performance_list, save_model, predict, predict_ts
 )
+from pypef.utils.to_file import predictions_out
 from pypef.utils.low_n_mutation_extrapolation import low_n, performance_mutation_extrapolation
 from pypef.utils.variant_data import absolute_path_cwd_file
 
@@ -58,7 +58,7 @@ def run_pypef_pure_ml(arguments):
 
     else:
         if arguments['--ls'] is not None and arguments['--ts'] is not None:  # LS --> TS
-            if arguments['--model'] is None and arguments['--figure'] is None:
+            if arguments['--model'] is None:
                 path = os.getcwd()
                 try:
                     t_save = int(arguments['--save'])
@@ -91,7 +91,7 @@ def run_pypef_pure_ml(arguments):
                 formatted_output(
                     performance_list=encoding_performance_list,
                     no_fft=arguments['--nofft'],
-                    minimum_r2=0.0
+                    minimum_r2=-1E9
                 )
 
                 # save_model encodes variants again (possibly change)
@@ -106,30 +106,26 @@ def run_pypef_pure_ml(arguments):
                     no_fft=arguments['--nofft'],
                     train_on_all=arguments['--all'],
                     couplings_file=arguments['--params'],  # only for DCA
-                    threads=threads  # only for DCA
+                    threads=threads,  # only for DCA
+                    label=arguments['--label']
                 )
 
-        elif arguments['--figure'] is not None and arguments['--model'] is not None:  # plotting
-            path = os.getcwd()
-            predict_and_plot(
-                path=path,
-                fasta_file=arguments['--figure'],
+        # Prediction of single .fasta file
+        elif arguments['--ts'] is not None and arguments['--model'] is not None:
+            predict_ts(
+                path=os.getcwd(),
                 model=arguments['--model'],
+                test_set=arguments['--ts'],
                 encoding=arguments['--encoding'],
-                label=arguments['--label'],
-                color=arguments['--color'],
-                y_wt=arguments['--y_wt'],
                 no_fft=arguments['--nofft'],
                 couplings_file=arguments['--params'],  # only for DCA
-                threads=threads  # only for DCA
+                label=arguments['--label'],
+                threads=threads
             )
-            logger.info('\nCreated plot!\n')
 
-        # Prediction of single .fasta file
         elif arguments['--ps'] is not None and arguments['--model'] is not None:
-            path = os.getcwd()
             predictions = predict(
-                path=path,
+                path=os.getcwd(),
                 prediction_set=arguments['--ps'],
                 model=arguments['--model'],
                 encoding=arguments['--encoding'],

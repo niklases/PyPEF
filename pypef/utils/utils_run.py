@@ -18,22 +18,20 @@
 
 import os
 import logging
-logger = logging.getLogger('pypef.utils.run')
+logger = logging.getLogger('pypef.utils.utils_run')
 
 import numpy as np
 import re
-import copy
-import ray
 
 from pypef.utils.variant_data import (
     amino_acids, generate_dataframe_and_save_csv,
-    remove_nan_encoded_positions, get_basename,
-    read_csv_and_shift_pos_ints
+    get_basename, read_csv_and_shift_pos_ints,
+    get_seqs_from_var_name, get_wt_sequence
 )
 
 from pypef.utils.learning_test_sets import (
-    get_wt_sequence, csv_input, drop_rows, get_variants, make_sub_ls_ts,
-    make_sub_ls_ts_randomly, make_fasta_ls_ts, get_seqs_from_var_name
+    csv_input, drop_rows, get_variants, make_sub_ls_ts,
+    make_sub_ls_ts_randomly, make_fasta_ls_ts
 )
 from pypef.utils.prediction_sets import (
     make_fasta_ps, make_recombinations_double, make_recombinations_triple,
@@ -43,11 +41,10 @@ from pypef.utils.prediction_sets import (
 )   # not yet implemented: make_combinations_double_all_diverse_and_all_positions
 
 from pypef.utils.directed_evolution import DirectedEvolution
-from pypef.dca.encoding import DCAEncoding
 from pypef.utils.sto2a2m import convert_sto2a2m
 
-from pypef.dca.encoding import get_dca_data_parallel, get_encoded_sequence
 from pypef.ml.regression import OneHotEncoding, AAIndexEncoding, full_aaidx_txt_path
+from pypef.dca.hybrid_model import plmc_or_gremlin_encoding
 
 
 def run_pypef_utils(arguments):
@@ -68,7 +65,7 @@ def run_pypef_utils(arguments):
         sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts(
             single_variants, single_values, higher_variants, higher_values)
         logger.info('Tip: You can edit your LS and TS datasets just by '
-              'cutting/pasting between the LS and TS fasta datasets.')
+                    'cutting/pasting between the LS and TS fasta datasets.')
 
         logger.info('Creating LS dataset...')
         make_fasta_ls_ts('LS.fasl', wt_sequence, sub_ls, val_ls)
@@ -176,11 +173,12 @@ def run_pypef_utils(arguments):
     # see https://github.com/ivanjayapurna/low-n-protein-engineering/tree/master/directed-evo
     elif arguments['directevo']:
         if arguments['hybrid'] or arguments['--encoding'] == 'dca':
-            dca_encoder = DCAEncoding(
-                params_file=arguments['--params'],
-                separator=arguments['--sep'],
-                verbose=False
-            )
+            #dca_encoder = DCAEncoding(
+            #    params_file=arguments['--params'],
+            #    separator=arguments['--sep'],
+            #    verbose=False
+            #)
+            dca_encoder = arguments['--params']
             if arguments['ml']:
                 ml_or_hybrid = 'ml'
             else:
@@ -275,40 +273,31 @@ def run_pypef_utils(arguments):
         )
 
     elif arguments['encode']:  # sole parallelized task for utils for DCA encoding
-        encoded_sequences = None
         df = drop_rows(arguments['--input'], amino_acids, arguments['--drop'])
         wt_sequence = get_wt_sequence(arguments['--wt'])
         logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
         single_variants, single_values, higher_variants, higher_values = get_variants(
             df, amino_acids, wt_sequence)
         variants = list(single_variants) + list(higher_variants)
-        fitnesses = list(single_values) + list(higher_values)
-        variants, fitnesses, sequences = get_seqs_from_var_name(wt_sequence, variants, fitnesses)
-        assert len(variants) == len(fitnesses) == len(sequences)
+        ys_true = list(single_values) + list(higher_values)
+        variants, ys_true, sequences = get_seqs_from_var_name(wt_sequence, variants, ys_true)
+        assert len(variants) == len(ys_true) == len(sequences)
         logger.info('Encoding variant sequences...')
 
         if arguments['--encoding'] == 'dca':
             threads = abs(arguments['--threads']) if arguments['--threads'] is not None else 1
             threads = threads + 1 if threads == 0 else threads
             logger.info(f'Using {threads} thread(s) for running...')
-            dca_encode = DCAEncoding(
+            xs, variants, sequences, ys_true, x_wt, model, model_type = plmc_or_gremlin_encoding(
+                variants=variants,
+                sequences=sequences,
+                ys_true=ys_true,
                 params_file=arguments['--params'],
-                separator=arguments['--mutation_sep'],
-                verbose=False
+                substitution_sep=arguments['--mutation_sep'],
+                threads=threads,
+                verbose=True
             )
-            if threads > 1:
-                ray.init()
-                variants, encoded_sequences, fitnesses = get_dca_data_parallel(
-                    variants=variants,
-                    fitnesses=fitnesses,
-                    dca_encode=dca_encode,
-                    threads=threads,
-                )
-            else:
-                x_ = dca_encode.collect_encoded_sequences(variants)
-                encoded_sequences, variants = remove_nan_encoded_positions(copy.copy(x_), variants)
-                encoded_sequences, fitnesses = remove_nan_encoded_positions(copy.copy(x_), fitnesses)
-                assert len(encoded_sequences) == len(variants) == len(fitnesses)
+            assert len(xs) == len(variants) == len(ys_true)
 
             if variants[0][0] != variants[0][-1]:  # WT is required for DCA-based hybrid modeling
                 if arguments['--y_wt'] is not None:
@@ -317,14 +306,15 @@ def run_pypef_utils(arguments):
                     y_wt = 1
                 # better using re then: wt = variants[0][0] + str(variants[0][1:-1] + variants[0][0])
                 wt = variants[0][0] + re.findall(r"\d+", variants[0])[0] + variants[0][0]
-                x_wt = get_encoded_sequence(variant=wt, dca_encode=dca_encode)
+                #x_wt = get_encoded_sequence(variant=wt, dca_encode=dca_encode)
                 variants.insert(0, wt)  # inserting WT at pos. 0
-                encoded_sequences.insert(0, x_wt)
-                fitnesses.insert(0, y_wt)  # set WT fitness to 1 or use arguments y_wt?
+                xs = list(xs)
+                xs.insert(0, list(x_wt.flatten()))
+                ys_true.insert(0, y_wt)  # set WT fitness to 1 or use arguments y_wt?
 
         elif arguments['--encoding'] == 'onehot':
             onehot_encoder = OneHotEncoding(sequences)
-            encoded_sequences = onehot_encoder.collect_encoded_sequences()
+            xs = onehot_encoder.collect_encoded_sequences()
 
         elif arguments['--encoding'] == 'aaidx':
             if arguments['--model'] is None:
@@ -337,14 +327,18 @@ def run_pypef_utils(arguments):
             )
             x_fft, x_raw = aa_index_encoder.collect_encoded_sequences()
             if arguments['--nofft']:
-                encoded_sequences = x_raw
+                xs = x_raw
             else:
-                encoded_sequences = x_fft
+                xs = x_fft
 
+        else:
+            raise SystemError("Unknown encoding option.")
+        logger.info(f'{len(variants)} variants (plus inserted WT) remained after encoding. '
+                    f'Saving to encoding CSV file...')
         generate_dataframe_and_save_csv(  # put WT at pos. 0 for hybrid low_N or extrapolation
             variants=variants,
-            sequence_encodings=encoded_sequences,
-            fitnesses=fitnesses,
+            sequence_encodings=xs,
+            fitnesses=ys_true,
             csv_file=arguments['--input'],
             encoding_type=arguments['--encoding']
         )

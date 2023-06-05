@@ -32,24 +32,37 @@ The included class 'CouplingsModel' has been taken from the script 'model.py' as
 EVmutation module (https://github.com/debbiemarkslab/EVmutation) written by Thomas Hopf in the
 labs of Debora Marks and Chris Sander at Harvard Medical School and modified (shortened).
 
-See also:
-Hopf, T. A., Ingraham, J. B., Poelwijk, F.J., Schärfe, C.P.I., Springer, M., Sander, C., & Marks, D. S. (2016).
-Mutation effects predicted from sequence co-variation. Nature Biotechnology, in press.
+References:
+[1] Hopf, T. A., Ingraham, J. B., Poelwijk, F.J., Schärfe, C.P.I., Springer, M., Sander, C., & Marks, D. S.
+    Mutation effects predicted from sequence co-variation.
+    Nature Biotechnology, 35, 2017, 128–135
+    https://doi.org/10.1038/nbt.3769
+[2] Hopf T. A., Green A. G., Schubert B., et al.
+    The EVcouplings Python framework for coevolutionary sequence analysis.
+    Bioinformatics 35, 2019, 1582–1584
+    https://doi.org/10.1093/bioinformatics/bty862
+[3] Ekeberg, M., Lövkvist, C., Lan, Y., Weigt, M., & Aurell, E.
+    Improved contact prediction in proteins: Using pseudolikelihoods to infer Potts models.
+    Physical Review E, 87(1), 2013, 012707. doi:10.1103/PhysRevE.87.012707
+    https://doi.org/10.1103/PhysRevE.87.012707
 """
 
 
-from collections.abc import Iterable  # originally imported 'from collections'
+import os
+from collections.abc import Iterable
 import logging
 logger = logging.getLogger('pypef.dca.encoding')
 
 import numpy as np
 import ray
 from tqdm import tqdm
+import pickle
+
 from pypef.utils.variant_data import amino_acids
 
 
 _SLICE = np.s_[:]
-# np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)  # DEV
+# np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)  # TODO: DEV
 
 class InvalidVariantError(Exception):
     """
@@ -198,7 +211,7 @@ class CouplingsModel:
             self,
             filename,
             precision="float32",
-            verbose: bool = True,
+            verbose: bool = False,
             **kwargs
     ):
         """
@@ -287,16 +300,16 @@ class CouplingsModel:
             self.wt_aa_pos = []
             for aa, pos in zip(self._target_seq, self.index_list):
                 self.wt_aa_pos.append(str(aa) + str(pos))
-            logger.info(f'Evaluating gap content of PLMC parameter file... '
-                  f'First amino acid position used in the MSA (PLMC params file) is '
-                  f'{self._target_seq[0]}{self.index_list[0]} and the last position '
-                  f'used is {self._target_seq[-1]}{self.index_list[-1]}.')
-            if len(not_valid) > 0:
-                logger.info(f'Further, non-included positions are:\n{str(not_valid)[1:-1]}')
             if self.verbose:
-                    logger.info(f'Summary of all effective positions represented in the MSA '
-                                f'based on wild-type sequence ({len(valid)} encoded positions):\n'
-                                f'{str([aa_pos for aa_pos in self.wt_aa_pos])[1:-1]}'.replace("'", ""))
+                logger.info(f'Evaluating gap content of PLMC parameter file... '
+                            f'First amino acid position used in the MSA (PLMC params file) is '
+                            f'{self._target_seq[0]}{self.index_list[0]} and the last position '
+                            f'used is {self._target_seq[-1]}{self.index_list[-1]}.')
+                if len(not_valid) > 0:
+                    logger.info(f'Further, non-included positions are:\n{str(not_valid)[1:-1]}')
+                logger.info(f'Summary of all effective positions represented in the MSA '
+                            f'based on wild-type sequence ({len(valid)} encoded positions):\n'
+                            f'{str([aa_pos for aa_pos in self.wt_aa_pos])[1:-1]}'.replace("'", ""))
 
             # single site frequencies f_i and fields h_i
             self.f_i, = np.fromfile(
@@ -684,6 +697,34 @@ to construct a pandas.DataFrame to store the encoded sequences
 """
 
 
+def save_plmc_dca_encoding_model(params_file, substitution_sep='/'):
+    """
+    Just converts plmc params from raw binary to
+    Pickle-saved DCAEncoding class.
+    """
+    logger.info("Transforming the provided plmc params file "
+                "to a DCAEncoding Pickle file (Pickles/PLMC).")
+    plmc = DCAEncoding(
+        params_file=params_file,
+        separator=substitution_sep,
+        verbose=False
+    )
+    try:
+        os.mkdir('Pickles')
+    except FileExistsError:
+        pass
+    pickle.dump({
+        'model': plmc,
+        'model_type': 'PLMCpureDCA',
+        'beta_1': None,
+        'beta_2': None,
+        'spearman_rho': None,
+        'regressor': None
+    },
+        open(f'Pickles/PLMC', 'wb')
+    )
+
+
 def get_encoded_sequence(
         variant: str,
         dca_encode: DCAEncoding
@@ -713,6 +754,7 @@ def get_encoded_sequence(
 @ray.remote
 def _get_data_parallel(
         variants: list,
+        sequences : list,
         fitnesses: list,
         dca_encode: DCAEncoding,
         data: list
@@ -738,9 +780,9 @@ def _get_data_parallel(
     data : manager.list()
         Filled list with variant names, fitnesses, and encoded sequence.
     """
-    for i, (variant, fitness) in enumerate(zip(variants, fitnesses)):
+    for i, (variant, sequence, fitness) in enumerate(zip(variants, sequences, fitnesses)):
         try:
-            data.append([variant, dca_encode.encode_variant(variant), fitness])
+            data.append([variant, sequence, dca_encode.encode_variant(variant), fitness])
         except EffectiveSiteError:  # do not append non-encoded sequences and
             pass                 # associated fitness values
 
@@ -749,10 +791,12 @@ def _get_data_parallel(
 
 def get_dca_data_parallel(
         variants: list,
+        sequences: list,
         fitnesses: list,
         dca_encode: DCAEncoding,
         threads: int,
-) -> tuple[list, list, list]:
+        verbose=True
+) -> tuple[list, list, list, list]:
     """
     Description
     -----------
@@ -779,8 +823,9 @@ def get_dca_data_parallel(
         List of variant names that cannot be used for modelling as they are not effective
         positions in the underlying MSA used for generating local and coupling terms.
     """
-    logger.info(f'{len(variants)} input variants. Encoding variant sequences. '
-                f'This might take some time...')
+    if verbose:
+        logger.info(f'{len(variants)} input variants. Encoding variant sequences using parameters '
+                    f'taken from plmc generated file. This might take some time...')
 
     idxs_nan = np.array([i for i, b in enumerate(np.isnan(fitnesses)) if b])  # find fitness NaNs
     if idxs_nan.size > 0:  # remove NaNs if present
@@ -789,22 +834,26 @@ def get_dca_data_parallel(
         variants = np.delete(variants, idxs_nan)
 
     variants_split = np.array_split(variants, threads)    # split array in n_cores pieces
-    fitnesses_split = np.array_split(fitnesses, threads)  # for parallelization
+    sequences_split = np.array_split(sequences, threads)  # for Ray parallelization
+    fitnesses_split = np.array_split(fitnesses, threads)
     results = ray.get([
         _get_data_parallel.remote(
             variants_split[i],
+            sequences_split[i],
             fitnesses_split[i],
             dca_encode,
             []
         ) for i in range(len(variants_split))
     ])
+
     data = [item for sublist in results for item in sublist]  # fusing all the individual results
-
     variants = [item[0] for item in data]
-    encoded_sequences = [item[1] for item in data]
-    fitnesses = [item[2] for item in data]
+    sequences = [item[1] for item in data]
+    xs = [item[2] for item in data]
+    fitnesses = [item[3] for item in data]
 
-    logger.info(f'{len(data)} variants after NaN-valued and non-effective '
-                f'site-substituted variant (EffectiveSiteError) dropping.')
+    if verbose:
+        logger.info(f'{len(data)} variants after NaN-valued and non-effective '
+                    f'site-substituted variant (EffectiveSiteError) dropping.')
 
-    return variants, encoded_sequences, fitnesses
+    return variants, sequences, xs, fitnesses

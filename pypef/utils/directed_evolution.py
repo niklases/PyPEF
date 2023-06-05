@@ -29,6 +29,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import warnings
 from adjustText import adjust_text
+import logging
+logger = logging.getLogger('pypef.utils.directed_evolution')
 
 from pypef.ml.regression import predict
 from pypef.dca.hybrid_model import predict_directed_evolution
@@ -217,6 +219,7 @@ class DirectedEvolution:
         y_traj.append(self.y_wt)
         s_traj.append(self.s_wt)
         accepted = 0
+        logger.info(f"Step 0: WT --> {self.y_wt:.3f}")
         for iteration in range(self.num_iterations):  # num_iterations
             self.de_step_counter = iteration
 
@@ -244,7 +247,7 @@ class DirectedEvolution:
                     variants=np.atleast_1d(new_full_variant),
                     sequences=np.atleast_1d(new_sequence),
                     no_fft=self.no_fft,
-                    dca_encoder=self.dca_encoder
+                    couplings_file=self.dca_encoder
                 )
 
             else:  # hybrid modeling and prediction
@@ -253,8 +256,10 @@ class DirectedEvolution:
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
                     hybrid_model_data_pkl=self.model
                 )
-
-            if predictions == 'skip':  # skip if variant cannot be encoded by DCA-based encoding technique
+            if predictions != 'skip':
+                logger.info(f"Step {self.de_step_counter + 1}: {new_variant} --> {predictions[0][0]:.3f}")
+            else:  # skip if variant cannot be encoded by DCA-based encoding technique
+                logger.info(f"Step {self.de_step_counter + 1}: {new_variant} --> {predictions}")
                 continue
             new_y, new_var = predictions[0][0], predictions[0][1]  # new_var == new_variant nonetheless
             # probability function for trial sequence

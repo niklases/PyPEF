@@ -45,24 +45,6 @@ import pandas as pd
 import re
 
 
-def get_wt_sequence(sequence_fasta):
-    """
-    Gets wild-type sequence from defined input file (can be pure sequence or fasta style)
-    """
-    wild_type_sequence = ""
-    try:
-        with open(sequence_fasta, 'r') as sf:
-            for lines in sf.readlines():
-                if lines.startswith(">"):
-                    continue
-                lines = ''.join(lines.split())
-                wild_type_sequence += lines
-    except FileNotFoundError:
-        raise FileNotFoundError("Did not find FASTA file. Check/specify input FASTA "
-                                "sequence file for getting the wild-type sequence.")
-    return wild_type_sequence
-
-
 def csv_input(csv_file):
     """
     Gets input data from defined .csv file (that contains variant names and fitness labels)
@@ -420,46 +402,3 @@ def make_fasta_ls_ts(
         print(''.join(temp), file=myfile)
         # print(name+';'+str(val[i])+';'+''.join(temp), file=myfile)  # uncomment output: CSV format
     myfile.close()
-
-
-def get_seqs_from_var_name(
-        wt_seq,
-        substitutions,
-        fitness_values
-) -> tuple[list, list, list]:
-    """
-    Similar to function above but just returns sequences
-
-    wt: str
-        Wild-type sequence as string
-    substitutions: list
-        List of substiutuions of a single variant of the format:
-            - Single substitution variant, e.g. variant A123C: ['A123C']
-            - Higher variants, e.g. variant A123C/D234E/F345G: ['A123C', 'D234E, 'F345G']
-            --> Full substitutions list, e.g.: [['A123C'], ['A123C', 'D234E, 'F345G']]
-    fitness_values: list
-        List of ints/floats of the variant fitness values, e.g. for two variants: [1.4, 0.8]
-    """
-    variant, values, sequences = [], [], []
-    for i, var in enumerate(substitutions):  # var are lists of (single or multiple) substitutions
-        temp = list(wt_seq)
-        name = ''
-        separation = 0
-        if var == ['WT']:
-            name = 'WT'
-        else:
-            for single_var in var:  # single entries of substitution list
-                position_index = int(str(single_var)[1:-1]) - 1
-                new_amino_acid = str(single_var)[-1]
-                temp[position_index] = new_amino_acid
-                # checking if multiple entries are inside list
-                if separation == 0:
-                    name += single_var
-                else:
-                    name += '/' + single_var
-                separation += 1
-        variant.append(name)
-        values.append(fitness_values[i])
-        sequences.append(''.join(temp))
-
-    return variant, values, sequences

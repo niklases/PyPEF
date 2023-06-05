@@ -19,35 +19,49 @@
 
 """
 Code taken from GREMLIN repository available at https://github.com/sokrypton/GREMLIN_CPP/
-adapted (rewritten from TensorFlow to full NumPy processing and put functions into a class
-called GREMLIN) and used under the "THE BEER-WARE LICENSE" (Revision 42).
-# ----------------------------------------------------------------------------------------
-# "THE BEER-WARE LICENSE" (Revision 42):
-# <so@fas.harvard.edu> wrote this file.  As long as you retain this notice you
-# can do whatever you want with this stuff. If we meet some day, and you think
-# this stuff is worth it, you can buy me a beer in return.  Sergey Ovchinnikov
-# ----------------------------------------------------------------------------------------
-# --> Thanks for sharing the great code, I will gladly provide you a beer or two. (Niklas)
-# https://github.com/sokrypton/GREMLIN_CPP/blob/master/GREMLIN_TF.ipynb
+adapted (put functions into a class termed GREMLIN) and used under the
+"THE BEER-WARE LICENSE" (Revision 42):
+ ----------------------------------------------------------------------------------------
+ "THE BEER-WARE LICENSE" (Revision 42):
+ <so@fas.harvard.edu> wrote this file.  As long as you retain this notice you
+ can do whatever you want with this stuff. If we meet some day, and you think
+ this stuff is worth it, you can buy me a beer in return.  Sergey Ovchinnikov
+ ----------------------------------------------------------------------------------------
+--> Thanks for sharing the great code, I will gladly provide you a beer or two. (Niklas)
+Code mainly taken from
+https://github.com/sokrypton/GREMLIN_CPP/blob/master/GREMLIN_TF.ipynb
 
-GREMLIN Reference:
-Hetunandan Kamisetty, Sergey Ovchinnikov, David Baker
-Assessing the utility of coevolution-based residue–residue contact predictions in a
-sequence- and structure-rich era
-Proceedings of the National Academy of Sciences, 2013, 110, 15674-15679
-https://www.pnas.org/doi/10.1073/pnas.1314045110
+References:
+[1] Kamisetty, H., Ovchinnikov, S., & Baker, D.
+    Assessing the utility of coevolution-based residue–residue contact predictions in a
+    sequence- and structure-rich era.
+    Proceedings of the National Academy of Sciences, 2013, 110, 15674-15679
+    https://www.pnas.org/doi/10.1073/pnas.1314045110
+[2] Balakrishnan, S., Kamisetty, H., Carbonell, J. G., Lee, S.-I., & Langmead, C. J.
+    Learning generative models for protein fold families.
+    Proteins, 79(4), 2011, 1061–78.
+    https://doi.org/10.1002/prot.22934
+[3] Ekeberg, M., Lövkvist, C., Lan, Y., Weigt, M., & Aurell, E.
+    Improved contact prediction in proteins: Using pseudolikelihoods to infer Potts models.
+    Physical Review E, 87(1), 2013, 012707. doi:10.1103/PhysRevE.87.012707
+    https://doi.org/10.1103/PhysRevE.87.012707
 """
 
+import logging
+logger = logging.getLogger('pypef.dca.params_inference')
+
+from os import mkdir
+import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import spearmanr, boxcox
 import pandas as pd
-
-from pypef.utils.variant_data import get_sequences_from_file
-from pypef.utils.learning_test_sets import get_wt_sequence
 import tensorflow as tf
+tf.get_logger().setLevel('DEBUG')
+
+from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
 
 
 class GREMLIN:
@@ -55,14 +69,13 @@ class GREMLIN:
             self,
             alignment: str,
             char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
-            wt_seq = None,
+            wt_seq=None,
             optimize=False,
-            gap_cutoff = 0.5,
-            eff_cutoff = 0.8,
-            opt_iter = 1000
+            gap_cutoff=0.5,
+            eff_cutoff=0.8,
+            opt_iter=1000
     ):
         self.char_alphabet = char_alphabet
-        self.wt_seq = wt_seq
         self.gap_cutoff = gap_cutoff
         self.eff_cutoff = eff_cutoff
         self.opt_iter = opt_iter
@@ -70,6 +83,12 @@ class GREMLIN:
         self.a2n = self.a2n_dict()
         self.seqs, _, _ = get_sequences_from_file(alignment)
         self.msa_ori = self.get_msa_ori()
+        if wt_seq is not None:
+            self.wt_seq = wt_seq
+        else:  # Taking the first sequence in the MSA as wild type sequence
+            logger.info("No wild-type sequence provided: The first sequence "
+                        "in the MSA is considered the wild-type sequence.")
+            self.wt_seq = "".join([self.char_alphabet[i] for i in self.msa_ori[0]])
         self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
@@ -100,9 +119,11 @@ class GREMLIN:
         convert a list of strings into list of integers
         Example: ["ACD","EFG"] -> [[0,4,3], [6,13,7]]
         """
+        if type(x) == list:
+            x = np.array(x)
         if x.dtype.type is np.str_:
             if x.ndim == 0:  # single seq
-                return np.array([self.aa2int(aa) for aa in x])
+                return np.array([self.aa2int(aa) for aa in str(x)])
             else:  # list of seqs
                 return np.array([[self.aa2int(aa) for aa in seq] for seq in x])
         else:
@@ -125,7 +146,7 @@ class GREMLIN:
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
 
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] > self.gap_cutoff)[0]
-        print('GAP Positions (Removed from msa):', gaps)
+        logger.info(f'Gap positions (removed from msa):\n{gaps}')
         ncol_trimmed = len(non_gaps)
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
@@ -147,6 +168,9 @@ class GREMLIN:
         return np.sum(np.square(x))
 
     def objective(self, v, w=None, flattened=True):
+        """Same objective function as used in run_opt_tf below
+        but here only using numpy not TensorFlow functions.
+        Potentially helpful for implementing SciPy optimizers."""
         if w is None:
             w = self.w_ini
         onehot_cat_msa = np.eye(self.states)[self.msa_trimmed]
@@ -173,7 +197,6 @@ class GREMLIN:
         loss = -np.sum(pll * self.msa_weights) / np.sum(self.msa_weights)
         loss = loss + (l2_v + l2_w) / self.n_eff
         return loss
-
 
     @staticmethod
     def opt_adam(loss, name, var_list=None, lr=1.0, b1=0.9, b2=0.999, b_fix=False):
@@ -222,7 +245,7 @@ class GREMLIN:
     def l2_tf(x):
         return tf.reduce_sum(tf.square(x))
 
-    def run_opt_tf(self, opt_rate=1.0, batch_size=None):  # 0: 0.6181657606497697 // 10: 0.597841185145002 // 100: 0.6357746768946049 / 1000:
+    def run_opt_tf(self, opt_rate=1.0, batch_size=None):
         """
         For optimization of v and w ADAM is used here (L-BFGS-B not (yet) implemented
         for TF 2.x, e.g. using scipy.optimize.minimize).
@@ -305,14 +328,14 @@ class GREMLIN:
             sess.run(v.assign(v_ini))
             # compute loss across all data
             get_loss = lambda: round(sess.run(loss, feed(feed_all=True)) * self.n_eff, 2)
-            print("starting", get_loss())
+            logger.info(f"Initial loss: {get_loss()}. Starting parameter optimization...")
             for i in range(self.opt_iter):
                 sess.run(opt, feed())
                 try:
                     if (i + 1) % int(self.opt_iter / 10) == 0:
-                        print("iter", (i + 1), get_loss())
+                        logger.info(f"Iteration {(i + 1)} {get_loss()}")
                 except ZeroDivisionError:
-                    print("iter", (i + 1), get_loss())
+                    logger.info(f"Iteration {(i + 1)} {get_loss()}")
             # save the v and w parameters of the MRF
             v_opt = sess.run(v)
             w_opt = sess.run(w)
@@ -326,14 +349,12 @@ class GREMLIN:
         implemented for TF 2.x, e.g. using scipy.optimize.minimize).
         Gaps (char '-' respectively '21') included.
         """
-        w_ini = np.zeros(shape=(self.n_col, self.states, self.n_col, self.states))
+        w_ini = np.zeros((self.n_col, self.states, self.n_col, self.states))
         onehot_cat_msa = np.eye(self.states)[self.msa_trimmed]
         pseudo_count = 0.01 * np.log(self.n_eff)
         v_ini = np.log(np.sum(onehot_cat_msa.T * self.msa_weights, -1).T + pseudo_count)
         v_ini = v_ini - np.mean(v_ini, -1, keepdims=True)
-        loss_score = self.objective(v_ini, w_ini, flattened=False)
-        print('loss score initial:', loss_score)  # 382.31
-        print('loss score initial times neff:', loss_score * self.n_eff)  # starting 55926.04
+        # loss_score_ini = self.objective(v_ini, w_ini, flattened=False)  # * self.n_eff
 
         if remove_gap_entries:
             no_gap_states = self.states - 1
@@ -347,23 +368,32 @@ class GREMLIN:
             return self.v_opt, self.w_opt
         except AttributeError:
             raise SystemError("No v_opt and w_opt available, this means GREMLIN "
-                              "has not been initialized setting ooptimize to True, "
+                              "has not been initialized setting optimize to True, "
                               "e.g., try GREMLIN('Alignment.fasta', optimize=True).")
 
-    def get_wt_score(self, wt_seq, v, w):
-        wt_seq = np.array([wt_seq])
-        return self.get_score(wt_seq, v, w)
-
-    def get_score(self, test_seqs, v=None, w=None, v_idx=None, h_wt_seq=0.0, recompute_z=False):
+    def get_score(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
         if v is None or w is None:
-            v, w = self.initialize_v_w()
+            if self.optimize:
+                v, w = self.v_opt, self.w_opt
+            else:
+                v, w = self.v_ini, self.w_ini
         if v_idx is None:
             v_idx = self.v_idx
-        seqs_int = self.str2int(test_seqs)
+        seqs_int = self.str2int(seqs)
         # if length of sequence != length of model use only
         # valid positions (v_idx) from the trimmed alignment
-        if seqs_int.shape[-1] != len(v_idx):
-            seqs_int = seqs_int[..., v_idx]
+        try:
+            if seqs_int.shape[-1] != len(v_idx):
+                seqs_int = seqs_int[..., v_idx]
+        except IndexError:
+            raise SystemError(
+                "The loaded GREMLIN parameter model does not match the input model "
+                "in terms of sequence encoding shape or is a gap-substituted sequence. "
+                "E.g., when providing two different DCA models/parameters provided by: "
+                "\"-m DCA and --params GREMLIN\", where -m DCA represents a ml input "
+                "model potentially generated using plmc parameters and --params GREMLIN "
+                "provides differently encoded sequences generated using GREMLIN."
+            )
 
         # one hot encode
         x = np.eye(self.states)[seqs_int]
@@ -385,11 +415,26 @@ class GREMLIN:
         # to do so, for comparison.
         # ============================================================================================
         h = np.sum(np.multiply(x, vw), axis=-1)
+
+        if encode:
+            return h
+
         if recompute_z:
             z = logsumexp(vw, axis=-1)
             return np.sum((h - z), axis=-1) - h_wt_seq
         else:
             return np.sum(h, axis=-1) - h_wt_seq
+
+    def get_wt_score(self, wt_seq=None, v=None, w=None):
+        if wt_seq is None:
+            wt_seq = self.wt_seq
+        if v is None or w is None:
+            if self.optimize:
+                v, w = self.v_opt, self.w_opt
+            else:
+                v, w = self.v_ini, self.w_ini
+        wt_seq = np.array(wt_seq, dtype=str)
+        return self.get_score(wt_seq, v, w)
 
     @staticmethod
     def normalize(apc_mat):
@@ -405,7 +450,7 @@ class GREMLIN:
         x = x.reshape(dim, dim)
         return x
 
-    def get_correlation_matrix(self, matrix_type: str='apc'):
+    def get_correlation_matrix(self, matrix_type: str = 'apc'):
         """
         Requires optimized w matrix (of shape (L, 20, L, 20))
         inputs
@@ -419,13 +464,12 @@ class GREMLIN:
         zscore      : normalize(apc)    shape=(L,L)
         """
         # l2norm of 20x20 matrices (note: gaps already excluded)
-        raw = np.sqrt(np.sum(np.square(self.w_opt),(1,3)))
+        raw = np.sqrt(np.sum(np.square(self.w_opt), (1, 3)))
 
         # apc (average product correction)
         ap = np.sum(raw, 0, keepdims=True) * np.sum(raw, 1, keepdims=True) / np.sum(raw)
         apc = raw - ap
-        apc_diag = np.sum(np.diag(apc))
-        diag_ = np.diag(apc)
+
         if matrix_type == 'apc':
             return apc
         elif matrix_type == 'raw':
@@ -435,7 +479,7 @@ class GREMLIN:
         else:
             raise SystemError("Unknown matrix type. Choose between 'apc', 'raw', or 'zscore'.")
 
-    def plot_correlation_matrix(self, matrix_type: str='apc', set_diag_zero=True):
+    def plot_correlation_matrix(self, matrix_type: str = 'apc', set_diag_zero=True):
         matrix = self.get_correlation_matrix(matrix_type)
         if set_diag_zero:
             np.fill_diagonal(matrix, 0.0)
@@ -468,9 +512,8 @@ class GREMLIN:
         raw = self.get_correlation_matrix(matrix_type='raw')
         apc = self.get_correlation_matrix(matrix_type='apc')
         zscore = self.get_correlation_matrix(matrix_type='zscore')
-        self.v_idx
-        # Explore top co-evolving residue pairs
 
+        # Explore top co-evolving residue pairs
         i_rel_idx = self.w_rel_idx[:, 0]
         j_rel_idx = self.w_rel_idx[:, 1]
 
@@ -505,53 +548,22 @@ class GREMLIN:
         return df_mtx_sorted_mindist
 
 
+def save_gremlin_as_pickle(alignment, opt_iter=1000):
+    gremlin = GREMLIN(alignment, optimize=True, opt_iter=opt_iter)
+    try:
+        mkdir('Pickles')
+    except FileExistsError:
+        pass
 
-def run_():
-    import time
-    from datetime import timedelta
-    start_time = time.time()
-    alignment = '/mnt/d/sciebo/dev/params_inference/alignments/4FAZA.fas'
-    #alignment = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/uref100_avgfp_jhmmer_119.fas'
-    gremlin = GREMLIN(alignment, optimize=True, opt_iter=100)
-
-    import pickle
-    with open('pkl_gremlin.pkl', 'wb') as write_pkl_file:
-        pickle.dump(gremlin, write_pkl_file)
-    with open('pkl_gremlin.pkl', 'rb') as read_pkl_file:
-        gremlin = pickle.load(read_pkl_file)
-    v_ini, w_ini = gremlin.initialize_v_w(remove_gap_entries=True)
-    v_opt, w_opt = gremlin.get_v_w_opt()
-
-    #wt_seq = get_wt_sequence('/mnt/d/sciebo/dev/params_inference/alignments/avgfp/P42212_F64L.fasta')
-    wt_seq = get_wt_sequence('/mnt/d/sciebo/dev/params_inference/alignments/4FAZA_WT.fasta')
-    h_wt_seq_v_ini_w_ini = gremlin.get_wt_score(wt_seq, v_ini, w_ini)
-    h_wt_seq_v_opt_w_opt = gremlin.get_wt_score(wt_seq, v_opt, w_opt)
-
-    #test_data = '/mnt/d/sciebo/dev/params_inference/alignments/avgfp/TEST.fasl'
-    test_data = None
-    if test_data:
-        test_seqs, test_names, test_ys = get_sequences_from_file(test_data)
-        pred_scores_v_ini_w_ini = gremlin.get_score(test_seqs, v_ini, w_ini, h_wt_seq=h_wt_seq_v_ini_w_ini)
-        pred_scores_v_opt_w_opt = gremlin.get_score(test_seqs, v_opt, w_opt, h_wt_seq=h_wt_seq_v_opt_w_opt)
-        plt.scatter(test_ys, pred_scores_v_ini_w_ini, s=3, alpha=0.3, label='v_0 (fi), w_0(fij 0\'s)')
-        plt.scatter(test_ys, pred_scores_v_opt_w_opt, s=3, alpha=0.3, label='v_opt, w_opt')
-        plt.legend()
-        plt.xlabel("fitness")
-        plt.ylabel("GREMLIN score")
-        plt.show()
-        print(spearmanr(test_ys, pred_scores_v_ini_w_ini))  # SignificanceResult(statistic=0.6417551098995459, pvalue=0.0)
-        print(spearmanr(test_ys, pred_scores_v_opt_w_opt))  #SignificanceResult(statistic=0.6541114305302851, pvalue=0.0)
-
-    gremlin.plot_correlation_matrix(matrix_type='raw')
-    gremlin.plot_correlation_matrix(matrix_type='apc')
-    gremlin.plot_correlation_matrix(matrix_type='zscore')
-
-    gremlin.get_top_coevolving_residues(wt_seq=wt_seq, min_distance=5, sort_by="zscore")
-
-    elapsed = str(timedelta(seconds=time.time() - start_time)).split(".")[0]
-    elapsed = f'{elapsed.split(":")[0]} h {elapsed.split(":")[1]} min {elapsed.split(":")[2]} s'
-    print(elapsed)
-
-
-if __name__ == '__main__':
-    run_()
+    logger.info(f'Save model as Pickle file... GREMLIN')
+    pickle.dump(
+        {
+            'model': gremlin,
+            'model_type': 'GREMLINpureDCA',
+            'beta_1': None,
+            'beta_2': None,
+            'spearman_rho': None,
+            'regressor': None
+        },
+        open('Pickles/GREMLIN', 'wb')
+    )

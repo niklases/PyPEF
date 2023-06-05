@@ -77,9 +77,9 @@ indices taken from the AAIndex database).
        pypef mklsts -i variant_and_fitness.csv -w wt_sequence.fasta
  2. Train and validate models:
         pypef ml -e aaidx -l LS.fasta -t TS.fasta --regressor pls
- 3. Plot the test set entries against test set predictions (creates PNG figure, MODEL12345 is
+ 3. Plot the test set entries against test set predictions (creates PNG figure, MODEL is
     the chosen AAindex, e.g. FAUJ880104):
-        pypef ml -e aaidx -m MODEL12345 -f TS.fasta --label
+        pypef ml -e aaidx -m MODEL -t TS.fasta --label
  4. Create files for prediction:
     - Single file:
         pypef mkps -w wt_sequence.fasta -i variant_fitness.csv
@@ -89,11 +89,11 @@ indices taken from the AAIndex database).
             [--ddiverse] [--tdiverse] [--qdiverse]
  5. Predict (unknown/new) variants:
     - Single file:
-        pypef ml -e aaidx -m MODEL12345 -p Prediction_Set.fasta
+        pypef ml -e aaidx -m MODEL -p Prediction_Set.fasta
     - Recombinant/diverse prediction files in created prediction set folders:
-        pypef ml -e aaidx -m MODEL12345 --pmult [--drecomb] [...] [--qdiverse]
+        pypef ml -e aaidx -m MODEL --pmult [--drecomb] [...] [--qdiverse]
     - Directed evolution – for performing and plotting in silico evolution trajectories:
-        pypef ml -e aaidx directevo -m MODEL12345 [...]
+        pypef ml -e aaidx directevo -m MODEL [...]
 Note: The commands for hybrid modeling are very similar to the commands for pure ML modeling,
 see pypef [-h] for possible commands.
 
@@ -112,7 +112,7 @@ Creation of prediction sets from CSV data (using single-substituted variant data
 Encoding a CSV file (for further performance studies such as "low N" or
 "mutational extrapolation" engineering tasks:
         pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_SEQ
-            [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL12345] [--nofft]
+            [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
             [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
 
 Converting a STO alignment file to A2M format:
@@ -122,30 +122,35 @@ Converting a STO alignment file to A2M format:
 
 Usage:
     pypef mklsts --wt WT_SEQ --input CSV_FILE
-        [--drop THRESHOLD] [--numrnd NUMBER]
+        [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--numrnd NUMBER]
     pypef mkps --wt WT_SEQ --input CSV_FILE
         [--drop THRESHOLD] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
+    pypef param_inference
+        [--msa MSA_FILE] [--params PLMC_FILE]
+        [--wt WT_SEQ] [--opt_iter OPT_ITER]
     pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_SEQ
-        [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL12345] [--nofft]
+        [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
         [--threads THREADS]
         [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
+    pypef reformat_csv --input CSV_FILE
+        [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef shift_pos --input CSV_FILE --offset OFFSET
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-    pypef hybrid --params PLMC_FILE --ts TEST_SET
+    pypef hybrid --ts TEST_SET
+        [--model MODEL] [--params PLMC_FILE]
         [--ls LEARNING_SET] [--label] [--threads THREADS]
     pypef hybrid --model MODEL --params PLMC_FILE
-        [--ts TEST_SET]
-        [--figure TS_FOR_PLOTTING] [--label]
+        [--ts TEST_SET] [--label]
         [--ps PREDICTION_SET] [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                         [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS]
-    pypef hybrid directevo --wt WT_SEQ --model MODEL12345 --params PLMC_FILE
+    pypef hybrid directevo --wt WT_SEQ --model MODEL --params PLMC_FILE
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
-    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE
+    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE --wt WT_SEQ
         [--fit_size REL_LEARN_FIT_SIZE] [--test_size REL_TEST_SIZE]
         [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR]
         [--fitness_key FITNESS_KEY] [--rnd_state RND_STATE]
@@ -155,17 +160,17 @@ Usage:
     pypef ml --encoding ENCODING_TECHNIQUE --ls LEARNING_SET --ts TEST_SET
         [--save NUMBER] [--regressor TYPE] [--nofft] [--all] [--params PLMC_FILE]
         [--sort METRIC_INT] [--threads THREADS]
+    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL --ts TEST_SET
+        [--nofft] [--params PLMC_FILE] [--threads THREADS]
     pypef ml --show
         [MODELS]
-    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --figure TS_FOR_PLOTTING
-        [--label] [--color] [--y_wt WT_FITNESS] [--nofft] [--params PLMC_FILE] [--threads THREADS]
-    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --ps PREDICTION_SET
+    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL --ps PREDICTION_SET
         [--params PLMC_FILE] [--threads THREADS] [--nofft] [--negative]
-    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL12345 --pmult
+    pypef ml --encoding ENCODING_TECHNIQUE --model MODEL --pmult
         [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
         [--regressor TYPE] [--nofft] [--negative] [--params PLMC_FILE] [--threads THREADS]
-    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL12345 --wt WT_SEQ
+    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL --wt WT_SEQ
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PLMC_FILE]
     pypef ml low_n --input ENCODED_CSV_FILE
@@ -188,8 +193,7 @@ Options:
                                     data [default: -9E09].
   -e --encoding ENCODING_TECHNIQUE  Sets technique used for encoding sequences for constructing regression models;
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
-                                    and 'dca' (DCA-based encoding) [default: aaidx].
-  -f --figure VS_FOR_PLOTTING       Validation set for plotting using a trained model.
+                                    and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
   -h --help                         Show this screen [default: False].
   -i --input CSV_FILE               Input data file in .csv format.
@@ -200,8 +204,10 @@ Options:
                                     (line trimming) [default: 0.5].
   --label                           Label the plot instances [default: False].
   -l --ls LEARNING_SET              Input learning set in .fasta format.
-  -m --model MODEL12345             Model (pickle file) for plotting of validation or for
+  -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
+  --msa MSA_FILE                    Multiple sequence alignment (MSA) ins FASTA or A2M format for
+                                    inferring DCA parameters.
   --mutation_sep MUTATION_SEP       Mutation separator [default: /].
   --mutation_extrapolation          Mutation extrapolation [default: False].
   --negative                        Set if more negative values define better variants [default: False].
@@ -213,6 +219,8 @@ Options:
   --numiter NUM_ITER                Number of mutation iterations per evolution trajectory [default: 5].
   --numtraj NUM_TRAJ                Number of trajectories, i.e., evolution pathways [default: 5].
   -o --offset OFFSET                Offset for shifting substitution positions of the input CSV file [default: 0].
+  --opt_iter OPT_ITER               Number of iterations for GREMLIN-based optimization of local fields
+                                    and couplings [default: 100].
   --params PLMC_FILE                Input PLMC couplings parameter file.
   -u --pmult                        Predict for all prediction files in folder for recombinants
                                     or for diverse variants [default: False].
@@ -260,12 +268,16 @@ Options:
   ml                                Pure machine learning modeling based on encoded sequences [default: False].
   MODELS                            Number of saved models to show [default: 5].
   onehot                            OneHot-based encoding [default: False].
+  param_inference                   Inferring DCA params using the GREMLIN approach [default: False].
+  reformat_csv                      Reformat input CSV with indicated column and mutation separators to default
+                                    CSV style (column separator ';' and mutation separator '/') [default: False.]
   shift_pos                         Shift positions of all variant substitutions of the input CSV
-                                    file [default: False.]
+                                    file (identical to reformat_csv when setting --offset to 0) [default: False.]
   sto2a2m                           Transform multiple sequence alignment from STO format to
                                     A2M format [default: False].
 """
 
+from os import environ
 from sys import argv, version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:
@@ -279,14 +291,17 @@ import logging
 from docopt import docopt
 from schema import Schema, SchemaError, Optional, Or, Use
 
+from pypef.ml.ml_run import run_pypef_pure_ml
+from pypef.dca.dca_run import run_pypef_hybrid_modeling
+from pypef.utils.utils_run import run_pypef_utils
 
-from pypef.ml.run import run_pypef_pure_ml
-from pypef.dca.run import run_pypef_hybrid_modeling
-from pypef.utils.run import run_pypef_utils
-
+try:
+    environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # only print TensorFlow errors
+except KeyError:
+    pass
 
 logger = logging.getLogger("pypef")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -308,7 +323,6 @@ schema = Schema({
     Optional('--drecomb'): bool,
     Optional('--drop'): Use(float),
     Optional('--encoding'): Use(str),
-    Optional('--figure'): Or(None, str),
     Optional('--fitness_key'): Or(None, str),
     Optional('--fit_size'): Use(float),
     Optional('--help'): bool,
@@ -317,7 +331,8 @@ schema = Schema({
     Optional('--intra_gap'): Use(float),
     Optional('--label'): bool,
     Optional('--ls'): Or(None, str),
-    Optional('--model'): Or(None, str),  # str, Or(None, str),
+    Optional('--model'): Or(None, str),
+    Optional('--msa'): Or(None, str),
     Optional('--mutation_sep'): Or(None, str),
     Optional('--negative'): bool,
     Optional('--nofft'): bool,
@@ -325,6 +340,7 @@ schema = Schema({
     Optional('--numiter'): Use(int),
     Optional('--numtraj'): Use(int),
     Optional('--offset'): Use(int),
+    Optional('--opt_iter'): Use(int),
     Optional('--params'): Or(None, str),
     Optional('--pmult'): bool,
     Optional('--ps'): Or(None, str),
@@ -351,6 +367,7 @@ schema = Schema({
     Optional('--wt_pos'): Use(int),
     Optional('--y_wt'): Or(None, Use(float)),
     Optional('aaidx'): bool,
+    Optional('param_inference'): bool,
     Optional('hybrid'): bool,
     Optional('directevo'): bool,
     Optional('encode'): bool,
@@ -361,6 +378,7 @@ schema = Schema({
     Optional('ml'): bool,
     Optional('MODELS'): Or(None, Use(int)),
     Optional('onehot'): bool,
+    Optional('reformat_csv'): bool,
     Optional('shift_pos'): bool,
     Optional('sto2a2m'): bool,
     Optional('train_and_save'): bool,
@@ -376,6 +394,9 @@ def validate(args):
 
 
 def run_main():
+    """
+    Entry point for pip-installed version.
+    """
     arguments = docopt(__doc__, version=__version__)
     start_time = time.time()
     logger.debug(f'main.py __name__: {__name__}, version: {__version__}')
@@ -388,6 +409,8 @@ def run_main():
         run_pypef_pure_ml(arguments)
     elif arguments['hybrid']:
         run_pypef_hybrid_modeling(arguments)
+    elif arguments['param_inference']:
+        run_pypef_hybrid_modeling(arguments)
     else:
         run_pypef_utils(arguments)
 
@@ -397,4 +420,7 @@ def run_main():
 
 
 if __name__ == '__main__':
+    """
+    Entry point for direct file run
+    """
     run_main()
