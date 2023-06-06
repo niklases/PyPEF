@@ -36,7 +36,12 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 <a name="pypef"></a>
 # PyPEF: Pythonic Protein Engineering Framework
 
-a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence. Written by Niklas Siedhoff and Alexander-Maurice Illig.
+a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence using different forms of sequence encoding:
+- One-hot encoding
+- Amino acid descriptor sets (taken from AAindex database) encoding
+- Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) encoding
+
+Written by Niklas Siedhoff and Alexander-Maurice Illig.
 
 <p align="center">
     <img src="workflow/test_dataset_aneh/exemplary_validation_color_plot.png" alt="drawing" width="500"/>
