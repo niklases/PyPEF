@@ -101,17 +101,17 @@ see pypef [-h] for possible commands.
 Additional helpful commands for data conversion
 -----------------------------------------------
 Creation of learning and test sets – splitting CSV variant-fitness data:
-        pypef mklsts --wt WT_SEQ --input CSV_FILE
+        pypef mklsts --wt WT_FASTA --input CSV_FILE
             [--drop THRESHOLD] [--numrnd NUMBER]
 
 Creation of prediction sets from CSV data (using single-substituted variant data):
-        pypef mkps --wt WT_SEQ --input CSV_FILE
+        pypef mkps --wt WT_FASTA --input CSV_FILE
             [--drop THRESHOLD] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
             [--ddiverse] [--tdiverse] [--qdiverse]
 
 Encoding a CSV file (for further performance studies such as "low N" or
 "mutational extrapolation" engineering tasks:
-        pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_SEQ
+        pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
             [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
             [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
 
@@ -121,15 +121,17 @@ Converting a STO alignment file to A2M format:
 
 
 Usage:
-    pypef mklsts --wt WT_SEQ --input CSV_FILE
+    pypef mklsts --wt WT_FASTA --input CSV_FILE
         [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--numrnd NUMBER]
-    pypef mkps --wt WT_SEQ --input CSV_FILE
+    pypef mkps --wt WT_FASTA --input CSV_FILE
         [--drop THRESHOLD] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
     pypef param_inference
         [--msa MSA_FILE] [--params PLMC_FILE]
-        [--wt WT_SEQ] [--opt_iter OPT_ITER]
-    pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_SEQ
+        [--wt WT_FASTA] [--opt_iter N_ITER]
+    pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
+        [--opt_iter N_ITER]
+    pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
         [--params PLMC_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
         [--threads THREADS]
         [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
@@ -146,11 +148,11 @@ Usage:
         [--ps PREDICTION_SET] [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                         [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS]
-    pypef hybrid directevo --wt WT_SEQ --model MODEL --params PLMC_FILE
+    pypef hybrid directevo --wt WT_FASTA --model MODEL --params PLMC_FILE
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
-    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE --wt WT_SEQ
+    pypef hybrid train_and_save --input CSV_FILE --params PLMC_FILE --wt WT_FASTA
         [--fit_size REL_LEARN_FIT_SIZE] [--test_size REL_TEST_SIZE]
         [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR]
         [--fitness_key FITNESS_KEY] [--rnd_state RND_STATE]
@@ -170,7 +172,7 @@ Usage:
         [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
         [--regressor TYPE] [--nofft] [--negative] [--params PLMC_FILE] [--threads THREADS]
-    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL --wt WT_SEQ
+    pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL --wt WT_FASTA
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PLMC_FILE]
     pypef ml low_n --input ENCODED_CSV_FILE
@@ -219,7 +221,7 @@ Options:
   --numiter NUM_ITER                Number of mutation iterations per evolution trajectory [default: 5].
   --numtraj NUM_TRAJ                Number of trajectories, i.e., evolution pathways [default: 5].
   -o --offset OFFSET                Offset for shifting substitution positions of the input CSV file [default: 0].
-  --opt_iter OPT_ITER               Number of iterations for GREMLIN-based optimization of local fields
+  --opt_iter N_ITER                 Number of iterations for GREMLIN-based optimization of local fields
                                     and couplings [default: 100].
   --params PLMC_FILE                Input PLMC couplings parameter file.
   -u --pmult                        Predict for all prediction files in folder for recombinants
@@ -260,7 +262,7 @@ Options:
                                     data [default: False].
   -t --ts TEST_SET                  Input validation set in .fasta format.
   --version                         Show version [default: False].
-  -w --wt WT_SEQ                    Input file (in FASTA format) for wild-type sequence.
+  -w --wt WT_FASTA                  Input wild-type sequence file (in FASTA format).
   --wt_pos WT_POSITION              Row position of encoded wild-type in encoding CSV file (0-indexed) [default: 0].
   -y --y_wt WT_FITNESS              Fitness value (y) of wild-type [default: 1.0].
   encode                            Encoding [default: False].
@@ -271,13 +273,21 @@ Options:
   param_inference                   Inferring DCA params using the GREMLIN approach [default: False].
   reformat_csv                      Reformat input CSV with indicated column and mutation separators to default
                                     CSV style (column separator ';' and mutation separator '/') [default: False.]
+  save_msa_info                     Optimize local fields and couplings of MSA based on GREMLIN DCA approach and
+                                    save resulting coupling matrix and highly coevolved amino acids.
   shift_pos                         Shift positions of all variant substitutions of the input CSV
                                     file (identical to reformat_csv when setting --offset to 0) [default: False.]
   sto2a2m                           Transform multiple sequence alignment from STO format to
                                     A2M format [default: False].
 """
 
+
 from os import environ
+try:
+    environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # only print TensorFlow errors
+except KeyError:
+    pass
+
 from sys import argv, version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:
@@ -295,11 +305,6 @@ from pypef.ml.ml_run import run_pypef_pure_ml
 from pypef.dca.dca_run import run_pypef_hybrid_modeling
 from pypef.utils.utils_run import run_pypef_utils
 
-try:
-    environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # only print TensorFlow errors
-except KeyError:
-    pass
-
 logger = logging.getLogger("pypef")
 logger.setLevel(logging.DEBUG)
 
@@ -307,7 +312,7 @@ ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter(
-    "%(asctime)s,%(msecs)03d %(levelname)s %(filename)s:%(lineno)d -- %(message)s",
+    "%(asctime)s.%(msecs)03d %(levelname)s %(filename)s:%(lineno)d -- %(message)s",
     "%Y-%m-%d %H:%M:%S"
 )
 ch.setFormatter(formatter)
@@ -379,6 +384,7 @@ schema = Schema({
     Optional('MODELS'): Or(None, Use(int)),
     Optional('onehot'): bool,
     Optional('reformat_csv'): bool,
+    Optional('save_msa_info'): bool,
     Optional('shift_pos'): bool,
     Optional('sto2a2m'): bool,
     Optional('train_and_save'): bool,
@@ -407,9 +413,7 @@ def run_main():
         run_pypef_utils(arguments)
     elif arguments['ml']:
         run_pypef_pure_ml(arguments)
-    elif arguments['hybrid']:
-        run_pypef_hybrid_modeling(arguments)
-    elif arguments['param_inference']:
+    elif arguments['hybrid'] or arguments['param_inference'] or arguments['save_msa_info']:
         run_pypef_hybrid_modeling(arguments)
     else:
         run_pypef_utils(arguments)
