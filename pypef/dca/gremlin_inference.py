@@ -48,6 +48,8 @@ References:
 """
 
 import logging
+import os
+
 logger = logging.getLogger('pypef.dca.params_inference')
 
 from os import mkdir
@@ -145,7 +147,7 @@ class GREMLIN:
         tmp = (msa_ori == self.states - 1).astype(float)
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
 
-        gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] > self.gap_cutoff)[0]
+        gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
         logger.info(f'Gap positions (removed from msa):\n{gaps}')
         ncol_trimmed = len(non_gaps)
         v_idx = non_gaps
@@ -235,7 +237,11 @@ class GREMLIN:
 
     @staticmethod
     def sym_w(w):
-        """symmetrize input matrix of shape (x,y,x,y)"""
+        """
+        Symmetrize input matrix of shape (x,y,x,y)
+        As the full couplings matrix W might/will be slightly "unsymmetrical"
+        it will be symmetrized according to one half being "mirrored".
+        """
         x = w.shape[0]
         w = w * np.reshape(1 - np.eye(x), (x, 1, x, 1))
         w = w + tf.transpose(w, [2, 3, 0, 1])
@@ -367,9 +373,11 @@ class GREMLIN:
         try:
             return self.v_opt, self.w_opt
         except AttributeError:
-            raise SystemError("No v_opt and w_opt available, this means GREMLIN "
-                              "has not been initialized setting optimize to True, "
-                              "e.g., try GREMLIN('Alignment.fasta', optimize=True).")
+            raise SystemError(
+                "No v_opt and w_opt available, this means GREMLIN "
+                "has not been initialized setting optimize to True, "
+                "e.g., try GREMLIN('Alignment.fasta', optimize=True)."
+            )
 
     def get_score(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
         if v is None or w is None:
@@ -450,7 +458,35 @@ class GREMLIN:
         x = x.reshape(dim, dim)
         return x
 
-    def get_correlation_matrix(self, matrix_type: str = 'apc'):
+    def mtx_gaps_as_zeros(self, gap_reduced_mtx, insert_gap_zeros=True):
+        """
+        Inserts zeros at gap positions of the (L,L) matrices,
+        i.e., raw/apc/zscore matrices.
+        """
+        if insert_gap_zeros:
+            gap_reduced_mtx = list(gap_reduced_mtx)
+            mtx_zeroed = []
+            c = 0
+            for i in range(self.n_col_ori):
+                mtx_i = []
+                c_i = 0
+                if i in self.gaps:
+                    mtx_zeroed.append(list(np.zeros(self.n_col_ori)))
+                else:
+                    for j in range(self.n_col_ori):
+                        if j in self.gaps:
+                            mtx_i.append(0.0)
+                        else:
+                            mtx_i.append(gap_reduced_mtx[c][c_i])
+                            c_i += 1
+                    mtx_zeroed.append(mtx_i)
+                    c += 1
+            return np.array(mtx_zeroed)
+
+        else:
+            return gap_reduced_mtx
+
+    def get_correlation_matrix(self, matrix_type: str = 'apc', insert_gap_zeros=False):
         """
         Requires optimized w matrix (of shape (L, 20, L, 20))
         inputs
@@ -471,26 +507,27 @@ class GREMLIN:
         apc = raw - ap
 
         if matrix_type == 'apc':
-            return apc
+            return self.mtx_gaps_as_zeros(apc, insert_gap_zeros=insert_gap_zeros)
         elif matrix_type == 'raw':
-            return raw
+            return self.mtx_gaps_as_zeros(raw, insert_gap_zeros=insert_gap_zeros)
         elif matrix_type == 'zscore' or matrix_type == 'z_score':
-            return self.normalize(apc)
+            return self.mtx_gaps_as_zeros(self.normalize(apc), insert_gap_zeros=insert_gap_zeros)
         else:
             raise SystemError("Unknown matrix type. Choose between 'apc', 'raw', or 'zscore'.")
 
     def plot_correlation_matrix(self, matrix_type: str = 'apc', set_diag_zero=True):
-        matrix = self.get_correlation_matrix(matrix_type)
+        matrix = self.get_correlation_matrix(matrix_type, insert_gap_zeros=True)
         if set_diag_zero:
             np.fill_diagonal(matrix, 0.0)
 
-        fig, ax = plt.subplots(figsize=(5, 5))
+        fig, ax = plt.subplots(figsize=(10, 10))
 
         if matrix_type == 'zscore' or matrix_type == 'z_score':
             ax.imshow(matrix, cmap='Blues', interpolation='none', vmin=1, vmax=3)
         else:
             ax.imshow(matrix, cmap='Blues')
         tick_pos = ax.get_xticks()
+        tick_pos[-1] = matrix.shape[0]
         tick_pos[2:] -= 1
         ax.set_xticks(tick_pos)
         ax.set_yticks(tick_pos)
@@ -503,7 +540,7 @@ class GREMLIN:
         plt.title(matrix_type)
         plt.savefig(f'{matrix_type}.png', dpi=500)
 
-    def get_top_coevolving_residues(self, wt_seq=None, min_distance=0, sort_by="apc", save_csv=True):
+    def get_top_coevolving_residues(self, wt_seq=None, min_distance=0, sort_by="apc"):
         if wt_seq is None:
             wt_seq = self.wt_seq
         if wt_seq is None:
@@ -527,7 +564,10 @@ class GREMLIN:
 
         i_idx = self.w_idx[:, 0]
         j_idx = self.w_idx[:, 1]
-
+        print(len(i_idx))
+        print(len(j_idx))
+        print(len(wt_seq))
+        print(wt_seq)
         i_aa = [f"{wt_seq[i]}_{i + 1}" for i in i_idx]
         j_aa = [f"{wt_seq[j]}_{j + 1}" for j in j_idx]
 
@@ -539,17 +579,22 @@ class GREMLIN:
         df_mtx = pd.DataFrame(mtx, columns=["i", "j", "apc", "zscore", "raw", "i_aa", "j_aa"])
         df_mtx_sorted = df_mtx.sort_values(sort_by, ascending=False)
 
-        # get contacts with sequence separation > min_distance, sort
+        # get contacts with sequence separation > min_distance
         df_mtx_sorted_mindist = df_mtx_sorted.loc[df_mtx['j'] - df_mtx['i'] > min_distance]
-
-        if save_csv:
-            df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv")
 
         return df_mtx_sorted_mindist
 
 
-def save_gremlin_as_pickle(alignment, opt_iter=1000):
-    gremlin = GREMLIN(alignment, optimize=True, opt_iter=opt_iter)
+"""
+GREMLIN class helper functions below.
+"""
+
+
+def save_gremlin_as_pickle(alignment: str, wt_seq: str, opt_iter: int = 100):
+    """
+    Function for getting and/or saving (optimized or unoptimized) GREMLIN model
+    """
+    gremlin = GREMLIN(alignment, wt_seq=wt_seq, optimize=True, opt_iter=opt_iter)
     try:
         mkdir('Pickles')
     except FileExistsError:
@@ -567,3 +612,17 @@ def save_gremlin_as_pickle(alignment, opt_iter=1000):
         },
         open('Pickles/GREMLIN', 'wb')
     )
+    return gremlin
+
+
+def plot_all_corr_mtx(gremlin: GREMLIN):
+    gremlin.plot_correlation_matrix(matrix_type='raw')
+    gremlin.plot_correlation_matrix(matrix_type='apc')
+    gremlin.plot_correlation_matrix(matrix_type='zscore')
+
+
+def save_corr_csv(gremlin: GREMLIN, min_distance: int = 0, sort_by: str = 'apc'):
+    df_mtx_sorted_mindist = gremlin.get_top_coevolving_residues(
+        min_distance=min_distance, sort_by=sort_by
+    )
+    df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv")

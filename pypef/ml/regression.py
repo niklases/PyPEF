@@ -938,7 +938,7 @@ def save_model(
             )
             name = get_basename(idx)
             if model_type in ['PLMC', 'GREMLIN']:
-                name = name + model_type.lower()
+                name = 'ML' + model_type.lower()
             logger.info(f'Saving model as {name}')
             file = open(os.path.join(path, 'Pickles', name), 'wb')
             pickle.dump(regressor_, file)
