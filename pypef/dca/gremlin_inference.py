@@ -16,7 +16,6 @@
 # *Corresponding author
 # §Equal contribution
 
-
 """
 Code taken from GREMLIN repository available at https://github.com/sokrypton/GREMLIN_CPP/
 adapted (put functions into a class termed GREMLIN) and used under the
@@ -594,13 +593,14 @@ def save_gremlin_as_pickle(alignment: str, wt_seq: str, opt_iter: int = 100):
     """
     Function for getting and/or saving (optimized or unoptimized) GREMLIN model
     """
+    logger.info(f'Inferring GREMLIN DCA parameters based on the provided MSA...')
     gremlin = GREMLIN(alignment, wt_seq=wt_seq, optimize=True, opt_iter=opt_iter)
     try:
         mkdir('Pickles')
     except FileExistsError:
         pass
 
-    logger.info(f'Save model as Pickle file... GREMLIN')
+    logger.info(f'Saving GREMLIN model as Pickle file...')
     pickle.dump(
         {
             'model': gremlin,

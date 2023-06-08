@@ -16,7 +16,6 @@
 # *Corresponding author
 # §Equal contribution
 
-
 import os
 from os import listdir
 from os.path import isfile, join
@@ -193,7 +192,7 @@ def run_pypef_pure_ml(arguments):
                         threads=threads  # only for DCA
                     )
                     for pred in predictions:
-                        predictions_total.append(pred)  # could implement numpy.save if array gets too large byte size
+                        predictions_total.append(pred)  # if array gets too large?
                 predictions_total = list(dict.fromkeys(predictions_total))  # removing duplicates from list
                 if arguments['--negative']:
                     predictions_total = sorted(predictions_total, key=lambda x: x[0], reverse=False)

@@ -16,7 +16,6 @@
 # *Corresponding author
 # §Equal contribution
 
-
 """
 Main modules for regression/ML including feature generation
 (i.e. sequence encoding), cross-validation-based hyperparameter
@@ -795,7 +794,7 @@ def encode_based_on_type(
     elif encoding == 'onehot':  # OneHot encoding technique
         encoder = OneHotEncoding(sequences)
         x = encoder.collect_encoded_sequences()
-    elif encoding == 'dca':  # encoding == 'plmc' or encoding == 'gremlin':  # xs, variants, sequences, ys_true, x_wt, model, model_type
+    elif encoding == 'dca':  # PLMC or GREMLIN-based encoding
         x, variants, sequences, y_true, x_wt, model, model_type = plmc_or_gremlin_encoding(
             variants, sequences, y_true, couplings_file, substitution_sep, threads, verbose
         )
@@ -856,7 +855,10 @@ def crossval_on_all(x_train, x_test, y_train, y_test, regressor: str, parameter,
     ax.set_xlabel('Measured')
     ax.set_ylabel('Predicted')
     ax.legend(prop={'size': 8})
-    plt.savefig(os.path.join('CV_performance', f'{name}_{regressor.upper()}_{n_samples}-fold-CV.png'), dpi=300)
+    plt.savefig(
+        os.path.join('CV_performance', f'{name}_{regressor.upper()}_{n_samples}-fold-CV.png'),
+        dpi=500
+    )
     plt.close('all')
 
 
@@ -1016,9 +1018,7 @@ def predict(
 
     # Pay attention if increased negative values would define a better variant --> use negative flag
     predictions.sort()
-    predictions.reverse()
-    # if predictions array too large? if Mult_Path is not None: predictions = predictions[:100000]
-
+    predictions.reverse()  # if predictions array is too large?
     return predictions
 
 

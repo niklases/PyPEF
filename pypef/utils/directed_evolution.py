@@ -123,7 +123,6 @@ class DirectedEvolution:
         self.usecsv = usecsv
         self.csvaa = csvaa
         self.negative = negative
-
         self.de_step_counter = 0  # DE steps
         self.traj_counter = 0  # Trajectory counter
 

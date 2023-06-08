@@ -40,7 +40,10 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 
-from pypef.utils.variant_data import get_sequences_from_file, get_seqs_from_var_name, remove_nan_encoded_positions, get_wt_sequence, split_variants
+from pypef.utils.variant_data import (
+    get_sequences_from_file, get_seqs_from_var_name,
+    remove_nan_encoded_positions, get_wt_sequence, split_variants
+)
 from pypef.dca.plmc_encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence, EffectiveSiteError
 from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
@@ -52,6 +55,7 @@ from pypef.dca.gremlin_inference import GREMLIN
 class DCAHybridModel:
     alphas = np.logspace(-6, 6, 100)  # Grid for the parameter 'alpha'.
     parameter_range = [(0, 1), (0, 1)]  # Parameter range of 'beta_1' and 'beta_2' with lb <= x <= ub
+    # TODO: Implementation of other regression techniques (CVRegression models)
 
     def __init__(
             self,
@@ -118,9 +122,9 @@ class DCAHybridModel:
         """
         return np.subtract(x, np.mean(x, axis=axis)) / np.std(x, axis=axis, ddof=1)
 
-    def _delta_X(
+    def _delta_x(
             self,
-            X: np.ndarray
+            x: np.ndarray
     ) -> np.ndarray:
         """
         Substracts for each variant the encoded wild-type sequence
@@ -128,19 +132,19 @@ class DCAHybridModel:
         
         Parameters
         ----------
-        X : np.ndarray
-            Array of encoded variant sequences.
+        x : np.ndarray
+            Array of encoded variant sequences (matrix X).
 
         Returns
         -------
         Array of encoded variant sequences with substracted encoded
         wild-type sequence.
         """
-        return np.subtract(X, self.x_wild_type)
+        return np.subtract(x, self.x_wild_type)
 
-    def _delta_E(
+    def _delta_e(
             self,
-            X: np.ndarray
+            x: np.ndarray
     ) -> np.ndarray:
         """
         Calculates the difference of the statistical energy 'dE'
@@ -159,7 +163,7 @@ class DCAHybridModel:
         Difference of the statistical energy between variant 
         and wild-type.
         """
-        return np.sum(self._delta_X(X), axis=1)
+        return np.sum(self._delta_x(x), axis=1)
 
     def _spearmanr_dca(self) -> float:
         """
@@ -173,7 +177,7 @@ class DCAHybridModel:
         or
             beta_1 * y_dca - beta_2 * y_ridge.
         """
-        y_dca = self._delta_E(self.X)
+        y_dca = self._delta_e(self.X)
         return self.spearmanr(self.y, y_dca)
 
     def ridge_predictor(
@@ -328,7 +332,7 @@ class DCAHybridModel:
         if y_ttrain_min_cv < 2:
             return 1.0, 0.0, None
 
-        y_dca_ttest = self._delta_E(X_ttest)
+        y_dca_ttest = self._delta_e(X_ttest)
 
         ridge = self.ridge_predictor(X_ttrain, y_ttrain)
         y_ridge_ttest = ridge.predict(X_ttest)
@@ -338,7 +342,7 @@ class DCAHybridModel:
 
     def hybrid_prediction(
             self,
-            X: np.ndarray,
+            x: np.ndarray,
             reg: object,  # any regression-based estimator (from sklearn)
             beta_1: float,
             beta_2: float
@@ -350,8 +354,8 @@ class DCAHybridModel:
 
         Parameters
         ----------
-        X : np.ndarray
-            Encoded sequences used for prediction.
+        x : np.ndarray
+            Encoded sequences X used for prediction.
         reg : object
             Tuned ridge regressor for the hybrid model.
         beta_1 : float
@@ -364,11 +368,11 @@ class DCAHybridModel:
         Predicted fitness associates of 'X' using the
         hybrid model.
         """
-        y_dca = self._delta_E(X)
+        y_dca = self._delta_e(x)
         if reg is None:
             y_ridge = np.random.random(len(y_dca))  # in order to suppress error
         else:
-            y_ridge = reg.predict(X)
+            y_ridge = reg.predict(x)
         # adjusting: + or - on all data --> +-beta_1 * y_dca + beta_2 * y_ridge
         return self._y_hybrid(y_dca, y_ridge, beta_1, beta_2)
 
@@ -650,7 +654,10 @@ def plmc_or_gremlin_encoding(
         threads=1,
         verbose=True
 ):
-    """TODO"""
+    """
+    Decides based on the params file input type which DCA encoding to be performed, i.e.,
+    GREMLIN or PLMC.
+    """
     if ys_true is None:
         ys_true = np.zeros(np.shape(sequences))
     model, model_type = get_model_and_type(params_file, substitution_sep)
@@ -903,17 +910,17 @@ def performance_ls_ts(
         Just plots test results (predicted fitness vs. measured fitness)
         using def plot_y_true_vs_y_pred.
     """
-    hybrid = False
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
     if ls_fasta is not None and ts_fasta is not None:
         train_sequences, train_variants, y_train = get_sequences_from_file(ls_fasta)
-        # # xs, variants, sequences, ys_true, x_wt, model, model_type
         x_train, train_variants, train_sequences, y_train, x_wt, _, model_type = plmc_or_gremlin_encoding(
-            train_variants, train_sequences, y_train, params_file, substitution_sep, threads)
+            train_variants, train_sequences, y_train, params_file, substitution_sep, threads
+        )
 
         x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
-            test_variants, test_sequences, y_test, params_file, substitution_sep, threads, verbose=False)
+            test_variants, test_sequences, y_test, params_file, substitution_sep, threads, verbose=False
+        )
 
         logger.info(f"\nInitial training set variants: {len(train_sequences)}. "
                     f"Remaining: {len(train_variants)} (after removing "
@@ -946,7 +953,6 @@ def performance_ls_ts(
         )
 
         save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, spearman_r, reg)
-        hybrid = True
 
     elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
         logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
@@ -965,15 +971,14 @@ def performance_ls_ts(
                 substitution_sep, threads, False
             )
             ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
-            hybrid = True
 
     elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
         logger.info(f'No learning set provided, falling back to statistical DCA model: '
                     f'no adjustments of individual hybrid model parameters (beta_1 and beta_2).')
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
-        # x_train, train_variants, train_sequences, y_train, x_wt, _, model_type
-        x_test, test_variants, test_sequences, y_test, x_wt, model, model_type = plmc_or_gremlin_encoding(   # return variants, xs, x_wt, ys, model, model_type
-            test_variants, test_sequences, y_test, params_file, substitution_sep, threads)
+        x_test, test_variants, test_sequences, y_test, x_wt, model, model_type = plmc_or_gremlin_encoding(
+            test_variants, test_sequences, y_test, params_file, substitution_sep, threads
+        )
 
         logger.info(f"Initial test set variants: {len(test_sequences)}. "
                     f"Remaining: {len(test_variants)} (after removing "
@@ -1122,7 +1127,9 @@ def predict_ps(  # also predicting "pmult" dict directories
         else:  # Hybrid model input requires params from plmc or GREMLIN model
             encoding_model, encoding_model_type = get_model_and_type(params_file)
             variants, x_test, *_ = plmc_or_gremlin_encoding(
-                variants, sequences, None, encoding_model, threads=threads, verbose=False, substitution_sep=separator)
+                variants, sequences, None, encoding_model,
+                threads=threads, verbose=False, substitution_sep=separator
+            )
             ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
         assert len(x_test) == len(variants)
         y_v_pred = zip(ys_pred, variants)

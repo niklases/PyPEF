@@ -16,21 +16,17 @@
 # *Corresponding author
 # §Equal contribution
 
-# Contains Python code used for the approach presented in our 'hybrid modeling' paper
-# Preprint available at: https://doi.org/10.1101/2022.06.07.495081
-# Code available at: https://github.com/Protein-Engineering-Framework/Hybrid_Model
-
-# The included class 'CouplingsModel' has been taken from the script 'model.py' as part of the
-# EVmutation module (https://github.com/debbiemarkslab/EVmutation) written by Thomas Hopf in the
-# labs of Debora Marks and Chris Sander at Harvard Medical School and modified (shortened).
-# See also: https://doi.org/10.1038/nbt.3769
-# Hopf, T. A., Ingraham, J. B., Poelwijk, F.J., Schärfe, C.P.I., Springer, M., Sander, C., & Marks, D. S. (2016).
-# Mutation effects predicted from sequence co-variation. Nature Biotechnology, in press.
-
 """
+Contains Python code used for the approach presented in our 'hybrid modeling' paper
+Preprint available at: https://doi.org/10.1101/2022.06.07.495081
+Code available at: https://github.com/Protein-Engineering-Framework/Hybrid_Model
+
 The included class 'CouplingsModel' has been taken from the script 'model.py' as part of the
 EVmutation module (https://github.com/debbiemarkslab/EVmutation) written by Thomas Hopf in the
 labs of Debora Marks and Chris Sander at Harvard Medical School and modified (shortened).
+See also: https://doi.org/10.1038/nbt.3769
+Hopf, T. A., Ingraham, J. B., Poelwijk, F.J., Schärfe, C.P.I., Springer, M., Sander, C., & Marks, D. S. (2016).
+Mutation effects predicted from sequence co-variation. Nature Biotechnology, in press.
 
 References:
 [1] Hopf, T. A., Ingraham, J. B., Poelwijk, F.J., Schärfe, C.P.I., Springer, M., Sander, C., & Marks, D. S.
@@ -62,14 +58,14 @@ from pypef.utils.variant_data import amino_acids
 
 
 _SLICE = np.s_[:]
-# np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)  # TODO: DEV
+# np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)
 
 class InvalidVariantError(Exception):
     """
     Description
     -----------
     Exception raised when entered variant does not follow the required scheme
-    (integer enclosed by two one letter code representations of amino acids).
+    (integer enclosed by two one-letter code representations of amino acids).
 
     Attributes
     ----------
@@ -121,8 +117,8 @@ def is_valid_substitution(substitution: str) -> bool:
     Description
     -----------
     A substitution has to follow the scheme:
-    First character: (wild-type/substituted) amino acid in one letter code representation
-    Last character: (introduced) amino acid in one letter code representation
+    First character: (wild-type/substituted) amino acid in one-letter code representation
+    Last character: (introduced) amino acid in one-letter code representation
     In between: position (of substitution)
 
     If the entered substitution does not follow this scheme (integer enclosed by two one
@@ -158,7 +154,7 @@ def is_valid_variant(variant: str, separator='/') -> bool:
     -----------
     Gets the single substitutions of the variant and checks if they follow the required scheme.
 
-    If the entered substitution does not follow this scheme (integer enclosed by two one
+    If the entered substitution does not follow this scheme (integer enclosed by two one-
     letter code representations of amino acids) return False, else return True.
 
     Parameters
@@ -784,7 +780,7 @@ def _get_data_parallel(
         try:
             data.append([variant, sequence, dca_encode.encode_variant(variant), fitness])
         except EffectiveSiteError:  # do not append non-encoded sequences and
-            pass                 # associated fitness values
+            pass                    # associated fitness values
 
     return data
 
@@ -833,7 +829,7 @@ def get_dca_data_parallel(
         fitnesses = np.delete(fitnesses, idxs_nan)
         variants = np.delete(variants, idxs_nan)
 
-    variants_split = np.array_split(variants, threads)    # split array in n_cores pieces
+    variants_split = np.array_split(variants, threads)    # split array in n_cores parts
     sequences_split = np.array_split(sequences, threads)  # for Ray parallelization
     fitnesses_split = np.array_split(fitnesses, threads)
     results = ray.get([
