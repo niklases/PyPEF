@@ -336,58 +336,53 @@ python3 ./pypef/main.py
 ## Preprocessing for DCA-based Sequence Encoding
 
 1. Downloading sequence database (e.g. UniRef100):
-```
-wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz
-```
+   ```
+   wget https://ftp.uniprot.org/pub/databases/uniprot/uniref/uniref100/uniref100.fasta.gz
+   ```
 
 2. Extracting sequence database:
-```
-gunzip uniref100.fasta.gz
-```
+   ```
+   gunzip uniref100.fasta.gz
+   ```
 
 3. After [installing jackhmmer as part of the HMMER package](http://hmmer.org/documentation.html), construct an MSA for your target sequence provided in FASTA format (and for example set `--incT` to half the sequence length (0.5*L*) and the number of used CPUs for computing):
-```
-jackhmmer --incT 199 --cpu 16 --noali -A ANEH_jhmmer.sto Sequence_WT_ANEH.fasta /path/to/uniref100.fasta
-```
+   ```
+   jackhmmer --incT 199 --cpu 16 --noali -A ANEH_jhmmer.sto Sequence_WT_ANEH.fasta /path/to/uniref100.fasta
+   ```
 
 4. Convert the created MSA from [Stockholm](https://en.wikipedia.org/wiki/Stockholm_format) (.sto) format to [A2M](https://en.wikipedia.org/wiki/FASTA_format#Extensions) format:
-```
-pypef sto2a2m --sto ANEH_jhmmer.sto
-```
+   ```
+   pypef sto2a2m --sto ANEH_jhmmer.sto
+   ```
+   
+5. Now you can follow approaches 5.1 (using GREMLIN; implemented in TensorFlow) or 5.2 (using plmc; extern parameter generation in C). 
 
-Now you can follow approaches 5.1 (using GREMLIN; implemented in TensorFlow) or 5.2 (using plmc; extern parameter generation in C).
+    5.1. Running GREMLIN on the generated MSA (in A2M format):
+    ```
+    pypef param_inference --msa MSA.fasta -w WT_SEQUENCE.FASTA --opt_iter 250
+    ```
+    The pickled GREMLIN file can then be used for encoding new/test sequences:
+    ```
+    pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params GREMLIN
+    ```
+    Or for hybrid modeling:
+    ```
+    pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
+    ```
 
-5.1 Running GREMLIN on the generated MSA (in A2M format):
-
-```
-pypef param_inference --msa MSA.fasta -w WT_SEQUENCE.FASTA --opt_iter 250
-```
-
-The pickled GREMLIN file can then be used for encoding new/test sequences:
-
-```
-pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params GREMLIN
-```
-
-Or for hybrid modeling:
-```
-pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
-```
-
-5.2 After [installing plmc](https://github.com/debbiemarkslab/plmc#compilation), generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
-
-```
-plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
-```
-
-The output parameter (.params) file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g. for pure ML modeling:
-```
-pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params ANEH_72.6.params
-```
-Or for hybrid modeling:
-```
-pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params
-```
+    5.2 After [installing plmc](https://github.com/debbiemarkslab/plmc#compilation), generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
+    ```
+    plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
+    ```
+    
+    The output parameter (.params) file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g. for pure ML modeling:
+    ```
+    pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params ANEH_72.6.params
+    ```
+    Or for hybrid modeling:
+    ```
+    pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params
+    ```
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding
