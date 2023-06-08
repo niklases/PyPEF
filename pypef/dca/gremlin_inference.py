@@ -18,7 +18,7 @@
 
 """
 Code taken from GREMLIN repository available at https://github.com/sokrypton/GREMLIN_CPP/
-adapted (put functions into a class termed GREMLIN) and used under the
+and adapted (put functions into a class termed GREMLIN) and used under the
 "THE BEER-WARE LICENSE" (Revision 42):
  ----------------------------------------------------------------------------------------
  "THE BEER-WARE LICENSE" (Revision 42):
@@ -47,8 +47,6 @@ References:
 """
 
 import logging
-import os
-
 logger = logging.getLogger('pypef.dca.params_inference')
 
 from os import mkdir
@@ -57,12 +55,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
-from scipy.stats import spearmanr, boxcox
+from scipy.stats import boxcox
 import pandas as pd
 import tensorflow as tf
 tf.get_logger().setLevel('DEBUG')
 
-from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
+from pypef.utils.variant_data import get_sequences_from_file
 
 
 class GREMLIN:
@@ -201,11 +199,15 @@ class GREMLIN:
 
     @staticmethod
     def opt_adam(loss, name, var_list=None, lr=1.0, b1=0.9, b2=0.999, b_fix=False):
-        """Adam optimizer [https://arxiv.org/abs/1412.6980]
+        """
+        Adam optimizer [https://arxiv.org/abs/1412.6980] with first and second moments
+            mt          and
+            vt          (greek letter nu) at time steps t, respectively.
         Note by GREMLIN authors: this is a modified version of adam optimizer.
         More specifically, we replace "vt" with sum(g*g) instead of (g*g).
         Furthermore, we find that disabling the bias correction
-        (b_fix=False) speeds up convergence for our case."""
+        (b_fix=False) speeds up convergence for our case.
+        """
 
         if var_list is None:
             var_list = tf.compat.v1.trainable_variables()
