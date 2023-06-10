@@ -626,7 +626,7 @@ class DCAEncoding(CouplingsModel):
 
         Returns
         -------
-        X_var : np.ndarray
+        x_var : np.ndarray
             Encoded sequence of the variant.
         """
         sequence = self.target_seq.copy()
@@ -641,11 +641,11 @@ class DCAEncoding(CouplingsModel):
             i_mapped = self.index_map[i]
             sequence[i_mapped] = A_i
 
-        X_var = np.zeros(sequence.size, dtype=float)
+        x_var = np.zeros(sequence.size, dtype=float)
         for idx, (i, A_i) in enumerate(zip(self.index_list, sequence)):
-            X_var[idx] = self.hi(i, A_i) + 0.5 * self.Ji(i, A_i, sequence)
+            x_var[idx] = self.hi(i, A_i) + 0.5 * self.Ji(i, A_i, sequence)
 
-        return X_var
+        return x_var
 
     def collect_encoded_sequences(self, variants: list) -> np.ndarray:
         """
@@ -672,11 +672,11 @@ class DCAEncoding(CouplingsModel):
             arrays/lists for training and testing the model.
         """
         encoded_sequences = []
-        if len(variants) == 1:  # do not show progress bar for single variant
+        if len(np.atleast_1d(variants)) == 1:  # do not show progress bar for single variant
             set_silence = True  # thus, also not for directed evolution
         else:
             set_silence = False
-        for i, variant in enumerate(tqdm(variants, disable=set_silence)):
+        for i, variant in enumerate(tqdm(np.atleast_1d(variants), disable=set_silence)):
             try:
                 encoded_sequences.append(self.encode_variant(variant))
             except EffectiveSiteError:

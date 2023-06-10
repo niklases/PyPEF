@@ -228,7 +228,7 @@ def run_pypef_utils(arguments):
             single_vars = None  # What happens now? (Full diverse?)
         # Metropolis-Hastings-driven directed evolution on single mutant .csv amino acid substitution data
         csvaa = arguments['--csvaa']  # only use identified substitutions --> taken from CSV file
-        logger.info('Running evolution trajectories and plotting...\n')
+        logger.info('Running evolution trajectories and plotting...')
         DirectedEvolution(
             ml_or_hybrid=ml_or_hybrid,
             encoding=arguments['--encoding'],

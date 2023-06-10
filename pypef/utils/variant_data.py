@@ -154,13 +154,13 @@ def remove_nan_encoded_positions(
     """
     Removes encoded sequence (x) of sequence list xs when NaNs occur in x.
     Also removes the corresponding fitness value y (f(x) --> y) at position i.
-    ys can als be any type of list, e.g. variants or sequences.
+    ys can also be any type of list, e.g. variants or sequences.
     """
-    if type(xs) == np.ndarray:
-        xs = list(xs)
+    xs = list(xs)
     temp = []
     for ys in yss:
         try:
+            ys = list(np.atleast_1d(ys))
             if isinstance(ys, pd.Series):
                 temp.append(list(ys))
             elif ys is None:
@@ -169,11 +169,17 @@ def remove_nan_encoded_positions(
                 else:
                     temp.append([None])
             else:
-                temp.append(list(ys))
+                if type(ys) == np.ndarray:
+                    if np.array(ys).ndim == 0:
+                        temp.append([list(np.atleast_1d(ys).tolist())])
+                    else:
+                        temp.append(list(np.atleast_1d(ys).tolist()))
+                else:
+                    temp.append(list(ys))
         except ValueError:
             temp.append(list(ys))
-        except TypeError:
-            temp = (None,)
+        #except TypeError:
+        #    temp = (None,)
     if temp:
         yss = temp
     if not yss == () and not yss == (None,):

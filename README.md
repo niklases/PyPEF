@@ -357,9 +357,9 @@ python3 ./pypef/main.py
    
 5. Now you can follow approaches 5.1 (using GREMLIN; implemented in TensorFlow) or 5.2 (using plmc; extern parameter generation in C). 
 
-    5.1. Running GREMLIN on the generated MSA (in A2M format):
+    5.1. Running GREMLIN on the generated MSA (in FASTA or A2M format):
     ```
-    pypef param_inference --msa MSA.fasta -w WT_SEQUENCE.FASTA --opt_iter 250
+    pypef param_inference --msa ANEH_jhmmer.a2m -w WT_SEQUENCE.FASTA --opt_iter 250
     ```
     The pickled GREMLIN file can then be used for encoding new/test sequences:
     ```

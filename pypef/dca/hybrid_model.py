@@ -555,7 +555,7 @@ Below: Some helper functions that call or are dependent on the DCAHybridModel cl
 """
 
 
-def check_model_type(model):
+def check_model_type(model: dict | DCAHybridModel | DCAEncoding | GREMLIN):
     """
     Checks type/instance of model.
     """
@@ -577,7 +577,7 @@ def check_model_type(model):
         raise SystemError('Unknown model/unknown Pickle file.')
 
 
-def get_model_path(model):
+def get_model_path(model: str):
     try:
         if isfile(model):
             model_path = model
@@ -679,7 +679,7 @@ def plmc_or_gremlin_encoding(
         )
     else:
         raise SystemError(
-            f"Found a {model_type} as input. Please train a new "
+            f"Found a {model_type.lower()} model as input. Please train a new "
             f"hybrid model on the provided LS/TS datasets."
         )
     assert len(xs) == len(variants) == len(sequences) == len(ys_true)
@@ -692,11 +692,15 @@ def gremlin_encoding(gremlin, variants, sequences, ys_true, shift_pos=1, substit
      delta_E = np.subtract(X, x_wt), with X = encoded sequences of variants.
      Also removes variants, sequences, and y_trues at MSA gap positions.
     """
+    variants, sequences, ys_true = np.atleast_1d(variants), np.atleast_1d(sequences), np.atleast_1d(ys_true)
     variants, sequences, ys_true = remove_gap_pos(
         gremlin.gaps, variants, sequences, ys_true,
         shift_pos=shift_pos, substitution_sep=substitution_sep
     )
-    xs = gremlin.get_score(sequences, encode=True)
+    try:
+        xs = gremlin.get_score(sequences, encode=True)
+    except SystemError:
+        xs = []
     x_wt = gremlin.get_score(np.atleast_1d(gremlin.wt_seq), encode=True)
     return xs, x_wt, variants, sequences, ys_true
 
@@ -720,7 +724,9 @@ def plmc_encoding(plmc, variants, sequences, ys_true, threads=1, verbose=False):
     else:
         x_ = plmc.collect_encoded_sequences(variants)
         # NaNs must still be removed
-        xs, variants, sequences, ys_true = remove_nan_encoded_positions(x_, variants, sequences, ys_true)
+        xs, variants, sequences, ys_true = remove_nan_encoded_positions(
+            x_, variants, sequences, ys_true
+        )
     return xs, x_wt, variants, sequences, ys_true
 
 
@@ -966,7 +972,7 @@ def performance_ls_ts(
         else:  # Hybrid model input requires params from plmc or GREMLIN model
             beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
             #encoding_model, encoding_model_type = get_model_and_type(params_file)
-            x_test, test_variants,  test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
+            x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
             )
@@ -1091,13 +1097,13 @@ def predict_ps(  # also predicting "pmult" dict directories
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
                     if model_type != 'Hybrid':
-                        test_variants, x_test, x_wt, *_ = plmc_or_gremlin_encoding(
+                        x_test, test_variants, x_wt, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, model, threads=threads, verbose=False,
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
                     else:  # Hybrid model input requires params from plmc or GREMLIN model
                         encoding_model, encoding_model_type = get_model_and_type(params_file)
-                        test_variants, x_test, *_ = plmc_or_gremlin_encoding(
+                        x_test, test_variants, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, encoding_model, threads=threads, verbose=False,
                             substitution_sep=separator)
                         ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
@@ -1119,19 +1125,18 @@ def predict_ps(  # also predicting "pmult" dict directories
     elif prediction_set is not None:
         sequences, variants, _ = get_sequences_from_file(prediction_set)
         # NaNs are already being removed by the called function
-        if model_type != 'Hybrid':
-            variants, x_test, x_wt, *_ = plmc_or_gremlin_encoding(
-                variants, sequences, None, model_pickle_file, threads=threads, verbose=False,
-                substitution_sep=separator)
-            ys_pred = get_delta_e_statistical_model(x_test, x_wt)
+        if model_type != 'Hybrid':  # statistical DCA model
+            xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
+                variants, sequences, None, params_file,
+                threads=threads, verbose=False, substitution_sep=separator)
+            ys_pred = get_delta_e_statistical_model(xs, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model
-            encoding_model, encoding_model_type = get_model_and_type(params_file)
-            variants, x_test, *_ = plmc_or_gremlin_encoding(
-                variants, sequences, None, encoding_model,
-                threads=threads, verbose=False, substitution_sep=separator
+            xs, variants, *_ = plmc_or_gremlin_encoding(
+                variants, sequences, None, params_file,
+                threads=threads, verbose=True, substitution_sep=separator
             )
-            ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
-        assert len(x_test) == len(variants)
+            ys_pred = model.hybrid_prediction(xs, reg, beta_1, beta_2)
+        assert len(xs) == len(variants)
         y_v_pred = zip(ys_pred, variants)
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(
@@ -1142,8 +1147,9 @@ def predict_ps(  # also predicting "pmult" dict directories
 
 
 def predict_directed_evolution(
-        encoder: DCAEncoding,
+        encoder: str,
         variant: str,
+        sequence: str,
         hybrid_model_data_pkl: str
 ) -> Union[str, list]:
     """
@@ -1154,28 +1160,32 @@ def predict_directed_evolution(
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.
     """
-    try:
-        x = encoder.encode_variant(variant)
-    except EffectiveSiteError:
-        return 'skip'
+    #try:
+    #    x = encoder.encode_variant(variant)
+    #except EffectiveSiteError:
+    #    return 'skip'
+    #file = open(os.path.join('Pickles', str(encoder)), 'rb')
+    #loaded_model = pickle.load(file)
 
     model_dict = pickle.load(open(os.path.join('Pickles', hybrid_model_data_pkl), "rb"))
     model = model_dict['model']
 
-    if check_model_type(model) == 'DCAMODEL':
-        target_seq, index = encoder.get_target_seq_and_index()
-        wt_name = target_seq[0] + str(index[0]) + target_seq[0]
-        x_wt = get_encoded_sequence(wt_name, encoder)
-        y_pred = get_delta_e_statistical_model(np.atleast_2d(x), x_wt)[0]  # [0] only for unpacking from list
-    elif check_model_type(model) == 'HYBRIDMODEL':
+    encoding_model, encoding_model_type = get_model_and_type(encoder)
+    if encoding_model_type != 'Hybrid':  # statistical DCA model
+        xs, variant, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
+            variant, sequence, None, encoder, verbose=False)
+        try:
+            y_pred = get_delta_e_statistical_model(xs, x_wt)
+        except ValueError:
+            return 'skip'
+    else:  # Hybrid model input requires params from plmc or GREMLIN model
+        xs, variant, *_ = plmc_or_gremlin_encoding(
+            variant, sequence, None, encoder, verbose=True
+        )
         reg = model_dict['regressor']
         beta_1 = model_dict['beta_1']
         beta_2 = model_dict['beta_2']
-        y_pred = model.hybrid_prediction(  # 2d as only single variant
-            X=np.atleast_2d(x),  # e.g., np.atleast_2d(3.0) --> array([[3.]])
-            reg=reg,  # RidgeRegressor
-            beta_1=beta_1,  # DCA model prediction weight
-            beta_2=beta_2  # ML model prediction weight
-        )[0]  # [0] only for unpacking from list
+        y_pred = model.hybrid_prediction(np.atleast_2d(xs), reg, beta_1, beta_2)[0]
+    y_pred = float(y_pred)
 
-    return [(y_pred, variant[1:])]
+    return [(y_pred, variant[0][1:])]

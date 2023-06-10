@@ -21,6 +21,8 @@ Modules for performing random evolution walks
 similar as presented by Biswas et al.
 """
 
+
+from __future__ import annotations
 import os
 import re
 import random
@@ -55,11 +57,11 @@ class DirectedEvolution:
             temp: float,
             path: str,
             model: str = None,
-            no_fft=False,
-            dca_encoder=None,
-            usecsv=False,
-            csvaa=False,
-            negative=False
+            no_fft: bool = False,
+            dca_encoder: str | None = None,
+            usecsv: bool = False,
+            csvaa: bool = False,
+            negative: bool = False
     ):
         """
         Runs in silico directed evolution and plots and writes trajectories.
@@ -242,7 +244,7 @@ class DirectedEvolution:
                 predictions = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                     path=self.path,
                     model=self.model,
-                    encoding=self.encoding,
+                    encoding=self.encoding,  # TODO: check names/rename
                     variants=np.atleast_1d(new_full_variant),
                     sequences=np.atleast_1d(new_sequence),
                     no_fft=self.no_fft,
@@ -253,10 +255,12 @@ class DirectedEvolution:
                 predictions = predict_directed_evolution(
                     encoder=self.dca_encoder,
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
+                    sequence=new_sequence,
                     hybrid_model_data_pkl=self.model
                 )
             if predictions != 'skip':
-                logger.info(f"Step {self.de_step_counter + 1}: {new_variant} --> {predictions[0][0]:.3f}")
+                logger.info(f"Step {self.de_step_counter + 1}: "
+                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions[0][0]:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
                 logger.info(f"Step {self.de_step_counter + 1}: {new_variant} --> {predictions}")
                 continue
