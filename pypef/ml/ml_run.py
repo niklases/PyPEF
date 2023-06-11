@@ -133,6 +133,9 @@ def run_pypef_pure_ml(arguments):
                 couplings_file=arguments['--params'],  # only for DCA
                 threads=threads  # only for DCA
             )
+            if predictions == 'skip' and not arguments['--params']:
+                raise SystemError("No couplings file provided. DCA-based sequence encoding "
+                                  "requires a (plmc or GREMLIN) parameter file.")
             if arguments['--negative']:
                 predictions = sorted(predictions, key=lambda x: x[0], reverse=False)
             predictions_out(

@@ -128,8 +128,8 @@ Converting a STO alignment file to A2M format:
 Usage:
     pypef mklsts --wt WT_FASTA --input CSV_FILE
         [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--numrnd NUMBER]
-    pypef mkps --wt WT_FASTA --input CSV_FILE
-        [--drop THRESHOLD] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
+    pypef mkps --wt WT_FASTA [--input CSV_FILE]
+        [--drop THRESHOLD] [--ssm] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
     pypef param_inference
         [--msa MSA_FILE] [--params PARAM_FILE]
@@ -153,7 +153,8 @@ Usage:
         [--ps PREDICTION_SET] [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                         [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS]
-    pypef hybrid directevo --wt WT_FASTA --model MODEL --params PARAM_FILE
+    pypef hybrid directevo --wt WT_FASTA --params PARAM_FILE
+        [--model MODEL]
         [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
@@ -247,10 +248,12 @@ Options:
   --show                            Show achieved model performances from Model_Results.txt.
   --sort METRIC_INT                 Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE,
                                     4: Pearson's r, 5: Spearman's rho} [default: 1].
+  --ssm                             Create single-saturation mutagenesis prediction set (does not
+                                    require CSV input) [default: False].
   --sto STO_MSA_FILE                The input MSA file in STO (Stockholm) format.
   --tdiverse                        Create/predict triple natural diverse variants [default: False].
   --temp TEMPERATURE                "Temperature" of Metropolis-Hastings criterion [default: 0.01]
-  --threads THREADS                  Parallel computing of training and validation of models.
+  --threads THREADS                 Parallel computing of training and validation of models.
                                     Number of threads used in parallel computing, by default
                                     no hyperthreading.
   --fit_size REL_LEARN_FIT_SIZE     Relative size of the train set for initial fitting. The remaining data
@@ -364,6 +367,7 @@ schema = Schema({
     Optional('--sep'): Or(None, str),
     Optional('--show'): Use(int),
     Optional('--sort'): Use(int),
+    Optional('--ssm'): bool,
     Optional('--sto'): Or(None, str),
     Optional('--tdiverse'): bool,
     Optional('--temp'): Use(float),

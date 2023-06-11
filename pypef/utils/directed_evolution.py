@@ -316,7 +316,7 @@ class DirectedEvolution:
         # Idea: Standardizing DCA-HybridModel predictions as just trained by Spearman's rho
         # e.g., meaning that fitness values could differ only at the 6th decimal place and only
         # predicted fitness ranks matter and not associated fitness values
-        fig, ax = plt.subplots()  # figsize=(10, 6)
+        fig, ax = plt.subplots(figsize=(10,6))  # figsize=(10, 6)
         ax.locator_params(integer=True)
         y_records_ = []
         for i, fitness_array in enumerate(y_records):
@@ -330,16 +330,17 @@ class DirectedEvolution:
                 if len(v_record) > traj_max_len:
                     traj_max_len = len(v_record)
                 if i == 0:                      # j + 1 -> x-axis position shifted by 1
-                    label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=9))
+                    label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=7))
                 else:
                     if v != 'WT':  # only plot 'WT' name once at i == 0
-                        label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=9))
-        adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.5)
+                        label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=7))
+        adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.6)
         ax.legend()
         plt.xticks(np.arange(1,  traj_max_len + 1, 1), np.arange(1, traj_max_len + 1, 1))
 
         plt.ylabel('Predicted fitness')
         plt.xlabel('Mutation trial steps')
+        plt.tight_layout()
         plt.savefig(str(self.model) + '_DE_trajectories.png', dpi=500)
         plt.clf()
 

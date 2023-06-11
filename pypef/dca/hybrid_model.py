@@ -1160,32 +1160,32 @@ def predict_directed_evolution(
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.
     """
-    #try:
-    #    x = encoder.encode_variant(variant)
-    #except EffectiveSiteError:
-    #    return 'skip'
-    #file = open(os.path.join('Pickles', str(encoder)), 'rb')
-    #loaded_model = pickle.load(file)
+    if hybrid_model_data_pkl is not None:
+        model, model_type = get_model_and_type(hybrid_model_data_pkl)
+    else:
+        model_type = 'StatisticalModel'  # any name != 'Hybrid'
 
-    model_dict = pickle.load(open(os.path.join('Pickles', hybrid_model_data_pkl), "rb"))
-    model = model_dict['model']
-
-    encoding_model, encoding_model_type = get_model_and_type(encoder)
-    if encoding_model_type != 'Hybrid':  # statistical DCA model
+    if model_type != 'Hybrid':  # statistical DCA model
+        # todo: each time pickle model file gets loaded, quite inefficient
+        #  for directed evolution, i.e., encoding of single sequences
         xs, variant, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
             variant, sequence, None, encoder, verbose=False)
-        try:
-            y_pred = get_delta_e_statistical_model(xs, x_wt)
-        except ValueError:
+        if not list(xs):
             return 'skip'
-    else:  # Hybrid model input requires params from plmc or GREMLIN model
+        y_pred = get_delta_e_statistical_model(xs, x_wt)
+    else:  # model_type == 'Hybrid': Hybrid model input requires params from PLMC or GREMLIN model
         xs, variant, *_ = plmc_or_gremlin_encoding(
-            variant, sequence, None, encoder, verbose=True
+            variant, sequence, None, encoder, verbose=False
         )
-        reg = model_dict['regressor']
-        beta_1 = model_dict['beta_1']
-        beta_2 = model_dict['beta_2']
-        y_pred = model.hybrid_prediction(np.atleast_2d(xs), reg, beta_1, beta_2)[0]
+        if not list(xs):
+            return 'skip'
+        try:
+            y_pred = model.hybrid_prediction(np.atleast_2d(xs), model.regressor, model.beta_1, model.beta_2)[0]
+        except ValueError:
+            raise SystemError(
+                "Probably a different model was used for encoding than for modeling; "
+                "e.g. using a HYBRIDgremlin model in combination with parameters taken from a PLMC file."
+            )
     y_pred = float(y_pred)
 
     return [(y_pred, variant[0][1:])]

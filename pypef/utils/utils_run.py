@@ -37,7 +37,8 @@ from pypef.utils.prediction_sets import (
     make_fasta_ps, make_recombinations_double, make_recombinations_triple,
     make_recombinations_quadruple, make_recombinations_quintuple,
     create_split_files, make_combinations_double_all_diverse,
-    make_combinations_triple_all_diverse, make_combinations_quadruple_all_diverse
+    make_combinations_triple_all_diverse, make_combinations_quadruple_all_diverse,
+    make_ssm_singles
 )   # not yet implemented: make_combinations_double_all_diverse_and_all_positions
 
 from pypef.utils.directed_evolution import DirectedEvolution
@@ -90,23 +91,28 @@ def run_pypef_utils(arguments):
 
     elif arguments['mkps']:
         wt_sequence = get_wt_sequence(arguments['--wt'])
-        csv_file = csv_input(arguments['--input'])
-        t_drop = float(arguments['--drop'])
-        df = drop_rows(csv_file, amino_acids, t_drop)
-        drop_wt = []
-        for i in range(len(df)):
-            if df.iloc[i, 0] == 'WT':
-                logger.info('Dropping wild-type (WT) from DataFrame as it cannot be used for (re-)combination.')
-                drop_wt.append(i)
-        df = df.drop(drop_wt).reset_index(drop=True)
+        if not arguments['--ssm']:
+            try:
+                csv_file = csv_input(arguments['--input'])
+            except FileNotFoundError:
+                raise SystemError("If creating prediction sets ('mkps') a CSV input is "
+                                  "required (if not running 'mkps --ssm').")
+            t_drop = float(arguments['--drop'])
+            df = drop_rows(csv_file, amino_acids, t_drop)
+            drop_wt = []
+            for i in range(len(df)):
+                if df.iloc[i, 0] == 'WT':
+                    logger.info('Dropping wild-type (WT) from DataFrame as it cannot be used for (re-)combination.')
+                    drop_wt.append(i)
+            df = df.drop(drop_wt).reset_index(drop=True)
 
-        logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
-        single_variants, _, higher_variants, _ = get_variants(df, amino_acids, wt_sequence)
-        logger.info(f'Using single substitution variants for (re-)combination. '
-                    f'Number of single variants: {len(single_variants)}.')
-        if len(single_variants) == 0:
-            logger.info('Found NO single substitution variants for possible recombination! '
-                        'No prediction files can be created!')
+            logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
+            single_variants, _, higher_variants, _ = get_variants(df, amino_acids, wt_sequence)
+            logger.info(f'Using single substitution variants for (re-)combination. '
+                        f'Number of single variants: {len(single_variants)}.')
+            if len(single_variants) == 0:
+                logger.info('Found NO single substitution variants for possible recombination! '
+                            'No prediction files can be created!')
 
         if arguments['--drecomb']:
             logger.info('Creating Recomb_Double_Split...')
@@ -157,15 +163,20 @@ def run_pypef_utils(arguments):
                 quadruples = np.array(files)
                 create_split_files(quadruples, single_variants, wt_sequence, 'Diverse_Quadruple', no + 1)
 
-        if arguments['--drecomb'] is False and arguments['--trecomb'] is False \
-                and arguments['--qarecomb'] is False and arguments['--qirecomb'] is False \
-                and arguments['--ddiverse'] is False and arguments['--tdiverse'] is False \
-                and arguments['--qdiverse'] is False:
+        if arguments['--ssm']:
+            singles = make_ssm_singles(wt_sequence, amino_acids)
+            make_fasta_ps('ssm_singles.fasta', wt_sequence, np.array(singles))
+
+        if True not in [
+            arguments['--drecomb'], arguments['--trecomb'], arguments['--qarecomb'],
+            arguments['--qirecomb'], arguments['--ddiverse'], arguments['--tdiverse'],
+            arguments['--qdiverse'], arguments['--ssm']
+        ]:
             logger.info(f'\nMaking prediction set fasta file from {csv_file}...\n')
             make_fasta_ps(
                 filename=f'{get_basename(csv_file)}_prediction_set.fasta',
                 wt=wt_sequence,
-                substitution=tuple(list(single_variants)+list(higher_variants))
+                substitutions=tuple(list(single_variants) + list(higher_variants))
             )
 
     # Metropolis-Hastings-driven directed evolution, similar to Biswas et al.:
