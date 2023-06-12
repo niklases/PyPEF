@@ -979,14 +979,16 @@ def predict(
     file = open(os.path.join(path, 'Pickles', str(model)), 'rb')
     loaded_model = pickle.load(file)
     file.close()
-    #aaidx = full_aaidx_txt_path(str(model) + '.txt')
+    idx = None
+    if encoding == 'aaidx':
+        idx = model + '.txt'
     if sequences is None and variants is None:  # File-based prediction
         sequences, variants, _ = get_sequences_from_file(prediction_set, mult_path)
 
     try:
         x, variants, sequences, _ = encode_based_on_type(
             encoding, variants, sequences, None, couplings_file,
-            None, threads, no_fft, substitution_sep, verbose
+            idx, threads, no_fft, substitution_sep, verbose
         )
     except SystemError:
         return 'skip'
