@@ -180,10 +180,10 @@ def run_pypef_pure_ml(arguments):
                 predictions_total = []
                 logger.info(f'Running predictions for variant-sequence files in directory {args[1:-1]}...')
                 path_recomb = path + args
-                os.chdir(path)
-                files = [f for f in listdir(path_recomb) if isfile(join(path_recomb, f)) if f.endswith('.fasta')]
+                files = [path_recomb + f for f in listdir(path_recomb)
+                         if isfile(join(path_recomb, f)) if f.endswith('.fasta')]
                 for i, file in enumerate(files):
-                    logger.info(f'Encoding files ({i+1}/{len(files)}) for prediction...\n')
+                    logger.info(f'Encoding files ({i+1}/{len(files)}) for prediction...')
                     predictions = predict(
                         path=path,
                         prediction_set=file,
@@ -191,7 +191,7 @@ def run_pypef_pure_ml(arguments):
                         encoding=arguments['--encoding'],
                         mult_path=path_recomb,
                         no_fft=arguments['--nofft'],
-                        couplings_file=absolute_path_cwd_file(arguments['--params']),  # only for DCA
+                        couplings_file=arguments['--params'],  # only for DCA
                         threads=threads  # only for DCA
                     )
                     for pred in predictions:
@@ -205,9 +205,9 @@ def run_pypef_pure_ml(arguments):
                 predictions_out(
                     predictions=predictions_total,
                     model=arguments['--model'],
-                    prediction_set='Top' + args[1:-1]
+                    prediction_set=f'Top{args[1:-1]}',
+                    path=path_recomb
                 )
-                os.chdir(path)
 
         elif arguments['extrapolation']:
             performance_mutation_extrapolation(
