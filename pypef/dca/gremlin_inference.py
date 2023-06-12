@@ -69,10 +69,10 @@ class GREMLIN:
             alignment: str,
             char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
             wt_seq=None,
-            optimize=False,
+            optimize=True,
             gap_cutoff=0.5,
             eff_cutoff=0.8,
-            opt_iter=1000
+            opt_iter=100
     ):
         self.char_alphabet = char_alphabet
         self.gap_cutoff = gap_cutoff

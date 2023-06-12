@@ -225,6 +225,7 @@ class CouplingsModel:
         self.index_map = None
         self._target_seq = None
         self._index_list = None
+        self.x_wt = None
         self.verbose = verbose
         try:
             self.__read_plmc_v2(filename, precision)
@@ -519,6 +520,8 @@ class DCAEncoding(CouplingsModel):
         super().__init__(filename=params_file)  # inherit functions and variables from class CouplingsModel
         self.verbose = verbose
         self.separator = separator
+        target_seq, index = self.get_target_seq_and_index()
+        self.x_wt = self.collect_encoded_sequences(target_seq[0] + str(index[0]) + target_seq[0])
 
     def _get_position_internal(self, position: int):
         """

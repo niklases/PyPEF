@@ -1027,6 +1027,7 @@ def predict_ts(
         model,
         test_set=None,
         encoding='aaidx',
+        idx=None,
         no_fft=False,
         couplings_file=None,
         label=False,
@@ -1044,11 +1045,12 @@ def predict_ts(
     file.close()
     if type(loaded_model) == dict:
         loaded_model = loaded_model['model']
+    if encoding == 'aaidx':
+        idx = model + '.txt'
 
     sequences, variants, y_test = get_sequences_from_file(test_set)
-
     x, variants, sequences, y_test, *_ = encode_based_on_type(
-        encoding, variants, sequences, y_test, couplings_file, None, threads, no_fft
+        encoding, variants, sequences, y_test, couplings_file, idx, threads, no_fft
     )
     if type(x) == list:
         if not x:

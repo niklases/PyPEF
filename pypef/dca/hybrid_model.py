@@ -686,7 +686,7 @@ def plmc_or_gremlin_encoding(
     return xs, variants, sequences, ys_true, x_wt, model, model_type
 
 
-def gremlin_encoding(gremlin, variants, sequences, ys_true, shift_pos=1, substitution_sep='/'):
+def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, shift_pos=1, substitution_sep='/'):
     """
      Gets X and x_wt for DCA prediction: delta_Hamiltonian respectively
      delta_E = np.subtract(X, x_wt), with X = encoded sequences of variants.
@@ -705,7 +705,7 @@ def gremlin_encoding(gremlin, variants, sequences, ys_true, shift_pos=1, substit
     return xs, x_wt, variants, sequences, ys_true
 
 
-def plmc_encoding(plmc, variants, sequences, ys_true, threads=1, verbose=False):
+def plmc_encoding(plmc: DCAEncoding, variants, sequences, ys_true, threads=1, verbose=False):
     """
     Gets X and x_wt for DCA prediction: delta_E = np.subtract(X, x_wt),
     with X = encoded sequences of variants.
@@ -743,6 +743,15 @@ def remove_gap_pos(
     based on input gaps (gap positions).
     Note that by default, gap positions are shifted by +1 to match the input
     variant identifiers (e.g., variant A123C is removed if gap pos is 122; (122 += 1).
+
+    Returns
+    -----------
+    variants_v
+        Variants with substitutions at valid sequence positions, i.e., at non-gap positions
+    sequences_v
+        Sequences of variants with substitutions at valid sequence positions, i.e., at non-gap positions
+    fitnesses_v
+        Fitness values of variants with substitutions at valid sequence positions, i.e., at non-gap positions
     """
     variants_v, sequences_v, fitnesses_v = [], [], []
     valid = []

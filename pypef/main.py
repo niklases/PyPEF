@@ -167,9 +167,9 @@ Usage:
         [--conc]
     pypef ml --encoding ENCODING_TECHNIQUE --ls LEARNING_SET --ts TEST_SET
         [--save NUMBER] [--regressor TYPE] [--nofft] [--all] [--params PARAM_FILE]
-        [--sort METRIC_INT] [--threads THREADS]
+        [--sort METRIC_INT] [--threads THREADS] [--label]
     pypef ml --encoding ENCODING_TECHNIQUE --model MODEL --ts TEST_SET
-        [--nofft] [--params PARAM_FILE] [--threads THREADS]
+        [--nofft] [--params PARAM_FILE] [--threads THREADS] [--label]
     pypef ml --show
         [MODELS]
     pypef ml --encoding ENCODING_TECHNIQUE --model MODEL --ps PREDICTION_SET
@@ -189,8 +189,6 @@ Usage:
 
 Options:
   --all                             Finally training on all data [default: False].
-  --color                           Color the plot for "true" and "false" predictions
-                                    quarters [default: False].
   --conc                            Concatenating mutational level variants for predicting variants
                                     from next higher level [default: False].
   --csvaa                           Directed evolution csv amino acid substitutions,
@@ -314,7 +312,7 @@ from pypef.dca.dca_run import run_pypef_hybrid_modeling
 from pypef.utils.utils_run import run_pypef_utils
 
 logger = logging.getLogger("pypef")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -329,7 +327,6 @@ logger.addHandler(ch)
 
 schema = Schema({
     Optional('--all'): bool,
-    Optional('--color'): bool,
     Optional('--conc'): bool,
     Optional('--csvaa'): bool,
     Optional('--ddiverse'): bool,
