@@ -178,8 +178,6 @@ def remove_nan_encoded_positions(
                     temp.append(list(ys))
         except ValueError:
             temp.append(list(ys))
-        #except TypeError:
-        #    temp = (None,)
     if temp:
         yss = temp
     if not yss == () and not yss == (None,):

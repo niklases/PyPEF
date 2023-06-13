@@ -645,6 +645,10 @@ def save_model_to_dict_pickle(
     )
 
 
+global_model = None
+global_model_type = None
+
+
 def plmc_or_gremlin_encoding(
         variants,
         sequences,
@@ -652,15 +656,28 @@ def plmc_or_gremlin_encoding(
         params_file,
         substitution_sep='/',
         threads=1,
-        verbose=True
+        verbose=True,
+        use_global_model=False
 ):
     """
     Decides based on the params file input type which DCA encoding to be performed, i.e.,
     GREMLIN or PLMC.
+    If use_global_model==True, to avoid each time pickle model file getting loaded, which
+    is quite inefficient when performing directed evolution, i.e., encoding of single
+    sequences, a global model is stored at the first evolution step and used in the
+    subsequent steps.
     """
+    global global_model, global_model_type
     if ys_true is None:
         ys_true = np.zeros(np.shape(sequences))
-    model, model_type = get_model_and_type(params_file, substitution_sep)
+    if use_global_model:
+        if global_model is None:
+            global_model, global_model_type = get_model_and_type(params_file, substitution_sep)
+            model, model_type = global_model, global_model_type
+        else:
+            model, model_type = global_model, global_model_type
+    else:
+        model, model_type = get_model_and_type(params_file, substitution_sep)
     if model_type == 'PLMC':
         xs, x_wt, variants, sequences, ys_true = plmc_encoding(
             model, variants, sequences, ys_true, threads, verbose
@@ -980,7 +997,6 @@ def performance_ls_ts(
             ys_pred = get_delta_e_statistical_model(x_test, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model
             beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
-            #encoding_model, encoding_model_type = get_model_and_type(params_file)
             x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
@@ -1111,10 +1127,11 @@ def predict_ps(  # also predicting "pmult" dict directories
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
                     else:  # Hybrid model input requires params from plmc or GREMLIN model
-                        encoding_model, encoding_model_type = get_model_and_type(params_file)
+                        ##encoding_model, encoding_model_type = get_model_and_type(params_file)
                         x_test, test_variants, *_ = plmc_or_gremlin_encoding(
-                            variants, sequences, None, encoding_model, threads=threads, verbose=False,
-                            substitution_sep=separator)
+                            variants, sequences, None, params_file,
+                            threads=threads, verbose=False, substitution_sep=separator
+                        )
                         ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
                     for k, y in enumerate(ys_pred):
                         all_y_v_pred.append((ys_pred[k], variants[k]))
@@ -1124,8 +1141,8 @@ def predict_ps(  # also predicting "pmult" dict directories
                     all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=True)
                 predictions_out(
                     predictions=all_y_v_pred,
-                    model='hybrid',
-                    prediction_set=prediction_set,
+                    model='Hybrid',
+                    prediction_set=f'Top{path}',
                     path=path
                 )
             else:  # check next task to do, e.g., predicting triple substituted variants, e.g. trecomb
@@ -1150,8 +1167,8 @@ def predict_ps(  # also predicting "pmult" dict directories
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(
             predictions=y_v_pred,
-            model='hybrid',
-            prediction_set=prediction_set
+            model='Hybrid',
+            prediction_set=f'Top{prediction_set}'
         )
 
 
@@ -1175,16 +1192,14 @@ def predict_directed_evolution(
         model_type = 'StatisticalModel'  # any name != 'Hybrid'
 
     if model_type != 'Hybrid':  # statistical DCA model
-        # todo: each time pickle model file gets loaded, quite inefficient
-        #  for directed evolution, i.e., encoding of single sequences
         xs, variant, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
-            variant, sequence, None, encoder, verbose=False)
+            variant, sequence, None, encoder, verbose=False, use_global_model=True)
         if not list(xs):
             return 'skip'
         y_pred = get_delta_e_statistical_model(xs, x_wt)
     else:  # model_type == 'Hybrid': Hybrid model input requires params from PLMC or GREMLIN model
         xs, variant, *_ = plmc_or_gremlin_encoding(
-            variant, sequence, None, encoder, verbose=False
+            variant, sequence, None, encoder, verbose=False, use_global_model=True
         )
         if not list(xs):
             return 'skip'
