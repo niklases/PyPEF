@@ -290,8 +290,8 @@ Options:
 
 from os import environ
 try:
-    environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # only print TensorFlow errors
-except KeyError:
+    environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # only print TensorFlow errors, set to '0' or comment
+except KeyError:                           # lines for seeing TensorFlow infos and warnings
     pass
 
 from sys import argv, version_info

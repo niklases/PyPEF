@@ -98,6 +98,7 @@ class GREMLIN:
         self.optimize = optimize
         if self.optimize:
             self.v_opt, self.w_opt = self.run_opt_tf()
+        self.x_wt = self.collect_encoded_sequences(np.atleast_1d(self.wt_seq))
 
     def a2n_dict(self):
         a2n = {}
@@ -445,6 +446,14 @@ class GREMLIN:
         wt_seq = np.array(wt_seq, dtype=str)
         return self.get_score(wt_seq, v, w)
 
+    def collect_encoded_sequences(self, seqs, v=None, w=None, v_idx=None):
+        """
+        Wrapper function for encoding input sequences using the self.get_score
+        function with encode set to True.
+        """
+        xs = self.get_score(seqs, v, w, v_idx, encode=True)
+        return xs
+
     @staticmethod
     def normalize(apc_mat):
         """
@@ -540,6 +549,7 @@ class GREMLIN:
         ax.set_ylim(-1, matrix.shape[0])
         plt.title(matrix_type)
         plt.savefig(f'{matrix_type}.png', dpi=500)
+        plt.close('all')
 
     def get_top_coevolving_residues(self, wt_seq=None, min_distance=0, sort_by="apc"):
         if wt_seq is None:

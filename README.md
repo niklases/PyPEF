@@ -35,7 +35,8 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 
 <a name="pypef"></a>
 # PyPEF: Pythonic Protein Engineering Framework
-![version](https://img.shields.io/pypi/v/PyPEF?color=blue)
+[![PyPI version](https://img.shields.io/pypi/v/PyPEF?color=blue)](https://pypi.org/project/pypef/)
+[![Python version](https://img.shields.io/pypi/pyversions/PyPEF)](https://pypi.org/project/pypef/)
 
 a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence using different forms of sequence encoding:
 - One-hot encoding
@@ -76,17 +77,40 @@ The detailed routine for setting up a new virtual environment with Anaconda, ins
 <a name="requirements"></a>
 ## Requirements
 - Python >=3.9
-    - numpy
-    - pandas
-    - tqdm
-    - docopt
-    - matplotlib
+    - numpy 
     - scipy
-    - adjustText
+    - pandas
     - scikit-learn
+    - tensorflow 
+    - ray[default]
+    - matplotlib
+    - tqdm
     - biopython
     - schema
-    - ray[default] (<2.0.0)
+    - docopt
+    - adjustText
+
+[![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
+[![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)
+[![Python version](https://img.shields.io/pypi/pyversions/pandas?label=pandas%3A%20python)](https://github.com/pandas-dev/pandas)
+[![Python version](https://img.shields.io/pypi/pyversions/scikit-learn?label=scikit-learn%3A%20python)](https://github.com/scikit-learn/scikit-learn)
+[![Python version](https://img.shields.io/pypi/pyversions/tensorflow?label=tensorflow%3A%20python)](https://github.com/tensorflow/tensorflow)
+[![Python version](https://img.shields.io/pypi/pyversions/ray?label=ray%3A%20python)](https://github.com/ray-project/ray)
+[![Python version](https://img.shields.io/pypi/pyversions/matplotlib?label=matplotlib%3A%20python)](https://github.com/matplotlib/matplotlib)
+[![Python version](https://img.shields.io/pypi/pyversions/tqdm?label=tqdm%3A%20python)](https://github.com/tqdm/tqdm)
+[![Python version](https://img.shields.io/pypi/pyversions/biopython?label=biopython%3A%20python)](https://github.com/biopython/biopython)
+[![Python version](https://img.shields.io/pypi/pyversions/schema?label=schema%3A%20python)](https://github.com/keleshev/schema)
+[![Python version](https://img.shields.io/pypi/pyversions/docopt?label=docopt%3A%20python)](https://github.com/docopt/docopt)
+[![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=adjusttext%3A%20python)](https://github.com/Phlya/adjustText)
+
+
+
+
+
+
+
+
+
 
 <a name="examples"></a>
 ## Running Examples
