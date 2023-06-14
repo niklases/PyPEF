@@ -22,9 +22,9 @@ from pypef.dca.hybrid_model import DCAHybridModel, remove_gap_pos, get_delta_e_s
 from pypef.dca.plmc_encoding import DCAEncoding
 from pypef.dca.gremlin_inference import GREMLIN
 
-use_gremlin = True  # if False uses plmc (requires plmc-generated .params file) 0.697 0.699
+use_gremlin = True  # if False uses plmc (requires plmc-generated .params file)
 
-n_aaindices_to_test = 10
+n_aaindices_to_test = 10  # all would be 566 AAindex indices, only testing 10 here for shorter run time
 # avGFP wild type sequence
 wt_sequence = 'MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTL' \
               'VTTLSYGVQCFSRYPDHMKQHDFFKSAMPEGYVQERTIFFKDDGNYKTRAEVKFEGDTLV' \
@@ -158,6 +158,7 @@ spearmans_rhos_aaidx, aa_index = [], []
 # e.g., looping over the 566 AAindex entries, encode with each AAindex and test performance
 # which can be seen as a AAindex hyperparameter search on the test set, i.e.,
 # not totally fair comparison to onehot- and DCA-based encoding techniques.
+# Limiting indices for testing to N = n_aaindices_to_test...
 aa_indices = [file for file in os.listdir(path_aaindex_dir()) if file.endswith('.txt')][:n_aaindices_to_test]
 mean_performances, ten_split_performance_std_dev, aa_indices_collected = [], [], []
 for index, aaindex in enumerate(aa_indices):
@@ -253,7 +254,7 @@ for n_train in tqdm(low_n_train):
         x_dca_train, x_dca_test, y_train, y_test = train_test_split(
             x_dca, fitnesses, train_size=n_train, random_state=rnd_state)
         performances_dca.append(get_regressor_performances(
-            x_dca_train, x_dca_test, y_train, y_test, regressor='ridge')[4])  # [4] defines spearmanr
+            x_dca_train, x_dca_test, y_train, y_test, regressor='ridge')[4])  # [4] defines spearmanr correlation
 
         hybrid_model = DCAHybridModel(x_train=x_dca_train, y_train=y_train, x_wt=x_wt)
         beta_1, beta_2, hybrid_regressor = hybrid_model.settings(x_train=x_dca_train, y_train=y_train)
