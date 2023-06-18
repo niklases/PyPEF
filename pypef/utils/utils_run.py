@@ -184,11 +184,6 @@ def run_pypef_utils(arguments):
     # see https://github.com/ivanjayapurna/low-n-protein-engineering/tree/master/directed-evo
     elif arguments['directevo']:
         if arguments['hybrid'] or arguments['--encoding'] == 'dca':
-            #dca_encoder = DCAEncoding(
-            #    params_file=arguments['--params'],
-            #    separator=arguments['--sep'],
-            #    verbose=False
-            #)
             dca_encoder = arguments['--params']
             if arguments['ml']:
                 ml_or_hybrid = 'ml'

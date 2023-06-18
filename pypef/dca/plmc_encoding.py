@@ -501,7 +501,7 @@ class CouplingsModel:
         return self.__2d_access(self.h_i, i, A_i)
 
 
-class DCAEncoding(CouplingsModel):
+class PLMC(CouplingsModel):
     """
     Class for performing the 'DCA encoding'.
 
@@ -605,7 +605,7 @@ class DCAEncoding(CouplingsModel):
         if substitution[:-1] not in self.wt_aa_pos:
             wild_type_aa, position, A_i = self._unpack_substitution(substitution)
             raise SystemError(
-                f"The variant naming scheme is not fitting to the DCAEncoding "
+                f"The variant naming scheme is not fitting to the PLMC "
                 f"scheme. Substitution {substitution} of variant {variant} has "
                 f"the amino acid {wild_type_aa} at position {position}, which "
                 f"does not match the wild type sequence used as target for DCA-"
@@ -689,7 +689,7 @@ class DCAEncoding(CouplingsModel):
 
 
 """
-Below: Some helper functions to run the DCAEncoding class and get 
+Below: Some helper functions to run the PLMC class and get 
 the encoded sequences in parallel (threading) using Ray and
 to construct a pandas.DataFrame to store the encoded sequences 
 (features) and the associated fitness values in a CSV file.
@@ -699,11 +699,11 @@ to construct a pandas.DataFrame to store the encoded sequences
 def save_plmc_dca_encoding_model(params_file, substitution_sep='/'):
     """
     Just converts plmc params from raw binary to
-    Pickle-saved DCAEncoding class.
+    Pickle-saved PLMC class.
     """
     logger.info("Transforming the provided plmc params file "
-                "to a DCAEncoding Pickle file (Pickles/PLMC).")
-    plmc = DCAEncoding(
+                "to a PLMC Pickle file (Pickles/PLMC).")
+    plmc = PLMC(
         params_file=params_file,
         separator=substitution_sep,
         verbose=False
@@ -726,21 +726,21 @@ def save_plmc_dca_encoding_model(params_file, substitution_sep='/'):
 
 def get_encoded_sequence(
         variant: str,
-        dca_encode: DCAEncoding
+        dca_encode: PLMC
 ):
     """
     Description
     -----------
     Gets encoded sequence based on input variant name and a preexisting
-    DCAEncoding instance.
+    PLMC instance.
 
     Parameters
     ----------
     variant: str
         Variant name, e.g. 'A13E', or 'D127F'. Wild-type sequence
         is defined by substitution to itself, e.g. 'F17F'.
-    dca_encode: DCAEncoding class object
-        For encoding sequences, see above: class DCAEncoding.
+    dca_encode: PLMC class object
+        For encoding sequences, see above: class PLMC.
     """
     try:
         encoded_seq = dca_encode.encode_variant(variant)
@@ -753,9 +753,9 @@ def get_encoded_sequence(
 @ray.remote
 def _get_data_parallel(
         variants: list,
-        sequences : list,
+        sequences: list,
         fitnesses: list,
-        dca_encode: DCAEncoding,
+        dca_encode: PLMC,
         data: list
 ) -> list:
     """
@@ -770,7 +770,7 @@ def _get_data_parallel(
     fitnesses : list
         List of floats (1d) containing the fitness values associated to the variants.
     dca_encode : object
-        Initialized 'DCAEncoding' class object.
+        Initialized 'PLMC' class object.
     data : manager.list()
         Manager.list() object to store the output of multiple processors.
 
@@ -792,7 +792,7 @@ def get_dca_data_parallel(
         variants: list,
         sequences: list,
         fitnesses: list,
-        dca_encode: DCAEncoding,
+        dca_encode: PLMC,
         threads: int,
         verbose=True
 ) -> tuple[list, list, list, list]:
@@ -809,7 +809,7 @@ def get_dca_data_parallel(
     fitnesses: list (or np.ndarray)
         Variant-associated fitness values.
     dca_encode : object
-        Initialized 'DCAEncoding' class object.
+        Initialized 'PLMC' class object.
     threads : int
         Number of processes to be used for parallel execution.
         n_cores = 1 defines no threading (not using Ray).

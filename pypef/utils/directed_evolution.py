@@ -96,8 +96,8 @@ class DirectedEvolution:
             Loaded Pickle file for regression/hybrid modeling.
         no_fft: bool
             If True, not using FFT for AAindex-based encoding
-        dca_encoder = None or DCAEncoding object
-            dca_encoder = DCAEncoding(
+        dca_encoder = None or PLMC object
+            dca_encoder = PLMC(
                   params_file=arguments['--plmc_params'],
                   separator=arguments['--sep']
             )

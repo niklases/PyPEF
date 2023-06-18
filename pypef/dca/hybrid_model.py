@@ -28,9 +28,6 @@ from os import listdir
 from os.path import isfile, join
 from typing import Union
 import logging
-
-import pypef.dca.gremlin_inference
-
 logger = logging.getLogger('pypef.dca.hybrid_model')
 
 import numpy as np
@@ -44,9 +41,11 @@ from pypef.utils.variant_data import (
     get_sequences_from_file, get_seqs_from_var_name,
     remove_nan_encoded_positions, get_wt_sequence, split_variants
 )
-from pypef.dca.plmc_encoding import DCAEncoding, get_dca_data_parallel, get_encoded_sequence, EffectiveSiteError
+
+from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence, EffectiveSiteError
 from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
+import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN
 
 # np.warnings.filterwarnings('error', category=np.VisibleDeprecationWarning)  # DEV
@@ -546,7 +545,6 @@ class DCAHybridModel:
         for t, train_size in enumerate(train_sizes):
             logger.info(f'{t + 1}/{len(train_sizes)}:{train_size}')
             data.update(self.split_performance(train_size=train_size, n_runs=n_runs))
-
         return data
 
 
@@ -555,7 +553,7 @@ Below: Some helper functions that call or are dependent on the DCAHybridModel cl
 """
 
 
-def check_model_type(model: dict | DCAHybridModel | DCAEncoding | GREMLIN):
+def check_model_type(model: dict | DCAHybridModel | PLMC | GREMLIN):
     """
     Checks type/instance of model.
     """
@@ -564,7 +562,7 @@ def check_model_type(model: dict | DCAHybridModel | DCAEncoding | GREMLIN):
             model = model['model']
         except KeyError:
             raise SystemError("Unknown model dictionary taken from Pickle file.")
-    if type(model) == pypef.dca.plmc_encoding.DCAEncoding:
+    if type(model) == pypef.dca.plmc_encoding.PLMC:
         return 'PLMC'
     elif type(model) == pypef.dca.hybrid_model.DCAHybridModel:
         return 'Hybrid'
@@ -601,7 +599,7 @@ def get_model_and_type(params_file: str, substitution_sep: str = '/'):
         model_type = 'PLMC_Params'
 
     if model_type == 'PLMC_Params':
-        model = DCAEncoding(
+        model = PLMC(
             params_file=params_file,
             separator=substitution_sep,
             verbose=False
@@ -615,7 +613,7 @@ def get_model_and_type(params_file: str, substitution_sep: str = '/'):
 
 
 def save_model_to_dict_pickle(
-        model: DCAHybridModel | DCAEncoding | GREMLIN,
+        model: DCAHybridModel | PLMC | GREMLIN,
         model_type: str | None = None,
         beta_1: float | None = None,
         beta_2: float | None = None,
@@ -722,7 +720,7 @@ def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, shift_pos=1
     return xs, x_wt, variants, sequences, ys_true
 
 
-def plmc_encoding(plmc: DCAEncoding, variants, sequences, ys_true, threads=1, verbose=False):
+def plmc_encoding(plmc: PLMC, variants, sequences, ys_true, threads=1, verbose=False):
     """
     Gets X and x_wt for DCA prediction: delta_E = np.subtract(X, x_wt),
     with X = encoded sequences of variants.
@@ -1182,7 +1180,7 @@ def predict_directed_evolution(
     Perform directed in silico evolution and predict the fitness of a
     (randomly) selected variant using the hybrid model. This function opens
     the stored DCAHybridModel and the model parameters to predict the fitness
-    of the variant encoded herein using the DCAEncoding class. If the variant
+    of the variant encoded herein using the PLMC class. If the variant
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.
     """

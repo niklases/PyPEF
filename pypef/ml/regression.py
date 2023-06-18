@@ -567,7 +567,6 @@ def performance_list(
                 spearman_rho, regression_model, params
             ])
     elif encoding == 'dca':  # 'plmc' or encoding == 'gremlin':
-        # xs, variants, sequences, ys_true, x_wt, model, model_type
         x_train, train_variants, train_sequences, y_train, x_wt, model, model_type = plmc_or_gremlin_encoding(
             train_variants, train_sequences, y_train, couplings_file, threads=threads
         )
