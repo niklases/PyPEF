@@ -18,8 +18,7 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 ### if using downloaded/locally stored pypef .py files:
 ############### CHANGE THIS PATHS AND USED THREADS, REQUIRES PYTHON ENVIRONMENT WITH PRE-INSTALLED MODULES ###############
 export PYTHONPATH=${PYTHONPATH}:/path/to/pypef-main                                                                      #
-pypef='python3 /path/to/pypef-main/pypef/main.py'                                                                        #
-                                                                                                                         #
+pypef='python3 /path/to/pypef-main/pypef/main.py'                                                                        #                                                                                                                   #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
 #pypef=pypef                                                                                                             #
@@ -426,10 +425,10 @@ echo
 $pypef hybrid -m HYBRIDplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
 
-# Pure statistical DCA model (no training set given)
+# No training set given
 $pypef hybrid -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
-$pypef hybrid -m MLplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --label --threads $threads
+$pypef ml -e dca -m MLplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --label --threads $threads
 echo
 
 $pypef mkps -i avGFP.csv -w P42212_F64L.fasta
