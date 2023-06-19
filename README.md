@@ -90,6 +90,8 @@ The detailed routine for setting up a new virtual environment with Anaconda, ins
     - docopt
     - adjustText
 
+If errors occur with third-party packages, you can check the required Python version dependencies (if available):
+
 [![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
 [![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)
 [![Python version](https://img.shields.io/pypi/pyversions/pandas?label=pandas%3A%20python)](https://github.com/pandas-dev/pandas)
