@@ -12,8 +12,8 @@ set -e  # exit on (PyPEF) errors
 export PS4='+(Line ${LINENO}): '  # echo script line numbers 
 
 ### RUN ME WITH
-### $ ./run_cli_tests.sh                      # printing STDOUT and STDERR to terminal
-### $ ./run_cli_tests.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
+### $ ./run_cli_tests_linux.sh                      # printing STDOUT and STDERR to terminal
+### $ ./run_cli_tests_linux.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
 
 ### if using downloaded/locally stored pypef .py files:
 ############### CHANGE THIS PATHS AND USED THREADS, REQUIRES PYTHON ENVIRONMENT WITH PRE-INSTALLED MODULES ###############

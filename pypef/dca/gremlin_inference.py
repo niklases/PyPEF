@@ -294,9 +294,9 @@ class GREMLIN:
         # v + w
         vw = v + tf.tensordot(oh_msa, w, 2)
 
-        # hamiltonian
+        # Hamiltonian
         h = tf.reduce_sum(tf.multiply(oh_msa, vw), axis=(1, 2))
-        # local z (parition function)
+        # partition function Z
         z = tf.reduce_sum(tf.reduce_logsumexp(vw, axis=2), axis=1)
 
         # Pseudo-Log-Likelihood
@@ -316,7 +316,7 @@ class GREMLIN:
         # MINIMIZE LOSS FUNCTION
         ##############################################################
         opt = self.opt_adam(loss, "adam", lr=opt_rate)
-        # initialize v
+        # initialize V (local fields)
         msa_cat = tf.keras.utils.to_categorical(self.msa_trimmed, self.states)
         pseudo_count = 0.01 * np.log(self.n_eff)
         v_ini = np.log(np.sum(msa_cat.T * self.msa_weights, -1).T + pseudo_count)
@@ -331,7 +331,7 @@ class GREMLIN:
                 return {msa: self.msa_trimmed[idx], msa_weights: self.msa_weights[idx]}
 
         with tf.compat.v1.Session() as sess:
-            # initialize variables V and W
+            # initialize variables V (local fields) and W (couplings)
             sess.run(tf.compat.v1.global_variables_initializer())
             sess.run(v.assign(v_ini))
             # compute loss across all data
