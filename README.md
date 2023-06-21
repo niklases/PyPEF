@@ -90,7 +90,7 @@ The detailed routine for setting up a new virtual environment with Anaconda, ins
     - docopt
     - adjustText
 
-If errors occur with third-party packages, you can check the required Python version dependencies (if available):
+If errors occur with third-party packages, you can check the required Python version dependencies (if available); also, as a rule of thumb, it is often helpful to use the second most recent Python version instead of the latest, since development for the latest version is often ongoing:
 
 [![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
 [![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)

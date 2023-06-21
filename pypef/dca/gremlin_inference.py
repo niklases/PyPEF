@@ -129,6 +129,7 @@ class GREMLIN:
         else:
             return x
 
+    @property
     def get_v_idx_w_idx(self):
         return self.v_idx, self.w_idx
 
@@ -371,6 +372,7 @@ class GREMLIN:
 
         return v_ini, w_ini
 
+    @property
     def get_v_w_opt(self):
         try:
             return self.v_opt, self.w_opt
