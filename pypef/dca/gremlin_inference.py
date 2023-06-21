@@ -402,7 +402,7 @@ class GREMLIN:
                 "The loaded GREMLIN parameter model does not match the input model "
                 "in terms of sequence encoding shape or is a gap-substituted sequence. "
                 "E.g., when providing two different DCA models/parameters provided by: "
-                "\"-m DCA and --params GREMLIN\", where -m DCA represents a ml input "
+                "\"-m DCA\" and \"--params GREMLIN\", where -m DCA represents a ml input "
                 "model potentially generated using plmc parameters and --params GREMLIN "
                 "provides differently encoded sequences generated using GREMLIN."
             )

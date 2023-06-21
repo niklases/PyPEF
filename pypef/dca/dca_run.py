@@ -115,7 +115,7 @@ def run_pypef_hybrid_modeling(arguments):
         if arguments['--msa']:
             save_gremlin_as_pickle(
                 alignment=arguments['--msa'],
-                wt_seq=arguments['--wt'],
+                wt_seq=get_wt_sequence(arguments['--wt']),
                 opt_iter=arguments['--opt_iter']
             )
         elif arguments['--params']:

@@ -1,25 +1,24 @@
 ### based on the two datasets provided (ANEH and avGFP)
 Write-Host "For successful running, following files are required:`n`nin test_dataset_aneh/`n`tSequence_WT_ANEH.fasta`n`t37_ANEH_variants.csv`n`tANEH_jhmmer.a2m`n`tANEH_72.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/workflow/test_dataset_aneh/ANEH_72.6.params)`n`nin test_dataset_avgfp/`n`tP42212_F64L.fasta`n`tavGFP.csv`n`turef100_avgfp_jhmmer_119.a2m`n`turef100_avgfp_jhmmer_119_plmc_42.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params)`n`n"
 
-Set-PSDebug -Trace 1  # Write-Host on
+#Set-PSDebug -Trace 1
 $ErrorActionPreference = "Stop"  # exit on (PyPEF) errors
 $PSDefaultParameterValues = @{
     'Write-Debug:Separator' = " (Line $($MyInvocation.ScriptLineNumber)): "
 }
 
-### RUN ME WITH
-### $ ./run_cli_tests.sh                      # printing STDOUT and STDERR to terminal
-### $ ./run_cli_tests.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
+### RUN ME IN POWERSHELL WITH
+### $ .\run_cli_tests_win.ps1                      # printing STDOUT and STDERR to terminal
 
 ### if using downloaded/locally stored pypef .py files:
 ############### CHANGE THIS PATHS AND USED THREADS, REQUIRES PYTHON ENVIRONMENT WITH PRE-INSTALLED MODULES ###############
-$env:PYTHONPATH="C:\path\to\pypef-main"                                                                                  #
-function pypef { python C:\path\to\pypef-main\pypef\main.py @args }                                                      #
+$env:PYTHONPATH="D:\sciebo\GitHub\PyPEF"  #"C:\path\to\pypef-main"                                                                                  #
+function pypef { python D:\sciebo\GitHub\PyPEF\pypef\main.py @args } #python C:\path\to\pypef-main\pypef\main.py @args }                                                      #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
 #function pypef { pypef @args }                                                                                          #
 ##########################################################################################################################
-$threads = 1                                                                                                             #
+$threads = 14                                                                                                             #
 ##########################################################################################################################
 
 ### threads=1 shows progress bar where possible
