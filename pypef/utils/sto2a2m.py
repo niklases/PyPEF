@@ -18,6 +18,7 @@
 
 import logging
 logger = logging.getLogger('pypef.utils.sto2a2m')
+
 import numpy as np
 from tqdm import tqdm
 from Bio import AlignIO

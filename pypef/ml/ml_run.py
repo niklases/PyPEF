@@ -31,7 +31,7 @@ from pypef.ml.regression import (
 )
 from pypef.utils.to_file import predictions_out
 from pypef.utils.low_n_mutation_extrapolation import low_n, performance_mutation_extrapolation
-from pypef.utils.variant_data import absolute_path_cwd_file
+
 
 
 def run_pypef_pure_ml(arguments):
@@ -96,7 +96,7 @@ def run_pypef_pure_ml(arguments):
                 # save_model encodes variants again (possibly change)
                 save_model(
                     path=path,
-                    performance_list=encoding_performance_list,
+                    performances=encoding_performance_list,
                     training_set=arguments['--ls'],
                     test_set=arguments['--ts'],
                     threshold=t_save,

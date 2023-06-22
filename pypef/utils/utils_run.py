@@ -17,6 +17,7 @@
 # §Equal contribution
 
 import os
+
 import logging
 logger = logging.getLogger('pypef.utils.utils_run')
 
@@ -312,10 +313,11 @@ def run_pypef_utils(arguments):
                     y_wt = 1
                 # better using re then: wt = variants[0][0] + str(variants[0][1:-1] + variants[0][0])
                 wt = variants[0][0] + re.findall(r"\d+", variants[0])[0] + variants[0][0]
-                #x_wt = get_encoded_sequence(variant=wt, dca_encode=dca_encode)
+                variants = list(variants)
                 variants.insert(0, wt)  # inserting WT at pos. 0
                 xs = list(xs)
                 xs.insert(0, list(x_wt.flatten()))
+                ys_true = list(ys_true)
                 ys_true.insert(0, y_wt)  # set WT fitness to 1 or use arguments y_wt?
 
         elif arguments['--encoding'] == 'onehot':

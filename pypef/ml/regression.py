@@ -341,6 +341,7 @@ class OneHotEncoding:
             encoded_sequences.append(self.one_hot_encode_sequence(sequence))
         return np.array(encoded_sequences)
 
+
 def pls_loocv(
         x_train: np.ndarray,
         y_train: np.ndarray
@@ -863,7 +864,7 @@ def crossval_on_all(x_train, x_test, y_train, y_test, regressor: str, parameter,
 
 def save_model(
         path,
-        performance_list,
+        performances,
         training_set,
         test_set,
         threshold=5,
@@ -904,8 +905,8 @@ def save_model(
         test_sequences, test_variants, y_test = get_sequences_from_file(test_set)
     for i, t in enumerate(range(threshold)):
         try:
-            idx = performance_list[t][0]
-            parameter = performance_list[t][7]
+            idx = performances[t][0]
+            parameter = performances[t][7]
 
             if encoding != 'aaidx' and x_train is not None and x_test is not None:
                 pass  # take global encodings instead of recomputing DCA encodings
@@ -938,7 +939,7 @@ def save_model(
                 name=f'{get_basename(idx)}_{regressor.upper()}_'
             )
             name = get_basename(idx)
-            if model_type in ['PLMC', 'GREMLIN']:
+            if model_type in ['PLMC', 'GREMLIN'] and encoding not in ['aaidx', 'onehot']:
                 name = 'ML' + model_type.lower()
             logger.info(f'Saving model as {name}')
             file = open(os.path.join(path, 'Pickles', name), 'wb')
@@ -1059,6 +1060,8 @@ def predict_ts(
     elif type(x) == np.ndarray:
         if not x.any():
             return 'skip'
+    if encoding != 'aaidx':
+        idx = encoding
 
     assert len(variants) == len(x)
 
@@ -1078,4 +1081,4 @@ def predict_ts(
             "Check the specified model provided via the \'-m\' flag."
         )
 
-    plot_y_true_vs_y_pred(y_test, y_pred, variants, label, hybrid=False)
+    plot_y_true_vs_y_pred(y_test, y_pred, variants, label, hybrid=False, name=f'{get_basename(idx).upper()}_')

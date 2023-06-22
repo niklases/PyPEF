@@ -262,7 +262,8 @@ class DirectedEvolution:
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions[0][0]:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
-                logger.info(f"Step {self.de_step_counter + 1}: {new_variant} --> {predictions}")
+                logger.info(f"Step {self.de_step_counter + 1}: "
+                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
                 continue
             new_y, new_var = predictions[0][0], predictions[0][1]  # new_var == new_variant nonetheless
             # probability function for trial sequence

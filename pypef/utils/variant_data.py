@@ -18,7 +18,6 @@
 
 from __future__ import annotations
 import os
-
 import numpy as np
 import pandas as pd
 
@@ -35,6 +34,8 @@ def get_wt_sequence(sequence_fasta):
     """
     Gets wild-type sequence from defined input file (can be pure sequence or fasta style)
     """
+    if sequence_fasta is None:
+        return None
     wild_type_sequence = ""
     try:
         with open(sequence_fasta, 'r') as sf:

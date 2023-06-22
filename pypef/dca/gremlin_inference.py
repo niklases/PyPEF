@@ -577,10 +577,7 @@ class GREMLIN:
 
         i_idx = self.w_idx[:, 0]
         j_idx = self.w_idx[:, 1]
-        print(len(i_idx))
-        print(len(j_idx))
-        print(len(wt_seq))
-        print(wt_seq)
+
         i_aa = [f"{wt_seq[i]}_{i + 1}" for i in i_idx]
         j_aa = [f"{wt_seq[j]}_{j + 1}" for j in j_idx]
 
