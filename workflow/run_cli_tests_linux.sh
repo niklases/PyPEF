@@ -23,7 +23,7 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 ### else just use pip-installed pypef version (uncomment):                                                               #
 pypef=pypef                                                                                                             #
 ##########################################################################################################################
-threads=12                                                                                                               #
+threads=16                                                                                                               #
 ##########################################################################################################################
 
 ### threads=1 shows progress bar where possible

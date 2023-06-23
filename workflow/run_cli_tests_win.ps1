@@ -7,11 +7,12 @@ Write-Host "For successful running, following files are required:`n`nin test_dat
 `turef100_avgfp_jhmmer_119_plmc_42.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params)`n`n"
 
 Set-PSDebug -Trace 1
-$ErrorActionPreference = "Stop"  # exit on (PyPEF) errors
+$ErrorActionPreference = "Stop"
 $PSDefaultParameterValues = @{
     'Write-Debug:Separator' = " (Line $($MyInvocation.ScriptLineNumber)): "
 }
 
+# exit on (PyPEF) errors
 function ExitOnExitCode { if ($LastExitCode) { Write-Host "PyPEF command error; terminating execution."; exit } }
 
 ### RUN ME IN POWERSHELL WITH

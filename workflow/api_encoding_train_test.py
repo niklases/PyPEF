@@ -19,7 +19,7 @@ from pypef.ml.regression import (
     path_aaindex_dir, full_aaidx_txt_path
 )
 from pypef.dca.hybrid_model import DCAHybridModel, remove_gap_pos, get_delta_e_statistical_model
-from pypef.dca.plmc_encoding import DCAEncoding
+from pypef.dca.plmc_encoding import PLMC
 from pypef.dca.gremlin_inference import GREMLIN
 
 use_gremlin = True  # if False uses plmc (requires plmc-generated .params file)
@@ -44,7 +44,7 @@ print(f'\nRunning script... which takes ~ 2 h (GREMLIN) - 4 h in total (PLMC) wh
       f'\n\n(1/4) Testing DCA-based sequence encoding...\n' + "=" * 50)
 if not use_gremlin:  # PLMC params file-based encoding
     try:
-        dca_encoder = DCAEncoding(
+        dca_encoder = PLMC(
             params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
             verbose=False
         )
@@ -101,7 +101,7 @@ if use_gremlin:
     x_dca = dca_encoder.collect_encoded_sequences(sequences)
     x_wt = dca_encoder.x_wt
 else:  # plmc
-    dca_encoder = DCAEncoding(
+    dca_encoder = PLMC(
         params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
         verbose=False
     )
@@ -153,7 +153,7 @@ print('-'*80 + f'\n{n_splits}-fold mean Spearmans rho (ML)= {np.mean(ten_split_p
 
 # 2nd example: AAindex encoding over all 566 amino acid descriptor sets
 # -------------------------------------------------------------------------------
-print('\n\n(2/4) Testing AAindex-based sequence encoding...\n' + "=" * 50)
+print(f'\n\n(2/4) Testing AAindex-based sequence encoding (using {n_aaindices_to_test} indices)...\n' + "=" * 75)
 spearmans_rhos_aaidx, aa_index = [], []
 # e.g., looping over the 566 AAindex entries, encode with each AAindex and test performance
 # which can be seen as a AAindex hyperparameter search on the test set, i.e.,
