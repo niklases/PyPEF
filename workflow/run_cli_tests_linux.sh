@@ -17,11 +17,11 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 
 ### if using downloaded/locally stored pypef .py files:
 ############### CHANGE THIS PATHS AND USED THREADS, REQUIRES PYTHON ENVIRONMENT WITH PRE-INSTALLED MODULES ###############
-#export PYTHONPATH=${PYTHONPATH}:/path/to/pypef-main                                                                      #
-#pypef='python3 /path/to/pypef-main/pypef/main.py'                                                                        #                                                                                                                   #
+export PYTHONPATH=${PYTHONPATH}:/path/to/pypef-main                                                                      #
+pypef='python3 /path/to/pypef-main/pypef/main.py'                                                                        #                                                                                                                   #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
-pypef=pypef                                                                                                             #
+#pypef=pypef                                                                                                             #
 ##########################################################################################################################
 threads=16                                                                                                               #
 ##########################################################################################################################
