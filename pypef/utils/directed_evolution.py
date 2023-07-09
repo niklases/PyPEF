@@ -244,7 +244,7 @@ class DirectedEvolution:
                 predictions = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                     path=self.path,
                     model=self.model,
-                    encoding=self.encoding,  # TODO: check names/rename
+                    encoding=self.encoding,
                     variants=np.atleast_1d(new_full_variant),
                     sequences=np.atleast_1d(new_sequence),
                     no_fft=self.no_fft,
