@@ -200,7 +200,7 @@ class DirectedEvolution:
         for i, variant in enumerate(v_traj[1:]):  # [1:] as not checking for WT
             variant_position = int(re.findall(r"\d+", variant)[0]) - 1
             variant_amino_acid = str(variant[-1])
-            assert variant_amino_acid == s_traj[i+1][variant_position]  # checking AA of last trajactory sequence
+            assert variant_amino_acid == s_traj[i+1][variant_position]  # checking AA of last trajectory sequence
 
     def in_silico_de(self):
         """

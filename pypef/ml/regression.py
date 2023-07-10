@@ -803,8 +803,12 @@ def encode_based_on_type(
         encoder = OneHotEncoding(sequences)
         x = encoder.collect_encoded_sequences()
     elif encoding == 'dca':  # PLMC or GREMLIN-based encoding
+        if len(sequences) == 1:
+            use_global_model = True
+        else:
+            use_global_model = False
         x, variants, sequences, y_true, x_wt, model, model_type = plmc_or_gremlin_encoding(
-            variants, sequences, y_true, couplings_file, substitution_sep, threads, verbose
+            variants, sequences, y_true, couplings_file, substitution_sep, threads, verbose, use_global_model
         )
     else:
         raise SystemError("Unknown encoding option.")
