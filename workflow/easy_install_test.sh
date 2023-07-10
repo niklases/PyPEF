@@ -8,6 +8,8 @@
 set -x  
 # Exit on errors
 set -e
+# echo script line numbers
+export PS4='+(Line ${LINENO}): '
 
 wget https://github.com/niklases/PyPEF/archive/refs/heads/main.zip
 
