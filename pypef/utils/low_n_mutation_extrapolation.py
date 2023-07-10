@@ -67,10 +67,11 @@ def plot_low_n(
         np.array(avg_spearmanr) - np.array(stddev_spearmanr),
         alpha=0.5
     )
-    plt.ylim(0, max(np.array(avg_spearmanr) + np.array(stddev_spearmanr)))
+    plt.ylim(0, max(np.array(avg_spearmanr) * 1.1 + np.array(stddev_spearmanr)))
     plt.xlabel('Train sizes')
     plt.ylabel(r"Spearman's $\rho$")
-    plt.savefig(plt_name.replace("\\", "").replace(".", "") + '.png', dpi=500)
+
+    plt.savefig(plt_name.split(os.sep)[-1] + '.png', dpi=500)
     plt.clf()
 
 
@@ -160,7 +161,7 @@ def low_n(
         train_sizes,
         avg_spearmanr,
         stddev_spearmanr,
-        'low_N_' + str(encoded_csv[:-4] + '_' + name)
+        'low_N_' + str(encoded_csv).split('.')[0] + '_' + name
     )
 
     return train_sizes, avg_spearmanr, stddev_spearmanr
@@ -432,6 +433,6 @@ def plot_extrapolation(
         name += '_train_lvl_1'
     plt.xticks(test_lvls, label_infos, fontsize=5)
     plt.ylabel(r"Spearman's $\rho$")
-    name = name.replace("\\", "").replace(".", "") + '_extrapolation.png'
+    name = name.split(os.sep)[-1] + '_extrapolation.png'
     plt.savefig(name, dpi=500)
     plt.clf()
