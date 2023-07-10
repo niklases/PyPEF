@@ -4,6 +4,7 @@
 
 
 from setuptools import setup, find_packages
+from pypef import __version__
 
 
 with open("requirements.txt", "r", encoding="utf-8") as install_requirements:
@@ -11,7 +12,7 @@ with open("requirements.txt", "r", encoding="utf-8") as install_requirements:
 
 setup(
     name='pypef',
-    version='0.3',
+    version=__version__.split('-')[0],
     author='Niklas Siedhoff & Alexander-Maurice Illig',
     author_email='n.siedhoff@biotec.rwth-aachen.de',
     license='CC BY-NC-SA 4.0',
