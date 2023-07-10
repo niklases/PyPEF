@@ -245,7 +245,7 @@ class CouplingsModel:
             self.target_seq_mapped = np.array([self.alphabet_map[x] for x in self.target_seq])
             self.has_target_seq = (np.sum(self.target_seq_mapped) > 0)
         except KeyError:
-            self.target_seq_mapped = np.zeros(shape=self.l, dtype=np.int32)
+            self.target_seq_mapped = np.zeros(shape=np.shape(self.l), dtype=np.int32)
             self.has_target_seq = False
 
     def __read_plmc_v2(self, filename, precision):
@@ -268,7 +268,7 @@ class CouplingsModel:
             )
 
             # theta, regularization weights, and effective number of samples
-            self.theta, self.lambda_h, self.lambda_j, self.lambda_group, self.N_eff = (
+            self.theta, self.lambda_h, self.lambda_j, self.lambda_group, self.n_eff = (
                 np.fromfile(f, precision, 5)
             )
 
@@ -380,7 +380,7 @@ class CouplingsModel:
             Length of sequence must correspond to model length (self.l)
         """
         if len(sequence) != self.l:
-            raise ValueError(f"Sequence length inconsistent with model length: {len(sequence)} {self.l}")
+            raise ValueError(f"Sequence length inconsistent with model length: {len(sequence)} != {self.l}")
 
         if isinstance(sequence, str):
             sequence = list(sequence)
@@ -409,7 +409,7 @@ class CouplingsModel:
             Length of list must correspond to model length (self.l)
         """
         if len(mapping) != self.l:
-            raise ValueError(f"Mapping length inconsistent with model length: {len(mapping)} {self.l}")
+            raise ValueError(f"Mapping length inconsistent with model length: {len(mapping)} != {self.l}")
 
         self._index_list = np.array(mapping)
         self.index_map = {b: a for a, b in enumerate(self.index_list)}
