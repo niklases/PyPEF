@@ -58,6 +58,7 @@ from scipy.special import logsumexp
 from scipy.stats import boxcox
 import pandas as pd
 import tensorflow as tf
+tf.get_logger().setLevel('DEBUG')
 
 from pypef.utils.variant_data import get_sequences_from_file
 
