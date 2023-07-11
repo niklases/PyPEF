@@ -60,7 +60,7 @@ Tutorial section below).
 
 <a name="installation"></a>
 ## Quick Installation
-A quick installation of the PyPEF command line framework using PyPI for Linux and Windows for **Python 3.9** can be performed with:
+A quick installation of the PyPEF command line framework using PyPI for Linux and Windows for **Python 3.10** can be performed with:
 
 ```
 pip install -U pypef
@@ -230,7 +230,7 @@ To activate the environment you can define:
 conda activate pypef
 ```
 
-After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main`) and install required packages with pip if you did not use the YAML file for creating the environment (if using conda, packages will be installed in anaconda3/envs/pypef/lib/python3.9/site-packages):
+After activating the environment you can install required packages after changing the directory to the PyPEF directory (`cd PyPEF` or `cd PyPEF-main`) and install required packages with pip if you did not use the YAML file for creating the environment (if using conda, packages will be installed in anaconda3/envs/pypef/lib/python3.10/site-packages):
 
 ```
 python3 -m pip install -r requirements.txt
