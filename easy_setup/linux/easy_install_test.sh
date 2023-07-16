@@ -31,7 +31,7 @@ python3 -m pip install -U pypef
 pypef --version
 
 while true; do
-    read -p "Test PyPEF installation (runs sudo apt-get update && sudo apt-get install unzip, downloads PyPEF repository, and runs a PyPEF-Python script, ~ 1 h run time)? " yn
+    read -p "Test PyPEF installation (runs sudo apt-get update && sudo apt-get install unzip, downloads PyPEF repository, and runs a PyPEF-Python script, ~ 1 h run time) [Y/N]? " yn
     case $yn in
         [Yy]* ) 
 			wget https://github.com/niklases/PyPEF/archive/refs/heads/main.zip;
