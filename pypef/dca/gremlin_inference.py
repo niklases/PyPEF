@@ -152,7 +152,7 @@ class GREMLIN:
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
 
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
-        logger.info(f'Gap positions (removed from msa):\n{gaps}')
+        logger.info(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
         ncol_trimmed = len(non_gaps)
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
@@ -560,7 +560,7 @@ class GREMLIN:
         ax.set_yticklabels(labels)
         ax.set_xlim(-1, matrix.shape[0])
         ax.set_ylim(-1, matrix.shape[0])
-        plt.title(matrix_type)
+        plt.title(matrix_type.upper())
         plt.savefig(f'{matrix_type}.png', dpi=500)
         plt.close('all')
 
