@@ -15,15 +15,22 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 ### $ ./run_cli_tests_linux.sh                      # printing STDOUT and STDERR to terminal
 ### $ ./run_cli_tests_linux.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
 
+conda env remove -n pypef
+conda create -n pypef python=3.10 -y
+eval "$(conda shell.bash hook)"
+conda activate pypef
+python -m pip install -r ../requirements.txt
+
 ### if using downloaded/locally stored pypef .py files:
-############### CHANGE THIS PATHS AND USED THREADS, REQUIRES PYTHON ENVIRONMENT WITH PRE-INSTALLED MODULES ###############
-export PYTHONPATH=${PYTHONPATH}:/path/to/pypef-main                                                                      #
-pypef='python3 /path/to/pypef-main/pypef/main.py'                                                                        #                                                                                                                   #
+##########################################################################################################################
+path=$( echo ${PWD%/*} )                                                                                                 #
+export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
+pypef='python3 '$path'/pypef/main.py'                                                                                    #                                                                                                                   #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
 #pypef=pypef                                                                                                             #
 ##########################################################################################################################
-threads=16                                                                                                               #
+threads=12                                                                                                               #
 ##########################################################################################################################
 
 ### threads=1 shows progress bar where possible
