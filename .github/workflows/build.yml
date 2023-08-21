@@ -22,7 +22,7 @@ jobs:
       uses: actions/setup-python@v3
       with:
         python-version: ${{ matrix.python-version }}
-    - name: display Path and Python version
+    - name: Display Path and Python version
       run: |
         python -c "import sys, platform; print(sys.version, platform.system())"
     - name: Install dependencies
