@@ -11,6 +11,8 @@ import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import urllib.request
+from hashlib import sha256
 
 from sklearn.model_selection import KFold, train_test_split
 from pypef.utils.variant_data import remove_nan_encoded_positions, get_seqs_from_var_name
@@ -31,6 +33,8 @@ wt_sequence = 'MSKGEELFTGVVPILVELDGDVNGHKFSVSGEGEGDATYGKLTLKFICTTGKLPVPWPTL' \
               'NRIELKGIDFKEDGNILGHKLEYNYNSHNVYIMADKQKNGIKVNFKIRHNIEDGSVQLAD' \
               'HYQQNTPIGDGPVLLPDNHYLSTQSALSKDPNEKRDHMVLLEFVTAAGITHGMDELYK'
 
+if not os.path.isdir('AVGFP'):
+    os.mkdir('AVGFP')
 
 # 1st example: A. DCA-based encoding
 # -------------------------------------------------------------------------------
@@ -45,35 +49,44 @@ print(f'\nRunning script... which takes ~ 2 h (GREMLIN) - 4 h in total (PLMC) wh
 if not use_gremlin:  # PLMC params file-based encoding
     try:
         dca_encoder = PLMC(
-            params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
+            params_file='AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params',
             verbose=False
         )
     except (ValueError, FileNotFoundError):
-        if not os.path.isdir('test_dataset_avgfp'):
-            os.mkdir('test_dataset_avgfp')
         print('Did not find required files for DCA-based encoding. Downloading required files...')
-        import urllib.request
-        from hashlib import sha256
         # Single substituted encoded variants: CSV files including variant name and true fitness
-        url = 'https://github.com/Protein-Engineering-Framework/PyPEF/raw/master/workflow/test_dataset_avgfp/avGFP.csv'
-        urllib.request.urlretrieve(url, './test_dataset_avgfp/avGFP.csv')
-        with open('./test_dataset_avgfp/avGFP.csv', 'rb') as f:
+        url = 'https://github.com/niklases/PyPEF/raw/main/datasets/AVGFP/avGFP.csv'
+        urllib.request.urlretrieve(url, 'AVGFP/avGFP.csv')
+        with open('AVGFP/avGFP.csv', 'rb') as f:
             sha256_hash = sha256(f.read()).hexdigest()
         if not sha256_hash == 'be4623f35a5ba05d33a29ae6e69dc3c2e994e3c9092cd5880a8d0bbc12f187b1':
             raise SystemError("Hash of downloaded CSV file not correct, terminating further running.")
         # Getting plmc parameter file
-        url = 'https://github.com/niklases/PyPEF/raw/main/workflow/' \
-              'test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params'
+        url = 'https://github.com/niklases/PyPEF/raw/main/datases/' \
+              'AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params'
         urllib.request.urlretrieve(
-            url, './test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params'
+            url, 'AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params'
         )  # 71.2 MB file size
-        with open('./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params', 'rb') as f:
+        with open('AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params', 'rb') as f:
             sha256_hash = sha256(f.read()).hexdigest()
         if not sha256_hash == '8baa30bc7d568906d4b587d4c6babd025041bf2f967f303fa38070d2df339830':
             raise SystemError("Hash of downloaded DCA parameter file not correct, terminating further running.")
         print('Successfully downloaded all required files!')
+else:
+    url = 'https://github.com/niklases/PyPEF/raw/main/datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
+    urllib.request.urlretrieve(url, 'AVGFP/uref100_avgfp_jhmmer_119.a2m')
+    with open('AVGFP/uref100_avgfp_jhmmer_119.a2m', 'rb') as f:
+        sha256_hash = sha256(f.read()).hexdigest()
+    if not sha256_hash == 'a7be875cd6b8c81c14abae0efb3d307aa0fa8956d15ebc67c4cab492d4443777':
+        raise SystemError("Hash of downloaded CSV file not correct, terminating further running.")
 
-variant_fitness_data = pd.read_csv('./test_dataset_avgfp/avGFP.csv', sep=';')  # loading the avGFP dataset
+url = 'https://github.com/niklases/PyPEF/raw/main/datasets/AVGFP/avGFP.csv'
+urllib.request.urlretrieve(url, 'AVGFP/avGFP.csv')
+with open('AVGFP/avGFP.csv', 'rb') as f:
+    sha256_hash = sha256(f.read()).hexdigest()
+if not sha256_hash == '34ba042830f1297463bb0bac155a043cd87c9e6fd0bbbd45312eb833b170ab0f':
+    raise SystemError("Hash of downloaded CSV file not correct, terminating further running.")
+variant_fitness_data = pd.read_csv('AVGFP/avGFP.csv', sep=';')  # loading the avGFP dataset
 
 variants = variant_fitness_data.iloc[:2000, 0].values  # "just" using 2000 variants for faster processing
 fitnesses = variant_fitness_data.iloc[:2000, 1].values
@@ -90,7 +103,7 @@ train_val_splits_indices, test_splits_indices = [], []
 
 if use_gremlin:
     dca_encoder = GREMLIN(
-        alignment='./test_dataset_avgfp/uref100_avgfp_jhmmer_119.a2m',
+        alignment='AVGFP/uref100_avgfp_jhmmer_119.a2m',
         wt_seq=wt_sequence,
         opt_iter=100,
         optimize=True
@@ -102,7 +115,7 @@ if use_gremlin:
     x_wt = dca_encoder.x_wt
 else:  # plmc
     dca_encoder = PLMC(
-        params_file='./test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params',
+        params_file='AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params',
         verbose=False
     )
     x_dca = dca_encoder.collect_encoded_sequences(variants)
