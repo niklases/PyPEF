@@ -31,9 +31,9 @@ while true; do
     case $yn in
         [Yy]* ) 
       mkdir test_dataset_avgfp
-      wget https://raw.githubusercontent.com/niklases/PyPEF/main/workflow/test_dataset_avgfp/avGFP.csv
-      wget https://raw.githubusercontent.com/niklases/PyPEF/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119.a2m
-      wget https://raw.githubusercontent.com/niklases/PyPEF/main/workflow/api_encoding_train_test.py
+      wget https://raw.githubusercontent.com/niklases/PyPEF/main/datasets/AVGFP/avGFP.csv
+      wget https://raw.githubusercontent.com/niklases/PyPEF/main/datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m
+      wget https://raw.githubusercontent.com/niklases/PyPEF/scripts/Encoding_low_N/api_encoding_train_test.py
       mv avGFP.csv ./test_dataset_avgfp/avGFP.csv
       mv uref100_avgfp_jhmmer_119.a2m ./test_dataset_avgfp/uref100_avgfp_jhmmer_119.a2m
       python3 ./api_encoding_train_test.py
