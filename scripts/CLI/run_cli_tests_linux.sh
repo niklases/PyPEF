@@ -21,11 +21,13 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 conda env remove -n pypef                                                                                                #
 conda create -n pypef python=3.10 -y                                                                                     #
 eval "$(conda shell.bash hook)"                                                                                          #
-conda activate pypef                                                                                                     #
-python -m pip install -r ../requirements.txt                                                                             #
+conda activate pypef                                                                                                     #                                                                             #
+cd '../'                                                                                                                 #
 path=$( echo ${PWD%/*} )                                                                                                 #
+cd 'CLI'                                                                                                                 #
+python -m pip install -r "$path/requirements.txt"                                                                        #
 export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
-pypef='python3 '$path'/pypef/main.py'                                                                                    #                                                                                                                   #
+pypef="python3 $path/pypef/main.py"                                                                                      #                                                                                                                   #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
 #pypef=pypef                                                                                                             #
@@ -37,10 +39,11 @@ threads=12                                                                      
 ### CV-based mlp and rf regression option optimization take a long time and related testing commands are commented out/not included herein
 
 ### Pure ML (and some hybrid model) tests on ANEH dataset
-cd 'test_dataset_aneh'
+cd "$path/datasets/ANEH"
 #######################################################################
+echo $PWD
 echo
-
+exit
 $pypef --version
 echo
 $pypef -h
@@ -307,7 +310,7 @@ echo
 
 
 ### Hybrid model (and some pure ML and pure DCA) tests on avGFP dataset 
-cd '../test_dataset_avgfp'
+cd '../AVGFP'
 #######################################################################
 echo
 

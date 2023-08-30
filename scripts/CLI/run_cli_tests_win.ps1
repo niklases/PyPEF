@@ -3,10 +3,10 @@
 ### REQUIRES MINICONDA OR ANACONDA BEING INSTALLED
 Write-Host "For successful running, following files are required:`n`nin test_dataset_aneh/
 `tSequence_WT_ANEH.fasta`n`t37_ANEH_variants.csv`n`tANEH_jhmmer.a2m
-`tANEH_72.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/workflow/test_dataset_aneh/ANEH_72.6.params)
+`tANEH_72.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/datasets/ANEH/ANEH_72.6.params)
 `nin test_dataset_avgfp/`n`tP42212_F64L.fasta`n`tavGFP.csv
 `turef100_avgfp_jhmmer_119.a2m
-`turef100_avgfp_jhmmer_119_plmc_42.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/workflow/test_dataset_avgfp/uref100_avgfp_jhmmer_119_plmc_42.6.params)`n`n"
+`turef100_avgfp_jhmmer_119_plmc_42.6.params (generated using PLMC or dowloaded from https://github.com/niklases/PyPEF/blob/main/datasets/AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params)`n`n"
 
 Set-PSDebug -Trace 1
 $ErrorActionPreference = "Stop"
@@ -27,6 +27,7 @@ conda create -n pypef python=3.10 -y                                            
 conda activate pypef                                                                                                     #
 $path=Get-Location                                                                                                       #
 $path=Split-Path -Path $path -Parent                                                                                     #
+$path=Split-Path -Path $path -Parent                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
@@ -41,7 +42,7 @@ $threads = 12                                                                   
 ### CV-based mlp and rf regression option optimization take a long time and related testing commands are commented out/not included herein
 
 ### Pure ML (and some hybrid model) tests on ANEH dataset
-cd 'test_dataset_aneh'
+Set-Location -Path $path'/datasets/ANEH'
 #######################################################################
 Write-Host
 pypef --version
@@ -430,7 +431,7 @@ Write-Host
 
 
 ### Hybrid model (and some pure ML and pure DCA) tests on avGFP dataset 
-cd '../test_dataset_avgfp'
+Set-Location -Path '../AVGFP'
 #######################################################################
 Write-Host
 
