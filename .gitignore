@@ -8,3 +8,6 @@ workflow/.ipynb_checkpoints/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+# Created (test) output files
+scripts/Encoding_low_N/apc.png
+scripts/Encoding_low_N/low_N_avGFP_extrapolation.png
