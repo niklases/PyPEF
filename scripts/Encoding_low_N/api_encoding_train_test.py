@@ -319,5 +319,5 @@ plt.fill_between(low_n_train,
 plt.legend()
 plt.xlabel(r'$N_\mathrm{Train}$')
 plt.ylabel(r'$\rho$')
-plt.savefig('low_N_avGFP_extrapolation.png', dpi=500)
-print('\nDone! Created figure \'low_N_avGFP_extrapolation.png\'.')
+plt.savefig('AVGFP/low_N_avGFP_extrapolation.png', dpi=500)
+print('\nDone! Created figure \'AVGFP/low_N_avGFP_extrapolation.png\'.')
