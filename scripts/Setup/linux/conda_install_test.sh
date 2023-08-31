@@ -30,12 +30,12 @@ while true; do
     read -p "Test PyPEF installation (downloads PyPEF example test set files and runs a Python test script, ~ 1 h run time) [Y/N]? " yn
     case $yn in
         [Yy]* ) 
-      mkdir test_dataset_avgfp
+      mkdir -p AVGFP
       wget https://raw.githubusercontent.com/niklases/PyPEF/main/datasets/AVGFP/avGFP.csv
       wget https://raw.githubusercontent.com/niklases/PyPEF/main/datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m
-      wget https://raw.githubusercontent.com/niklases/PyPEF/scripts/Encoding_low_N/api_encoding_train_test.py
-      mv avGFP.csv ./test_dataset_avgfp/avGFP.csv
-      mv uref100_avgfp_jhmmer_119.a2m ./test_dataset_avgfp/uref100_avgfp_jhmmer_119.a2m
+      wget https://raw.githubusercontent.com/niklases/PyPEF/main/scripts/Encoding_low_N/api_encoding_train_test.py
+      mv avGFP.csv ./AVGFP/avGFP.csv
+      mv uref100_avgfp_jhmmer_119.a2m ./AVGFP/uref100_avgfp_jhmmer_119.a2m
       python3 ./api_encoding_train_test.py
       break;;
         [Nn]* ) 
