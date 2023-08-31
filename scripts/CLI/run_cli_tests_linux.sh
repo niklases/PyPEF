@@ -41,9 +41,8 @@ threads=12                                                                      
 ### Pure ML (and some hybrid model) tests on ANEH dataset
 cd "$path/datasets/ANEH"
 #######################################################################
-echo $PWD
 echo
-exit
+
 $pypef --version
 echo
 $pypef -h
