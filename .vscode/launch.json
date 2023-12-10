@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: PyPEF Help",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--help"
+            ]
+        },
+        {
+            "name": "Python: PyPEF MKLSTS",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/ANEH/",
+            "args": [
+                "mklsts", 
+                "--wt", "${workspaceFolder}/datasets/ANEH/Sequence_WT_ANEH.fasta", 
+                "--input", "${workspaceFolder}/datasets/ANEH/37_ANEH_variants.csv"
+            ]
+        }
+
+    ]
+}

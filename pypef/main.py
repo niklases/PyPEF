@@ -324,7 +324,6 @@ formatter = logging.Formatter(
 ch.setFormatter(formatter)
 logger.addHandler(ch)
 
-
 schema = Schema({
     Optional('--all'): bool,
     Optional('--conc'): bool,
@@ -398,6 +397,22 @@ schema = Schema({
 
 
 def validate(args):
+    """
+    Validate (docopt) arguments.
+    
+    Parameters
+    ----------
+    args: dict
+        Key-value pairs of arguments,
+        e.g.,
+        {'mklsts': True,
+         '--wt': 'WT_Seq.fasta',
+         '--input': 'Variant-Fitness.csv'}
+
+    Returns
+    -------
+    None
+    """
     try:
         args = schema.validate(args)
         return args
@@ -408,6 +423,8 @@ def validate(args):
 def run_main():
     """
     Entry point for pip-installed version.
+    Arguments are created from Docstring using docopt that 
+    creates an argument dict.
     """
     arguments = docopt(__doc__, version=__version__)
     start_time = time.time()
@@ -424,7 +441,7 @@ def run_main():
     else:
         run_pypef_utils(arguments)
 
-    elapsed = str(timedelta(seconds=time.time()-start_time)).split(".")[0]
+    elapsed = str(timedelta(seconds=time.time() - start_time)).split(".")[0]
     elapsed = f'{elapsed.split(":")[0]} h {elapsed.split(":")[1]} min {elapsed.split(":")[2]} s'
     logger.info(f'Done! (Run time: {elapsed})')
 
