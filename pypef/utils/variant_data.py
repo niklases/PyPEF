@@ -98,6 +98,10 @@ def get_sequences_from_file(
     Only takes one-liner sequences for correct input.
     Make sure every marker (> and ;) is seperated by a
     space ' ' from the value respectively name.
+
+    Returns
+    ----------
+    np.array(sequences), np.array(names_of_mutations), np.array(values)
     """
     if mult_path is not None:
         os.chdir(mult_path)

@@ -12,7 +12,7 @@ set -x  # echo on
 set -e  # exit on (PyPEF) errors
 export PS4='+(Line ${LINENO}): '  # echo script line numbers 
 
-### RUN ME WITH
+### RUN ME FROM CURRENT FILE DIRECTORY:
 ### $ ./run_cli_tests_linux.sh                      # printing STDOUT and STDERR to terminal
 ### $ ./run_cli_tests_linux.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
 
