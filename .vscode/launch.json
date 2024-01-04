@@ -101,7 +101,7 @@
                 "param_inference", 
                 "--params", "uref100_avgfp_jhmmer_119_plmc_42.6.params"
             ]
-    },
+        },
 
         {   
             "name": "Python: PyPEF hybrid/only-TS-zero-shot PLMC-DCA avGFP",
