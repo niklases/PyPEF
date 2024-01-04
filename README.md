@@ -18,19 +18,20 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 
 ---
 ## Table of Contents
-- [PyPEF](#pypef)
-- [Installation](#installation)
-- [Requirements](#requirements)
-- [Running Examples](#examples)
-- [Tutorial](#tutorial)
-- [Encoding Technique Options](#encoding-options)
-- [Modeling Techniques](#modeling-techniques)
-    - [Pure Machine Learning (ML)-based Modeling](#pure-ml)
-    - [Hybrid Modeling](#hybrid-modeling)
-- [Model Hyperparameter Grids for Training](#grids)
-- [Setting Up the Scripts Yourself](#set-up)
-- [Preprocessing for DCA-based Sequence Encoding](#dca-preprocessing)
-- [API Usage for Sequence Encoding](#api-usage)
+- [PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
+  - [Quick Installation](#quick-installation)
+  - [Requirements](#requirements)
+  - [Running Examples](#running-examples)
+  - [Tutorial](#tutorial)
+  - [Encoding Technique Options](#encoding-technique-options)
+  - [Modeling Techniques](#modeling-techniques)
+    - [Pure Machine Learning (ML)-based Modeling](#pure-machine-learning-ml-based-modeling)
+    - [Hybrid Modeling Using the MERGE Method](#hybrid-modeling-using-the-merge-method)
+  - [Model Hyperparameter Grids for Training](#model-hyperparameter-grids-for-training)
+  - [Setting Up the Scripts Yourself](#setting-up-the-scripts-yourself)
+  - [Preprocessing for DCA-based Sequence Encoding](#preprocessing-for-dca-based-sequence-encoding)
+  - [Unsupervised (DCA-based) zero-shot prediction](#unsupervised-dca-based-zero-shot-prediction)
+  - [API Usage for Sequence Encoding](#api-usage-for-sequence-encoding)
 ---
 
 <a name="pypef"></a>
@@ -278,7 +279,7 @@ Copy the notebook URL in your internet browser and select the Workflow_PyPEF.ipy
 ## Modeling Techniques
 <a name="pure-ml"></a>
 ### Pure Machine Learning (ML)-based Modeling
-Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e. encoded sequences. 
+Serveral linear and non-linear modeling options are available by default to construct supervised regression models based on the generated sequence features, i.e. encoded sequences.
 Regression models are trained, i.e. model hyperparameters are optimized, by *k*- fold (by default, fivefold) cross-validation on training samples. Here, the model aims to map the encoded variant sequences that are the features (***X***) for predicting the corresponding fitness labels (***y***) such that *f(***X***)* --> ***y*** – while cross-validation and/or using a model implementing a penalty will be necessary for better model generalization behavior.
 Following regression options from [Scikit-learn](https://scikit-learn.org/stable/) are implemented (for optimized hyperparameters, see Model Hyperparameters section below):
 - [Partial Least Squares Regression (linear model)](https://scikit-learn.org/stable/modules/generated/sklearn.cross_decomposition.PLSRegression.html)
@@ -379,14 +380,19 @@ python3 ./pypef/main.py
 5. Now you can follow approaches 5.1 (using GREMLIN; implemented in TensorFlow) or 5.2 (using plmc; extern parameter generation in C). 
 
     5.1. Running GREMLIN on the generated MSA (in FASTA or A2M format):
+
     ```
     pypef param_inference --msa ANEH_jhmmer.a2m -w WT_SEQUENCE.FASTA --opt_iter 250
     ```
+
     The pickled GREMLIN file can then be used for encoding new/test sequences:
+
     ```
     pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params GREMLIN
     ```
+
     Or for hybrid modeling:
+
     ```
     pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
     ```
@@ -404,6 +410,24 @@ python3 ./pypef/main.py
     ```
     pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params
     ```
+
+<a name="zero-shot-prediction"></a>
+## Unsupervised (DCA-based) zero-shot prediction
+Several developed methods allow unsupervised prediction of a proteins fitness based on its sequence (and/or structure).
+These methods have the advantage that no initial knowledge about a proteins fitness is required for prediction while a correlation of the predicted score and a protein's natural fitness is assumed.
+DCA itself was a statistical/unsupervised method based on MSA information that outperforms simpler MSA-based methods (such as (un)coupled raw MSA sequence frequencies or BLOSUM scores), see [scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb](scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb).
+To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a train set for model testing and use the DCA encoding method, e.g.
+
+```
+TODO
+```
+
+Other well-performing zero-shot prediction methods with available source code are:
+- ESM-1v/ESM-2 (https://github.com/facebookresearch/esm)
+- DeepSequence (https://github.com/debbiemarkslab/DeepSequence)
+- EVcouplings (plmc-DCA, https://github.com/debbiemarkslab/EVcouplings)
+- EVE (https://github.com/OATML/EVE)
+
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding
