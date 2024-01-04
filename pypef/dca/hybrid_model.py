@@ -570,6 +570,10 @@ def check_model_type(model: dict | DCAHybridModel | PLMC | GREMLIN):
 
 
 def get_model_path(model: str):
+    """
+    Checks if model Pickle files exits in CWD 
+    and then in ./Pickles directory.
+    """
     try:
         if isfile(model):
             model_path = model
@@ -586,7 +590,15 @@ def get_model_path(model: str):
                           "Specify a model for DCA-based encoding.")
 
 
-def get_model_and_type(params_file: str, substitution_sep: str = '/'):
+def get_model_and_type(
+        params_file: str, 
+        substitution_sep: str = '/'
+):
+    """
+    Tries to load/unpickle model to identify the model type 
+    and to load the model from the identified plmc pickle file 
+    or from the loaded pickle dictionary.
+    """
     file_path = get_model_path(params_file)
     try:
         with open(file_path, 'rb') as read_pkl_file:
@@ -624,8 +636,7 @@ def save_model_to_dict_pickle(
 
     if model_type is None:
         model_type = 'MODEL'
-    # else:
-    #    model_type += '_MODEL'
+    
     logger.info(f'Save model as Pickle file... {model_type}')
     pickle.dump(
         {
@@ -700,9 +711,9 @@ def plmc_or_gremlin_encoding(
 
 def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, shift_pos=1, substitution_sep='/'):
     """
-     Gets X and x_wt for DCA prediction: delta_Hamiltonian respectively
-     delta_E = np.subtract(X, x_wt), with X = encoded sequences of variants.
-     Also removes variants, sequences, and y_trues at MSA gap positions.
+    Gets X and x_wt for DCA prediction: delta_Hamiltonian respectively
+    delta_E = np.subtract(X, x_wt), with X = encoded sequences of variants.
+    Also removes variants, sequences, and y_trues at MSA gap positions.
     """
     variants, sequences, ys_true = np.atleast_1d(variants), np.atleast_1d(sequences), np.atleast_1d(ys_true)
     variants, sequences, ys_true = remove_gap_pos(
