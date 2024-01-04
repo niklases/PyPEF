@@ -414,9 +414,9 @@ python3 ./pypef/main.py
 <a name="zero-shot-prediction"></a>
 ## Unsupervised/zero-shot prediction
 Several developed methods allow unsupervised prediction of a proteins fitness based on its sequence (and/or structure).
-These methods have the advantage that no initial knowledge about a proteins fitness is required for prediction while a correlation of the predicted score and a protein's natural fitness is assumed.
+These methods have the advantage that no initial knowledge about a proteins fitness is required for prediction, while a correlation of the predicted score and a protein's natural fitness is assumed.
 DCA itself is a statistical/unsupervised method based on MSA information that outperforms simpler MSA-based methods (such as (un)coupled raw MSA sequence frequencies or BLOSUM scores), e.g., see [scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb](scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb).
-To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a train set for model testing and apply the DCA encoding method for running, e.g., for the avGFP data,
+To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a training set (no `-l` flag, only a `-t` flag) for hybrid modeling, e.g., for the avGFP data,
 
 ```
 pypef param_inference --msa uref100_avgfp_jhmmer_119.a2m
@@ -434,7 +434,7 @@ Other well-performing zero-shot prediction methods with available source code ar
 - DeepSequence (https://github.com/debbiemarkslab/DeepSequence)
 - EVcouplings (plmc-DCA, https://github.com/debbiemarkslab/EVcouplings)
 - EVE (https://github.com/OATML/EVE)
-
+- Tranception (https://github.com/OATML-Markslab/Tranception)
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding
