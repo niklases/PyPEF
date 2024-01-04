@@ -422,7 +422,7 @@ To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not 
 TODO
 ```
 
-Other well-performing zero-shot prediction methods with available source code are:
+Other well-performing zero-shot prediction methods with available source code are (list not complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances):
 - ESM-1v/ESM-2 (https://github.com/facebookresearch/esm)
 - DeepSequence (https://github.com/debbiemarkslab/DeepSequence)
 - EVcouplings (plmc-DCA, https://github.com/debbiemarkslab/EVcouplings)
