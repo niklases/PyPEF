@@ -1,12 +1,6 @@
 
 import os.path
 import numpy as np
-import sys
-sys.path.append(os.path.abspath(
-    os.path.join(
-        os.path.abspath(__file__), 
-        '../../'
-    )))
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
