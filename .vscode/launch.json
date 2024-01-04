@@ -16,8 +16,9 @@
                 "--help"
             ]
         },
+
         {
-            "name": "Python: PyPEF MKLSTS",
+            "name": "Python: PyPEF MKLSTS ANEH",
             "type": "python",
             "request": "launch",
             "env": {"PYTHONPATH": "${workspaceFolder}"},
@@ -30,7 +31,93 @@
                 "--wt", "${workspaceFolder}/datasets/ANEH/Sequence_WT_ANEH.fasta", 
                 "--input", "${workspaceFolder}/datasets/ANEH/37_ANEH_variants.csv"
             ]
-        }
+        },
 
+        {
+            "name": "Python: PyPEF MKLSTS avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "mklsts", 
+                "--wt", "P42212_F64L.fasta", 
+                "--input", "avGFP.csv"
+            ]
+        },
+
+        {   // GREMLIN zero-shot steps:
+            // 1. $pypef param_inference --msa uref100_avgfp_jhmmer_119.a2m --opt_iter 100
+            // 2. $pypef hybrid -t TS.fasl --params GREMLIN
+            // or
+            // 2. $pypef hybrid -m GREMLIN -t TS.fasl --params GREMLIN
+            "name": "Python: PyPEF save GREMLIN avGFP model",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "param_inference", 
+                "--msa", "uref100_avgfp_jhmmer_119.a2m", 
+                "--opt_iter", "100"
+            ]
+        },
+
+        {
+            "name": "Python: PyPEF hybrid/only-TS-zero-shot GREMLIN-DCA avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "GREMLIN",   // optional, not required  
+                "--ts", "TS.fasl", 
+                "--params", "GREMLIN"
+            ]
+        },
+
+        {   // PLMC zero-shot steps:
+            // 1. $pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+            // 2. $pypef hybrid -t TS.fasl --params PLMC
+            "name": "Python: PyPEF save PLMC avGFP model",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "param_inference", 
+                "--params", "uref100_avgfp_jhmmer_119_plmc_42.6.params"
+            ]
+    },
+
+        {   
+            "name": "Python: PyPEF hybrid/only-TS-zero-shot PLMC-DCA avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "--ts", "TS.fasl", 
+                "--params", "PLMC",
+                "--threads", "24"
+            ]
+        }
     ]
 }

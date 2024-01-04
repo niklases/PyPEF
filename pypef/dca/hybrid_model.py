@@ -576,7 +576,10 @@ def get_model_path(model: str):
         elif isfile(f'Pickles/{model}'):
             model_path = f'Pickles/{model}'
         else:
-            raise SystemError("Did not find specified model file.")
+            raise SystemError("Did not find specified model file in current working directory "
+                              " or /Pickles subdirectory. Make sure to train/save a model first "
+                              "(e.g., for saving a GREMLIN model, type \"pypef param_inference --msa TARGET_MSA.a2m\" "
+                              "or, for saving a plmc model, type \"pypef param_inference --params TARGET_PLMC.params\").")
         return model_path
     except TypeError:
         raise SystemError("No provided model. "

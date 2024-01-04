@@ -30,7 +30,7 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
   - [Model Hyperparameter Grids for Training](#model-hyperparameter-grids-for-training)
   - [Setting Up the Scripts Yourself](#setting-up-the-scripts-yourself)
   - [Preprocessing for DCA-based Sequence Encoding](#preprocessing-for-dca-based-sequence-encoding)
-  - [Unsupervised (DCA-based) zero-shot prediction](#unsupervised-dca-based-zero-shot-prediction)
+  - [Unsupervised/zero-shot prediction](#unsupervisedzero-shot-prediction)
   - [API Usage for Sequence Encoding](#api-usage-for-sequence-encoding)
 ---
 
@@ -412,15 +412,22 @@ python3 ./pypef/main.py
     ```
 
 <a name="zero-shot-prediction"></a>
-## Unsupervised (DCA-based) zero-shot prediction
+## Unsupervised/zero-shot prediction
 Several developed methods allow unsupervised prediction of a proteins fitness based on its sequence (and/or structure).
 These methods have the advantage that no initial knowledge about a proteins fitness is required for prediction while a correlation of the predicted score and a protein's natural fitness is assumed.
-DCA itself was a statistical/unsupervised method based on MSA information that outperforms simpler MSA-based methods (such as (un)coupled raw MSA sequence frequencies or BLOSUM scores), see [scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb](scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb).
-To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a train set for model testing and use the DCA encoding method, e.g.
+DCA itself is a statistical/unsupervised method based on MSA information that outperforms simpler MSA-based methods (such as (un)coupled raw MSA sequence frequencies or BLOSUM scores), e.g., see [scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb](scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb).
+To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a train set for model testing and apply the DCA encoding method for running, e.g., for the avGFP data,
 
 ```
-TODO
+pypef param_inference --msa uref100_avgfp_jhmmer_119.a2m
+pypef hybrid -t AVGFP_TS.fasl --params GREMLIN
 ```
+using the GREMLIN parameters, or,
+```
+pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+pypef hybrid -t TS.fasl --params PLMC
+```
+using the plmc parameters.
 
 Other well-performing zero-shot prediction methods with available source code are (list not complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances):
 - ESM-1v/ESM-2 (https://github.com/facebookresearch/esm)
