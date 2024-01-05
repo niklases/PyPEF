@@ -1094,11 +1094,14 @@ def predict_ps(  # also predicting "pmult" dict directories
         in the respective created folders).
 
     """
-    logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
-
+    if model_pickle_file is None:
+        model_pickle_file = params_file
+        logger.info(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
+    else:
+        logger.info(f'Loading model from saved model (Pickle file): {model_pickle_file}...')
     model, model_type = get_model_and_type(model_pickle_file)
 
-    if model_type == 'PLMC':
+    if model_type == 'PLMC' or model_type == 'GREMLIN':
         logger.info(f'No hybrid model provided – falling back to a statistical DCA model.')
     elif model_type == 'Hybrid':
         beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor

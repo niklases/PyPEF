@@ -104,6 +104,23 @@
             ]
         },
 
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "GREMLIN",   // optional, not required  
+                "--ps", "TS.fasl", 
+                "--params", "GREMLIN"
+            ]
+        },
+
         {   // PLMC zero-shot steps:
             // 1. $pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
             // 2. $pypef hybrid -t TS.fasl --params PLMC
@@ -133,6 +150,42 @@
             "args": [
                 "hybrid", 
                 "--ts", "TS.fasl", 
+                "--params", "PLMC",
+                "--threads", "24"
+            ]
+        },
+
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot PLMC-DCA avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "PLMC",   // optional, not required  
+                "--ps", "TS.fasl", 
+                "--params", "uref100_avgfp_jhmmer_119_plmc_42.6.params",
+                "--threads", "24"
+            ]
+        },
+
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot PLMC-DCA variant 2 avGFP",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "PLMC",   // optional, not required  
+                "--ps", "TS.fasl", 
                 "--params", "PLMC",
                 "--threads", "24"
             ]

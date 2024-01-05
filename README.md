@@ -17,8 +17,9 @@ Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
 <sup>*§*</sup><sub>Equal contribution</sub> <br>
 
 ---
+
 ## Table of Contents
-- [PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
+[PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
   - [Quick Installation](#quick-installation)
   - [Requirements](#requirements)
   - [Running Examples](#running-examples)
@@ -398,15 +399,19 @@ python3 ./pypef/main.py
     ```
 
     5.2 After [installing plmc](https://github.com/debbiemarkslab/plmc#compilation), generate the evolutionary coupling file, which is used for encoding sequences. For example, set `-le` to the value output by `sto2a2m`:
+
     ```
     plmc -o ANEH_72.6.params -le 72.6 -m 100 -g -f WT_ANEH ANEH_jhmmer.a2m
     ```
     
     The output parameter (.params) file can be used for encoding sequences with the DCA-based encoding technique (`-e dca`) by providing it to PyPEF; e.g. for pure ML modeling:
+
     ```
     pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params ANEH_72.6.params
     ```
+
     Or for hybrid modeling:
+
     ```
     pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params
     ```
@@ -420,21 +425,27 @@ To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not 
 
 ```
 pypef param_inference --msa uref100_avgfp_jhmmer_119.a2m
-pypef hybrid -t AVGFP_TS.fasl --params GREMLIN
+pypef hybrid -t TS.fasl --params GREMLIN
 ```
+
 using the GREMLIN parameters, or,
+
 ```
 pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 pypef hybrid -t TS.fasl --params PLMC
 ```
+
 using the plmc parameters.
 
-Other well-performing zero-shot prediction methods with available source code are (list not complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances):
+Other well-performing zero-shot prediction methods with available source code are:
+
 - ESM-1v/ESM-2 (https://github.com/facebookresearch/esm)
 - DeepSequence (https://github.com/debbiemarkslab/DeepSequence)
 - EVcouplings (plmc-DCA, https://github.com/debbiemarkslab/EVcouplings)
 - EVE (https://github.com/OATML/EVE)
 - Tranception (https://github.com/OATML-Markslab/Tranception)
+  
+This list is by no means complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances (as well as for getting many benchmark data sets).
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding

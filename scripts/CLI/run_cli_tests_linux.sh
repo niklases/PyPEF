@@ -368,10 +368,20 @@ echo
 $pypef hybrid -m PLMC -t TS.fasl --params PLMC --threads $threads
 echo
 
-# pure statistical
+# Hybrid: pure statistical
 $pypef hybrid -t TS.fasl --params PLMC --threads $threads
 echo
+$pypef hybrid -p TS.fasl --params PLMC --threads $threads
+echo
+# Same as above command
+$pypef hybrid -p TS.fasl -m PLMC --params PLMC --threads $threads
+echo
 $pypef hybrid -t TS.fasl --params GREMLIN
+echo
+$pypef hybrid -p TS.fasl --params GREMLIN
+echo
+# Same as above command
+$pypef hybrid -p TS.fasl -m GREMLIN --params GREMLIN
 echo
 $pypef hybrid -m GREMLIN -t TS.fasl --params GREMLIN
 echo
