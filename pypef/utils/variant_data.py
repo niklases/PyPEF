@@ -110,6 +110,9 @@ def get_sequences_from_file(
     values = []
     names_of_mutations = []
 
+    allowed_chars = "ABCDEFGHIKLMNPQRSTVWYX-."
+    allowed_chars += allowed_chars.lower()
+
     with open(fasta, 'r') as f:
         words = ""
         for line in f:
@@ -132,9 +135,17 @@ def get_sequences_from_file(
 
             else:
                 try:
-                    words += line.strip()
+                    line = line.strip()
+                    if any(not c in line for c in allowed_chars):
+                        for c in line:
+                            if c not in allowed_chars:
+                                raise SystemError(
+                                    f"The input file(s) (MSA or train/test sets) contain(s) unknown protein sequence characters "
+                                    f"(e.g.: \"{c}\"). Note that an MSA has to be provided in FASTA or A2M format (or formatted as "
+                                    F"pure linebreak-separated sequences).")
+                    words += line
                 except IndexError:
-                    raise IndexError("Learning or Validation sets (.fasta) likely "
+                    raise IndexError("Sequences in input file(s) likely "
                                      "have emtpy lines (e.g. at end of file)")
         if words != "":
             sequences.append(words)

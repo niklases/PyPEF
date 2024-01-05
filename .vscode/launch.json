@@ -189,6 +189,21 @@
                 "--params", "PLMC",
                 "--threads", "24"
             ]
+        },
+
+        {
+            "name": "Python: PyPEF !wrong! MSA input format (STO)",
+            "type": "python",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "param_inference", 
+                "--msa", "uref100_avgfp_jhmmer_119.sto"
+            ]
         }
     ]
 }
