@@ -421,11 +421,12 @@ python3 ./pypef/main.py
 Several developed methods allow unsupervised prediction of a proteins fitness based on its sequence (and/or structure).
 These methods have the advantage that no initial knowledge about a proteins fitness is required for prediction, while a correlation of the predicted score and a protein's natural fitness is assumed.
 DCA itself is a statistical/unsupervised method based on MSA information that outperforms simpler MSA-based methods (such as (un)coupled raw MSA sequence frequencies or BLOSUM scores), e.g., see [scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb](scripts/GREMLIN_numba/using_gremlin_functionalities.ipynb).
-To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a training set (no `-l` flag, only a `-t` flag) for hybrid modeling, e.g., for the avGFP data,
+To make zero-shot predictions using PyPEF (plmc-DCA or GREMLIN-DCA) just do not provide a training set (no `-l` flag, only a `-t` or `-p` flag) for hybrid modeling, e.g., for the avGFP data, try
 
 ```
 pypef param_inference --msa uref100_avgfp_jhmmer_119.a2m
 pypef hybrid -t TS.fasl --params GREMLIN
+pypef hybrid -p PS.fasta --params GREMLIN
 ```
 
 using the GREMLIN parameters, or,
@@ -433,6 +434,7 @@ using the GREMLIN parameters, or,
 ```
 pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 pypef hybrid -t TS.fasl --params PLMC
+pypef hybrid -p PS.fasta --params PLMC
 ```
 
 using the plmc parameters.
