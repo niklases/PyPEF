@@ -298,8 +298,8 @@ except KeyError:
 from sys import argv, version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:
-    raise SystemError(f"The current version of PyPEF (v {__version__}) "
-                      f"requires at least Python 3.9 or higher.")
+    raise SystemError(f"The current version of PyPEF (v {__version__}) requires at "
+                      f"least Python 3.9 or higher versions of Python.")
 
 import time
 from datetime import timedelta
