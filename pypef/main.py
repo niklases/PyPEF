@@ -94,7 +94,7 @@ indices taken from the AAIndex database).
         pypef ml -e aaidx -m MODEL -p Prediction_Set.fasta
     - Recombinant/diverse prediction files in created prediction set folders:
         pypef ml -e aaidx -m MODEL --pmult [--drecomb] [...] [--qdiverse]
-    - Directed evolution – for performing and plotting in silico evolution trajectories:
+    - Directed evolution - for performing and plotting in silico evolution trajectories:
         pypef ml -e aaidx directevo -m MODEL [...]
 Note: The commands for hybrid modeling are very similar to the commands for pure ML modeling,
 see pypef -h for possible commands.
@@ -105,7 +105,7 @@ pypef param_inference --msa MSA_FILE --wt WT_FASTA [--opt_iter 100]
 
 Helpful commands for data conversion
 -----------------------------------------------
-Creation of learning and test sets – splitting CSV variant-fitness data:
+Creation of learning and test sets - splitting CSV variant-fitness data:
         pypef mklsts --wt WT_FASTA --input CSV_FILE
             [--drop THRESHOLD] [--numrnd NUMBER]
 
