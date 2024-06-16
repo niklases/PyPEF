@@ -34,6 +34,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 from tqdm import tqdm  # progress bars
+from sklearnex import patch_sklearn
+patch_sklearn(verbose=False)
 from sklearn.model_selection import LeaveOneOut
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_squared_error

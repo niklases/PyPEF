@@ -17,8 +17,11 @@
 # §Equal contribution
 
 import warnings
+import logging
 import numpy as np
 from scipy import stats
+from sklearnex import patch_sklearn
+patch_sklearn(verbose=False)
 from sklearn.metrics import mean_squared_error, r2_score
 
 
