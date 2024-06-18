@@ -16,6 +16,7 @@ scripts/ProteinGym_runs/DMS_ProteinGym_substitutions/
 scripts/ProteinGym_runs/ProteinGym_AF2_structures/
 scripts/ProteinGym_runs/multi_point_dms_mut_data.json
 scripts/ProteinGym_runs/single_point_dms_mut_data.json
+scripts/ProteinGym_runs/higher_point_dms_mut_data.json
 scripts/ProteinGym_runs/_Description_DMS_substitutions_data.csv
 
 # Created test/output files

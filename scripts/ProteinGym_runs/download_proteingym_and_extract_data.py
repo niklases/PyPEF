@@ -106,21 +106,19 @@ def get_single_or_multi_point_mut_data(csv_description_path, datasets_path=None,
                 'WT_sequence': avail_wt_seqs[i], 
                 'MSA_path': msa_path,
                 'PDB_path': pdb_path
-                #'DF': df
             }
         })
     return dms_mp_data
 
 
 if __name__ == '__main__':
-    #download_proteingym_data()
-    single=True
-    if single:
-        type_str='single'
-    else:
-        type_str='multi'
-    mut_data = get_single_or_multi_point_mut_data(os.path.join(os.path.dirname(__file__), '_Description_DMS_substitutions_data.csv'), single=single)
-    json_output_file = os.path.abspath(os.path.join(os.path.dirname(__file__), f"{type_str}_point_dms_mut_data.json"))
-    with open(json_output_file, 'w') as fp:
-        json.dump(mut_data, fp, indent=4)
-    print(f"Stored data and saved {type_str}-point data information as Pickle file as {json_output_file}.")
+    download_proteingym_data()
+    single_mut_data = get_single_or_multi_point_mut_data(os.path.join(os.path.dirname(__file__), '_Description_DMS_substitutions_data.csv'), single=True)
+    higher_mut_data = get_single_or_multi_point_mut_data(os.path.join(os.path.dirname(__file__), '_Description_DMS_substitutions_data.csv'), single=False)
+    json_output_file_single = os.path.abspath(os.path.join(os.path.dirname(__file__), f"single_point_dms_mut_data.json"))
+    json_output_file_higher = os.path.abspath(os.path.join(os.path.dirname(__file__), f"higher_point_dms_mut_data.json"))
+    with open(json_output_file_single, 'w') as fp:
+        json.dump(single_mut_data, fp, indent=4)
+    with open(json_output_file_higher, 'w') as fp:
+        json.dump(higher_mut_data, fp, indent=4)
+    print(f"Saved path data information as JSON files at {json_output_file_single} and {json_output_file_higher}.")
