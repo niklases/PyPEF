@@ -49,6 +49,7 @@ References:
 import logging
 logger = logging.getLogger('pypef.dca.params_inference')
 
+from __future__ import annotations
 from os import mkdir
 import pickle
 import numpy as np
