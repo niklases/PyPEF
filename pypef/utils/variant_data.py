@@ -139,10 +139,11 @@ def get_sequences_from_file(
                     if any(not c in line for c in allowed_chars):
                         for c in line:
                             if c not in allowed_chars:
-                                raise SystemError(
-                                    f"The input file(s) (MSA or train/test sets) contain(s) unknown protein sequence characters "
-                                    f"(e.g.: \"{c}\"). Note that an MSA has to be provided in FASTA or A2M format (or formatted as "
-                                    F"pure linebreak-separated sequences).")
+                                pass
+                                #raise SystemError(
+                                #    f"The input file(s) (MSA or train/test sets) contain(s) unknown protein sequence characters "
+                                #    f"(e.g.: \"{c}\"). Note that an MSA has to be provided in FASTA or A2M format (or formatted as "
+                                #    F"pure linebreak-separated sequences).")
                     words += line
                 except IndexError:
                     raise IndexError("Sequences in input file(s) likely "

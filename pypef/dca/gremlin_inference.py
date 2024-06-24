@@ -72,15 +72,19 @@ class GREMLIN:
             optimize=True,
             gap_cutoff=0.5,
             eff_cutoff=0.8,
-            opt_iter=100
+            opt_iter=100,
+            max_msa_seqs: int | None = 10000,
     ):
         self.char_alphabet = char_alphabet
         self.gap_cutoff = gap_cutoff
         self.eff_cutoff = eff_cutoff
         self.opt_iter = opt_iter
+        self.max_msa_seqs = max_msa_seqs
         self.states = len(self.char_alphabet)
+        print('self.states', self.states)
         self.seqs, _, _ = get_sequences_from_file(alignment)
         self.msa_ori = self.get_msa_ori()
+        print(f'MSA shape: {np.shape(self.msa_ori)}')
         self.n_col_ori = self.msa_ori.shape[1]
         if wt_seq is not None:
             self.wt_seq = wt_seq
@@ -92,14 +96,17 @@ class GREMLIN:
             raise SystemError("Length of (provided) wild-type sequence does not match "
                               "number of MSA columns, i.e., common MSA sequence length.")
         self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
+        print(f'OLD: {np.shape(self.msa_trimmed)}, {np.shape(self.v_idx)}, {np.shape(self.w_idx)}, {np.shape(self.w_rel_idx)}, {np.shape(self.gaps)}')
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
         self.n_row = self.msa_trimmed.shape[0]
         self.n_col = self.msa_trimmed.shape[1]
         self.v_ini, self.w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
+        print(f'OLD INI SHAPES: {np.shape(self.v_ini)}, {np.shape(self.w_ini)}, {np.shape(self.aa_counts)}')
         self.optimize = optimize
         if self.optimize:
             self.v_opt, self.w_opt = self.run_opt_tf()
+        print(f'OLD OPT: {np.shape(self.v_opt)}, {np.shape(self.w_opt)}')
         self.x_wt = self.collect_encoded_sequences(np.atleast_1d(self.wt_seq))
 
     def a2n_dict(self):
@@ -141,18 +148,24 @@ class GREMLIN:
     def get_msa_ori(self):
         """converts list of sequences to msa"""
         msa_ori = []
-        for seq in self.seqs:
-            msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
+        for i, seq in enumerate(self.seqs):
+            if i < self.max_msa_seqs:
+                msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
+            else:
+                print(f'Reached max. number of MSA sequences ({self.max_msa_seqs})...')
+                break
         msa_ori = np.array(msa_ori)
         return msa_ori
 
     def filt_gaps(self, msa_ori):
         """filters alignment to remove gappy positions"""
+        print('old inner:', np.shape(msa_ori))
         tmp = (msa_ori == self.states - 1).astype(float)
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
 
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
         logger.info(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
+        print(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
         ncol_trimmed = len(non_gaps)
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]

@@ -53,14 +53,13 @@ from os import mkdir, PathLike
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from Bio import AlignIO
 from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import boxcox
 import pandas as pd
 import tensorflow as tf
 tf.get_logger().setLevel('DEBUG')
-
-from pypef.utils.variant_data import get_sequences_from_file
 
 
 class GREMLIN:
@@ -74,18 +73,18 @@ class GREMLIN:
     def __init__(
             self,
             alignment: str | PathLike,
-            char_alphabet: str = "ACDEFGHIKLMNPQRSTVWY-X",
+            char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
             wt_seq=None,
             offset=0,
             optimize=True,
-            gap_cutoff=1.0,
-            eff_cutoff=1.0,
+            gap_cutoff=0.5,
+            eff_cutoff=0.8,
             opt_iter=100,
             max_msa_seqs: int | None = 10000,
             seqs=None
     ):
         self.char_alphabet = char_alphabet
-        self.allowed_chars = "ABCDEFGHIKLMNPQRSTVWYX-."
+        self.allowed_chars = "ARNDCQEGHILKMFPSTWYV-"
         self.allowed_chars += self.allowed_chars.lower()
         self.offset = offset
         self.gap_cutoff = gap_cutoff
@@ -96,13 +95,16 @@ class GREMLIN:
         else:
             self.max_msa_seqs = max_msa_seqs
         self.states = len(self.char_alphabet)
+        print('self.states', self.states)
         print('Loading MSA...')
         if seqs is None:
-            self.seqs, _ = self.get_sequences_from_msa(alignment)
+            self.seqs, self.seq_ids = self.get_sequences_from_msa(alignment)
         else:
             self.seqs = seqs
+            self.seq_ids = np.array([n for n in range(len(self.seqs))])
         print(f'Found {len(self.seqs)} sequences in the MSA...')
         self.msa_ori = self.get_msa_ori()
+        print(f'MSA shape: {np.shape(self.msa_ori)}')
         self.n_col_ori = self.msa_ori.shape[1]
         if wt_seq is not None:
             self.wt_seq = wt_seq
@@ -117,6 +119,7 @@ class GREMLIN:
                               f"i.e., common MSA sequence length.")
         print('Filtering gaps...')
         self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
+        print(f'NEW: {np.shape(self.msa_trimmed)}, {np.shape(self.v_idx)}, {np.shape(self.w_idx)}, {np.shape(self.w_rel_idx)}, {np.shape(self.gaps)}')
         print('Getting effective sequence weights...')
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
@@ -124,13 +127,16 @@ class GREMLIN:
         self.n_col = self.msa_trimmed.shape[1]
         print('Initializing v and W terms based on MSA frequencies...')
         self.v_ini, self.w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
+        print(f'NEW INI SHAPES: {np.shape(self.v_ini)}, {np.shape(self.w_ini)}, {np.shape(self.aa_counts)}')
         self.aa_freqs = self.aa_counts / self.n_row
         self.optimize = optimize
         if self.optimize:
             self.v_opt_with_gaps, self.w_opt_with_gaps = self.run_opt_tf()
+            print(f'NEW OPT: {np.shape(self.v_opt_with_gaps)}, {np.shape(self.v_opt_with_gaps)}')
             no_gap_states = self.states - 1
             self.v_opt = self.v_opt_with_gaps[:, :no_gap_states],
             self.w_opt = self.w_opt_with_gaps[:, :no_gap_states, :, :no_gap_states]
+        print(f'NEW OPT: {np.shape(self.v_opt)}, {np.shape(self.w_opt)}')
         self.x_wt = self.collect_encoded_sequences(np.atleast_1d(self.wt_seq))
 
     def get_sequences_from_msa(self, msa_file: str):
@@ -148,25 +154,16 @@ class GREMLIN:
             Path to MSA in FASTA or A2M format.
         """
         sequences = []
-        names_of_seqs = []
-        with open(msa_file, 'r') as f:
-            words = ""
-            for line in f:
-                if line.startswith('>'):
-                    if words != "":
-                        sequences.append(words[self.offset:])
-                    words = line.split('>')
-                    names_of_seqs.append(words[1].strip())
-                    words = ""
-                elif line.startswith('#'):
-                    pass  # are comments
-                else:
-                    line = line.strip()
-                    words += line
-            if words != "":
-                sequences.append(words[self.offset:])
-        assert len(sequences) == len(names_of_seqs), f"{len(sequences)}, {len(names_of_seqs)}"
-        return np.array(sequences), np.array(names_of_seqs)
+        seq_ids = []
+        alignment = AlignIO.read(open(msa_file), "fasta")
+        print("Alignment length %i" % alignment.get_alignment_length())
+        for record in alignment:
+            #print(record.seq + " " + record.id)
+            sequences.append(str(record.seq))
+            seq_ids.append(str(record.id))
+        assert len(sequences) == len(seq_ids), f"{len(sequences)}, {len(seq_ids)}"
+        print("SSSS", sequences[0])
+        return np.array(sequences), np.array(seq_ids)
 
     def a2n_dict(self):
         """convert alphabet to numerical integer values, e.g.:
@@ -211,38 +208,21 @@ class GREMLIN:
         Converts list of sequences to MSA.
         Also checks for unknown amino acid characters and removes those sequences from the MSA.
         """
-        n_skipped = 0
         msa_ori = []
-        for i, seq in enumerate(self.seqs):
-            skip = False
-            for aa in seq:
-                if aa not in self.allowed_chars:
-                    if n_skipped == 0:
-                        f"The input file(s) (MSA or train/test sets) contain(s) "
-                        f"unknown protein sequence characters "
-                        f"(e.g.: \"{aa}\" in sequence {i + 1}). "
-                        f"Will remove those sequences from MSA!"
-                    skip = True
-                if skip:
-                    n_skipped += 1
-            if i <= self.max_msa_seqs and not skip:
+        for i, (seq, seq_id) in enumerate(zip(self.seqs, self.seq_ids)):
+            if i < self.max_msa_seqs:
                 msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
-            elif i >= self.max_msa_seqs:
-                print(f'Reached the number of maximal MSA sequences ({self.max_msa_seqs}), '
-                       'skipping the rest of the MSA sequences...')
+            else:
+                print(f'Reached max. number of MSA sequences ({self.max_msa_seqs})...')
                 break
-        try:
-            msa_ori = np.array(msa_ori)
-        except ValueError:
-            raise ValueError("The provided MSA seems to have inhomogeneous "
-                             "shape, i.e., unequal sequence length.")
+        msa_ori = np.array(msa_ori)
         return msa_ori
 
     def filt_gaps(self, msa_ori):
         """filters alignment to remove gappy positions"""
+        print('new inner:', np.shape(msa_ori))
         tmp = (msa_ori == self.states - 1).astype(float)
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
-
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
         print(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
         ncol_trimmed = len(non_gaps)
@@ -444,7 +424,9 @@ class GREMLIN:
             # save the v and w parameters of the MRF
             v_opt = sess.run(v)
             w_opt = sess.run(w)
-        return v_opt, w_opt
+        no_gap_states = self.states - 1
+        return v_opt[:, :no_gap_states], w_opt[:, :no_gap_states, :, :no_gap_states]
+        #return v_opt, w_opt
 
 
     def initialize_v_w(self, remove_gap_entries=True):
