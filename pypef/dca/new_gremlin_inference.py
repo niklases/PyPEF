@@ -162,7 +162,6 @@ class GREMLIN:
             sequences.append(str(record.seq))
             seq_ids.append(str(record.id))
         assert len(sequences) == len(seq_ids), f"{len(sequences)}, {len(seq_ids)}"
-        print("SSSS", sequences[0])
         return np.array(sequences), np.array(seq_ids)
 
     def a2n_dict(self):
