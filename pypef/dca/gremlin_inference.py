@@ -46,6 +46,8 @@ References:
     https://doi.org/10.1103/PhysRevE.87.012707
 """
 
+from __future__ import annotations
+
 import logging
 logger = logging.getLogger('pypef.dca.params_inference')
 
