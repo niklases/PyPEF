@@ -46,15 +46,14 @@ References:
     https://doi.org/10.1103/PhysRevE.87.012707
 """
 
-from __future__ import annotations
-
 import logging
 logger = logging.getLogger('pypef.dca.params_inference')
 
-from os import mkdir
+from os import mkdir, PathLike
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
+from Bio import AlignIO
 from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import boxcox
@@ -62,56 +61,113 @@ import pandas as pd
 import tensorflow as tf
 tf.get_logger().setLevel('DEBUG')
 
-from pypef.utils.variant_data import get_sequences_from_file
-
 
 class GREMLIN:
+    """
+    Alphabet char order in GREMLIN: "ARNDCQEGHILKMFPSTWYV-".
+    gap_cutoff = 0.5 and eff_cutoff = 0.8 is proposed by Hopf et al.;
+    here, by default all columns are used (gap_cutoff >= 1.0 and eff_cutoff > 1.0).
+    v_ini represent the weighted frequency of each amino acid at each position, i.e.,
+    np.log(np.sum(onehot_cat_msa.T * self.msa_weights, -1).T + pseudo_count).
+    """
     def __init__(
             self,
-            alignment: str,
+            alignment: str | PathLike,
             char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
             wt_seq=None,
+            offset=0,
             optimize=True,
             gap_cutoff=0.5,
             eff_cutoff=0.8,
             opt_iter=100,
             max_msa_seqs: int | None = 10000,
+            seqs=None
     ):
         self.char_alphabet = char_alphabet
+        self.allowed_chars = "ARNDCQEGHILKMFPSTWYV-"
+        self.allowed_chars += self.allowed_chars.lower()
+        self.offset = offset
         self.gap_cutoff = gap_cutoff
         self.eff_cutoff = eff_cutoff
         self.opt_iter = opt_iter
-        self.max_msa_seqs = max_msa_seqs
+        self.gaps_1_indexed = None
+        if max_msa_seqs == None:
+            self.max_msa_seqs = 1E9
+        else:
+            self.max_msa_seqs = max_msa_seqs
         self.states = len(self.char_alphabet)
         print('self.states', self.states)
-        self.seqs, _, _ = get_sequences_from_file(alignment)
+        print('Loading MSA...')
+        if seqs is None:
+            self.seqs, self.seq_ids = self.get_sequences_from_msa(alignment)
+        else:
+            self.seqs = seqs
+            self.seq_ids = np.array([n for n in range(len(self.seqs))])
+        print(f'Found {len(self.seqs)} sequences in the MSA...')
         self.msa_ori = self.get_msa_ori()
         print(f'MSA shape: {np.shape(self.msa_ori)}')
         self.n_col_ori = self.msa_ori.shape[1]
         if wt_seq is not None:
             self.wt_seq = wt_seq
         else:  # Taking the first sequence in the MSA as wild type sequence
-            logger.info("No wild-type sequence provided: The first sequence "
-                        "in the MSA is considered the wild-type sequence.")
             self.wt_seq = "".join([self.char_alphabet[i] for i in self.msa_ori[0]])
+            print("No wild-type sequence provided: The first sequence "
+                  f"in the MSA is considered the wild-type sequence "
+                  f"(Length: {len(self.wt_seq)}):\n{self.wt_seq}\n")
         if len(self.wt_seq) != self.n_col_ori:
-            raise SystemError("Length of (provided) wild-type sequence does not match "
-                              "number of MSA columns, i.e., common MSA sequence length.")
+            raise SystemError(f"Length of (provided) wild-type sequence ({len(self.wt_seq)}) "
+                              f"does not match number of MSA columns ({self.n_col_ori}), "
+                              f"i.e., common MSA sequence length.")
+        print('Filtering gaps...')
         self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
-        print(f'OLD: {np.shape(self.msa_trimmed)}, {np.shape(self.v_idx)}, {np.shape(self.w_idx)}, {np.shape(self.w_rel_idx)}, {np.shape(self.gaps)}')
+        print(f'NEW: {np.shape(self.msa_trimmed)}, {np.shape(self.v_idx)}, {np.shape(self.w_idx)}, {np.shape(self.w_rel_idx)}, {np.shape(self.gaps)}')
+        print('Getting effective sequence weights...')
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
         self.n_row = self.msa_trimmed.shape[0]
         self.n_col = self.msa_trimmed.shape[1]
+        print('Initializing v and W terms based on MSA frequencies...')
         self.v_ini, self.w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
-        print(f'OLD INI SHAPES: {np.shape(self.v_ini)}, {np.shape(self.w_ini)}, {np.shape(self.aa_counts)}')
+        print(f'NEW INI SHAPES: {np.shape(self.v_ini)}, {np.shape(self.w_ini)}, {np.shape(self.aa_counts)}')
+        self.aa_freqs = self.aa_counts / self.n_row
         self.optimize = optimize
         if self.optimize:
-            self.v_opt, self.w_opt = self.run_opt_tf()
-        print(f'OLD OPT: {np.shape(self.v_opt)}, {np.shape(self.w_opt)}')
+            self.v_opt_with_gaps, self.w_opt_with_gaps = self.run_opt_tf()
+            print(f'NEW OPT: {np.shape(self.v_opt_with_gaps)}, {np.shape(self.v_opt_with_gaps)}')
+            no_gap_states = self.states - 1
+            self.v_opt = self.v_opt_with_gaps[:, :no_gap_states],
+            self.w_opt = self.w_opt_with_gaps[:, :no_gap_states, :, :no_gap_states]
+        print(f'NEW OPT: {np.shape(self.v_opt)}, {np.shape(self.w_opt)}')
         self.x_wt = self.collect_encoded_sequences(np.atleast_1d(self.wt_seq))
 
+    def get_sequences_from_msa(self, msa_file: str):
+        """
+        "Get_Sequences" reads (learning and test) .fasta and
+        .fasta-like ".fasl" format files and extracts the name,
+        the target value and the sequence of the protein.
+        Only takes one-liner sequences for correct input.
+        See example directory for required fasta file format.
+        Make sure every marker (> and ;) is seperated by a
+        space ' ' from the value respectively name.
+        Trimming MSA sequences starting at offset.
+
+        msa_file: str
+            Path to MSA in FASTA or A2M format.
+        """
+        sequences = []
+        seq_ids = []
+        alignment = AlignIO.read(open(msa_file), "fasta")
+        print("Alignment length %i" % alignment.get_alignment_length())
+        for record in alignment:
+            #print(record.seq + " " + record.id)
+            sequences.append(str(record.seq))
+            seq_ids.append(str(record.id))
+        assert len(sequences) == len(seq_ids), f"{len(sequences)}, {len(seq_ids)}"
+        return np.array(sequences), np.array(seq_ids)
+
     def a2n_dict(self):
+        """convert alphabet to numerical integer values, e.g.:
+        {"A": 0, "C": 1, "D": 2, ...}"""
         a2n = {}
         for a, n in zip(self.char_alphabet, range(self.states)):
             a2n[a] = n
@@ -148,9 +204,12 @@ class GREMLIN:
         return self.v_idx, self.w_idx
 
     def get_msa_ori(self):
-        """converts list of sequences to msa"""
+        """
+        Converts list of sequences to MSA.
+        Also checks for unknown amino acid characters and removes those sequences from the MSA.
+        """
         msa_ori = []
-        for i, seq in enumerate(self.seqs):
+        for i, (seq, seq_id) in enumerate(zip(self.seqs, self.seq_ids)):
             if i < self.max_msa_seqs:
                 msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
             else:
@@ -161,14 +220,14 @@ class GREMLIN:
 
     def filt_gaps(self, msa_ori):
         """filters alignment to remove gappy positions"""
-        print('old inner:', np.shape(msa_ori))
+        print('new inner:', np.shape(msa_ori))
         tmp = (msa_ori == self.states - 1).astype(float)
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
-
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
-        logger.info(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
-        print(f'Gap positions (removed from MSA; 0-indexed):\n{gaps}')
+        self.gaps_1_indexed = [g+1 for g in gaps]
+        print(f'Gap positions (removed from MSA; 1-indexed):\n{self.gaps_1_indexed}')
         ncol_trimmed = len(non_gaps)
+        print(f'Positions remaining: {ncol_trimmed} of {np.shape(msa_ori)[1]} ({(ncol_trimmed / np.shape(msa_ori)[1]) * 100 :.2f}%)')
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
         w_rel_idx = np.stack(np.triu_indices(ncol_trimmed, 1), -1)
@@ -356,20 +415,21 @@ class GREMLIN:
             sess.run(v.assign(v_ini))
             # compute loss across all data
             get_loss = lambda: round(sess.run(loss, feed(feed_all=True)) * self.n_eff, 2)
-            logger.info(f"Initial loss: {get_loss()}. Starting parameter optimization...")
+            print(f"Initial loss: {get_loss()}. Starting parameter optimization...")
             for i in range(self.opt_iter):
                 sess.run(opt, feed())
                 try:
                     if (i + 1) % int(self.opt_iter / 10) == 0:
-                        logger.info(f"Iteration {(i + 1)} {get_loss()}")
+                        print(f"Iteration {(i + 1)} {get_loss()}")
                 except ZeroDivisionError:
-                    logger.info(f"Iteration {(i + 1)} {get_loss()}")
+                    print(f"Iteration {(i + 1)} {get_loss()}")
             # save the v and w parameters of the MRF
             v_opt = sess.run(v)
             w_opt = sess.run(w)
-
         no_gap_states = self.states - 1
         return v_opt[:, :no_gap_states], w_opt[:, :no_gap_states, :, :no_gap_states]
+        #return v_opt, w_opt
+
 
     def initialize_v_w(self, remove_gap_entries=True):
         """
@@ -405,6 +465,9 @@ class GREMLIN:
             )
 
     def get_score(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
+        """
+        Computes the GREMLIN score for a given sequence or list of sequences.
+        """
         if v is None or w is None:
             if self.optimize:
                 v, w = self.v_opt, self.w_opt
