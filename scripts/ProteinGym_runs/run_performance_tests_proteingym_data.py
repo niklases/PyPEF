@@ -6,10 +6,10 @@ import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-print(sys.path)
+# Add local PyPEF path if not using pip-installed PyPEF version
+#sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.dca.hybrid_model import remove_gap_pos, get_delta_e_statistical_model
+from pypef.dca.hybrid_model import get_delta_e_statistical_model, remove_gap_pos
 from pypef.utils.variant_data import get_seqs_from_var_name
 
 
@@ -17,12 +17,11 @@ single_point_mut_data = os.path.abspath(os.path.join(os.path.dirname(__file__), 
 higher_mut_data = os.path.abspath(os.path.join(os.path.dirname(__file__), f"higher_point_dms_mut_data.json"))
 
 
-
-
 def plot_performance(mut_data, plot_name, mut_sep=':'):
     tested_dsets = []
     dset_perfs = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
+            #if i < 3:
             #try:
             print('\n', i, '\n===============================================================')
             csv_path = dset_paths['CSV_path']
@@ -43,13 +42,19 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                 print('Sequence length over 800, continuing...')
                 continue
             gremlin_new = GREMLIN(alignment=msa_path, wt_seq=wt_seq, max_msa_seqs=10000)
-            gaps = gremlin_new.gaps
+            #gaps = gremlin_new.gaps
             gaps_1_indexed = gremlin_new.gaps_1_indexed
-            var_pos = [int(v[1:-1]) for v in variants]
+            var_pos = [int(v[1:-1]) for variants in variants_split for v in variants]
+            n_muts = []
+            for vs in variants_split:
+                n_muts.append(len(vs))
+            max_muts = max(n_muts)
             c = 0
             for vp in var_pos:
                 if vp in gaps_1_indexed:
                     c += 1
+            print(f'N max. (multiple) amino acid substitutions: {max_muts}')
+            c = c / max_muts
             ratio_input_vars_at_gaps = c / len(var_pos)
             if c > 0:
                 print(f'{c} of {len(var_pos)} ({ratio_input_vars_at_gaps * 100:.2f}%) input variants to be predicted are variants with '
@@ -59,15 +64,17 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
             x_wt = gremlin_new.x_wt
             # Statistical model performance
             y_pred_new = get_delta_e_statistical_model(x_dca, x_wt)
-            print(f'Statistical DCA model performance on all datapoints; Spearman\'s rho: {spearmanr(fitnesses, y_pred_new)[0]:.3f}')
+            print(f'Statistical DCA model performance on all datapoints; Spearman\'s rho: {abs(spearmanr(fitnesses, y_pred_new)[0]):.3f}')
             assert len(x_dca) == len(fitnesses) == len(variants) == len(sequences)
             #except SystemError:  # Check MSAs
             #   continue
-            tested_dsets.append(dset_key)
-            dset_perfs.append(spearmanr(fitnesses, y_pred_new)[0])
+            tested_dsets.append(f'{dset_key} ({100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, ' 
+                                + r'$N_\mathrm{AASubs:}$' + f'{max_muts})')
+            dset_perfs.append(abs(spearmanr(fitnesses, y_pred_new)[0]))
     plt.figure(figsize=(20, 12))
     plt.plot(range(len(tested_dsets)), dset_perfs, 'o--', markersize=12)
     plt.plot(range(len(tested_dsets)), np.full(np.shape(tested_dsets), np.mean(dset_perfs)), 'k--')
+    plt.text(len(tested_dsets) - 1, np.mean(dset_perfs), f'{np.mean(dset_perfs):.2f}')
     plt.xticks(range(len(tested_dsets)), tested_dsets, rotation=45, ha='right')
     plt.tight_layout()
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
