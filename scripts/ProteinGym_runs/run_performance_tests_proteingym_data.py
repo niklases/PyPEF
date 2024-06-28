@@ -71,8 +71,10 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
             c = c / max_muts
             ratio_input_vars_at_gaps = c / len(var_pos)
             if c > 0:
-                print(f'{c} of {len(var_pos)} ({ratio_input_vars_at_gaps * 100:.2f}%) input variants to be predicted are variants with '
+                print(f'{int(c)} of {len(var_pos)} ({ratio_input_vars_at_gaps * 100:.2f}%) input variants to be predicted are variants with '
                       f'amino acid substitutions at gap positions (these variants will be predicted/labeled with a fitness of 0.0).')
+            if ratio_input_vars_at_gaps >= 1.0:
+                print('100% substitutions at gap sites, skipping dataset...')
             #variants, sequences, fitnesses = remove_gap_pos(gaps, variants, sequences, fitnesses)
             x_dca = gremlin_new.collect_encoded_sequences(sequences)
             x_wt = gremlin_new.x_wt
