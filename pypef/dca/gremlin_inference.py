@@ -51,7 +51,7 @@ from __future__ import annotations
 import logging
 logger = logging.getLogger('pypef.dca.params_inference')
 
-from os import mkdir, PathLike
+from os import mkdir, PathLike, environ
 import pickle
 import numpy as np
 import matplotlib.pyplot as plt
@@ -62,6 +62,8 @@ from scipy.stats import boxcox
 import pandas as pd
 import tensorflow as tf
 tf.get_logger().setLevel('DEBUG')
+# Uncomment to hide GPU devices
+#environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
 class GREMLIN:

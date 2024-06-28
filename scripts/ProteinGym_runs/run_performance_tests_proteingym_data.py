@@ -12,6 +12,10 @@ from pypef.dca.gremlin_inference import GREMLIN
 from pypef.dca.hybrid_model import get_delta_e_statistical_model, remove_gap_pos
 from pypef.utils.variant_data import get_seqs_from_var_name
 
+import time
+import psutil
+import gc
+
 
 single_point_mut_data = os.path.abspath(os.path.join(os.path.dirname(__file__), f"single_point_dms_mut_data.json"))
 higher_mut_data = os.path.abspath(os.path.join(os.path.dirname(__file__), f"higher_point_dms_mut_data.json"))
@@ -21,15 +25,23 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
     tested_dsets = []
     dset_perfs = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i < 8:
+        if i >= 0:
             #try:
-            print('\n', i, '\n===============================================================')
+            print(f'\n{i+1}/{len(mut_data.items())}\n===============================================================')
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
             wt_seq = dset_paths['WT_sequence']
             print(msa_path)
+            time.sleep(5)
+            # Getting % usage of virtual_memory ( 3rd field)
+            print('RAM memory % used:', psutil.virtual_memory()[2])
+            # Getting usage of virtual_memory in GB ( 4th field)
+            print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000)
             variant_fitness_data = pd.read_csv(csv_path, sep=',')
-            print(np.shape(variant_fitness_data))
+            print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
+            if np.shape(variant_fitness_data)[0] > 400000:
+                print('More than 400000 variant-fitness pairs which is a potential OOM error risk, skipping dataset...')
+                continue
             variants = variant_fitness_data['mutant']
             fitnesses = variant_fitness_data['DMS_score']
             variants_split = []
@@ -39,8 +51,9 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                 variants_split.append(variant.split(mut_sep))
             variants, fitnesses, sequences = get_seqs_from_var_name(wt_seq, variants_split, fitnesses)
             # Only model sequences with length of max. 800 amino acids to avoid out of memory errors 
-            if len(wt_seq) > 800:
-                print('Sequence length over 800, continuing...')
+            print('Sequence length:', len(wt_seq))
+            if len(wt_seq) > 1000:
+                print('Sequence length over 1000 which is a potential OOM error risk, skipping dataset...')
                 continue
             gremlin_new = GREMLIN(alignment=msa_path, wt_seq=wt_seq, max_msa_seqs=10000)
             #gaps = gremlin_new.gaps
@@ -71,6 +84,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
             #   continue
             tested_dsets.append(f'{dset_key} ({100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, {max_muts})')
             dset_perfs.append(abs(spearmanr(fitnesses, y_pred_new)[0]))
+            gc.collect()  # Potentially GC is needed to free some RAM (deallocated VRAM -> partly stored in RAM?) after run
     plt.figure(figsize=(26, 12))
     plt.plot(range(len(tested_dsets)), dset_perfs, 'o--', markersize=8)
     plt.plot(range(len(tested_dsets)), np.full(np.shape(tested_dsets), np.mean(dset_perfs)), 'k--')
@@ -88,4 +102,4 @@ with open(single_point_mut_data, 'r') as fh:
 with open(higher_mut_data, 'r') as fh:
     h_mut_data = json.loads(fh.read())
 plot_performance(mut_data=s_mut_data, plot_name='single_point_mut_performance')
-#plot_performance(mut_data=h_mut_data, plot_name='multi_point_mut_performance')
+plot_performance(mut_data=h_mut_data, plot_name='multi_point_mut_performance')
