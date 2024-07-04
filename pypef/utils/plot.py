@@ -23,7 +23,7 @@ from adjustText import adjust_text
 import logging
 logger = logging.getLogger('pypef.ml.regression')
 
-from pypef.utils.performance import get_performances
+from pypef.utils.performance import get_performances, get_binarized_classification_performances
 
 
 def plot_y_true_vs_y_pred(
@@ -38,34 +38,40 @@ def plot_y_true_vs_y_pred(
     Plots predicted versus true values using the hybrid model for prediction.
     Function called by function predict_ps.
     """
-    figure, ax = plt.subplots()
+    _prec, _acc, _bacc, rec, _f1, _mcc, _auroc, _aps = get_binarized_classification_performances(y_true, y_pred)
     if hybrid:
         spearman_rho = stats.spearmanr(y_true, y_pred)[0]
-        ax.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7,
-                   label=f'Spearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' + fr'($N$ = {len(y_true)})')
+        # Recall: Here, top 10 % fit variants are positive labeled (1), rest are labeled negative (0) by default
+        plt.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, c=y_true, vmin=min(y_true), vmax=max(y_true),
+                   label=f'Spearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
+                   + f'Recall(top 10 %) = {rec:.3f}\n' 
+                   + fr'($N$ = {len(y_true)})'
+        )
         file_name = name + 'DCA_Hybrid_Model_Performance.png'
     else:
         r_squared, rmse, nrmse, pearson_r, spearman_rho = get_performances(
             y_true=y_true, y_pred=y_pred
         )
-        ax.scatter(
-            y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7,
-            label=r'$R^2$' + f' = {r_squared:.3f}' + f'\nRMSE = {rmse:.3f}' + f'\nNRMSE = {nrmse:.3f}' +
-                  f'\nPearson\'s ' + r'$r$'+f' = {pearson_r:.3f}' + f'\nSpearman\'s ' +
-                  fr'$\rho$ = {spearman_rho:.3f}' + '\n' + fr'($N$ = {len(y_true)})'
+        plt.scatter(
+            y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, c=y_true, vmin=min(y_true), vmax=max(y_true),
+            label=r'$R^2$' + f' = {r_squared:.3f}' + f'\nRMSE = {rmse:.3f}' + f'\nNRMSE = {nrmse:.3f}' 
+                  + f'\nPearson\'s ' + r'$r$'+f' = {pearson_r:.3f}' 
+                  + f'\nSpearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
+                  + f'Recall(top 10 %) = {rec:.3f}\n'
+                  + fr'($N$ = {len(y_true)})'
         )
         file_name = name + 'ML_Model_Performance.png'
         # x = np.linspace(min(y_pred), max(y_pred), 100)
         # ax.plot(x, x, color='black', linewidth=0.25)  # plot diagonal line
-    ax.legend(prop={'size': 8})
-    ax.set_xlabel('Measured')
-    ax.set_ylabel('Predicted')
+    plt.legend(prop={'size': 8})
+    plt.xlabel('Measured')
+    plt.ylabel('Predicted')
     logger.info('Plotting...')
     if label:
         logger.info('Adjusting variant labels for plotting can take some '
                     'time (the limit for labeling is 150 data points)...')
         if len(y_true) < 150:
-            texts = [ax.text(y_true[i], y_pred[i], txt, fontsize=4)
+            texts = [plt.text(y_true[i], y_pred[i], txt, fontsize=4)
                      for i, txt in enumerate(variants)]
             adjust_text(
                 texts, only_move={'points': 'y', 'text': 'y'}, force_points=0.5, lim=250)
@@ -77,5 +83,6 @@ def plot_y_true_vs_y_pred(
     # while os.path.isfile(file_name):
     #     i += 1  # iterate until finding an unused file name
     #     file_name = f'DCA_Hybrid_Model_LS_TS_Performance({i}).png'
+    plt.colorbar()
     plt.savefig(file_name, dpi=500)
     plt.close('all')

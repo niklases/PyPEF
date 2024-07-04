@@ -18,14 +18,14 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-conda env remove -n pypef                                                                                                #
-conda create -n pypef python=3.10 -y                                                                                     #
+conda env remove -n pypef_py312                                                                                                #
+conda create -n pypef_py312 python=3.12 -y                                                                                     #
 eval "$(conda shell.bash hook)"                                                                                          #
-conda activate pypef                                                                                                     #                                                                             #
+conda activate pypef_py312                                                                                                     #                                                                             #
 cd '../'                                                                                                                 #
 path=$( echo ${PWD%/*} )                                                                                                 #
 cd 'CLI'                                                                                                                 #
-python -m pip install -r "$path/requirements.txt"                                                                        #
+python -m pip install -r "$path/requirements_dev.txt"                                                                        #
 export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
 pypef="python3 $path/pypef/main.py"                                                                                      #                                                                                                                   #
 ##########################################################################################################################

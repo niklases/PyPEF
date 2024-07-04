@@ -90,7 +90,7 @@ def path_aaidx_txt_path_from_utils(filename):
 def get_sequences_from_file(
         fasta: str,
         mult_path: str | None = None
-) -> (np.ndarray, np.ndarray, np.ndarray):
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Reads (learning and test) .fasta and .fasta-like ".fasl" 
     format files and extracts the name, the target value and 
