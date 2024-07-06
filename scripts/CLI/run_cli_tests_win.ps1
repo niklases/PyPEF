@@ -685,4 +685,4 @@ ExitOnExitCode
 Write-Host
 
 ExitOnExitCode
-Write-Host 'All tests finished without error!'
+Write-Host 'All runs finished without error!'

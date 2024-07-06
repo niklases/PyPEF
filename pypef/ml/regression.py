@@ -954,13 +954,14 @@ def save_model(
                 variants=test_variants,
                 label=label,
                 hybrid=False,
-                name=f'{get_basename(idx)}_{regressor.upper()}_'
+                name=f'{get_basename(idx)}_{regressor.upper()}'
             )
             name = get_basename(idx)
             if model_type in ['PLMC', 'GREMLIN'] and encoding not in ['aaidx', 'onehot']:
                 name = 'ML' + model_type.lower()
-            logger.info(f'Saving model as {name}')
-            file = open(os.path.join(path, 'Pickles', name), 'wb')
+            f_name = os.path.abspath(os.path.join(path, 'Pickles', name))
+            logger.info(f'Saving model ({f_name})...')
+            file = open(f_name, 'wb')
             pickle.dump(regressor_, file)
             file.close()
 

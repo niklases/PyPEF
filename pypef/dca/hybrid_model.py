@@ -150,7 +150,7 @@ class DCAHybridModel:
         of the variant and wild-type sequence.
 
         dE = E (variant) - E (wild-type)
-        with E = \sum_{i} h_i (o_i) + \sum_{i<j} J_{ij} (o_i, o_j)
+        with E = sum_{i} h_i (o_i) + sum_{i<j} J_{ij} (o_i, o_j)
 
         Parameters
         ----------
@@ -639,7 +639,7 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    logger.info(f'Save model as Pickle file... {model_type}')
+    logger.info(f'Saving model as Pickle file ({os.path.abspath(f'Pickles/{model_type}')})...')
     pickle.dump(
         {
             'model': model,
@@ -695,7 +695,7 @@ def plmc_or_gremlin_encoding(
             logger.info(f"Following positions are frequent gap positions in the MSA "
                         f"and cannot be considered for effective modeling, i.e., "
                         f"substitutions at these positions are removed as these would be "
-                        f"predicted as wild type:\n{[gap + 1 for gap in model.gaps]}.\n"
+                        f"predicted with wild-type fitness:\n{[gap + 1 for gap in model.gaps]}.\n"
                         f"Effective positions (N={len(model.v_idx)}) are:\n"
                         f"{[v_pos + 1 for v_pos in model.v_idx]}")
         xs, x_wt, variants, sequences, ys_true = gremlin_encoding(
@@ -1027,6 +1027,8 @@ def performance_ls_ts(
 
         save_model_to_dict_pickle(model, model_type, None, None, spearmanr(y_test, ys_pred)[0], None)
 
+        model_type = f'{model_type}_no_ML'
+
     else:
         raise SystemError('No Test Set given for performance estimation.')
 
@@ -1034,7 +1036,8 @@ def performance_ls_ts(
     logger.info(f'Spearman Rho = {spearman_rho[0]:.3f}')
 
     plot_y_true_vs_y_pred(
-        np.array(y_test), np.array(ys_pred), np.array(test_variants), label=label, hybrid=True
+        np.array(y_test), np.array(ys_pred), np.array(test_variants), 
+        label=label, hybrid=True, name=model_type
     )
 
 

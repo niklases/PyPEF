@@ -16,6 +16,7 @@
 # *Corresponding author
 # §Equal contribution
 
+import os
 import numpy as np
 from scipy import stats
 import matplotlib.pyplot as plt
@@ -44,10 +45,13 @@ def plot_y_true_vs_y_pred(
         # Recall: Here, top 10 % fit variants are positive labeled (1), rest are labeled negative (0) by default
         plt.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, c=y_true, vmin=min(y_true), vmax=max(y_true),
                    label=f'Spearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
-                   + f'Recall(top 10 %) = {rec:.3f}\n' 
+                   + r'Recall$_\mathrm{top 10 \%}$' + f' = {rec:.3f}\n'
                    + fr'($N$ = {len(y_true)})'
         )
-        file_name = name + 'DCA_Hybrid_Model_Performance.png'
+        if name != '':
+            file_name = f'DCA_Hybrid_Model_Performance_{name}.png'
+        else:
+            file_name = 'DCA_Hybrid_Model_Performance.png'
     else:
         r_squared, rmse, nrmse, pearson_r, spearman_rho = get_performances(
             y_true=y_true, y_pred=y_pred
@@ -57,10 +61,13 @@ def plot_y_true_vs_y_pred(
             label=r'$R^2$' + f' = {r_squared:.3f}' + f'\nRMSE = {rmse:.3f}' + f'\nNRMSE = {nrmse:.3f}' 
                   + f'\nPearson\'s ' + r'$r$'+f' = {pearson_r:.3f}' 
                   + f'\nSpearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
-                  + f'Recall(top 10 %) = {rec:.3f}\n'
+                  + r'Recall$_\mathrm{top 10 \%}$' + f' = {rec:.3f}\n'
                   + fr'($N$ = {len(y_true)})'
         )
-        file_name = name + 'ML_Model_Performance.png'
+        if name != '':
+            file_name = f'ML_Model_Performance_{name}.png'
+        else:
+            file_name = 'ML_Model_Performance.png'
         # x = np.linspace(min(y_pred), max(y_pred), 100)
         # ax.plot(x, x, color='black', linewidth=0.25)  # plot diagonal line
     plt.legend(prop={'size': 8})
@@ -74,15 +81,16 @@ def plot_y_true_vs_y_pred(
             texts = [plt.text(y_true[i], y_pred[i], txt, fontsize=4)
                      for i, txt in enumerate(variants)]
             adjust_text(
-                texts, only_move={'points': 'y', 'text': 'y'}, force_points=0.5, lim=250)
+                texts, only_move={'points': 'y', 'text': 'y'}, force_points=0.5, time_lim=10)
         else:
             logger.info("Terminating label process. Too many variants "
-                        "(> 150) for plotting (labels would overlap).")
+                        "(> 150) for labeled plotting.")
     # Uncomment for renaming new plots
     # i = 1
     # while os.path.isfile(file_name):
     #     i += 1  # iterate until finding an unused file name
     #     file_name = f'DCA_Hybrid_Model_LS_TS_Performance({i}).png'
     plt.colorbar()
+    logger.info(f'Saving plot ({os.path.abspath(file_name)})...')
     plt.savefig(file_name, dpi=500)
     plt.close('all')
