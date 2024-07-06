@@ -639,7 +639,8 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    logger.info(f'Saving model as Pickle file ({os.path.abspath(f'Pickles/{model_type}')})...')
+    pkl_path = os.path.abspath(f'Pickles/{model_type}')
+    logger.info(f'Saving model as Pickle file ({pkl_path})...')
     pickle.dump(
         {
             'model': model,
