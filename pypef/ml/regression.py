@@ -803,24 +803,27 @@ def encode_based_on_type(
         encoder = AAIndexEncoding(full_aaidx_txt_path(idx), list(np.atleast_1d(sequences)))
         if no_fft is False:  # use FFT on encoded sequences (default)
             x, _ = encoder.collect_encoded_sequences()
+            model_type = 'AAindex_FFT'
         else:  # use raw encoding (no FFT used on encoded sequences)
             _, x = encoder.collect_encoded_sequences()
+            model_type = 'AAindex_raw'
     elif encoding == 'onehot':  # OneHot encoding technique
         encoder = OneHotEncoding(sequences)
         x = encoder.collect_encoded_sequences()
+        model_type = 'onehot'
     elif encoding == 'dca':  # PLMC or GREMLIN-based encoding
         if len(sequences) == 1:
             use_global_model = True
         else:
             use_global_model = False
-        x, variants, sequences, y_true, x_wt, model, model_type = plmc_or_gremlin_encoding(
+        x, variants, sequences, y_true, _x_wt, _model, model_type = plmc_or_gremlin_encoding(
             variants, sequences, y_true, couplings_file, substitution_sep, threads, verbose, use_global_model
         )
     else:
         raise SystemError("Unknown encoding option.")
 
     assert len(x) == len(variants) == len(sequences) == len(y_true)
-    return x, variants, sequences, y_true
+    return x, variants, sequences, y_true, model_type
 
 
 def crossval_on_all(x_train, x_test, y_train, y_test, regressor: str, parameter, idx=None, no_fft=False):
@@ -929,10 +932,10 @@ def save_model(
             if encoding != 'aaidx' and x_train is not None and x_test is not None:
                 pass  # take global encodings instead of recomputing DCA encodings
             else:
-                x_train, train_variants, train_sequences, y_train = encode_based_on_type(
+                x_train, train_variants, train_sequences, y_train, _model_type = encode_based_on_type(
                     encoding, train_variants, train_sequences, y_train, couplings_file, idx, threads, no_fft
                 )
-                x_test, test_variants, test_sequences, y_test = encode_based_on_type(
+                x_test, test_variants, test_sequences, y_test, _model_type = encode_based_on_type(
                     encoding, test_variants, test_sequences, y_test, couplings_file, idx, threads, no_fft
                 )
 
@@ -1005,7 +1008,7 @@ def predict(
         sequences, variants, _ = get_sequences_from_file(prediction_set, mult_path)
 
     try:
-        x, variants, sequences, _ = encode_based_on_type(
+        x, variants, sequences, *_ = encode_based_on_type(
             encoding, variants, sequences, None, couplings_file,
             idx, threads, no_fft, substitution_sep, verbose
         )
@@ -1069,8 +1072,8 @@ def predict_ts(
     if encoding == 'aaidx':
         idx = model + '.txt'
 
-    sequences, variants, y_test = get_sequences_from_file(test_set)
-    x, variants, sequences, y_test, *_ = encode_based_on_type(
+    sequences, variants, y_test = get_sequences_from_file(test_set)  # x, variants, sequences, y_true, model_type
+    x, variants, sequences, y_test, model_type = encode_based_on_type(
         encoding, variants, sequences, y_test, couplings_file, idx, threads, no_fft
     )
     if type(x) == list:
@@ -1100,4 +1103,4 @@ def predict_ts(
             "Check the specified model provided via the \'-m\' flag."
         )
 
-    plot_y_true_vs_y_pred(y_test, y_pred, variants, label, hybrid=False, name=f'{get_basename(idx).upper()}_')
+    plot_y_true_vs_y_pred(y_test, y_pred, variants, label, hybrid=False, name=f'{get_basename(idx).upper()}_{model_type}')
