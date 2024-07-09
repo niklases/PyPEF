@@ -384,3 +384,7 @@ datasets/AVGFP/Recomb_Double_Split/Recomb_Double_Split4.fasta
 datasets/AVGFP/Recomb_Double_Split/Recomb_Double_Split5.fasta
 datasets/AVGFP/Recomb_Double_Split/Recomb_Double_Split6.fasta
 datasets/AVGFP/Recomb_Double_Split/Recomb_Double_Split7.fasta
+avGFP_shortened_dca_encoded.csv
+datasets/AVGFP/avGFP_shortened.csv
+avGFP_dca_encoded.csv
+scripts/Runtime_tests/runtimes.png
