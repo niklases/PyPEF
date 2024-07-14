@@ -58,38 +58,36 @@ def get_single_or_multi_point_mut_data(csv_description_path, datasets_path=None,
         pdbs_path = os.path.join(file_dirname, 'ProteinGym_AF2_structures')
     pdbs = os.listdir(pdbs_path)
     description_df = pd.read_csv(csv_description_path, sep=',')
-    i_mps = []
+    i_s = []
     for i, n_mp in enumerate(description_df['DMS_number_multiple_mutants'].to_list()):
-        if description_df['MSA_start'][i] == 1:  # TODO: Else shift WT seq by description_df['MSA_start']]
-            if n_mp > 0:
-                if not single:
-                    i_mps.append(i)
+        if n_mp > 0:
+            if not single:
+                i_s.append(i)
+        else:
+            if single:
+                i_s.append(i)
             else:
-                if single:
-                    i_mps.append(i)
-                else:
-                    pass
-    mp_description_df = description_df.iloc[i_mps, :]
-    mp_filenames = mp_description_df['DMS_filename'].to_list()
-    mp_wt_seqs = mp_description_df['target_seq'].to_list()
+                pass
+    target_description_df = description_df.iloc[i_s, :]
+    target_filenames = target_description_df['DMS_filename'].to_list()
+    target_wt_seqs = target_description_df['target_seq'].to_list()
+    target_msa_starts = target_description_df['MSA_start'].to_list()
+    target_msa_ends = target_description_df['MSA_end'].to_list()
     print(f'Searching for CSV files in {datasets_path}...')
-    csv_paths = [os.path.join(datasets_path, mp_filename) for mp_filename in mp_filenames]
+    csv_paths = [os.path.join(datasets_path, target_filename) for target_filename in target_filenames]
     print(f'Found {len(csv_paths)} {type_str}-point datasets, will check if all are available in datasets folder...')
     avail_filenames, avail_csvs, avail_wt_seqs = [], [], []
     for i, csv_path in enumerate(csv_paths):
         if not os.path.isfile(csv_path):
-            # Used to be an error in files: CHECK: Likely 'Rocklin' mistake in CSV! Should be Tsuboyama(?)
             print(f"Did not find CSV file {csv_path} - will remove it from prediction process!")
         else:
             avail_csvs.append(csv_path)
-            avail_wt_seqs.append(mp_wt_seqs[i]) 
-            avail_filenames.append(os.path.splitext(mp_filenames[i])[0])
-    print(csv_paths[0])   
+            avail_wt_seqs.append(target_wt_seqs[i]) 
+            avail_filenames.append(os.path.splitext(target_filenames[i])[0])
     assert len(avail_wt_seqs) == len(avail_csvs)
     print(f'Getting data from {len(avail_csvs)} {type_str}-point mutation DMS CSV files...')
     dms_mp_data = {}
     for i, csv_path in enumerate(avail_csvs):
-        #df = pd.read_csv(csv_path, sep=',')
         begin = avail_filenames[i].split('_')[0] + '_' + avail_filenames[i].split('_')[1]
         msa_path=None
         for msa in msas:
@@ -99,12 +97,17 @@ def get_single_or_multi_point_mut_data(csv_description_path, datasets_path=None,
             if pdb.startswith(begin):
                 pdb_path = os.path.join(pdbs_path, pdb)
         if msa_path is None or pdb_path is None:
+            print(f'Did not find a MSA or a PDB beginning with {begin}, continuing...')
             continue
+        target_msa_start = target_msa_starts[i]
+        target_msa_end = target_msa_ends[i]
         dms_mp_data.update({
             avail_filenames[i]: {
                 'CSV_path': csv_path,
                 'WT_sequence': avail_wt_seqs[i], 
                 'MSA_path': msa_path,
+                'MSA_start': target_msa_start,
+                'MSA_end': target_msa_end,
                 'PDB_path': pdb_path
             }
         })
