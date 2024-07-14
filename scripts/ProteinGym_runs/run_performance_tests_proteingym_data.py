@@ -34,7 +34,6 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         wt_seq = dset_paths['WT_sequence']
         msa_start = dset_paths['MSA_start']
         msa_end = dset_paths['MSA_end']
-        print(wt_seq)
         wt_seq = wt_seq[msa_start - 1:msa_end]
         print('CSV path:', csv_path)
         print('MSA path:', msa_path)
