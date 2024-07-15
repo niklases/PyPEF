@@ -6,17 +6,17 @@ import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
-# Add local PyPEF path if not using pip-installed PyPEF version
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from pypef.dca.gremlin_inference import GREMLIN
-from pypef.dca.hybrid_model import get_delta_e_statistical_model, remove_gap_pos
-from pypef.utils.variant_data import get_seqs_from_var_name
-
 import time
 import psutil
 import gc
-
 import logging
+# Add local PyPEF path if not using pip-installed PyPEF version
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from pypef.dca.gremlin_inference import GREMLIN
+from pypef.dca.hybrid_model import get_delta_e_statistical_model
+from pypef.utils.variant_data import get_seqs_from_var_name
+
+
 logger = logging.getLogger("pypef")
 logger.setLevel(logging.INFO)
 
@@ -27,6 +27,7 @@ higher_mut_data = os.path.abspath(os.path.join(os.path.dirname(__file__), f"high
 def plot_performance(mut_data, plot_name, mut_sep=':'):
     tested_dsets = []
     dset_perfs = []
+    n_tested_datasets = 0
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
         print(f'\n{i+1}/{len(mut_data.items())}\n===============================================================')
         csv_path = dset_paths['CSV_path']
@@ -91,12 +92,11 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         y_pred_new = get_delta_e_statistical_model(x_dca, x_wt)
         print(f'Statistical DCA model performance on all datapoints; Spearman\'s rho: {abs(spearmanr(fitnesses, y_pred_new)[0]):.3f}')
         assert len(x_dca) == len(fitnesses) == len(variants) == len(sequences)
-        #except SystemError:  # Check MSAs
-        #   continue
-        tested_dsets.append(f'{dset_key} ({100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, {max_muts})')
+        n_tested_datasets += 1
+        tested_dsets.append(f'({n_tested_datasets}) {dset_key} ({100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, {max_muts})')
         dset_perfs.append(abs(spearmanr(fitnesses, y_pred_new)[0]))
         gc.collect()  # Potentially GC is needed to free some RAM (deallocated VRAM -> partly stored in RAM?) after run
-    plt.figure(figsize=(26, 12))
+    plt.figure(figsize=(32, 12))
     plt.plot(range(len(tested_dsets)), dset_perfs, 'o--', markersize=8)
     plt.plot(range(len(tested_dsets)), np.full(np.shape(tested_dsets), np.mean(dset_perfs)), 'k--')
     plt.text(len(tested_dsets) - 1, np.mean(dset_perfs), f'{np.mean(dset_perfs):.2f}')
