@@ -52,24 +52,23 @@ from pypef.dca.gremlin_inference import GREMLIN
 
 
 class DCAHybridModel:
-    alphas = np.logspace(-6, 6, 100)  # Grid for the parameter 'alpha'.
-    parameter_range = [(0, 1), (0, 1)]  # Parameter range of 'beta_1' and 'beta_2' with lb <= x <= ub
     # TODO: Implementation of other regression techniques (CVRegression models)
-
     def __init__(
             self,
-            alphas=alphas,
-            parameter_range=None,
             x_train: np.ndarray = None,
             y_train: np.ndarray = None,
             x_test: np.ndarray = None,  # not necessary for training
             y_test: np.ndarray = None,  # not necessary for training
-            x_wt=None
+            x_wt=None,
+            alphas=None,     # Ridge regression grid for the parameter 'alpha'
+            parameter_range=None,  # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
     ):
         if parameter_range is None:
-            parameter_range = parameter_range
-        self._alphas = alphas
-        self._parameter_range = parameter_range
+            parameter_range = [(0, 1), (0, 1)] 
+        if alphas is None:
+            alphas = np.logspace(-6, 6, 100)
+        self.alphas = alphas
+        self.parameter_range = parameter_range
         self.x_train = x_train
         self.y_train = y_train
         self.x_test = x_test
@@ -200,7 +199,7 @@ class DCAHybridModel:
         Ridge object trained on 'x_train' and 'y_train' (cv=5)
         with optimized 'alpha'. 
         """
-        grid = GridSearchCV(Ridge(), {'alpha': self._alphas}, cv=5)
+        grid = GridSearchCV(Ridge(), {'alpha': self.alphas}, cv=5)
         grid.fit(x_train, y_train)
         return Ridge(**grid.best_params_).fit(x_train, y_train)
 

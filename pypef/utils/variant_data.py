@@ -167,8 +167,7 @@ def get_seqs_from_var_name(
         wt_seq: str,
         substitutions: list,
         fitness_values: list,
-        shift_pos: int = 0, 
-        assert_wt_aa: bool = False
+        shift_pos: int = 0
 ) -> tuple[list, list, list]:
     """
     Similar to function "get_sequences_from_file" but instead of getting 
@@ -196,7 +195,7 @@ def get_seqs_from_var_name(
             for single_var in var:  # single entries of substitution list
                 position_index = int(str(single_var)[1:-1]) - 1 - shift_pos
                 new_amino_acid = str(single_var)[-1]
-                if assert_wt_aa: # Assertion only possible for format AaPosAa, e.g. A123C
+                if str(single_var)[0].isalpha(): # Assertion only possible for format AaPosAa, e.g. A123C
                     assert str(single_var)[0] == temp[position_index], f"Input variant: "\
                         f"{str(single_var)[0]}{position_index}{new_amino_acid}, WT amino "\
                         f"acid variant {temp[position_index]}{position_index}{new_amino_acid}"

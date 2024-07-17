@@ -462,6 +462,7 @@ Other well-performing zero-shot prediction methods with available source code ar
 This list is by no means complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances (as well as for getting many benchmark data sets).
 
 The performance of the GREMLIN model used is shown in the following for predicting
+
 (I) single substitution effects
 <p align="center">
     <img src=".github/imgs/single_point_mut_performance.png" alt="drawing" width="500"/>
