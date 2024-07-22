@@ -6,9 +6,6 @@ import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
-import time
-import psutil
-import gc
 from sklearn.model_selection import train_test_split
 from adjustText import adjust_text
 
@@ -19,7 +16,7 @@ from pypef.dca.hybrid_model import DCAHybridModel, get_delta_e_statistical_model
 from pypef.utils.variant_data import get_seqs_from_var_name
 
 
-MAX_WT_SEQUENCE_LENGTH = 100
+MAX_WT_SEQUENCE_LENGTH = 1000
 
 single_point_mut_data = os.path.abspath(os.path.join(
     os.path.dirname(__file__), f"single_point_dms_mut_data.json"))
@@ -47,10 +44,9 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         print('MSA path:', msa_path)
         print('MSA start:', msa_start, '- MSA end:', msa_end)
         print('WT sequence (trimmed from MSA start to MSA end):\n' + wt_seq)
-        time.sleep(5)
-        # Getting % usage of virtual_memory ( 3rd field)
-        print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
-              f'GB ({psutil.virtual_memory()[2]} %)')
+        # Getting % usage of virtual_memory (3rd field)
+        #print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
+        #      f'GB ({psutil.virtual_memory()[2]} %)')
         variant_fitness_data = pd.read_csv(csv_path, sep=',')
         print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
         #if np.shape(variant_fitness_data)[0] > 400000:
@@ -101,7 +97,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         x_wt = gremlin_new.x_wt
         # Statistical model performance
         y_pred = get_delta_e_statistical_model(x_dca, x_wt)
-        print(f'Statistical DCA model performance on all datapoints; Spearman\'s rho: '
+        print(f'Statistical DCA model performance on all {len(fitnesses)} datapoints; Spearman\'s rho: '
               f'{abs(spearmanr(fitnesses, y_pred)[0]):.3f}')
         train_test_size_texts.append(plt.text(
             n_tested_datasets, abs(spearmanr(fitnesses, y_pred)[0]), f'0'  + r'$\rightarrow$' + f'{len(fitnesses)}', size=4))
