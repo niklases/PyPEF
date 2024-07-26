@@ -63,7 +63,7 @@ import pandas as pd
 import tensorflow as tf
 tf.get_logger().setLevel('DEBUG')
 # Uncomment to hide GPU devices
-#environ['CUDA_VISIBLE_DEVICES'] = '-1'
+#environ['CUDA_VISIBLE_DEVICES'] = '-1'  
 
 
 class GREMLIN:
@@ -87,6 +87,11 @@ class GREMLIN:
             max_msa_seqs: int | None = 10000,
             seqs=None
     ):
+        if not tf.config.list_physical_devices('GPU'):
+            logger.info('Using CPU for GREMLIN computations...')
+        else:
+            logger.info('Using GPU for GREMLIN computations...')
+            
         self.char_alphabet = char_alphabet
         self.allowed_chars = "ARNDCQEGHILKMFPSTWYV-"
         self.allowed_chars += self.allowed_chars.lower()

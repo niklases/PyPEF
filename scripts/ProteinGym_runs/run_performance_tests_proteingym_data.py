@@ -161,7 +161,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
     plt.margins(0.01)
     plt.legend()
     plt.tight_layout()
-    adjust_text(train_test_size_texts)
+    adjust_text(train_test_size_texts, ha='right', only_move='x-y', expand=(2, 4))
     plt.ylim(0.0, 1.0)
     plt.ylabel(r'|Spearmanr $\rho$|')
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
