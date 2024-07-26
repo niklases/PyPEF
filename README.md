@@ -465,15 +465,26 @@ The performance of the GREMLIN model used is shown in the following for predicti
 
 (I) single substitution effects
 <p align="center">
-    <img src=".github/imgs/single_point_mut_performance.png" alt="drawing" width="500"/>
+    <img src=".github/imgs/single_point_mut_performance_PGyM_DCA.png" alt="drawing" width="500"/>
+</p>
+
+(including Hybrid model performances with N_Train = {25, 50, 75, 100, 200})
+
+<p align="center">
+    <img src=".github/imgs/single_point_mut_performance_PGym_Hybrid.png" alt="drawing" width="500"/>
 </p>
 
 (II) multi-substitution effects
 <p align="center">
-    <img src=".github/imgs/multi_point_mut_performance.png" alt="drawing" width="500"/>
+    <img src=".github/imgs/multi_point_mut_performance_PGym_DCA.png" alt="drawing" width="500"/>
 </p>
 
-for some ProteinGym datasets computed using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs).
+(including Hybrid model performances with N_Train = {25, 50, 75, 100, 200})
+<p align="center">
+    <img src=".github/imgs/multi_point_mut_performance_PGym_Hybrid.png" alt="drawing" width="500"/>
+</p>
+
+for ProteinGym datasets computed using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs).
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding

@@ -100,7 +100,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         print(f'Statistical DCA model performance on all {len(fitnesses)} datapoints; Spearman\'s rho: '
               f'{abs(spearmanr(fitnesses, y_pred)[0]):.3f}')
         train_test_size_texts.append(plt.text(
-            n_tested_datasets + 0.05, 
+            n_tested_datasets - 0.05, 
             abs(spearmanr(fitnesses, y_pred)[0]), f'0'  + r'$\rightarrow$' + f'{len(fitnesses)}', 
             color='tab:blue', size=4, ha='right'
         ))
@@ -119,7 +119,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                       f'{abs(spearmanr(y_test, y_test_pred)[0]):.3f}')
                 hybrid_perfs.append(abs(spearmanr(y_test, y_test_pred)[0]))
                 train_test_size_texts.append(
-                    plt.text(n_tested_datasets + 0.05, 
+                    plt.text(n_tested_datasets - 0.05, 
                              abs(spearmanr(y_test, y_test_pred)[0]), f'{len(y_train)}'  + r'$\rightarrow$' + f'{len(y_test)}', 
                              color=['tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown'][i_t],
                              size=4, ha='right'
