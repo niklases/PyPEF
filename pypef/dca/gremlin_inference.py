@@ -234,7 +234,8 @@ class GREMLIN:
         self.gaps_1_indexed = [g+1 for g in gaps]
         logger.info(f'Gap positions (removed from MSA; 1-indexed):\n{self.gaps_1_indexed}')
         ncol_trimmed = len(non_gaps)
-        logger.info(f'Positions remaining: {ncol_trimmed} of {np.shape(msa_ori)[1]} ({(ncol_trimmed / np.shape(msa_ori)[1]) * 100 :.2f}%)')
+        logger.info(f'Positions remaining: {ncol_trimmed} of {np.shape(msa_ori)[1]} '
+                    f'({(ncol_trimmed / np.shape(msa_ori)[1]) * 100 :.2f}%)')
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
         w_rel_idx = np.stack(np.triu_indices(ncol_trimmed, 1), -1)
