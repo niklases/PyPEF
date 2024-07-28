@@ -3,14 +3,17 @@
 # or for editable/develop mode with: pip install -e .
 
 
+import os
 from setuptools import setup, find_packages
-from pathlib import Path
 
 from pypef import __version__
 
 
-this_directory = Path(__file__).parent
-long_description = Path.joinpath(this_directory, "README.md").read_text()
+directory_readme = os.path.join(os.path.dirname(__file__), "README.md")
+with open(directory_readme, 'r') as readme:
+    long_description = readme.read()
+
+long_description = long_description.replace(".github/imgs/", "https://github.com/niklases/PyPEF/raw/main/.github/imgs/")
 
 with open("requirements.txt", "r", encoding="utf-8") as install_requirements:
     requirements = install_requirements.read()
