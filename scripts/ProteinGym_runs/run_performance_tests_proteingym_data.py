@@ -73,24 +73,25 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         #gaps = gremlin.gaps
         #variants, sequences, fitnesses = remove_gap_pos(gaps, variants, sequences, fitnesses)
         gaps_1_indexed = gremlin.gaps_1_indexed
-        var_pos = [int(v[1:-1]) for variants in variants_split for v in variants]
+        count_gap_variants = 0
         n_muts = []
-        for vs in variants_split:
-            n_muts.append(len(vs))
+        for variant in variants_split:
+            n_muts.append(len(variant))
+            for substitution in variant:
+                if int(substitution[1:-1]) in gaps_1_indexed:
+                    count_gap_variants += 1
+                    break
         max_muts = max(n_muts)
-        c = 0
-        for vp in var_pos:
-            if vp in gaps_1_indexed:
-                c += 1
         print(f'N max. (multiple) amino acid substitutions: {max_muts}')
-        c = c / max_muts
-        ratio_input_vars_at_gaps = c / len(var_pos)
-        if c > 0:
-            print(f'{int(c)} of {len(var_pos)} ({ratio_input_vars_at_gaps * 100:.2f}%) input '
-                  f'variants to be predicted are variants with amino acid substitutions at gap' 
-                  f'positions (these variants will be predicted/labeled with a fitness of 0.0).')
+        ratio_input_vars_at_gaps = count_gap_variants / len(variants)
+        if count_gap_variants > -1:
+            print(f'{int(count_gap_variants)} of {len(variants)} ({ratio_input_vars_at_gaps * 100:.2f} %) input '
+                  f'variants to be predicted are variants with amino acid substitutions at gap ' 
+                  f'positions (these variants will be predicted/labeled with a fitness of 0.0).\n'
+                  f'Gap positions (1-indexed): {gaps_1_indexed}')
         if ratio_input_vars_at_gaps >= 1.0:
-            print('100% substitutions at gap sites, skipping dataset...')
+            print(f'Gap positions (1-indexed): {gaps_1_indexed}\n'
+                  f'100% substitutions at gap positions, skipping dataset...')
             continue
         #variants, sequences, fitnesses = remove_gap_pos(gaps, variants, sequences, fitnesses)
         x_dca = gremlin.collect_encoded_sequences(sequences)
@@ -100,8 +101,9 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         print(f'Statistical DCA model performance on all {len(fitnesses)} datapoints; Spearman\'s rho: '
               f'{abs(spearmanr(fitnesses, y_pred)[0]):.3f}')
         train_test_size_texts.append(plt.text(
-            n_tested_datasets - 0.05, 
-            abs(spearmanr(fitnesses, y_pred)[0]), f'0'  + r'$\rightarrow$' + f'{len(fitnesses)}', 
+            n_tested_datasets, 
+            abs(spearmanr(fitnesses, y_pred)[0]), 
+            f'0'  + r'$\rightarrow$' + f'{len(fitnesses)}', 
             color='tab:blue', size=4, ha='right'
         ))
         assert len(x_dca) == len(fitnesses) == len(variants) == len(sequences)
@@ -119,8 +121,9 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                       f'{abs(spearmanr(y_test, y_test_pred)[0]):.3f}')
                 hybrid_perfs.append(abs(spearmanr(y_test, y_test_pred)[0]))
                 train_test_size_texts.append(
-                    plt.text(n_tested_datasets - 0.05, 
-                             abs(spearmanr(y_test, y_test_pred)[0]), f'{len(y_train)}'  + r'$\rightarrow$' + f'{len(y_test)}', 
+                    plt.text(n_tested_datasets, 
+                             abs(spearmanr(y_test, y_test_pred)[0]), 
+                             f'{len(y_train)}'  + r'$\rightarrow$' + f'{len(y_test)}', 
                              color=['tab:orange', 'tab:green', 'tab:red', 'tab:purple', 'tab:brown'][i_t],
                              size=4, ha='right'
                     )
@@ -161,9 +164,9 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
     plt.margins(0.01)
     plt.legend()
     plt.tight_layout()
-    adjust_text(train_test_size_texts, ha='right', only_move='x-y', expand=(2, 4))
     plt.ylim(0.0, 1.0)
     plt.ylabel(r'|Spearmanr $\rho$|')
+    adjust_text(train_test_size_texts, expand=(1.2, 2))
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
     print('Saved file as ' + os.path.join(os.path.dirname(__file__),  f'{plot_name}.png') + '.')
 
