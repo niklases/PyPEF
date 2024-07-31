@@ -463,12 +463,12 @@ This list is by no means complete, see ProteinGym [repository](https://github.co
 
 The performance of the GREMLIN model used is shown in the following for predicting
 
-(I) single substitution effects (blue), including Hybrid model performances with N_Train = {25, 50, 75, 100, 200} (orange, green, red, purple,brown)
+(I) single substitution effects (blue), including Hybrid model performances with N_Train = {25, 50, 75, 100, 200} (orange, green, red, purple, brown)
 <p align="center">
     <img src=".github/imgs/single_point_mut_performance_PGyM_DCA.png" alt="drawing" width="500"/>
 </p>
 
-(II) multi-substitution effects (blue), including Hybrid model performances with N_Train = {25, 50, 75, 100, 200} (orange, green, red, purple,brown)
+(II) multi-substitution effects (blue), including Hybrid model performances with N_Train = {25, 50, 75, 100, 200} (orange, green, red, purple, brown)
 <p align="center">
     <img src=".github/imgs/multi_point_mut_performance_PGym_DCA.png" alt="drawing" width="500"/>
 </p>
