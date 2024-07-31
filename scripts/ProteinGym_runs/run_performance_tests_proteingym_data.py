@@ -4,6 +4,7 @@ import sys
 import json
 import pandas as pd
 import numpy as np
+import tensorflow as tf
 from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
@@ -15,6 +16,11 @@ from pypef.dca.gremlin_inference import GREMLIN
 from pypef.dca.hybrid_model import DCAHybridModel, get_delta_e_statistical_model, remove_gap_pos
 from pypef.utils.variant_data import get_seqs_from_var_name
 
+if not tf.config.list_physical_devices('GPU'):
+    print('Using CPU for computations...')
+else:
+    print('Using GPU for computations... if facing an (out-of-memory) error, '
+          'try reducing variable MAX_WT_SEQUENCE_LENGTH to e.g. 400...')
 
 MAX_WT_SEQUENCE_LENGTH = 1000
 
@@ -70,8 +76,6 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                   f'skipping dataset...')
             continue
         gremlin = GREMLIN(alignment=msa_path, wt_seq=wt_seq, opt_iter=100, max_msa_seqs=10000)
-        #gaps = gremlin.gaps
-        #variants, sequences, fitnesses = remove_gap_pos(gaps, variants, sequences, fitnesses)
         gaps_1_indexed = gremlin.gaps_1_indexed
         count_gap_variants = 0
         n_muts = []
@@ -84,7 +88,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         max_muts = max(n_muts)
         print(f'N max. (multiple) amino acid substitutions: {max_muts}')
         ratio_input_vars_at_gaps = count_gap_variants / len(variants)
-        if count_gap_variants > -1:
+        if count_gap_variants > 0:
             print(f'{int(count_gap_variants)} of {len(variants)} ({ratio_input_vars_at_gaps * 100:.2f} %) input '
                   f'variants to be predicted are variants with amino acid substitutions at gap ' 
                   f'positions (these variants will be predicted/labeled with a fitness of 0.0).\n'
@@ -93,6 +97,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
             print(f'Gap positions (1-indexed): {gaps_1_indexed}\n'
                   f'100% substitutions at gap positions, skipping dataset...')
             continue
+        # gaps = gremlin.gaps
         #variants, sequences, fitnesses = remove_gap_pos(gaps, variants, sequences, fitnesses)
         x_dca = gremlin.collect_encoded_sequences(sequences)
         x_wt = gremlin.x_wt
@@ -103,7 +108,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
         train_test_size_texts.append(plt.text(
             n_tested_datasets, 
             abs(spearmanr(fitnesses, y_pred)[0]), 
-            f'0'  + r'$\rightarrow$' + f'{len(fitnesses)}', 
+            f'0' + r'$\rightarrow$' + f'{len(fitnesses)}', 
             color='tab:blue', size=4, ha='right'
         ))
         assert len(x_dca) == len(fitnesses) == len(variants) == len(sequences)
@@ -132,7 +137,7 @@ def plot_performance(mut_data, plot_name, mut_sep=':'):
                 hybrid_perfs.append(np.nan)
         n_tested_datasets += 1
         tested_dsets.append(f'({n_tested_datasets}) {dset_key} '
-                            f'({100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, {max_muts})')
+                            f'({len(variants)}, {100.0 - (ratio_input_vars_at_gaps * 100):.2f}%, {max_muts})')
         dset_dca_perfs.append(abs(spearmanr(fitnesses, y_pred)[0]))
         dset_hybrid_perfs.append(hybrid_perfs)
         #import gc;gc.collect()  # Potentially GC is needed to free some RAM (deallocated VRAM -> partly stored in RAM?) after each run
