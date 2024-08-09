@@ -33,6 +33,7 @@ logger = logging.getLogger('pypef.dca.hybrid_model')
 import numpy as np
 import sklearn.base
 from scipy.stats import spearmanr
+from scipy.optimize import curve_fit
 from sklearnex import patch_sklearn
 patch_sklearn(verbose=False)
 from sklearn.linear_model import Ridge
@@ -55,13 +56,13 @@ class DCAHybridModel:
     # TODO: Implementation of other regression techniques (CVRegression models)
     def __init__(
             self,
-            x_train: np.ndarray = None,
-            y_train: np.ndarray = None,
+            x_train: np.ndarray = None, # DCA-encoded sequences
+            y_train: np.ndarray = None, # true labels
             x_test: np.ndarray = None,  # not necessary for training
             y_test: np.ndarray = None,  # not necessary for training
-            x_wt=None,
-            alphas=None,     # Ridge regression grid for the parameter 'alpha'
-            parameter_range=None,  # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
+            x_wt=None,                  # Wild type encoding
+            alphas=None,                # Ridge regression grid for the parameter 'alpha'
+            parameter_range=None,       # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
     ):
         if parameter_range is None:
             parameter_range = [(0, 1), (0, 1)] 
@@ -140,6 +141,10 @@ class DCAHybridModel:
         """
         return np.subtract(x, self.x_wild_type)
 
+    @staticmethod
+    def logistic_func(y, delta_e, l_supremum, k_log_growth, c):
+        return (l_supremum / (1 + np.exp(-k_log_growth * (delta_e - y)))) + c
+
     def _delta_e(
             self,
             x: np.ndarray
@@ -162,6 +167,19 @@ class DCAHybridModel:
         and wild-type.
         """
         return np.sum(self._delta_x(x), axis=1)
+    
+    def _logistic_delta_e(
+            self,
+            ys,
+            delta_es
+    ):
+        popt, _pcov = curve_fit(
+            self.logistic_func, ys, delta_es, 
+            maxfev=10000, p0=(1,1,-7,1), bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)]
+        )
+        y_dca_logistic = self.logistic_func(ys, delta_es, popt)  # popt ERROR!!!!!!!!!!!!!!!!!!!!
+        return y_dca_logistic
+
 
     def _spearmanr_dca(self) -> float:
         """
@@ -245,7 +263,8 @@ class DCAHybridModel:
             self,
             y: np.ndarray,
             y_dca: np.ndarray,
-            y_ridge: np.ndarray
+            y_ridge: np.ndarray,
+            rank_based: bool = True
     ) -> np.ndarray:
         """
         Find parameters that maximize the absolut Spearman rank
@@ -266,8 +285,12 @@ class DCAHybridModel:
         'beta_1' and 'beta_2' that maximize the absolut Spearman rank correlation
         coefficient.
         """
-        loss = lambda b: -np.abs(self.spearmanr(y, b[0] * y_dca + b[1] * y_ridge))
-        minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
+        if rank_based:
+            loss = lambda b: -np.abs(self.spearmanr(y, b[0] * y_dca + b[1] * y_ridge))
+            minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
+        else:
+            loss = lambda params: np.sum(np.power(y - params[0] * y_dca - params[1] * y_ridge, 2))
+            minimizer = differential_evolution(loss, bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)], tol=1e-4)  
         return minimizer.x
 
     def settings(
@@ -327,6 +350,7 @@ class DCAHybridModel:
             return 1.0, 0.0, None
 
         y_dca_ttest = self._delta_e(X_ttest)
+        # logistic fit here?
 
         ridge = self.ridge_predictor(X_ttrain, y_ttrain)
         y_ridge_ttest = ridge.predict(X_ttest)
