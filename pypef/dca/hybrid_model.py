@@ -56,20 +56,24 @@ class DCAHybridModel:
     # TODO: Implementation of other regression techniques (CVRegression models)
     def __init__(
             self,
-            x_train: np.ndarray = None, # DCA-encoded sequences
-            y_train: np.ndarray = None, # true labels
-            x_test: np.ndarray = None,  # not necessary for training
-            y_test: np.ndarray = None,  # not necessary for training
-            x_wt=None,                  # Wild type encoding
-            alphas=None,                # Ridge regression grid for the parameter 'alpha'
-            parameter_range=None,       # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
+            x_train: np.ndarray | None = None,   # DCA-encoded sequences
+            y_train: np.ndarray | None  = None,  # true labels
+            x_test: np.ndarray | None = None,    # not necessary for training
+            y_test: np.ndarray | None = None,    # not necessary for training
+            x_wt: np.ndarray | None = None,      # Wild type encoding
+            alphas: np.ndarray | None = None,    # Ridge regression grid for the parameter 'alpha'
+            parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
+            logistic: bool | None = None
     ):
         if parameter_range is None:
             parameter_range = [(0, 1), (0, 1)] 
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
-        self.alphas = alphas
+        if logistic is None:
+            logistic = True  # TODO: Change vack to True !!!!!!!!!!!!!!!!!
         self.parameter_range = parameter_range
+        self.alphas = alphas
+        self.logistic = logistic
         self.x_train = x_train
         self.y_train = y_train
         self.x_test = x_test
@@ -142,8 +146,8 @@ class DCAHybridModel:
         return np.subtract(x, self.x_wild_type)
 
     @staticmethod
-    def logistic_func(y, delta_e, l_supremum, k_log_growth, c):
-        return (l_supremum / (1 + np.exp(-k_log_growth * (delta_e - y)))) + c
+    def logistic_func(delta_e, *args):
+        return args[0] / (1 + np.exp(-args[1] * (delta_e - args[2]))) + args[3]
 
     def _delta_e(
             self,
@@ -174,12 +178,16 @@ class DCAHybridModel:
             delta_es
     ):
         popt, _pcov = curve_fit(
-            self.logistic_func, ys, delta_es, 
-            maxfev=10000, p0=(1,1,-7,1), bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)]
+            self.logistic_func, 
+            delta_es, 
+            ys,
+            maxfev=10000, 
+            p0=(1, 1, -7, 1), 
+            bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)]
         )
-        y_dca_logistic = self.logistic_func(ys, delta_es, popt)  # popt ERROR!!!!!!!!!!!!!!!!!!!!
+        print(popt)
+        y_dca_logistic = self.logistic_func(ys, delta_es, *popt)  # TODO: Check popt ERROR!!!!!!!!!!!!!!!!!!!!
         return y_dca_logistic
-
 
     def _spearmanr_dca(self) -> float:
         """
@@ -193,8 +201,8 @@ class DCAHybridModel:
         or
             beta_1 * y_dca - beta_2 * y_ridge.
         """
-        y_dca = self._delta_e(self.X)
-        return self.spearmanr(self.y, y_dca)
+        y_dca = self._delta_e(self.x_train)
+        return self.spearmanr(self.y_train, y_dca)
 
     def ridge_predictor(
             self,
@@ -252,7 +260,7 @@ class DCAHybridModel:
         """
         # Uncomment lines below to see if correlation between
         # y_true and y_dca is positive or negative:
-        # logger.info(f'Positive or negative correlation of (all data) y_true '
+        # logger.info(f'Positive or negative correlation of (train data) y_true '
         #             f'and y_dca (+/-?): {self._spearmanr_dca:.3f}')
         if self._spearmanr_dca >= 0:
             return beta_1 * y_dca + beta_2 * y_ridge
@@ -264,7 +272,7 @@ class DCAHybridModel:
             y: np.ndarray,
             y_dca: np.ndarray,
             y_ridge: np.ndarray,
-            rank_based: bool = True
+            rank_based: bool = False
     ) -> np.ndarray:
         """
         Find parameters that maximize the absolut Spearman rank
@@ -286,19 +294,19 @@ class DCAHybridModel:
         coefficient.
         """
         if rank_based:
-            loss = lambda b: -np.abs(self.spearmanr(y, b[0] * y_dca + b[1] * y_ridge))
-            minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
-        else:
             loss = lambda params: np.sum(np.power(y - params[0] * y_dca - params[1] * y_ridge, 2))
             minimizer = differential_evolution(loss, bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)], tol=1e-4)  
+        else:
+            loss = lambda params: -np.abs(self.spearmanr(y, params[0] * y_dca + params[1] * y_ridge))
+            minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
         return minimizer.x
 
     def settings(
             self,
             x_train: np.ndarray,
             y_train: np.ndarray,
-            train_size_fit=0.66,
-            random_state=42
+            train_size_fit: float = 0.66,
+            random_state: int = 42
     ) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -345,17 +353,24 @@ class DCAHybridModel:
 
         If this is not given -> return parameter setting for 'EVmutation' model.
         """
-        y_ttrain_min_cv = int(0.2 * len(y_ttrain))  # 0.2 because of five-fold cross validation (1/5)
+        # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
+        y_ttrain_min_cv = int(0.2 * len(y_ttrain))
         if y_ttrain_min_cv < 2:
             return 1.0, 0.0, None
 
-        y_dca_ttest = self._delta_e(X_ttest)
         # logistic fit here?
+        if self.logistic:
+            y_dca_ttest = self._logistic_delta_e(ys=y_ttest, delta_es=self._delta_e(X_ttest))
+        else:
+            y_dca_ttest = self._delta_e(X_ttest)
+
+
 
         ridge = self.ridge_predictor(X_ttrain, y_ttrain)
         y_ridge_ttest = ridge.predict(X_ttest)
 
-        beta1, beta2 = self._adjust_betas(y_ttest, y_dca_ttest, y_ridge_ttest)
+        beta1, beta2 = self._adjust_betas(
+            y_ttest, y_dca_ttest, y_ridge_ttest, rank_based=self.logistic)
         return beta1, beta2, ridge
 
     def hybrid_prediction(
@@ -391,7 +406,7 @@ class DCAHybridModel:
             y_ridge = np.random.random(len(y_dca))  # in order to suppress error
         else:
             y_ridge = reg.predict(x)
-        # adjusting: + or - on all data --> +-beta_1 * y_dca + beta_2 * y_ridge
+        # adjusting: + or - on train data --> +-beta_1 * y_dca + beta_2 * y_ridge
         return self._y_hybrid(y_dca, y_ridge, beta_1, beta_2)
 
     def split_performance(
