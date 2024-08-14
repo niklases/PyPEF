@@ -45,7 +45,7 @@ from pypef.utils.variant_data import (
     remove_nan_encoded_positions, get_wt_sequence, split_variants
 )
 
-from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence, EffectiveSiteError
+from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
@@ -70,7 +70,7 @@ class DCAHybridModel:
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
         if logistic is None:
-            logistic = True  # TODO: Change vack to True !!!!!!!!!!!!!!!!!
+            logistic = False
         self.parameter_range = parameter_range
         self.alphas = alphas
         self.logistic = logistic
@@ -185,8 +185,10 @@ class DCAHybridModel:
             p0=(1, 1, -7, 1), 
             bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)]
         )
-        print(popt)
-        y_dca_logistic = self.logistic_func(ys, delta_es, *popt)  # TODO: Check popt ERROR!!!!!!!!!!!!!!!!!!!!
+        y_dca_logistic = self.logistic_func(ys, delta_es, *popt)
+        #import matplotlib.pyplot as plt
+        #plt.scatter(np.array(delta_es).argsort().argsort(), delta_es);plt.savefig('delta_es.png', dpi=300);plt.clf()
+        #plt.scatter(np.array(y_dca_logistic).argsort().argsort(), y_dca_logistic);plt.savefig('delta_es_logistic.png', dpi=300);plt.clf()
         return y_dca_logistic
 
     def _spearmanr_dca(self) -> float:
@@ -295,7 +297,7 @@ class DCAHybridModel:
         """
         if rank_based:
             loss = lambda params: np.sum(np.power(y - params[0] * y_dca - params[1] * y_ridge, 2))
-            minimizer = differential_evolution(loss, bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)], tol=1e-4)  
+            minimizer = differential_evolution(loss, bounds=[(0, 10), (0, 10)], tol=1e-4)  
         else:
             loss = lambda params: -np.abs(self.spearmanr(y, params[0] * y_dca + params[1] * y_ridge))
             minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
@@ -358,7 +360,6 @@ class DCAHybridModel:
         if y_ttrain_min_cv < 2:
             return 1.0, 0.0, None
 
-        # logistic fit here?
         if self.logistic:
             y_dca_ttest = self._logistic_delta_e(ys=y_ttest, delta_es=self._delta_e(X_ttest))
         else:
@@ -620,10 +621,12 @@ def get_model_path(model: str):
         elif isfile(f'Pickles/{model}'):
             model_path = f'Pickles/{model}'
         else:
-            raise SystemError("Did not find specified model file in current working directory "
-                              " or /Pickles subdirectory. Make sure to train/save a model first "
-                              "(e.g., for saving a GREMLIN model, type \"pypef param_inference --msa TARGET_MSA.a2m\" "
-                              "or, for saving a plmc model, type \"pypef param_inference --params TARGET_PLMC.params\").")
+            raise SystemError(
+                "Did not find specified model file in current working directory "
+                " or /Pickles subdirectory. Make sure to train/save a model first "
+                "(e.g., for saving a GREMLIN model, type \"pypef param_inference --msa TARGET_MSA.a2m\" "
+                "or, for saving a plmc model, type \"pypef param_inference --params TARGET_PLMC.params\")."
+            )
         return model_path
     except TypeError:
         raise SystemError("No provided model. "
