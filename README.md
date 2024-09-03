@@ -8,7 +8,11 @@ as well as additional framework features described in the preprint<br>
 
 Alexander-Maurice Illig<sup>*1,§*</sup>, Niklas E. Siedhoff<sup>*1,§*</sup>, Ulrich Schwaneberg<sup>*1,2*</sup>, Mehdi D. Davari<sup>*3,\**</sup>, <br>
 A hybrid model combining evolutionary probability and machine learning leverages data-driven protein engineering, *To be published*<br>
-Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081.
+Preprint available at bioRxiv: https://doi.org/10.1101/2022.06.07.495081<br>
+now published as<br>
+Evolutionary Probability and Stacked Regressions Enable Data-Driven Protein Engineering with Minimized Experimental Effort,<br>
+*J. Chem. Inf. Model.* 2024, 64, 16, 6350–6360<br>
+https://doi.org/10.1021/acs.jcim.4c00704
 
 <sup>*1*</sup><sub>Institute of Biotechnology, RWTH Aachen University, Worringer Weg 3, 52074 Aachen, Germany</sub> <br>
 <sup>*2*</sup><sub>DWI-Leibniz Institute for Interactive Materials, Forckenbeckstraße 50, 52074 Aachen, Germany</sub> <br>
