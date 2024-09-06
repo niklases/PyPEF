@@ -28,6 +28,8 @@ from os import listdir
 from os.path import isfile, join
 from typing import Union
 import logging
+
+import pypef.dca.plmc_encoding
 logger = logging.getLogger('pypef.dca.hybrid_model')
 
 import numpy as np
@@ -481,6 +483,7 @@ class DCAHybridModel:
             self.y_test,
             self.hybrid_prediction(self.x_test, reg, beta_1, beta_2)
         )
+        self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
         return spearman_r, reg, beta_1, beta_2
 
     def train_and_test(
@@ -642,6 +645,10 @@ def get_model_and_type(
     and to load the model from the identified plmc pickle file 
     or from the loaded pickle dictionary.
     """
+    if type(params_file) == pypef.dca.gremlin_inference.GREMLIN:
+        return params_file, 'GREMLIN'
+    if type(params_file) == pypef.dca.plmc_encoding.PLMC:
+        return params_file, 'PLMC'
     file_path = get_model_path(params_file)
     try:
         with open(file_path, 'rb') as read_pkl_file:
@@ -1145,11 +1152,11 @@ def predict_ps(  # also predicting "pmult" dict directories
         model_pickle_file = params_file
         logger.info(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
     else:
-        logger.info(f'Loading model from saved model (Pickle file): {model_pickle_file}...')
+        logger.info(f'Loading model from saved model (Pickle file {os.path.abspath(model_pickle_file)})...')
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
-        logger.info(f'No hybrid model provided – falling back to a statistical DCA model.')
+        logger.info(f'No hybrid model provided - falling back to a statistical DCA model.')
     elif model_type == 'Hybrid':
         beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
         if reg is None:
@@ -1178,13 +1185,13 @@ def predict_ps(  # also predicting "pmult" dict directories
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
                     if model_type != 'Hybrid':
-                        x_test, test_variants, x_wt, *_ = plmc_or_gremlin_encoding(
+                        x_test, _, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, model, threads=threads, verbose=False,
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
                     else:  # Hybrid model input requires params from plmc or GREMLIN model
                         ##encoding_model, encoding_model_type = get_model_and_type(params_file)
-                        x_test, test_variants, *_ = plmc_or_gremlin_encoding(
+                        x_test, _test_variants, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )

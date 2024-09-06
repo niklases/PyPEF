@@ -156,6 +156,40 @@
             ]
         },
 
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb II",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "-m", "HYBRIDgremlin", 
+                "--pmult", "--drecomb", 
+                "--params", "GREMLIN"
+            ]
+        },
+
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "-m", "GREMLIN", 
+                "--pmult", "--drecomb", 
+                "--params", "GREMLIN"
+            ]
+        },
+
         {   // PLMC zero-shot steps:
             // 1. $pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
             // 2. $pypef hybrid -t TS.fasl --params PLMC
