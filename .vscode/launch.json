@@ -50,6 +50,23 @@
         },
 
         {
+            "name": "Python: PyPEF MKPS avGFP ddiverse tdiverse",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "mkps", 
+                "--wt", "P42212_F64L.fasta", 
+                "--input", "avGFP.csv",
+                "--drecomb"
+            ]
+        },
+
+        {
             "name": "Python: PyPEF ml -e onehot pls_loocv",
             "type": "debugpy",
             "request": "launch",
