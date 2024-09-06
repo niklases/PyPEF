@@ -50,7 +50,7 @@
         },
 
         {
-            "name": "Python: PyPEF MKPS avGFP ddiverse tdiverse",
+            "name": "Python: PyPEF MKPS avGFP drecomb",
             "type": "debugpy",
             "request": "launch",
             "env": {"PYTHONPATH": "${workspaceFolder}"},
