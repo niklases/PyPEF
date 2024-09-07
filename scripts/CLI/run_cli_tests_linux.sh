@@ -368,7 +368,7 @@ echo
 $pypef hybrid -m PLMC -t TS.fasl --params PLMC --threads $threads
 echo
 
-# ## No training set given: Statistical prediction, Hybrid: pure statistical
+# No training set given: Statistical prediction, Hybrid: pure statistical
 $pypef hybrid -t TS.fasl --params PLMC --threads $threads
 echo
 $pypef hybrid -p TS.fasl --params PLMC --threads $threads
@@ -428,6 +428,7 @@ echo
 $pypef hybrid -m HYBRIDgremlin -t TS.fasl --params GREMLIN
 echo 
 
+
 $pypef encode -i avGFP.csv -e dca -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
 $pypef encode -i avGFP.csv -e onehot -w P42212_F64L.fasta
@@ -454,7 +455,10 @@ echo
 $pypef hybrid -m HYBRIDplmc -p avGFP_prediction_set.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
 $pypef mkps -i avGFP.csv -w P42212_F64L.fasta --drecomb
-#$pypef hybrid -m HYBRID --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  # many single variants for recombination, takes too long
+# many single variants for recombination, takes too long
+$pypef hybrid -m HYBRIDplmc --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
+echo
+$pypef hybrid -m HYBRIDgremlin --params GREMLIN --pmult --drecomb
 echo
 
 $pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
