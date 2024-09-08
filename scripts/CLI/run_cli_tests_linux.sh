@@ -455,9 +455,10 @@ echo
 $pypef hybrid -m HYBRIDplmc -p avGFP_prediction_set.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
 $pypef mkps -i avGFP.csv -w P42212_F64L.fasta --drecomb
-# many single variants for recombination, takes too long
-$pypef hybrid -m HYBRIDplmc --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
 echo
+# many single variants for recombination, takes too long
+#$pypef hybrid -m HYBRIDplmc --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
+#echo
 $pypef hybrid -m HYBRIDgremlin --params GREMLIN --pmult --drecomb
 echo
 
