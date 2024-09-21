@@ -19,7 +19,7 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
 conda env remove -n pypef                                                                                                #
-conda create -n pypef python=3.11 -y                                                                                     #
+conda create -n pypef python=3.12 -y                                                                                     #
 eval "$(conda shell.bash hook)"                                                                                          #
 conda activate pypef                                                                                                     #
 cd '../'                                                                                                                 #
@@ -307,6 +307,10 @@ echo
 $pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
 echo
 
+rm 37_ANEH_variants_plmc_dca_encoded.csv
+echo
+rm 37_ANEH_variants_gremlin_dca_encoded.csv
+echo
 
 ### Hybrid model (and some pure ML and pure DCA) tests on avGFP dataset 
 cd '../AVGFP'

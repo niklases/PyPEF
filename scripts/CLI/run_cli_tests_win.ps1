@@ -26,7 +26,7 @@ function ExitOnExitCode { if ($LastExitCode) {
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
 conda env remove -n pypef                                                                                                #
-conda create -n pypef python=3.11 -y                                                                                     #
+conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
 $path=Get-Location                                                                                                       #
 $path=Split-Path -Path $path -Parent                                                                                     #
@@ -429,6 +429,13 @@ pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv
 ExitOnExitCode
 Write-Host
 pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
+ExitOnExitCode
+Write-Host
+
+Remove-Item 37_ANEH_variants_plmc_dca_encoded.csv
+ExitOnExitCode
+Write-Host
+Remove-Item 37_ANEH_variants_gremlin_dca_encoded.csv
 ExitOnExitCode
 Write-Host
 
