@@ -6,6 +6,7 @@
 import sys
 import os
 from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6.QtCore import QSize
 # Up to now needs (pip) installed PyPEF version
 from pypef import __version__
 
@@ -15,7 +16,7 @@ pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 #os.environ["PATH"] += os.pathsep + pypef_root
 
 
-class MyWidget(QtWidgets.QWidget):
+class MainWindow(QtWidgets.QWidget):
     def __init__(
             self, 
             pypef_root: str | None = None
@@ -26,22 +27,27 @@ class MyWidget(QtWidgets.QWidget):
         else:
             self.pypef_root = pypef_root
 
+        self.setMinimumSize(QSize(200, 100))
         self.setWindowTitle("PyPEF GUI")
 
         layout = QtWidgets.QVBoxLayout(self)
-        self.text = QtWidgets.QLabel(f"PyPEF {__version__}",
-                                     alignment=QtCore.Qt.AlignCenter)
-        self.textedit = QtWidgets.QTextEdit(readOnly=True)
-
+        self.text = QtWidgets.QLabel(f"PyPEF v. {__version__}", alignment=QtCore.Qt.AlignRight)
+        self.textedit_out = QtWidgets.QTextEdit(readOnly=True)
         self.button_mklsts = QtWidgets.QPushButton("Run MKLSTS")
+        self.button_mklsts.setMinimumWidth(80)
+        #self.button_mklsts.setMaximumWidth(80)        
+        self.button_mklsts.setToolTip("Create files for training and testing from variant-fitness CSV data")
         self.button_mklsts.clicked.connect(self.pypef_mklsts)
 
-        self.output =  QtWidgets.QTextEdit()
+        self.button_dca_inference_gremlin = QtWidgets.QPushButton("Run GREMLIN")
+        self.button_dca_inference_gremlin.setMinimumWidth(80)
+        self.button_dca_inference_gremlin.setToolTip("To be implemented")
+
         self.setGeometry(100, 60, 1000, 800)
-        layout.addWidget(self.output)
         layout.addWidget(self.text)
         layout.addWidget(self.button_mklsts)
-        layout.addWidget(self.textedit)
+        layout.addWidget(self.button_dca_inference_gremlin)
+        layout.addWidget(self.textedit_out)
 
         self.process = QtCore.QProcess(self)
         #process_env = self.process.processEnvironment()
@@ -54,7 +60,7 @@ class MyWidget(QtWidgets.QWidget):
 
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
-         self.textedit.append(text)
+         self.textedit_out.append(text)
 
     @QtCore.Slot()
     def pypef_mklsts(self):
@@ -75,7 +81,7 @@ class MyWidget(QtWidgets.QWidget):
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
-    widget = MyWidget()
+    widget = MainWindow()
     widget.resize(800, 600)
     widget.show()
     sys.exit(app.exec())
