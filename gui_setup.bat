@@ -17,5 +17,6 @@ powershell -Command "python -m pip install -U pypef pyside6"
 
 echo powershell -Command ^"python gui/qt_window.py^" > run_pypef_gui.bat
 
-.\run_pypef_gui
+echo Created file run_pypef_gui.bat for future GUI starting.
 
+.\run_pypef_gui
