@@ -18,4 +18,4 @@ python gui/qt_window.py
 printf "Created file run_pypef_gui.sh for future GUI starting."
 
 chmod a+x ./run_pypef_gui.sh
-./run_pypef_gui.sh
+./run_pypef_gui.sh && exit

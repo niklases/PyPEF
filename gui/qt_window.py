@@ -14,11 +14,14 @@ from PySide6.QtCore import QSize
 # https://stackoverflow.com/questions/67297494/redirect-console-output-to-pyqt5-gui-in-real-time
 # sudo apt-get install -y libxcb-cursor-dev
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-with open(os.path.join(pypef_root, 'pypef', '__init__.py')) as fh:
-    for line in fh:
-        if line.startswith('__version__'):
-            version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", line)[0]
 #os.environ["PATH"] += os.pathsep + pypef_root
+try:
+    with open(os.path.join(pypef_root, 'pypef', '__init__.py')) as fh:
+        for line in fh:
+            if line.startswith('__version__'):
+                version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", line)[0]
+except FileNotFoundError:
+    version = "Unknown"
 
 
 class MainWindow(QtWidgets.QWidget):

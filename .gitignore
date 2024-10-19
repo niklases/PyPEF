@@ -5,6 +5,9 @@ dist/
 *.egg
 workflow/.ipynb_checkpoints/
 .idea/
+Python3127/*
+python-3.12.7-amd64.exe
+run_pypef_gui.bat
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
