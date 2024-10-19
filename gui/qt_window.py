@@ -124,6 +124,17 @@ class MainWindow(QtWidgets.QWidget):
         self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
         self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
         self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_test_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_test_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_predict_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_predict_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(True))  
+
 
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
@@ -132,7 +143,7 @@ class MainWindow(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def pypef_mklsts(self):
-        self.text.setText("Running MKLSTS...")
+        self.version_text.setText("Running MKLSTS...")
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select WT FASTA File")[0]
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select variant CSV File")[0]
         self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
