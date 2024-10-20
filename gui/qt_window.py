@@ -32,6 +32,28 @@ out, err, exitcode = capture([f'python', f'{pypef_root}/run.py', '--version'])
 version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", str(out))[0]
 
 
+button_style = """
+QPushButton {
+	border: 2px solid rgb(52, 59, 72);
+	border-radius: 5px;	
+	background-color: rgb(52, 59, 72);
+	color: white; 
+}
+QPushButton:hover {
+	background-color: rgb(57, 65, 80);
+	border: 2px solid rgb(61, 70, 86);
+}
+QPushButton:pressed {	
+	background-color: rgb(35, 40, 49);
+	border: 2px solid rgb(43, 50, 61);
+}"""
+
+text_style = """
+QLabel {
+	color: white;
+}"""
+
+
 class MainWindow(QtWidgets.QWidget):
     def __init__(
             self, 
@@ -45,19 +67,23 @@ class MainWindow(QtWidgets.QWidget):
         self.c = 0
         self.setMinimumSize(QSize(200, 100))
         self.setWindowTitle("PyPEF GUI")
+        self.setStyleSheet("background-color: rgb(40, 44, 52);")
 
         # Texts #############################################################################
         layout = QtWidgets.QGridLayout(self)
         self.version_text = QtWidgets.QLabel(f"PyPEF v. {version}", alignment=QtCore.Qt.AlignRight)
-        self.textedit_out = QtWidgets.QTextEdit(readOnly=True)
-        self.textedit_out.setStyleSheet("font-family:DejaVu Sans Mono;font-size:12px;font-weight:normal;")
         self.utils_text = QtWidgets.QLabel("Utilities")
-
         self.supervised_text = QtWidgets.QLabel("Supervised")
         self.supervised_text_train_test = QtWidgets.QLabel("Train - Test")
         self.supervised_text_predict = QtWidgets.QLabel("Predict")
-
         self.unsupervised_text = QtWidgets.QLabel("Unsupervised (DCA)")
+
+        for txt in [self.version_text, self.utils_text, self.supervised_text, 
+                    self.supervised_text_train_test, self.supervised_text_predict, self.unsupervised_text]:
+            txt.setStyleSheet(text_style)
+
+        self.textedit_out = QtWidgets.QTextEdit(readOnly=True)
+        self.textedit_out.setStyleSheet("font-family:Consolas;font-size:12px;font-weight:normal;color:white;background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);")
 
         # Buttons ###########################################################################
         self.button_mklsts = QtWidgets.QPushButton("Run MKLSTS")
@@ -65,6 +91,7 @@ class MainWindow(QtWidgets.QWidget):
         #self.button_mklsts.setMaximumWidth(80)        
         self.button_mklsts.setToolTip("Create files for training and testing from variant-fitness CSV data")
         self.button_mklsts.clicked.connect(self.pypef_mklsts)
+        self.button_mklsts.setStyleSheet(button_style)
 
         self.button_dca_inference_gremlin = QtWidgets.QPushButton("GREMLIN (MSA optimization)")
         self.button_dca_inference_gremlin.setMinimumWidth(80)
@@ -73,6 +100,7 @@ class MainWindow(QtWidgets.QWidget):
             "you have to provide an MSA in FASTA or A2M format"
         )
         self.button_dca_inference_gremlin.clicked.connect(self.pypef_gremlin)
+        self.button_dca_inference_gremlin.setStyleSheet(button_style)
 
         self.button_dca_test_gremlin = QtWidgets.QPushButton("Test GREMLIN")
         self.button_dca_test_gremlin.setMinimumWidth(80)
@@ -80,6 +108,7 @@ class MainWindow(QtWidgets.QWidget):
             "Test performance on any test dataset using the MSA-optimized GREMLIN model"
         )
         self.button_dca_test_gremlin.clicked.connect(self.pypef_gremlin_dca_test)
+        self.button_dca_test_gremlin.setStyleSheet(button_style)
 
         self.button_dca_predict_gremlin = QtWidgets.QPushButton("Predict GREMLIN")
         self.button_dca_predict_gremlin.setMinimumWidth(80)
@@ -87,6 +116,7 @@ class MainWindow(QtWidgets.QWidget):
             "Predict any dataset using the MSA-optimized GREMLIN model"
         )
         self.button_dca_predict_gremlin.clicked.connect(self.pypef_gremlin_dca_predict)
+        self.button_dca_predict_gremlin.setStyleSheet(button_style)
 
         self.button_supervised_train_gremlin = QtWidgets.QPushButton("Hybrid Training (GREMLIN)")
         self.button_supervised_train_gremlin.setMinimumWidth(80)
@@ -94,6 +124,7 @@ class MainWindow(QtWidgets.QWidget):
             "Optimize the GREMLIN model by supervised training on variant-fitness labels"
         )
         self.button_supervised_train_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train)
+        self.button_supervised_train_gremlin.setStyleSheet(button_style)
 
         self.button_supervised_train_test_gremlin = QtWidgets.QPushButton("Hybrid Train-Test (GREMLIN)")
         self.button_supervised_train_test_gremlin.setMinimumWidth(80)
@@ -101,7 +132,7 @@ class MainWindow(QtWidgets.QWidget):
             "Optimize the GREMLIN model by supervised training on variant-fitness labels"
         )
         self.button_supervised_train_test_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train_test)
-
+        self.button_supervised_train_test_gremlin.setStyleSheet(button_style)
 
         # Layout widgets ####################################################################
         # int fromRow, int fromColumn, int rowSpan, int columnSpan
@@ -141,7 +172,7 @@ class MainWindow(QtWidgets.QWidget):
         self.process.started.connect(lambda: self.button_supervised_train_gremlin.setEnabled(False))
         self.process.finished.connect(lambda: self.button_supervised_train_gremlin.setEnabled(True))
         self.process.started.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(True))  
+        self.process.finished.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(True))
 
 
     def on_readyReadStandardOutput(self):
