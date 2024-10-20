@@ -6,7 +6,8 @@
 import re
 import sys
 import os
-from PySide6 import QtCore, QtWidgets, QtGui
+import subprocess
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
 # Up to now needs (pip) installed PyPEF version
 #from pypef import __version__
@@ -15,13 +16,20 @@ from PySide6.QtCore import QSize
 # sudo apt-get install -y libxcb-cursor-dev
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 #os.environ["PATH"] += os.pathsep + pypef_root
-try:
-    with open(os.path.join(pypef_root, 'pypef', '__init__.py')) as fh:
-        for line in fh:
-            if line.startswith('__version__'):
-                version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", line)[0]
-except FileNotFoundError:
-    version = "Unknown"
+
+
+def capture(command):
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    out, err = proc.communicate()
+    return out, err, proc.returncode
+
+
+out, err, exitcode = capture([f'python', f'{pypef_root}/run.py', '--version'])
+version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", str(out))[0]
 
 
 class MainWindow(QtWidgets.QWidget):
@@ -139,7 +147,8 @@ class MainWindow(QtWidgets.QWidget):
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
          self.c += 1
-         self.textedit_out.append(text)
+         print(text)
+         self.textedit_out.append(text.strip())
 
     @QtCore.Slot()
     def pypef_mklsts(self):
