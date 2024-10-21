@@ -46,7 +46,11 @@ QPushButton:hover {
 QPushButton:pressed {	
 	background-color: rgb(35, 40, 49);
 	border: 2px solid rgb(43, 50, 61);
-}"""
+}
+QPushButton:disabled {
+    background-color: grey;
+}
+"""
 
 text_style = """
 QLabel {
@@ -178,7 +182,6 @@ class MainWindow(QtWidgets.QWidget):
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
          self.c += 1
-         print(text)
          self.textedit_out.append(text.strip())
 
     @QtCore.Slot()
@@ -186,35 +189,40 @@ class MainWindow(QtWidgets.QWidget):
         self.version_text.setText("Running MKLSTS...")
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select WT FASTA File")[0]
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select variant CSV File")[0]
-        self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
+        if wt_fasta_file and csv_variant_file:
+            self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
 
     @QtCore.Slot()
     def pypef_gremlin(self):
         self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select WT FASTA File")[0]
         msa_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Multiple Sequence Alignment (MSA) file (in FASTA or A2M format)")[0]
-        self.exec_pypef(f'param_inference --wt {wt_fasta_file} --msa {msa_file}')  # --opt_iter 100
+        if wt_fasta_file and msa_file:
+            self.exec_pypef(f'param_inference --wt {wt_fasta_file} --msa {msa_file}')  # --opt_iter 100
 
     @QtCore.Slot()
     def pypef_gremlin_dca_test(self):
         self.version_text.setText("Testing GREMLIN (DCA) performance on provided test set...")
         test_set_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Test Set File in \"FASL\" format")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "GREMLIN parameter Pickle file")[0]
-        self.exec_pypef(f'hybrid --ts {test_set_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
+        if test_set_file and params_pkl_file:
+            self.exec_pypef(f'hybrid --ts {test_set_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
 
     @QtCore.Slot()
     def pypef_gremlin_dca_predict(self):
         self.version_text.setText("Predicting using the GREMLIN (DCA) model on provided prediction set...")
         prediction_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Prediction Set File in FASTA format")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select GREMLIN parameter Pickle file")[0]
-        self.exec_pypef(f'hybrid --ps {prediction_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
+        if prediction_file and params_pkl_file:
+            self.exec_pypef(f'hybrid --ps {prediction_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
 
     @QtCore.Slot()
     def pypef_gremlin_hybrid_train(self):
         self.version_text.setText("Hybrid (DCA-supervised) model training...")
         training_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Training Set File in \"FASL\" format")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select GREMLIN parameter Pickle file")[0]
-        self.exec_pypef(f'hybrid --ls {training_file} --ts {training_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
+        if training_file and params_pkl_file:
+            self.exec_pypef(f'hybrid --ls {training_file} --ts {training_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
 
     @QtCore.Slot()
     def pypef_gremlin_hybrid_train_test(self):
@@ -222,7 +230,8 @@ class MainWindow(QtWidgets.QWidget):
         training_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Training Set File in \"FASL\" format")[0]
         test_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Test Set File in \"FASL\" format")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select GREMLIN parameter Pickle file")[0]
-        self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
+        if training_file and test_file and params_pkl_file:
+            self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
     
     def exec_pypef(self, cmd):
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))

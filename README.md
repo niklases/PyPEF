@@ -69,15 +69,15 @@ A rudimentary graphical user interface (GUI) can be installed using the gui_setu
 
 (Windows PowerShell)
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/dev/gui_setup.bat -OutFile gui_setup.bat
-Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/dev/gui/qt_window.py -OutFile ( New-Item -Path ".\gui\qt_window.py" -Force )
+Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui_setup.bat -OutFile gui_setup.bat
+Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui/qt_window.py -OutFile ( New-Item -Path ".\gui\qt_window.py" -Force )
 .\gui_setup.bat
 ```
 
 (Linux)
 ```bash
-wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/dev/gui_setup.sh -O gui_setup.sh
-mkdir -p ./gui/ && wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/dev/gui/qt_window.py -O ./gui/qt_window.py
+wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui_setup.sh -O gui_setup.sh
+mkdir -p ./gui/ && wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui/qt_window.py -O ./gui/qt_window.py
 chmod a+x ./gui_setup.sh && ./gui_setup.sh
 ```
 
