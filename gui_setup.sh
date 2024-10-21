@@ -15,7 +15,10 @@ printf "#!/bin/bash
 python gui/qt_window.py
 " > run_pypef_gui.sh
 
-printf "Created file run_pypef_gui.sh for future GUI starting."
+echo "Finished installation..."
+echo "+++      Created file       +++"
+echo "+++    run_pypef_gui.sh     +++"
+echo "+++ for future GUI starting +++"
 
 chmod a+x ./run_pypef_gui.sh
 ./run_pypef_gui.sh && exit
