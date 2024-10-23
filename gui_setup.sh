@@ -1,6 +1,9 @@
 #!/bin/bash
 set -e 
 
+# Only required for WSL(?):
+# sudo apt-get install -y libxcb-cursor-dev
+
 python -m pip install -U pypef pyside6
 
 printf "
@@ -11,8 +14,9 @@ if __name__ == '__main__':
     run_main()
 " > run.py
 
-printf "#!/bin/bash
-python gui/qt_window.py
+printf "#!/bin/bash\n
+SCRIPT_DIR=\$( cd -- \"\$( dirname -- \"\${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n
+python "\${SCRIPT_DIR}/gui/qt_window.py"\n
 " > run_pypef_gui.sh
 
 echo "Finished installation..."
