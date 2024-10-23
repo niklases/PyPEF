@@ -13,7 +13,6 @@ powershell -Command "$ProgressPreference = 'SilentlyContinue';Invoke-WebRequest 
 
 REM Not removing Python installer EXE as it can be used for easy uninstall/repair
 REM del /Q python-3.12.7-amd64.exe
-
 set "python_exe=.\Python3127\python.exe"
 
 
@@ -35,7 +34,11 @@ set "python_exe=.\Python3127\python.exe"
 
 powershell -Command "%python_exe% -m pip install -U pypef pyside6"
 
-echo start /min cmd /c powershell -Command ^"%python_exe% gui/qt_window.py^" > run_pypef_gui.bat
+(
+    echo @echo off
+    echo:
+    echo start /min cmd /c powershell -Command ^"%%~dp0%python_exe% %%~dp0gui\qt_window.py^"
+ ) > run_pypef_gui.bat
 
 echo Finished installation...
 echo +++      Created file       +++ 
