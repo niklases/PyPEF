@@ -2,6 +2,7 @@
 echo Installing PyPEF...
 
 set "python_exe=python"
+set "prefix="
 
 set /P AREYOUSURE=Install and use local Python version (Y/[N]) (downloads Python installer and installs Python locally in the current working directory)?
 if /I "%AREYOUSURE%" NEQ "Y" if /I "%AREYOUSURE%" NEQ "y" goto NO_PYTHON
@@ -14,6 +15,7 @@ powershell -Command "$ProgressPreference = 'SilentlyContinue';Invoke-WebRequest 
 REM Not removing Python installer EXE as it can be used for easy uninstall/repair
 REM del /Q python-3.12.7-amd64.exe
 set "python_exe=.\Python3127\python.exe"
+set "prefix=%%~dp0"
 
 
 :NO_PYTHON
@@ -37,7 +39,7 @@ powershell -Command "%python_exe% -m pip install -U pypef pyside6"
 (
     echo @echo off
     echo:
-    echo start /min cmd /c powershell -Command ^"%%~dp0%python_exe% %%~dp0gui\qt_window.py^"
+    echo start /min cmd /c powershell -Command ^"%prefix%%python_exe% %%~dp0gui\qt_window.py^"
  ) > run_pypef_gui.bat
 
 echo Finished installation...

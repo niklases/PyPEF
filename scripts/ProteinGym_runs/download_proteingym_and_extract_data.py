@@ -19,21 +19,21 @@ def download_proteingym_data(version: str = '1.1'):
     print(f'Getting {url}...')
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), 'DMS_ProteinGym_substitutions.zip'))
     with zipfile.ZipFile(os.path.join(os.path.dirname(__file__), 'DMS_ProteinGym_substitutions.zip'), "r") as zip_ref:
-        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'DMS_ProteinGym_substitutions'))
+        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'DMS_ProteinGym_substitutions', '..'))
     os.remove(os.path.join(os.path.dirname(__file__), 'DMS_ProteinGym_substitutions.zip'))
 
     url = f'https://marks.hms.harvard.edu/proteingym/ProteinGym_v{version}/DMS_msa_files.zip'
     print(f'Getting {url}...')
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), 'DMS_msa_files.zip'))
     with zipfile.ZipFile(os.path.join(os.path.dirname(__file__), 'DMS_msa_files.zip'), "r") as zip_ref:
-        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'DMS_msa_files'))
+        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'DMS_msa_files', '..'))
     os.remove(os.path.join(os.path.dirname(__file__), 'DMS_msa_files.zip'))
 
     url = f'https://marks.hms.harvard.edu/proteingym/ProteinGym_v{version}/ProteinGym_AF2_structures.zip'
     print(f'Getting {url}...')
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), 'ProteinGym_AF2_structures.zip'))
     with zipfile.ZipFile(os.path.join(os.path.dirname(__file__), 'ProteinGym_AF2_structures.zip'), "r") as zip_ref:
-        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'ProteinGym_AF2_structures'))
+        zip_ref.extractall(os.path.join(os.path.dirname(__file__), 'ProteinGym_AF2_structures', '..'))
     os.remove(os.path.join(os.path.dirname(__file__), 'ProteinGym_AF2_structures.zip'))
 
 
