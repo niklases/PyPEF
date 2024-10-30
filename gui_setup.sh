@@ -4,6 +4,13 @@ set -e
 # Only required for WSL(?):
 # sudo apt-get install -y libxcb-cursor-dev
 
+py_ver="$(python --version)"
+
+if [[ $py_ver == *"3.12."* ]] || [[ $py_ver == *"3.11."* ]] || [[ $py_ver == *"3.10."* ]] || [[ $py_ver == *"3.9."* ]]; then
+    echo "Identified Python version should be suitable for installing and running PyPEF..."
+else
+    echo >&2 "The identified Python version ($py_ver) does not match the required Python versions... you should activate/install a suitable version first, e.g. Python 3.12."; exit 1
+fi
 python -m pip install -U pypef pyside6
 
 printf "
@@ -25,4 +32,4 @@ echo "+++    run_pypef_gui.sh     +++"
 echo "+++ for future GUI starting +++"
 
 chmod a+x ./run_pypef_gui.sh
-./run_pypef_gui.sh && exit
+./run_pypef_gui.sh && exit 0

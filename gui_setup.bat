@@ -4,7 +4,37 @@ echo Installing PyPEF...
 set "python_exe=python"
 set "prefix="
 
-set /P AREYOUSURE=Install and use local Python version (Y/[N]) (downloads Python installer and installs Python locally in the current working directory)?
+for /F "delims=" %%i in ('powershell python --version') do set py_ver=%%i
+if not "%py_ver:~0,6%"=="Python" (
+    set "true=0"
+) else (
+    set "true=0"
+    if  "%py_ver:~7,5%"=="3.12." (
+        echo Found Python version 3.12.
+        set "true=1"        
+    )
+    if  "%py_ver:~7,5%"=="3.11." (
+        echo Found Python version 3.11.
+        set "true=1"
+    )
+    if  "%py_ver:~7,5%"=="3.10." (
+        echo Found Python version 3.10.
+        set "true=1"
+    )
+    if  "%py_ver:~7,4%"=="3.9." (
+        echo Found Python version 3.9.
+        set "true=1"
+    )
+)
+
+if "%true%"=="0" (
+    echo Did not find any Python version. Python will be installed locally in the next step...
+    set /P AREYOUSURE="Y"
+) else ( 
+    echo A suitable Python version was found, no local download and Python installtion should be necessary...
+    set /P AREYOUSURE="Install and use local Python version (Y/[N]) (downloads Python installer and installs Python locally in the current working directory)? "
+)
+
 if /I "%AREYOUSURE%" NEQ "Y" if /I "%AREYOUSURE%" NEQ "y" goto NO_PYTHON
 
 echo Installing Python...
