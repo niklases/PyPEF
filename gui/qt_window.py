@@ -77,26 +77,30 @@ class MainWindow(QtWidgets.QWidget):
         layout = QtWidgets.QGridLayout(self)
         self.version_text = QtWidgets.QLabel(f"PyPEF v. {version}", alignment=QtCore.Qt.AlignRight)
         self.utils_text = QtWidgets.QLabel("Utilities")
+        self.dca_text = QtWidgets.QLabel("DCA (Unsupervised)")
+        self.hybrid_text = QtWidgets.QLabel("Hybrid")
+        self.hybrid_text_train_test = QtWidgets.QLabel("Train - Test")
+        self.hybrid_text_predict = QtWidgets.QLabel("Predict")
+        self.hybrid_text = QtWidgets.QLabel("Hybrid (DCA-Supervised)")
         self.supervised_text = QtWidgets.QLabel("Supervised")
-        self.supervised_text_train_test = QtWidgets.QLabel("Train - Test")
-        self.supervised_text_predict = QtWidgets.QLabel("Predict")
-        self.unsupervised_text = QtWidgets.QLabel("Unsupervised (DCA)")
 
-        for txt in [self.version_text, self.utils_text, self.supervised_text, 
-                    self.supervised_text_train_test, self.supervised_text_predict, self.unsupervised_text]:
+        for txt in [self.version_text, self.utils_text, self.dca_text, self.hybrid_text, self.supervised_text,
+                    self.hybrid_text_train_test, self.hybrid_text_predict, self.hybrid_text]:
             txt.setStyleSheet(text_style)
 
         self.textedit_out = QtWidgets.QTextEdit(readOnly=True)
         self.textedit_out.setStyleSheet("font-family:Consolas;font-size:12px;font-weight:normal;color:white;background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);")
 
         # Buttons ###########################################################################
+        # Utilities
         self.button_mklsts = QtWidgets.QPushButton("Run MKLSTS")
         #self.button_mklsts.setMinimumWidth(80)
         #self.button_mklsts.setMaximumWidth(80)        
         self.button_mklsts.setToolTip("Create files for training and testing from variant-fitness CSV data")
         self.button_mklsts.clicked.connect(self.pypef_mklsts)
         self.button_mklsts.setStyleSheet(button_style)
-
+        
+        # DCA
         self.button_dca_inference_gremlin = QtWidgets.QPushButton("GREMLIN (MSA optimization)")
         self.button_dca_inference_gremlin.setMinimumWidth(80)
         self.button_dca_inference_gremlin.setToolTip(
@@ -122,20 +126,38 @@ class MainWindow(QtWidgets.QWidget):
         self.button_dca_predict_gremlin.clicked.connect(self.pypef_gremlin_dca_predict)
         self.button_dca_predict_gremlin.setStyleSheet(button_style)
 
-        self.button_supervised_train_gremlin = QtWidgets.QPushButton("Hybrid Training (GREMLIN)")
-        self.button_supervised_train_gremlin.setMinimumWidth(80)
-        self.button_supervised_train_gremlin.setToolTip(
+        # Hybrid
+        self.button_hybrid_train_gremlin = QtWidgets.QPushButton("Hybrid Training (GREMLIN)")
+        self.button_hybrid_train_gremlin.setMinimumWidth(80)
+        self.button_hybrid_train_gremlin.setToolTip(
             "Optimize the GREMLIN model by supervised training on variant-fitness labels"
         )
-        self.button_supervised_train_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train)
-        self.button_supervised_train_gremlin.setStyleSheet(button_style)
+        self.button_hybrid_train_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train)
+        self.button_hybrid_train_gremlin.setStyleSheet(button_style)
 
-        self.button_supervised_train_test_gremlin = QtWidgets.QPushButton("Hybrid Train-Test (GREMLIN)")
+        self.button_hybrid_train_test_gremlin = QtWidgets.QPushButton("Hybrid Train-Test (GREMLIN)")
+        self.button_hybrid_train_test_gremlin.setMinimumWidth(80)
+        self.button_hybrid_train_test_gremlin.setToolTip(
+            "Optimize the GREMLIN model by supervised training on variant-fitness labels"
+        )
+        self.button_hybrid_train_test_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train_test)
+        self.button_hybrid_train_test_gremlin.setStyleSheet(button_style)
+
+        self.button_hybrid_train_test_gremlin = QtWidgets.QPushButton("Hybrid Train-Test (GREMLIN)")
+        self.button_hybrid_train_test_gremlin.setMinimumWidth(80)
+        self.button_hybrid_train_test_gremlin.setToolTip(
+            "Optimize the GREMLIN model by supervised training on variant-fitness labels"
+        )
+        self.button_hybrid_train_test_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train_test)
+        self.button_hybrid_train_test_gremlin.setStyleSheet(button_style)
+
+        # Supervised
+        self.button_supervised_train_test_gremlin = QtWidgets.QPushButton("Supervised (GREMLIN)")
         self.button_supervised_train_test_gremlin.setMinimumWidth(80)
         self.button_supervised_train_test_gremlin.setToolTip(
-            "Optimize the GREMLIN model by supervised training on variant-fitness labels"
+            "Purely supervised GREMLIN model training on variant-fitness labels"
         )
-        self.button_supervised_train_test_gremlin.clicked.connect(self.pypef_gremlin_hybrid_train_test)
+        self.button_supervised_train_test_gremlin.clicked.connect(self.pypef_gremlin_supervised_train_test)
         self.button_supervised_train_test_gremlin.setStyleSheet(button_style)
 
         # Layout widgets ####################################################################
@@ -147,14 +169,17 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addWidget(self.button_mklsts, 2, 0, 1, 1)
 
-        layout.addWidget(self.unsupervised_text, 1, 1, 1, 1)
+        layout.addWidget(self.dca_text, 1, 1, 1, 1)
         layout.addWidget(self.button_dca_inference_gremlin, 2, 1, 1, 1)
         layout.addWidget(self.button_dca_test_gremlin, 3, 1, 1, 1)
         layout.addWidget(self.button_dca_predict_gremlin, 4, 1, 1, 1)
 
-        layout.addWidget(self.supervised_text, 1, 2, 1, 1)
-        layout.addWidget(self.button_supervised_train_gremlin, 2, 2, 1, 1)
-        layout.addWidget(self.button_supervised_train_test_gremlin, 3, 2, 1, 1)
+        layout.addWidget(self.hybrid_text, 1, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_train_gremlin, 2, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_train_test_gremlin, 3, 2, 1, 1)
+
+        layout.addWidget(self.supervised_text, 1, 3, 1, 1)
+        layout.addWidget(self.button_supervised_train_test_gremlin, 2, 3, 1, 1)
 
         layout.addWidget(self.textedit_out, 5, 0, 1, -1)
 
@@ -173,8 +198,10 @@ class MainWindow(QtWidgets.QWidget):
         self.process.finished.connect(lambda: self.button_dca_test_gremlin.setEnabled(True))
         self.process.started.connect(lambda: self.button_dca_predict_gremlin.setEnabled(False))
         self.process.finished.connect(lambda: self.button_dca_predict_gremlin.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_gremlin.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_test_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_test_gremlin.setEnabled(True))
         self.process.started.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(False))
         self.process.finished.connect(lambda: self.button_supervised_train_test_gremlin.setEnabled(True))
 
@@ -232,7 +259,17 @@ class MainWindow(QtWidgets.QWidget):
         if training_file and test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
             self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} -m {params_pkl_file} --params {params_pkl_file}')  # --opt_iter 100
+
+    @QtCore.Slot()
+    def pypef_gremlin_supervised_train_test(self):
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Training Set File in \"FASL\" format")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Test Set File in \"FASL\" format")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select GREMLIN parameter Pickle file")[0]
+        if training_file and test_file and params_pkl_file:
+            self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
+            self.exec_pypef(f'ml --encoding dca --ls {training_file} --ts {test_file} --params {params_pkl_file}')  # --opt_iter 100
     
+
     def exec_pypef(self, cmd):
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))
         self.process.finished.connect(self.process_finished)
