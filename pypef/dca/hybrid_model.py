@@ -50,10 +50,10 @@ import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN
 
 
-class DCAHybridModel:
     # TODO: Implementation of other regression techniques (CVRegression models)
     # TODO: Differential evolution of multiple Zero Shot predictors
     #       (and supervised model predictions thereof) and y_true
+class DCAHybridModel:
     def __init__(
             self,
             x_train: np.ndarray | None = None,     # DCA-encoded sequences
