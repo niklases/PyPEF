@@ -208,7 +208,7 @@ Options:
   -l --ls LEARNING_SET              Input learning set in .fasta format.
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
-  --msa MSA_FILE                    Multiple sequence alignment (MSA) ins FASTA or A2M format for
+  --msa MSA_FILE                    Multiple sequence alignment (MSA) in FASTA or A2M format for
                                     inferring DCA parameters.
   --mutation_sep MUTATION_SEP       Mutation separator [default: /].
   --mutation_extrapolation          Mutation extrapolation [default: False].
@@ -308,7 +308,7 @@ from pypef.dca.dca_run import run_pypef_hybrid_modeling
 from pypef.utils.utils_run import run_pypef_utils
 
 logger = logging.getLogger("pypef")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)  # logging.INFO)
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
