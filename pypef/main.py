@@ -308,7 +308,7 @@ from pypef.dca.dca_run import run_pypef_hybrid_modeling
 from pypef.utils.utils_run import run_pypef_utils
 
 logger = logging.getLogger("pypef")
-logger.setLevel(logging.DEBUG)  # logging.INFO)
+logger.setLevel(logging.INFO)
 
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
