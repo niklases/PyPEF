@@ -10,12 +10,9 @@ import subprocess
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
 # Up to now needs (pip) installed PyPEF version
-#from pypef import __version__
-
 # https://stackoverflow.com/questions/67297494/redirect-console-output-to-pyqt5-gui-in-real-time
 # sudo apt-get install -y libxcb-cursor-dev
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-#os.environ["PATH"] += os.pathsep + pypef_root
 
 
 def capture(command):
@@ -108,9 +105,7 @@ class MainWindow(QtWidgets.QWidget):
         self.button_help.clicked.connect(self.pypef_help)
         self.button_help.setStyleSheet(button_style)
 
-        self.button_mklsts = QtWidgets.QPushButton("Create LS and TS (MKLSTS)")
-        #self.button_mklsts.setMinimumWidth(80)
-        #self.button_mklsts.setMaximumWidth(80)        
+        self.button_mklsts = QtWidgets.QPushButton("Create LS and TS (MKLSTS)")       
         self.button_mklsts.setToolTip("Create files for training and testing from variant-fitness CSV data")
         self.button_mklsts.clicked.connect(self.pypef_mklsts)
         self.button_mklsts.setStyleSheet(button_style)
@@ -193,7 +188,6 @@ class MainWindow(QtWidgets.QWidget):
 
         # Layout widgets ####################################################################
         # int fromRow, int fromColumn, int rowSpan, int columnSpan
-        #self.setGeometry(100, 60, 1000, 800)
         layout.addWidget(self.version_text, 0, 0, 1, -1)
         layout.addWidget(self.box_multicore, 0, 0, 1, 1)
 
@@ -219,9 +213,6 @@ class MainWindow(QtWidgets.QWidget):
 
 
         self.process = QtCore.QProcess(self)
-        #process_env = self.process.processEnvironment()
-        #process_env.insert("PYTHONPATH", pypef_root) 
-        #self.process.setProcessEnvironment(process_env)
         self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
         self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
         self.process.started.connect(lambda: self.button_help.setEnabled(False))
