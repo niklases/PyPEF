@@ -64,7 +64,7 @@ A quick file setup and run test can be performed running files in [scripts/Setup
 <a name="gui-installation"></a>
 ### GUI Installation
 
-A rudimentary graphical user interface (GUI) can be installed using the gui_setup.bat and gui_setup.sh scripts for Windows and Linux, respectively (which download and run `./gui/qt_window.py`):
+A rudimentary graphical user interface (GUI) can be installed using the gui_setup.bat and gui_setup.sh scripts for Windows and Linux, respectively (which download and run `./gui/qt_window.py`, run these commands in a directory without any whitespaces):
 
 Windows (PowerShell)
 ```powershell
