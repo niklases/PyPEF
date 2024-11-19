@@ -959,10 +959,10 @@ def save_model(
             if model_type in ['PLMC', 'GREMLIN'] and encoding not in ['aaidx', 'onehot']:
                 name = 'ML' + model_type.lower()
             f_name = os.path.abspath(os.path.join(path, 'Pickles', name))
-            logger.info(f'Saving model ({f_name})...')
             file = open(f_name, 'wb')
             pickle.dump(regressor_, file)
             file.close()
+            logger.info(f'Saved model as {f_name}...')
 
         except IndexError:
             raise IndexError

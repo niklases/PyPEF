@@ -57,8 +57,9 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import boxcox
 import pandas as pd
+from tqdm import tqdm
 import tensorflow as tf
-tf.get_logger().setLevel('DEBUG')
+tf.get_logger().setLevel('WARNING')
 # Uncomment to hide GPU devices
 #environ['CUDA_VISIBLE_DEVICES'] = '-1'  
 
@@ -718,7 +719,7 @@ def save_gremlin_as_pickle(alignment: str, wt_seq: str, opt_iter: int = 100):
         },
         open('Pickles/GREMLIN', 'wb')
     )
-    logger.info(f"Saved GREMLIN model as Pickle file ({os.path.abspath('Pickles/GREMLIN')})...")
+    logger.info(f"Saved GREMLIN model as Pickle file as {os.path.abspath('Pickles/GREMLIN')}...")
     return gremlin
 
 
@@ -733,3 +734,54 @@ def save_corr_csv(gremlin: GREMLIN, min_distance: int = 0, sort_by: str = 'apc')
         min_distance=min_distance, sort_by=sort_by
     )
     df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv")
+
+
+def plot_predicted_ssm(gremlin: GREMLIN):
+    """
+    Function to plot all predicted 19 amino acid substitution 
+    effects at all predictable WT/input sequence positions; e.g.: 
+    M1A, M1C, M1E, ..., D2A, D2C, D2E, ..., ..., T300V, T300W, T300Y
+    """
+    wt_sequence = gremlin.wt_seq
+    wt_score = gremlin.get_wt_score()[0]
+    aas = "".join(sorted(gremlin.char_alphabet.replace("-", "")))
+    variantss, variant_sequencess, variant_scoress = [], [], []
+    for i, aa_wt in enumerate(tqdm(wt_sequence)):
+        variants, variant_sequences, variant_scores = [], [], []
+        for aa_sub in aas:
+            variant = aa_wt + str(i + 1) + aa_sub
+            variant_sequence = wt_sequence[:i] + aa_sub + wt_sequence[i + 1:]
+            variant_score = gremlin.get_score(variant_sequence)[0]
+            variants.append(variant)
+            variant_sequences.append(variant_sequence)
+            variant_scores.append(variant_score - wt_score)
+        variantss.append(variants)
+        variant_sequencess.append(variant_sequences)
+        variant_scoress.append(variant_scores)
+    print(np.shape(variant_scoress))
+    fig, ax = plt.subplots(figsize=(30, 3))
+    ax.imshow(np.array(variant_scoress).T)
+    for i_vss, vss in enumerate(variant_scoress):
+        for i_vs, vs in enumerate(vss):
+            ax.text(
+                i_vss, i_vs, 
+                f'{variantss[i_vss][i_vs]}\n{round(vs, 1)}', 
+                size=2, va='center', ha='center'
+            )
+    ax.set_xticks(
+        range(len(wt_sequence)), 
+        [f'{aa}{i + 1}' for i, aa in enumerate(wt_sequence)], 
+        size=6, rotation=90
+    )
+    ax.set_yticks(range(len(aas)), aas, size=6)
+    plt.tight_layout()
+    plt.savefig('SSM_landscape.png', dpi=300)
+    pd.DataFrame(
+        {
+            'Variant': np.array(variantss).flatten(),
+            'Sequence': np.array(variant_sequencess).flatten(),
+            'Variant_Score': np.array(variant_scoress).flatten()
+        }
+    ).to_csv('SSM_landscape.csv', sep=',')
+    logger.info(f"Saved SSM landscape as {os.path.abspath('SSM_landscape.png')} "
+                f"and CSV data as {os.path.abspath('SSM_landscape.csv')}...")

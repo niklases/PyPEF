@@ -686,7 +686,6 @@ def save_model_to_dict_pickle(
         model_type = 'MODEL'
     
     pkl_path = os.path.abspath(f'Pickles/{model_type}')
-    logger.info(f'Saving model as Pickle file ({pkl_path})...')
     pickle.dump(
         {
             'model': model,
@@ -698,6 +697,7 @@ def save_model_to_dict_pickle(
         },
         open(f'Pickles/{model_type}', 'wb')
     )
+    logger.info(f'Saved model as Pickle file ({pkl_path})...')
 
 
 global_model = None
