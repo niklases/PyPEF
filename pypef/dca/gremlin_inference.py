@@ -746,6 +746,7 @@ def plot_predicted_ssm(gremlin: GREMLIN):
     wt_score = gremlin.get_wt_score()[0]
     aas = "".join(sorted(gremlin.char_alphabet.replace("-", "")))
     variantss, variant_sequencess, variant_scoress = [], [], []
+    logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
     for i, aa_wt in enumerate(tqdm(wt_sequence)):
         variants, variant_sequences, variant_scores = [], [], []
         for aa_sub in aas:
