@@ -742,9 +742,9 @@ def plmc_or_gremlin_encoding(
             logger.info(f"Following positions are frequent gap positions in the MSA "
                         f"and cannot be considered for effective modeling, i.e., "
                         f"substitutions at these positions are removed as these would be "
-                        f"predicted with wild-type fitness:\n{[gap + 1 for gap in model.gaps]}.\n"
+                        f"predicted with wild-type fitness:\n{[int(gap) + 1 for gap in model.gaps]}.\n"
                         f"Effective positions (N={len(model.v_idx)}) are:\n"
-                        f"{[v_pos + 1 for v_pos in model.v_idx]}")
+                        f"{[int(v_pos) + 1 for v_pos in model.v_idx]}")
         xs, x_wt, variants, sequences, ys_true = gremlin_encoding(
             model, variants, sequences, ys_true,
             shift_pos=1, substitution_sep=substitution_sep
