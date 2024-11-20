@@ -28,13 +28,13 @@ https://github.com/sokrypton/GREMLIN_CPP/blob/master/GREMLIN_TF.ipynb
 
 References:
 [1] Kamisetty, H., Ovchinnikov, S., & Baker, D.
-    Assessing the utility of coevolution-based residue–residue contact predictions in a
+    Assessing the utility of coevolution-based residue-residue contact predictions in a
     sequence- and structure-rich era.
     Proceedings of the National Academy of Sciences, 2013, 110, 15674-15679
     https://www.pnas.org/doi/10.1073/pnas.1314045110
 [2] Balakrishnan, S., Kamisetty, H., Carbonell, J. G., Lee, S.-I., & Langmead, C. J.
     Learning generative models for protein fold families.
-    Proteins, 79(4), 2011, 1061–78.
+    Proteins, 79(4), 2011, 1061-78.
     https://doi.org/10.1002/prot.22934
 [3] Ekeberg, M., Lövkvist, C., Lan, Y., Weigt, M., & Aurell, E.
     Improved contact prediction in proteins: Using pseudolikelihoods to infer Potts models.
@@ -648,6 +648,7 @@ class GREMLIN:
         ax.set_ylim(-1, matrix.shape[0])
         plt.title(matrix_type.upper())
         plt.savefig(f'{matrix_type}.png', dpi=500)
+        logger.info(f"Plotted correlation matrix {os.path.abspath(matrix_type)}.png")
         plt.close('all')
 
     def get_top_coevolving_residues(self, wt_seq=None, min_distance=0, sort_by="apc"):
@@ -733,7 +734,9 @@ def save_corr_csv(gremlin: GREMLIN, min_distance: int = 0, sort_by: str = 'apc')
     df_mtx_sorted_mindist = gremlin.get_top_coevolving_residues(
         min_distance=min_distance, sort_by=sort_by
     )
-    df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv")
+    df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv", sep=',')
+    logger.info(f"Saved coevolution CSV data as "
+                f"{os.path.abspath(f'coevolution_{sort_by}_sorted.csv')}")
 
 
 def plot_predicted_ssm(gremlin: GREMLIN):
@@ -759,15 +762,15 @@ def plot_predicted_ssm(gremlin: GREMLIN):
         variantss.append(variants)
         variant_sequencess.append(variant_sequences)
         variant_scoress.append(variant_scores)
-    print(np.shape(variant_scoress))
-    fig, ax = plt.subplots(figsize=(30, 3))
+
+    fig, ax = plt.subplots(figsize=(2 * len(wt_sequence) / len(aas), 3))
     ax.imshow(np.array(variant_scoress).T)
     for i_vss, vss in enumerate(variant_scoress):
         for i_vs, vs in enumerate(vss):
             ax.text(
                 i_vss, i_vs, 
                 f'{variantss[i_vss][i_vs]}\n{round(vs, 1)}', 
-                size=2, va='center', ha='center'
+                size=1.5, va='center', ha='center'
             )
     ax.set_xticks(
         range(len(wt_sequence)), 
@@ -776,7 +779,7 @@ def plot_predicted_ssm(gremlin: GREMLIN):
     )
     ax.set_yticks(range(len(aas)), aas, size=6)
     plt.tight_layout()
-    plt.savefig('SSM_landscape.png', dpi=300)
+    plt.savefig('SSM_landscape.png', dpi=500)
     pd.DataFrame(
         {
             'Variant': np.array(variantss).flatten(),
