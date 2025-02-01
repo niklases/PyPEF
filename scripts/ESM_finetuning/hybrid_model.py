@@ -40,32 +40,16 @@ from transformers import EsmForMaskedLM, EsmTokenizer, EsmConfig
 from esm1v_contrastive_learning import get_encoded_seqs, get_batches, train, test, infer, corr_loss
 
 
-# Get cpu, gpu or mps device for training.
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-print(f"Using {device} device")
-basemodel = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-model_reg = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-peft_config = LoraConfig(r=8, target_modules=["query", "value"])
-model = get_peft_model(basemodel, peft_config)
-model = model.to(device)
-baseline_model = copy.deepcopy(model)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
-MAX_WT_SEQUENCE_LENGTH = 500
-N_EPOCHS = 5
-BATCH_SIZE = 5
+
+def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
+    reduce = len(a) - (len(a) % batch_size)
+    return a[:reduce]
 
 
 
-    # TODO: Implementation of other regression techniques (CVRegression models)
-    # TODO: Differential evolution of multiple Zero Shot predictors
-    #       (and supervised model predictions thereof) and y_true
+# TODO: Implementation of other regression techniques (CVRegression models)
+# TODO: Differential evolution of multiple Zero Shot predictors
+#       (and supervised model predictions thereof) and y_true
 class DCAESMHybridModel:
     def __init__(
             self,
@@ -73,9 +57,12 @@ class DCAESMHybridModel:
             x_train_esm: np.ndarray, 
             x_train_esm_attention_masks: np.ndarray,
             y_train: np.ndarray,                   # true labels
+            esm_base_model,
+            esm_model,
+            esm_optimizer,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
-            parameter_range: list | None = None    # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
+            parameter_range: list | None = None    # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
     ):
         if parameter_range is None:
             parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
@@ -89,6 +76,9 @@ class DCAESMHybridModel:
         self.x_train_esm = x_train_esm
         self.x_train_esm_attention_masks = x_train_esm_attention_masks
         self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = None, None, None, None, None
+        self.esm_base_model = esm_base_model
+        self.esm_model = esm_model
+        self.esm_optimizer = esm_optimizer
         self.train_and_optimize()
 
     @staticmethod
@@ -249,7 +239,8 @@ class DCAESMHybridModel:
     def train_and_optimize(
             self,
             train_size_fit: float = 0.66,
-            random_state: int = 42
+            random_state: int = 42,
+            batch_size: int = 5
     ) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -274,10 +265,10 @@ class DCAESMHybridModel:
         """
         #try:
         print('Orig. train size:', int(train_size_fit * len(self.y_train)))
-        train_size_fit = int((train_size_fit * len(self.y_train)) - ((train_size_fit * len(self.y_train)) % BATCH_SIZE))
+        train_size_fit = int((train_size_fit * len(self.y_train)) - ((train_size_fit * len(self.y_train)) % batch_size))
         print('New train size:', train_size_fit)
         print('Remaining for testing:', len(self.y_train) - train_size_fit)
-        train_test_size = int((len(self.y_train) - train_size_fit) - ((len(self.y_train) - train_size_fit) % BATCH_SIZE))
+        train_test_size = int((len(self.y_train) - train_size_fit) - ((len(self.y_train) - train_size_fit) % batch_size))
         print('New test size:', train_test_size)
 
 
@@ -331,46 +322,27 @@ class DCAESMHybridModel:
         # and y_esm1v_lora_ttest (LoRA-optimized predicted ESM1v values)
 
 
-        x_dca_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
-            get_batches(x_esm1v_ttrain, batch_size=BATCH_SIZE), 
-            get_batches(attn_esm_1v_ttrain, batch_size=BATCH_SIZE), 
-            get_batches(y_ttrain, batch_size=BATCH_SIZE)
+        x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
+            get_batches(x_esm1v_ttrain, batch_size=batch_size), 
+            get_batches(attn_esm_1v_ttrain, batch_size=batch_size), 
+            get_batches(y_ttrain, batch_size=batch_size)
         )
-        x_dca_ttest_b, attns_ttest_b, scores_ttest_b = (
-            get_batches(x_esm1v_ttest, batch_size=BATCH_SIZE), 
-            get_batches(attn_esm_1v_ttest, batch_size=BATCH_SIZE), 
-            get_batches(y_ttest, batch_size=BATCH_SIZE)
+        x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b = (
+            get_batches(x_esm1v_ttest, batch_size=batch_size), 
+            get_batches(attn_esm_1v_ttest, batch_size=batch_size), 
+            get_batches(y_ttest, batch_size=batch_size)
         )
 
-        y_ttest_, y_esm_ttest = test(x_dca_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=model)
-        print('Test-perf. (untrained):', spearmanr(y_ttest_.cpu(), y_esm_ttest.cpu()))
+        y_ttest_, y_esm_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.esm_base_model)
+        print(f'Hybrid opt. Test-perf. (untrained, N={len(y_ttest_)}):', spearmanr(y_ttest_.cpu(), y_esm_ttest.cpu()))
 
-        train(x_dca_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=model, optimizer=optimizer, n_epochs=5)
-        y_ttrain_, y_ttrain_esm1v_pred = test(x_dca_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=model)
-        print('LoRA Train-perf.:', spearmanr(y_ttrain_.cpu(), y_ttrain_esm1v_pred.cpu()))
-        y_ttest_, y_esm_lora_ttest = test(x_dca_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=model)
-        print('LoRA Test-perf.:', spearmanr(y_ttest_.cpu(), y_esm_lora_ttest.cpu()))
+        train(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.esm_model, optimizer=self.esm_optimizer, n_epochs=5)
+        y_ttrain_, y_ttrain_esm1v_pred = test(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.esm_model)
+        print(f'Hybrid opt. LoRA Train-perf., N={len(y_ttrain_.cpu())}:', spearmanr(y_ttrain_.cpu(), y_ttrain_esm1v_pred.cpu()))
+        y_ttest_, y_esm_lora_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.esm_model)
+        print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_.cpu())}:', spearmanr(y_ttest_.cpu(), y_esm_lora_ttest.cpu()))
 
-        y_ttest_, y_esm_ttest = test(x_dca_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=baseline_model)
-        print('Test-perf. (untrained, should be unchanged!):', spearmanr(y_ttest_.cpu(), y_esm_ttest.cpu()))
-
-        def normal(a):
-            return (np.array(a) - np.array(a).mean()) / np.array(a).std()
-        
-        def min_max(a):
-            return (np.array(a) - np.min(np.array(a))) / (np.max(np.array(a)) - np.min(np.array(a)))
-
-        # NORMALIZE ALL VALUES?!
-        ##y_ttest = min_max(y_ttest)
-        #y_dca_ttest = min_max(y_dca_ttest)
-        #y_ridge_ttest = min_max(y_ridge_ttest)
-        #y_esm1v_ttest = min_max(y_esm1v_ttest)
-        #print('Y_true:', [float(f) for f in y_ttest])
-        #print('Y_DCA:', y_dca_ttest)
-        #print('Y_RIDGE_DCA:', y_ridge_ttest)
-        #print('Y_ESM1v:', y_esm1v_ttest)
         # Hybrid DCA model performance (N Train: 200, N Test: 6027). Spearman's rho: 0.519 (Unnorm.), 0.496 normal., 0.496 min-max norm.
-
         self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
             y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest.detach().cpu().numpy(), y_esm_lora_ttest.detach().cpu().numpy()
         )  # .cpu() ?
@@ -380,7 +352,8 @@ class DCAESMHybridModel:
             self,
             x_dca: np.ndarray,
             x_esm: np.ndarray,
-            attns_esm: np.ndarray
+            attns_esm: np.ndarray,
+            batch_size: int = 5
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -410,12 +383,19 @@ class DCAESMHybridModel:
             y_ridge = self.ridge_opt.predict(x_dca)
 
         x_esm_b, attns_b = (
-            get_batches(x_esm, batch_size=BATCH_SIZE), 
-            get_batches(attns_esm, batch_size=BATCH_SIZE)
+            get_batches(x_esm, batch_size=batch_size), 
+            get_batches(attns_esm, batch_size=batch_size)
         )
         
-        y_esm = infer(x_esm_b, attns_b, baseline_model).detach().cpu().numpy()
-        y_esm_lora = infer(x_esm_b, attns_b, model).detach().cpu().numpy()
+        y_esm = infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model').detach().cpu().numpy()
+        y_esm_lora = infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model').detach().cpu().numpy()
+        
+        y_dca, y_ridge, y_esm, y_esm_lora = (
+            reduce_by_batch_modulo(y_dca), 
+            reduce_by_batch_modulo(y_ridge), 
+            reduce_by_batch_modulo(y_esm), 
+            reduce_by_batch_modulo(y_esm_lora)
+        )
         
         # adjusting: + or - on train data --> +-beta_1 * y_dca + beta_2 * y_ridge
         return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
@@ -594,12 +574,62 @@ class DCAESMHybridModel:
         return data
 
 
+def get_delta_e_statistical_model(
+        x_test: np.ndarray,
+        x_wt: np.ndarray
+):
+    """
+    Description
+    -----------
+    Delta_E means difference in evolutionary energy in plmc terms.
+    In other words, this is the delta of the sum of Hamiltonian-encoded
+    sequences of local fields and couplings of encoded sequence and wild-type
+    sequence in GREMLIN terms.
+
+    Parameters
+    -----------
+    x_test: np.ndarray [2-dim]
+        Encoded sequences to be subtracted by x_wt to compute delta E.
+    x_wt: np.ndarray [1-dim]
+        Encoded wild-type sequence.
+
+    Returns
+    -----------
+    delta_e: np.ndarray [1-dim]
+        Summed subtracted encoded sequences.
+
+    """
+    delta_x = np.subtract(x_test, x_wt)
+    delta_e = np.sum(delta_x, axis=1)
+    return delta_e
+
 
 if __name__ == '__main__':
     import pandas as pd
     from pypef.utils.variant_data import get_seqs_from_var_name
     from pypef.dca.gremlin_inference import GREMLIN
     from pypef.dca.hybrid_model import get_delta_e_statistical_model
+
+        # Get cpu, gpu or mps device for training.
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"hybrid_model.py: Using {device} device")
+    basemodel = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    model_reg = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    peft_config = LoraConfig(r=8, target_modules=["query", "value"])
+    model = get_peft_model(basemodel, peft_config)
+    model = model.to(device)
+    baseline_model = copy.deepcopy(model)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+    MAX_WT_SEQUENCE_LENGTH = 500
+    N_EPOCHS = 5
+    BATCH_SIZE = 5
 
     # Get cpu, gpu or mps device for training.
     #device = (
@@ -622,8 +652,9 @@ if __name__ == '__main__':
     #BATCH_SIZE = 5
 
 
-    csv_path = f'DMS_ProteinGym_substitutions/AMIE_PSEAE_Wrenbeck_2017.csv'
-    msa_path= f'DMS_msa_files/AMIE_PSEAE_full_11-26-2021_b02.a2m'
+    k = ['/mnt/d/dev/', '/home/niklas/Data/dev/'][0]
+    csv_path = f'{k}contrastive_learning_test/DMS_ProteinGym_substitutions/AMIE_PSEAE_Wrenbeck_2017.csv'
+    msa_path= f'{k}contrastive_learning_test/DMS_msa_files/AMIE_PSEAE_full_11-26-2021_b02.a2m'
     # MSA start: 1 - MSA end: 346
     wt_seq = 'MRHGDISSSNDTVGVAVVNYKMPRLHTAAEVLDNARKIAEMIVGMKQGLPGMDLVVFPEYSLQGIMYDPAEMMETAVAIPGEETEIFSRACRKANVWGVFSLTGERHEEHPRKAPYNTLVLIDNNGEIVQKYRKIIPWCPIEGWYPGGQTYVSEGPKGMKISLIICDDGNYPEIWRDCAMKGAELIVRCQGYMYPAKDQQVMMAKAMAWANNCYVAVANAAGFDGVYSYFGHSAIIGFDGRTLGECGEEEMGIQYAQLSLSQIRDARANDQSQNHLFKILHRGYSGLQASGDGDRGLAECPFEFYRTWVTDAEKARENVERLTRSTTGVAQCPVGRLPYEGLEKEA'
     variant_fitness_data = pd.read_csv(csv_path, sep=',')
@@ -632,8 +663,8 @@ if __name__ == '__main__':
     #    print('More than 400000 variant-fitness pairs which represents a '
     #          'potential out-of-memory risk, skipping dataset...')
     #    continue
-    variants = variant_fitness_data['mutant'].to_numpy()[200:500]
-    fitnesses = variant_fitness_data['DMS_score'].to_numpy()[200:500]
+    variants = variant_fitness_data['mutant'].to_numpy()  # [200:500]
+    fitnesses = variant_fitness_data['DMS_score'].to_numpy()  # [200:500]
     variants_split = []
     for variant in variants:
         # Split double and higher substituted variants to multiple single substitutions; 
@@ -676,8 +707,11 @@ if __name__ == '__main__':
         x_train_esm=np.array(x_train_esm1v), 
         x_train_esm_attention_masks=np.array(attn_train_esm), 
         y_train=y_train,
+        esm_model=model,
         x_wt=x_wt
     )
+
+    y_test = reduce_by_batch_modulo(y_test)
 
     y_test_pred = hm.hybrid_prediction(x_dca=np.array(x_test_dca), x_esm=np.array(x_test_esm), attns_esm=np.array(attn_test_esm))
     print(f'Hybrid DCA model performance (N Train: {len(y_train)}, N Test: {len(y_test)}). '
