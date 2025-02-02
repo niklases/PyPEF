@@ -485,6 +485,11 @@ The performance of the GREMLIN model used is shown in the following for predicti
 
 for ProteinGym datasets computed using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs).
 
+A hybrid GREMLIN-ESM1v low-N-tuned model achieved even increased performances compared to the pure DCA-tuned model (script available at [scripts/ESM_finetuning](scripts/ESM_finetuning))
+<p align="center">
+    <img src=".github/imgs/mut_performance_violin_DCA_ESM.png" alt="drawing" width="250"/>
+</p>
+
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding
 For script-based encoding of sequences using PyPEF and the available AAindex-, OneHot- or DCA-based techniques, the classes and corresponding functions can be imported, i.e. `OneHotEncoding`, `AAIndexEncoding`, `GREMLIN` (DCA),  `PLMC` (DCA), and `DCAHybridModel`. In addition, implemented functions for CV-based tuning of regression models can be used to train and validate models, eventually deriving them to obtain performances on retained data for testing. An exemplary script and a Jupyter notebook for CV-based (low-*N*) tuning of models and using them for testing is provided at [scripts/Encoding_low_N/api_encoding_train_test.py](scripts/Encoding_low_N/api_encoding_train_test.py) and [scripts/Encoding_low_N/api_encoding_train_test.ipynb](scripts/Encoding_low_N/api_encoding_train_test.ipynb), respectively.
