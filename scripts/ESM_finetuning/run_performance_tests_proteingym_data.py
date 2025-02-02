@@ -351,7 +351,7 @@ def plot_csv_data(csv, plot_name):
         'Hybrid_Trained_Performance_1000'
         ]]
     print(df_)
-    sns.violinplot(df_, saturation=0.4)
+    sns.violinplot(df_, saturation=0.4, palette=['tab:blue', 'tab:grey', 'tab:orange', 'tab:green', 'tab:red'])
     plt.ylim(-0.09, 1.09)
     plt.ylabel(r'|Spearmanr $\rho$|')
     sns.swarmplot(df_, color='black')
@@ -431,18 +431,16 @@ if __name__ == '__main__':
             already_tested_is = []
 
 
-    compute_performances(
-        mut_data=combined_mut_data, 
-        start_i=start_i, 
-        already_tested_is=already_tested_is
-    )
+    #compute_performances(
+    #    mut_data=combined_mut_data, 
+    #    start_i=start_i, 
+    #    already_tested_is=already_tested_is
+    #)
 
 
     with open(out_results_csv, 'r') as fh:
         with open(os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_opt_results_clean.csv'), 'w') as fh2:
             for line in fh:
-                #print(line.split(','))
-                print(line.split(',')[1])
                 if not line.split(',')[1].startswith('OOM') and not line.split(',')[1].startswith('X'):
                     fh2.write(line)
     
