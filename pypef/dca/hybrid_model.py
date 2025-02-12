@@ -50,39 +50,76 @@ import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN
 
 
-    # TODO: Implementation of other regression techniques (CVRegression models)
-    # TODO: Differential evolution of multiple Zero Shot predictors
-    #       (and supervised model predictions thereof) and y_true
-class DCAHybridModel:
+from __future__ import annotations
+
+
+import pickle
+import copy
+import logging
+logger = logging.getLogger('pypef.dca.hybrid_model')
+
+import numpy as np
+from scipy.stats import spearmanr
+from sklearn.preprocessing import normalize
+from sklearn.linear_model import Ridge
+from sklearn.model_selection import GridSearchCV, train_test_split
+from scipy.optimize import differential_evolution
+
+
+import torch
+from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
+from peft.utils.other import fsdp_auto_wrap_policy
+from transformers import EsmForMaskedLM, EsmTokenizer, EsmConfig
+
+from esm1v_contrastive_learning import get_encoded_seqs, get_batches, train, test, infer, corr_loss
+
+
+
+def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
+    reduce = len(a) - (len(a) % batch_size)
+    return a[:reduce]
+
+
+
+# TODO: Implementation of other regression techniques (CVRegression models)
+# TODO: Differential evolution of multiple Zero Shot predictors
+#       (and supervised model predictions thereof) and y_true
+class DCAESMHybridModel:
     def __init__(
             self,
-            x_train: np.ndarray | None = None,     # DCA-encoded sequences
-            y_train: np.ndarray | None  = None,    # true labels
-            x_test: np.ndarray | None = None,      # not necessary for training
-            y_test: np.ndarray | None = None,      # not necessary for training
+            x_train_dca: np.ndarray,               # DCA-encoded sequences
+            x_train_esm: np.ndarray, 
+            x_train_esm_attention_masks: np.ndarray,
+            y_train: np.ndarray,                   # true labels
+            esm_base_model,
+            esm_model,
+            esm_optimizer,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
-            parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound
-            logistic: bool | None = None
+            parameter_range: list | None = None,     # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
+            batch_size: int | None = None,
+            device: str | None = None
     ):
         if parameter_range is None:
-            parameter_range = [(0, 1), (0, 1)] 
+            parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
-        if logistic is None:
-            logistic = False
         self.parameter_range = parameter_range
         self.alphas = alphas
-        self.logistic = logistic
-        self.x_train = x_train
+        self.x_train_dca = x_train_dca
         self.y_train = y_train
-        self.x_test = x_test
-        self.y_test = y_test
-        self.X = np.concatenate((x_train, x_test), axis=0) if self.x_test is not None else self.x_train
-        self.y = np.concatenate((y_train, y_test), axis=0) if self.y_test is not None else self.y_train
         self.x_wild_type = x_wt
-        self._spearmanr_dca = self._spearmanr_dca()
-        self.beta_1, self.beta_2, self.regressor = self.settings(self.x_train, self.y_train)
+        self.x_train_esm = x_train_esm
+        self.x_train_esm_attention_masks = x_train_esm_attention_masks
+        self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = None, None, None, None, None
+        self.esm_base_model = esm_base_model
+        self.esm_model = esm_model
+        self.esm_optimizer = esm_optimizer
+        self.device = device
+        if batch_size is None:
+            batch_size = 5
+        self.batch_size = batch_size
+        self.train_and_optimize()
 
     @staticmethod
     def spearmanr(
@@ -145,10 +182,6 @@ class DCAHybridModel:
         """
         return np.subtract(x, self.x_wild_type)
 
-    @staticmethod
-    def logistic_func(delta_e, *args):
-        return args[0] / (1 + np.exp(-args[1] * (delta_e - args[2]))) + args[3]
-
     def _delta_e(
             self,
             x: np.ndarray
@@ -171,25 +204,6 @@ class DCAHybridModel:
         and wild-type.
         """
         return np.sum(self._delta_x(x), axis=1)
-    
-    def _logistic_delta_e(
-            self,
-            ys,
-            delta_es
-    ):
-        popt, _pcov = curve_fit(
-            self.logistic_func, 
-            delta_es, 
-            ys,
-            maxfev=10000, 
-            p0=(1, 1, -7, 1), 
-            bounds=[(-5, -5, -20, -20), (5, 5, 0, 20)]
-        )
-        y_dca_logistic = self.logistic_func(ys, delta_es, *popt)
-        #import matplotlib.pyplot as plt
-        #plt.scatter(np.array(delta_es).argsort().argsort(), delta_es);plt.savefig('delta_es.png', dpi=300);plt.clf()
-        #plt.scatter(np.array(y_dca_logistic).argsort().argsort(), y_dca_logistic);plt.savefig('delta_es_logistic.png', dpi=300);plt.clf()
-        return y_dca_logistic
 
     def _spearmanr_dca(self) -> float:
         """
@@ -203,7 +217,7 @@ class DCAHybridModel:
         or
             beta_1 * y_dca - beta_2 * y_ridge.
         """
-        y_dca = self._delta_e(self.x_train)
+        y_dca = self._delta_e(self.x_train_dca)
         return self.spearmanr(self.y_train, y_dca)
 
     def ridge_predictor(
@@ -231,50 +245,13 @@ class DCAHybridModel:
         grid.fit(x_train, y_train)
         return Ridge(**grid.best_params_).fit(x_train, y_train)
 
-    def _y_hybrid(
-            self,
-            y_dca: np.ndarray,
-            y_ridge: np.ndarray,
-            beta_1: float,
-            beta_2: float
-    ) -> np.ndarray:
-        """
-        Chooses sign for connecting the parts of the hybrid model.
-
-        Parameters
-        ----------
-        y_dca : np.ndarray
-            Difference of the statistical energies of variants
-            and wild-type.
-        y_ridge : np.ndarray
-            (Ridge) predicted fitness values of the variants.
-        b1 : float
-            Float between [0,1] coefficient for regulating DCA
-            model contribution.
-        b2 : float
-            Float between [0,1] coefficient for regulating ML
-            model contribution.
-
-        Returns
-        -------
-        The predicted fitness value-representatives of the hybrid
-        model.
-        """
-        # Uncomment lines below to see if correlation between
-        # y_true and y_dca is positive or negative:
-        # logger.info(f'Positive or negative correlation of (train data) y_true '
-        #             f'and y_dca (+/-?): {self._spearmanr_dca:.3f}')
-        if self._spearmanr_dca >= 0:
-            return beta_1 * y_dca + beta_2 * y_ridge
-        else:  # negative correlation
-            return beta_1 * y_dca - beta_2 * y_ridge
-
     def _adjust_betas(
             self,
             y: np.ndarray,
             y_dca: np.ndarray,
             y_ridge: np.ndarray,
-            rank_based: bool = False
+            y_esm1v: np.ndarray,
+            y_esm1v_lora: np.ndarray
     ) -> np.ndarray:
         """
         Find parameters that maximize the absolut Spearman rank
@@ -295,18 +272,20 @@ class DCAHybridModel:
         'beta_1' and 'beta_2' that maximize the absolut Spearman rank correlation
         coefficient.
         """
-        if rank_based:
-            loss = lambda params: np.sum(np.power(y - params[0] * y_dca - params[1] * y_ridge, 2))
-            minimizer = differential_evolution(loss, bounds=[(0, 10), (0, 10)], tol=1e-4)  
-        else:
-            loss = lambda params: -np.abs(self.spearmanr(y, params[0] * y_dca + params[1] * y_ridge))
-            minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
+        loss = lambda params: -np.abs(
+            self.spearmanr(
+                y, 
+                params[0] * y_dca + 
+                params[1] * y_ridge + 
+                params[2] * y_esm1v + 
+                params[3] * y_esm1v_lora 
+            )
+        )
+        minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
         return minimizer.x
 
-    def settings(
+    def train_and_optimize(
             self,
-            x_train: np.ndarray,
-            y_train: np.ndarray,
             train_size_fit: float = 0.66,
             random_state: int = 42
     ) -> tuple:
@@ -331,55 +310,130 @@ class DCAHybridModel:
         Tuple containing the adjusted parameters 'beta_1' and 'beta_2',
         as well as the tuned regressor of the hybrid model.
         """
-        try:
-            X_ttrain, X_ttest, y_ttrain, y_ttest = train_test_split(
-                x_train, y_train,
+        #try:
+        print('Orig. train size:', int(train_size_fit * len(self.y_train)))
+        train_size_fit = int((train_size_fit * len(self.y_train)) - ((train_size_fit * len(self.y_train)) % self.batch_size))
+        print('New train size:', train_size_fit)
+        print('Remaining for testing:', len(self.y_train) - train_size_fit)
+        train_test_size = int((len(self.y_train) - train_size_fit) - ((len(self.y_train) - train_size_fit) % self.batch_size))
+        print('New test size:', train_test_size)
+
+        (
+                x_dca_ttrain, x_dca_ttest, 
+                x_esm1v_ttrain, x_esm1v_ttest,
+                attn_esm_1v_ttrain, attn_esm_1v_ttest,
+                y_ttrain, y_ttest
+        ) = train_test_split(
+                self.x_train_dca, 
+                self.x_train_esm,
+                self.x_train_esm_attention_masks,
+                self.y_train, 
                 train_size=train_size_fit,
                 random_state=random_state
-            )
+        )
+        # Reducing by batch size modulo for X, attention masks, and y
+        x_dca_ttest = x_dca_ttest[:train_test_size]   
+        x_esm1v_ttest = x_esm1v_ttest[:train_test_size]
+        attn_esm_1v_ttest = attn_esm_1v_ttest[:train_test_size]
+        y_ttest = y_ttest[:train_test_size]
 
-        except ValueError:
-            """
+        #except ValueError:
+        """
             Not enough sequences to construct a sub-training and sub-testing 
             set when splitting the training set.
 
             Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
-            possible -> return parameter setting for 'EVmutation' model.
-            """
-            return 1.0, 0.0, None
+            possible -> return parameter setting for 'EVmutation/GREMLIN' model.
+        """
+            #return 1.0, 0.0, 1.0, 0.0, None
 
         """
         The sub-training set 'y_ttrain' is subjected to a five-fold cross 
         validation. This leads to the constraint that at least two sequences
         need to be in the 20 % of that set in order to allow a ranking. 
 
-        If this is not given -> return parameter setting for 'EVmutation' model.
+        If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
         """
         # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
         y_ttrain_min_cv = int(0.2 * len(y_ttrain))
-        if y_ttrain_min_cv < 2:
-            return 1.0, 0.0, None
+        if y_ttrain_min_cv < 5:
+            return 1.0, 0.0, 1.0, 0.0, None
 
-        if self.logistic:
-            y_dca_ttest = self._logistic_delta_e(ys=y_ttest, delta_es=self._delta_e(X_ttest))
-        else:
-            y_dca_ttest = self._delta_e(X_ttest)
+        y_dca_ttest = self._delta_e(x_dca_ttest)
+        self.ridge_opt = self.ridge_predictor(x_dca_ttrain, y_ttrain)
+        y_ridge_ttest = self.ridge_opt.predict(x_dca_ttest)
 
+        # LoRA training on y_esm1v_ttrain --> Testing on y_esm1v_ttest 
+        x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
+            get_batches(x_esm1v_ttrain, batch_size=self.batch_size), 
+            get_batches(attn_esm_1v_ttrain, batch_size=self.batch_size), 
+            get_batches(y_ttrain, batch_size=self.batch_size)
+        )
+        x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b = (
+            get_batches(x_esm1v_ttest, batch_size=self.batch_size), 
+            get_batches(attn_esm_1v_ttest, batch_size=self.batch_size), 
+            get_batches(y_ttest, batch_size=self.batch_size)
+        )
 
+        y_ttest_, y_esm_ttest = test(
+            x_esm1v_ttest_b, 
+            attns_ttest_b, 
+            scores_ttest_b, 
+            loss_fn=corr_loss, 
+            model=self.esm_base_model, 
+            device=self.device
+        )
 
-        ridge = self.ridge_predictor(X_ttrain, y_ttrain)
-        y_ridge_ttest = ridge.predict(X_ttest)
+        print('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
+              'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
+        
+        # void // training model in place
+        train(
+            x_esm1v_ttrain_b, 
+            attns_ttrain_b, 
+            scores_ttrain_b, 
+            loss_fn=corr_loss, 
+            model=self.esm_model, 
+            optimizer=self.esm_optimizer, 
+            n_epochs=5, 
+            device=self.device
+        )
 
-        beta1, beta2 = self._adjust_betas(
-            y_ttest, y_dca_ttest, y_ridge_ttest, rank_based=self.logistic)
-        return beta1, beta2, ridge
+        y_ttrain_, y_ttrain_esm1v_pred = test(
+            x_esm1v_ttrain_b, 
+            attns_ttrain_b, 
+            scores_ttrain_b, 
+            loss_fn=corr_loss, 
+            model=self.esm_model, 
+            device=self.device
+        )
+
+        y_ttrain_.detach().cpu()
+        y_ttrain_esm1v_pred.detach().cpu()
+        print(f'Hybrid opt. LoRA Train-perf., N={len(y_ttrain_)}:', spearmanr(y_ttrain_, y_ttrain_esm1v_pred))
+
+        y_ttest_, y_esm_lora_ttest = test(
+            x_esm1v_ttest_b, 
+            attns_ttest_b, 
+            scores_ttest_b, 
+            loss_fn=corr_loss, 
+            model=self.esm_model, 
+            device=self.device
+        )
+        y_ttest_.detach().cpu()
+        y_esm_lora_ttest.detach().cpu()
+        print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_)}:', spearmanr(y_ttest_, y_esm_lora_ttest))
+
+        self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
+            y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest.detach().cpu().numpy(), y_esm_lora_ttest.detach().cpu().numpy()
+        )
+        return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
 
     def hybrid_prediction(
             self,
-            x: np.ndarray,
-            reg: object,  # any regression-based estimator (from sklearn)
-            beta_1: float,
-            beta_2: float
+            x_dca: np.ndarray,
+            x_esm: np.ndarray,
+            attns_esm: np.ndarray
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -402,13 +456,29 @@ class DCAHybridModel:
         Predicted fitness associates of 'X' using the
         hybrid model.
         """
-        y_dca = self._delta_e(x)
-        if reg is None:
-            y_ridge = np.random.random(len(y_dca))  # in order to suppress error
+        y_dca = self._delta_e(x_dca)
+        if self.ridge_opt is None:
+            y_ridge = np.zeros(len(y_dca))  # in order to suppress error
         else:
-            y_ridge = reg.predict(x)
+            y_ridge = self.ridge_opt.predict(x_dca)
+
+        x_esm_b, attns_b = (
+            get_batches(x_esm, batch_size=self.batch_size), 
+            get_batches(attns_esm, batch_size=self.batch_size)
+        )
+        
+        y_esm = infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
+        y_esm_lora = infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
+        
+        y_dca, y_ridge, y_esm, y_esm_lora = (
+            reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
+            reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
+            reduce_by_batch_modulo(y_esm, batch_size=self.batch_size), 
+            reduce_by_batch_modulo(y_esm_lora, batch_size=self.batch_size)
+        )
+        
         # adjusting: + or - on train data --> +-beta_1 * y_dca + beta_2 * y_ridge
-        return self._y_hybrid(y_dca, y_ridge, beta_1, beta_2)
+        return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
 
     def split_performance(
             self,
@@ -585,11 +655,11 @@ class DCAHybridModel:
 
 
 """
-Below: Some helper functions that call or are dependent on the DCAHybridModel class.
+Below: Some helper functions that call or are dependent on the DCAESMHybridModel class.
 """
 
 
-def check_model_type(model: dict | DCAHybridModel | PLMC | GREMLIN):
+def check_model_type(model: dict | DCAESMHybridModel | PLMC | GREMLIN):
     """
     Checks type/instance of model.
     """
@@ -600,7 +670,7 @@ def check_model_type(model: dict | DCAHybridModel | PLMC | GREMLIN):
             raise SystemError("Unknown model dictionary taken from Pickle file.")
     if type(model) == pypef.dca.plmc_encoding.PLMC:
         return 'PLMC'
-    elif type(model) == pypef.dca.hybrid_model.DCAHybridModel:
+    elif type(model) == pypef.dca.hybrid_model.DCAESMHybridModel:
         return 'Hybrid'
     elif type(model) == pypef.dca.gremlin_inference.GREMLIN:
         return 'GREMLIN'
@@ -670,7 +740,7 @@ def get_model_and_type(
 
 
 def save_model_to_dict_pickle(
-        model: DCAHybridModel | PLMC | GREMLIN,
+        model: DCAESMHybridModel | PLMC | GREMLIN,
         model_type: str | None = None,
         beta_1: float | None = None,
         beta_2: float | None = None,
@@ -922,7 +992,7 @@ def generate_model_and_save_pkl(
         xs, ys_true, test_size=test_percent, random_state=random_state
     )
 
-    hybrid_model = DCAHybridModel(
+    hybrid_model = DCAESMHybridModel(
         x_train=x_train,
         y_train=y_train,
         x_test=x_test,
@@ -1016,7 +1086,7 @@ def performance_ls_ts(
                     f"(after removing substitutions at gap positions)."
                     )
 
-        hybrid_model = DCAHybridModel(
+        hybrid_model = DCAESMHybridModel(
             x_train=np.array(x_train),
             y_train=np.array(y_train),
             x_test=np.array(x_test),
@@ -1242,7 +1312,7 @@ def predict_directed_evolution(
     """
     Perform directed in silico evolution and predict the fitness of a
     (randomly) selected variant using the hybrid model. This function opens
-    the stored DCAHybridModel and the model parameters to predict the fitness
+    the stored DCAESMHybridModel and the model parameters to predict the fitness
     of the variant encoded herein using the PLMC class. If the variant
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.
