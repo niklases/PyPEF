@@ -49,7 +49,7 @@ from pypef.utils.variant_data import (
 )
 from pypef.utils.plot import plot_y_true_vs_y_pred
 from pypef.utils.performance import get_performances
-from pypef.dca.hybrid_model import plmc_or_gremlin_encoding
+from pypef.hybrid.hybrid_model import plmc_or_gremlin_encoding
 
 import warnings
 warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='numpy')

@@ -26,16 +26,12 @@ logger = logging.getLogger('pypef.dca.hybrid_model')
 
 import numpy as np
 from scipy.stats import spearmanr
-from sklearn.preprocessing import normalize
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
-
-
 import torch
-from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
-from peft.utils.other import fsdp_auto_wrap_policy
-from transformers import EsmForMaskedLM, EsmTokenizer, EsmConfig
+from peft import LoraConfig, get_peft_model
+from transformers import EsmForMaskedLM, EsmTokenizer
 
 from esm1v_contrastive_learning import get_encoded_seqs, get_batches, train, test, infer, corr_loss
 
@@ -608,7 +604,7 @@ if __name__ == '__main__':
     import pandas as pd
     from pypef.utils.variant_data import get_seqs_from_var_name
     from pypef.dca.gremlin_inference import GREMLIN
-    from pypef.dca.hybrid_model import get_delta_e_statistical_model
+    from pypef.hybrid.hybrid_model import get_delta_e_statistical_model
 
         # Get cpu, gpu or mps device for training.
     device = (

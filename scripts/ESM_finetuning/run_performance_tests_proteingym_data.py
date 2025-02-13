@@ -351,7 +351,10 @@ def plot_csv_data(csv, plot_name):
         'Hybrid_Trained_Performance_1000'
         ]]
     print(df_)
-    sns.violinplot(df_, saturation=0.4, palette=['tab:blue', 'tab:grey', 'tab:orange', 'tab:green', 'tab:red'])
+    sns.violinplot(
+        df_, saturation=0.4, 
+        palette=['tab:blue', 'tab:grey', 'tab:orange', 'tab:green', 'tab:red']
+    )
     plt.ylim(-0.09, 1.09)
     plt.ylabel(r'|Spearmanr $\rho$|')
     sns.swarmplot(df_, color='black')

@@ -26,12 +26,11 @@ from typing import Union
 import logging
 
 import pypef.dca.plmc_encoding
-logger = logging.getLogger('pypef.dca.hybrid_model')
+logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 import numpy as np
 import sklearn.base
 from scipy.stats import spearmanr
-from scipy.optimize import curve_fit
 from sklearnex import patch_sklearn
 patch_sklearn(verbose=False)
 from sklearn.linear_model import Ridge
@@ -48,37 +47,15 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN
-
-
-from __future__ import annotations
-
-
-import pickle
-import copy
-import logging
-logger = logging.getLogger('pypef.dca.hybrid_model')
-
-import numpy as np
-from scipy.stats import spearmanr
-from sklearn.preprocessing import normalize
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import GridSearchCV, train_test_split
-from scipy.optimize import differential_evolution
-
-
-import torch
-from peft import PeftModel, PeftConfig, LoraConfig, get_peft_model
-from peft.utils.other import fsdp_auto_wrap_policy
-from transformers import EsmForMaskedLM, EsmTokenizer, EsmConfig
-
-from esm1v_contrastive_learning import get_encoded_seqs, get_batches, train, test, infer, corr_loss
-
+from pypef.llm.esm_lora_tune import get_batches, train, test, infer, corr_loss
 
 
 def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
+    """
+    Cuts input array by batch size modulo.
+    """
     reduce = len(a) - (len(a) % batch_size)
     return a[:reduce]
-
 
 
 # TODO: Implementation of other regression techniques (CVRegression models)
@@ -96,7 +73,7 @@ class DCAESMHybridModel:
             esm_optimizer,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
-            parameter_range: list | None = None,     # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
+            parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
             batch_size: int | None = None,
             device: str | None = None
     ):
@@ -111,7 +88,8 @@ class DCAESMHybridModel:
         self.x_wild_type = x_wt
         self.x_train_esm = x_train_esm
         self.x_train_esm_attention_masks = x_train_esm_attention_masks
-        self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = None, None, None, None, None
+        self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = \
+            None, None, None, None, None
         self.esm_base_model = esm_base_model
         self.esm_model = esm_model
         self.esm_optimizer = esm_optimizer
@@ -312,24 +290,29 @@ class DCAESMHybridModel:
         """
         #try:
         print('Orig. train size:', int(train_size_fit * len(self.y_train)))
-        train_size_fit = int((train_size_fit * len(self.y_train)) - ((train_size_fit * len(self.y_train)) % self.batch_size))
+        train_size_fit = int(
+            (train_size_fit * len(self.y_train)) - 
+            ((train_size_fit * len(self.y_train)) % self.batch_size)
+        )
         print('New train size:', train_size_fit)
         print('Remaining for testing:', len(self.y_train) - train_size_fit)
-        train_test_size = int((len(self.y_train) - train_size_fit) - ((len(self.y_train) - train_size_fit) % self.batch_size))
+        train_test_size = int(
+            (len(self.y_train) - train_size_fit) - 
+            ((len(self.y_train) - train_size_fit) % self.batch_size))
         print('New test size:', train_test_size)
 
         (
-                x_dca_ttrain, x_dca_ttest, 
-                x_esm1v_ttrain, x_esm1v_ttest,
-                attn_esm_1v_ttrain, attn_esm_1v_ttest,
-                y_ttrain, y_ttest
+            x_dca_ttrain, x_dca_ttest, 
+            x_esm1v_ttrain, x_esm1v_ttest,
+            attn_esm_1v_ttrain, attn_esm_1v_ttest,
+            y_ttrain, y_ttest
         ) = train_test_split(
-                self.x_train_dca, 
-                self.x_train_esm,
-                self.x_train_esm_attention_masks,
-                self.y_train, 
-                train_size=train_size_fit,
-                random_state=random_state
+            self.x_train_dca, 
+            self.x_train_esm,
+            self.x_train_esm_attention_masks,
+            self.y_train, 
+            train_size=train_size_fit,
+            random_state=random_state
         )
         # Reducing by batch size modulo for X, attention masks, and y
         x_dca_ttest = x_dca_ttest[:train_test_size]   
@@ -488,6 +471,7 @@ class DCAESMHybridModel:
             save_model: bool = False
     ) -> dict:
         """
+        TODO: Update
         Estimates performance of the model.
 
         Parameters
