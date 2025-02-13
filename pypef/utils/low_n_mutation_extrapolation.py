@@ -126,7 +126,7 @@ def low_n(
 
             if hybrid_modeling:
                 x_wt = x[0]  # WT should be first CSV variant entry
-                hybrid_model = DCAHybridModel(
+                hybrid_model = DCAESMHybridModel(
                     x_train=x_train,
                     y_train=y_train,
                     x_test=x_test,  # only used for adjusting +/- sign of y_dca, can also be None
