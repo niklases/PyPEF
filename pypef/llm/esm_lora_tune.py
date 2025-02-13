@@ -167,7 +167,7 @@ def train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str 
             #        saved_params.append(torch.sum(param).clone())
             pbar_batches.set_description(
                 f"EPOCH: {epoch}. Loss: {loss.item():>1f}  "
-                f"[batch: {batch+1}/{len(xs)} "
+                f"[batch: {batch+1}/{len(xs)} | "
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
                 #f"(LoRA weight sum:{sum(saved_params):.3f})"
             )

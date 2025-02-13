@@ -5,11 +5,11 @@ from scipy.stats import spearmanr
 import torch
 
 # Uncomment for local file run (e.g., `python ./tests/test_api_functions.py`)
-#import sys
-#sys.path.append(os.path.join(
-#    os.path.dirname(__file__),
-#    '..'
-#))
+import sys
+sys.path.append(os.path.join(
+    os.path.dirname(__file__),
+    '..'
+))
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
@@ -19,10 +19,18 @@ from pypef.hybrid.hybrid_model import DCAESMHybridModel
 
 
 
-msa_file = os.path.abspath(
+msa_file_avgfp = os.path.abspath(
     os.path.join(
         os.path.abspath(__file__), 
         '../../datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
+    )
+)
+
+
+msa_file_aneh = os.path.abspath(
+    os.path.join(
+        os.path.abspath(__file__), 
+        '../../datasets/ANEH/ANEH_jhmmer.a2m'
     )
 )
 
@@ -47,7 +55,7 @@ test_seqs, _test_vars, test_ys = get_sequences_from_file(ts_b)
 
 def test_gremlin():
     g = GREMLIN(
-        alignment=msa_file,
+        alignment=msa_file_avgfp,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
         wt_seq=None,
         optimize=True,
@@ -67,7 +75,7 @@ def test_gremlin():
 
 def test_hybrid_model():
     g = GREMLIN(
-        alignment=msa_file,
+        alignment=msa_file_aneh,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
         wt_seq=None,
         optimize=True,
@@ -81,10 +89,11 @@ def test_hybrid_model():
         np.sum(x_dca_train, axis=1)
     ), len(train_ys))
 
-
+    print(len(train_seqs[0]), train_seqs[0])
+    assert len(train_seqs[0]) == len(g.wt_seq)
     base_model, lora_model, tokenizer, optimizer = get_esm_models()
-    encoded_seqs, attention_masks = get_encoded_seqs(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
-    x_esm_b, attention_masks_b = get_batches(encoded_seqs), get_batches(attention_masks)
+    encoded_seqs_train, attention_masks_train = get_encoded_seqs(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
+    x_esm_b, attention_masks_b = get_batches(encoded_seqs_train), get_batches(attention_masks_train)
     y_true, y_pred_esm = test(x_esm_b, attention_masks_b, torch.Tensor(train_ys), loss_fn=corr_loss, model=base_model)
     print(spearmanr(
         y_true,
@@ -93,14 +102,23 @@ def test_hybrid_model():
 
     hm = DCAESMHybridModel(
         x_train_dca=np.array(x_dca_train), 
-        x_train_esm=np.array(encoded_seqs), 
-        x_train_esm_attention_masks=np.array(attention_masks), 
+        x_train_esm=np.array(encoded_seqs_train), 
+        x_train_esm_attention_masks=np.array(attention_masks_train), 
         y_train=train_ys,
         esm_model=lora_model,
         esm_base_model=base_model,
         esm_optimizer=optimizer,
         x_wt=g.x_wt
     )
+
+    x_dca_test = g.get_scores(test_seqs, encode=True)
+    encoded_seqs_test, attention_masks_test = get_encoded_seqs(list(test_seqs), tokenizer, max_length=len(test_seqs[0]))
+
+    print('np.shape(encoded_seqs):', np.shape(encoded_seqs))
+
+    y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_esm=encoded_seqs_test, attns_esm=attention_masks_test)
+    print(spearmanr(test_ys, y_pred_test), len(test_ys))
+
 
 test_hybrid_model()
 
