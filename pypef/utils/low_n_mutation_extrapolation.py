@@ -271,7 +271,7 @@ def performance_mutation_extrapolation(
         all_higher_variants, x_all_higher, y_all_higher = process_df_encoding(all_higher_df)
         if hybrid_modeling:
             x_wt = x_train[0]
-            hybrid_model = DCAHybridModel(
+            hybrid_model = DCAESMHybridModel(
                 x_train=x_train,
                 y_train=y_train,
                 x_test=x_all_higher,  # only used for adjusting +/- of y_dca, can also be None but
