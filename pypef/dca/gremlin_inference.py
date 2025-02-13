@@ -390,9 +390,9 @@ class GREMLIN:
         return v_ini, w_ini, aa_counts
 
     @property
-    def get_v_w_opt(self):
+    def get_v_w(self):
         try:
-            return self.v_opt, self.w_opt
+            return self.v, self.w
         except AttributeError:
             raise SystemError(
                 "No v_opt and w_opt available, this means GREMLIN "
@@ -400,7 +400,7 @@ class GREMLIN:
                 "e.g., try GREMLIN('Alignment.fasta', optimize=True)."
             )
 
-    def get_score(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
+    def get_scores(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
         """
         Computes the GREMLIN score for a given sequence or list of sequences.
         """
@@ -458,23 +458,18 @@ class GREMLIN:
         else:
             return np.sum(h, axis=-1) - h_wt_seq
 
-    def get_wt_score(self, wt_seq=None, v=None, w=None, encode=False):
+    def get_wt_score(self, wt_seq=None, encode=False):
         if wt_seq is None:
             wt_seq = self.wt_seq
-        if v is None or w is None:
-            if self.optimize:
-                v, w = self.v_opt, self.w_opt
-            else:
-                v, w = self.v_ini, self.w_ini
         wt_seq = np.array(wt_seq, dtype=str)
-        return self.get_score(wt_seq, v, w, encode=encode)
+        return self.get_scores(wt_seq, encode=encode)
 
     def collect_encoded_sequences(self, seqs, v=None, w=None, v_idx=None):
         """
-        Wrapper function for encoding input sequences using the self.get_score
+        Wrapper function for encoding input sequences using the self.get_scores
         function with encode set to True.
         """
-        xs = self.get_score(seqs, v, w, v_idx, encode=True)
+        xs = self.get_scores(seqs, v, w, v_idx, encode=True)
         return xs
 
     @staticmethod
@@ -683,7 +678,7 @@ def plot_predicted_ssm(gremlin: GREMLIN):
         for aa_sub in aas:
             variant = aa_wt + str(i + 1) + aa_sub
             variant_sequence = wt_sequence[:i] + aa_sub + wt_sequence[i + 1:]
-            variant_score = gremlin.get_score(variant_sequence)[0]
+            variant_score = gremlin.get_scores(variant_sequence)[0]
             variants.append(variant)
             variant_sequences.append(variant_sequence)
             variant_scores.append(variant_score - wt_score)

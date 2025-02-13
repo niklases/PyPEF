@@ -1,6 +1,14 @@
 
 import os.path
 import numpy as np
+from scipy.stats import spearmanr
+
+# Uncomment for local file run (e.g., `python ./tests/test_api_functions.py`)
+#import sys
+#sys.path.append(os.path.join(
+#    os.path.dirname(__file__),
+#    '..'
+#))
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
@@ -30,6 +38,10 @@ ts_b = os.path.abspath(
 )
 
 
+train_seqs, _train_vars, train_ys = get_sequences_from_file(ls_b)
+test_seqs, _test_vars, test_ys = get_sequences_from_file(ts_b)
+
+
 def test_gremlin():
     g = GREMLIN(
         alignment=msa_file,
@@ -41,12 +53,18 @@ def test_gremlin():
         opt_iter=100
     )
     wt_score = g.get_wt_score()  # only 1 decimal place for TensorFlow result
-    np.testing.assert_almost_equal(wt_score, 1203.549234202937, decimal=1)
-    
+    np.testing.assert_almost_equal(wt_score, 952.1, decimal=1)
+    y_pred = g.get_scores(np.append(train_seqs, test_seqs))
+    np.testing.assert_almost_equal(
+        spearmanr(np.append(train_ys, test_ys), y_pred)[0], 
+        0.4516502675400598, 
+        decimal=3
+    )
+
+
+test_gremlin()  
 
 def test_dataset_b_results():
-    train_seqs, _train_vars, train_ys = get_sequences_from_file(ls_b)
-    test_seqs, _test_vars, test_ys = get_sequences_from_file(ts_b)
     aaindex = "WOLR810101.txt"
     x_fft_train, _ = AAIndexEncoding(full_aaidx_txt_path(aaindex), train_seqs).collect_encoded_sequences()
     x_fft_test, _ = AAIndexEncoding(full_aaidx_txt_path(aaindex), test_seqs).collect_encoded_sequences()
