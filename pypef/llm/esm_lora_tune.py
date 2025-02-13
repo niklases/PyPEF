@@ -9,6 +9,8 @@
 # Inspired by ConFit
 # https://github.com/luo-group/ConFit
 
+from __future__ import annotations
+
 import torch
 import numpy as np
 from tqdm import tqdm
