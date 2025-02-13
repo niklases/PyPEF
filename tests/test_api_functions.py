@@ -5,11 +5,11 @@ from scipy.stats import spearmanr
 import torch
 
 # Uncomment for local file run (e.g., `python ./tests/test_api_functions.py`)
-import sys
-sys.path.append(os.path.join(
-    os.path.dirname(__file__),
-    '..'
-))
+#import sys
+#sys.path.append(os.path.join(
+#    os.path.dirname(__file__),
+#    '..'
+#))
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
@@ -113,14 +113,9 @@ def test_hybrid_model():
 
     x_dca_test = g.get_scores(test_seqs, encode=True)
     encoded_seqs_test, attention_masks_test = get_encoded_seqs(list(test_seqs), tokenizer, max_length=len(test_seqs[0]))
-
-    print('np.shape(encoded_seqs):', np.shape(encoded_seqs))
-
     y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_esm=encoded_seqs_test, attns_esm=attention_masks_test)
     print(spearmanr(test_ys, y_pred_test), len(test_ys))
-
-
-test_hybrid_model()
+    np.testing.assert_almost_equal(spearmanr(test_ys, y_pred_test)[0], 0.8027150775495858, decimal=3)
 
 
 def test_dataset_b_results():
