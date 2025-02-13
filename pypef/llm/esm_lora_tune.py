@@ -16,6 +16,9 @@ import numpy as np
 from tqdm import tqdm
 import logging
 
+from peft import LoraConfig, get_peft_model
+from transformers import EsmForMaskedLM, EsmTokenizer
+
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 
@@ -28,6 +31,15 @@ def get_vram(verbose: bool = True):
         logger.info(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
             total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
     return free, total
+
+
+def get_esm_models():
+    base_model = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    peft_config = LoraConfig(r=8, target_modules=["query", "value"])
+    lora_model = get_peft_model(base_model, peft_config)
+    optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.01)
+    return base_model, lora_model, tokenizer, optimizer
 
 
 def get_encoded_seqs(sequences, tokenizer, max_length=104):

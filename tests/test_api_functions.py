@@ -2,6 +2,7 @@
 import os.path
 import numpy as np
 from scipy.stats import spearmanr
+import torch
 
 # Uncomment for local file run (e.g., `python ./tests/test_api_functions.py`)
 #import sys
@@ -13,6 +14,8 @@ from scipy.stats import spearmanr
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file
+from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, corr_loss, get_batches, test
+from pypef.hybrid.hybrid_model import DCAESMHybridModel
 
 
 
@@ -62,7 +65,45 @@ def test_gremlin():
     )
 
 
-test_gremlin()  
+def test_hybrid_model():
+    g = GREMLIN(
+        alignment=msa_file,
+        char_alphabet="ARNDCQEGHILKMFPSTWYV-",
+        wt_seq=None,
+        optimize=True,
+        gap_cutoff=0.5,
+        eff_cutoff=0.8,
+        opt_iter=100
+    )
+    x_dca_train = g.get_scores(train_seqs, encode=True)
+    print(spearmanr(
+        train_ys,
+        np.sum(x_dca_train, axis=1)
+    ), len(train_ys))
+
+
+    base_model, lora_model, tokenizer, optimizer = get_esm_models()
+    encoded_seqs, attention_masks = get_encoded_seqs(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
+    x_esm_b, attention_masks_b = get_batches(encoded_seqs), get_batches(attention_masks)
+    y_true, y_pred_esm = test(x_esm_b, attention_masks_b, torch.Tensor(train_ys), loss_fn=corr_loss, model=base_model)
+    print(spearmanr(
+        y_true,
+        y_pred_esm
+    ), len(y_true))
+
+    hm = DCAESMHybridModel(
+        x_train_dca=np.array(x_dca_train), 
+        x_train_esm=np.array(encoded_seqs), 
+        x_train_esm_attention_masks=np.array(attention_masks), 
+        y_train=train_ys,
+        esm_model=lora_model,
+        esm_base_model=base_model,
+        esm_optimizer=optimizer,
+        x_wt=g.x_wt
+    )
+
+test_hybrid_model()
+
 
 def test_dataset_b_results():
     aaindex = "WOLR810101.txt"

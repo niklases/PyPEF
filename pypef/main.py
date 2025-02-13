@@ -284,12 +284,6 @@ Options:
 """
 
 
-from os import environ
-try:
-    environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 3 = TensorFlow INFO, WARNING, and ERROR messages are not printed
-except KeyError:                           
-    pass
-
 from sys import argv, version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:
