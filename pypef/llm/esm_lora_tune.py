@@ -102,7 +102,7 @@ def get_batches(a, batch_size=5, verbose: bool = False):
     return torch.Tensor(a)
     
 
-def test(xs, attns, scores, loss_fn, model, device: str | None = None):
+def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     logger.info(f'Infering model for testing using {device.upper()} device...')
@@ -124,7 +124,7 @@ def test(xs, attns, scores, loss_fn, model, device: str | None = None):
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
-def infer(xs, attns, model, desc: None | str = None, device: str | None = None):
+def esm_infer(xs, attns, model, desc: None | str = None, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     logger.info(f'Infering model for predictions using {device.upper()} device...')
@@ -139,7 +139,7 @@ def infer(xs, attns, model, desc: None | str = None, device: str | None = None):
     return torch.flatten(y_preds_total)
 
 
-def train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None):
+def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     logger.info(f'Training using {device.upper()} device (N_Train={len(scores)})...')

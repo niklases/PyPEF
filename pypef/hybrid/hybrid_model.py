@@ -47,7 +47,7 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.llm.esm_lora_tune import get_batches, train, test, infer, corr_loss
+from pypef.llm.esm_lora_tune import get_batches, esm_train, esm_test, esm_infer, corr_loss
 
 
 def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
@@ -358,7 +358,7 @@ class DCAESMHybridModel:
             get_batches(y_ttest, batch_size=self.batch_size)
         )
 
-        y_ttest_, y_esm_ttest = test(
+        y_ttest_, y_esm_ttest = esm_test(
             x_esm1v_ttest_b, 
             attns_ttest_b, 
             scores_ttest_b, 
@@ -371,7 +371,7 @@ class DCAESMHybridModel:
               'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
         
         # void // training model in place
-        train(
+        esm_train(
             x_esm1v_ttrain_b, 
             attns_ttrain_b, 
             scores_ttrain_b, 
@@ -382,7 +382,7 @@ class DCAESMHybridModel:
             device=self.device
         )
 
-        y_ttrain_, y_ttrain_esm1v_pred = test(
+        y_ttrain_, y_ttrain_esm1v_pred = esm_test(
             x_esm1v_ttrain_b, 
             attns_ttrain_b, 
             scores_ttrain_b, 
@@ -395,7 +395,7 @@ class DCAESMHybridModel:
         y_ttrain_esm1v_pred.detach().cpu()
         print(f'Hybrid opt. LoRA Train-perf., N={len(y_ttrain_)}:', spearmanr(y_ttrain_, y_ttrain_esm1v_pred))
 
-        y_ttest_, y_esm_lora_ttest = test(
+        y_ttest_, y_esm_lora_ttest = esm_test(
             x_esm1v_ttest_b, 
             attns_ttest_b, 
             scores_ttest_b, 
@@ -450,8 +450,8 @@ class DCAESMHybridModel:
             get_batches(attns_esm, batch_size=self.batch_size)
         )
         
-        y_esm = infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
-        y_esm_lora = infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
+        y_esm = esm_infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
+        y_esm_lora = esm_infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
         
         y_dca, y_ridge, y_esm, y_esm_lora = (
             reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
