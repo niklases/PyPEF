@@ -1,8 +1,6 @@
 
 # Linux
-#     Run me in file dir:  
-#         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest .
-#     or from parent dir:
+#     Run me from parent dir:
 #         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest tests/
 
 import os.path
