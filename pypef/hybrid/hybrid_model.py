@@ -376,14 +376,13 @@ class DCAESMHybridModel:
             scores_ttest_b, 
             loss_fn=corr_loss, 
             model=self.esm_base_model, 
-            device=self.device,
-            seed=self.seed
+            device=self.device
         )
 
         print('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
               'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
         
-        # void // training model in place
+        # void function, training model in place
         esm_train(
             x_esm1v_ttrain_b, 
             attns_ttrain_b, 
@@ -392,7 +391,8 @@ class DCAESMHybridModel:
             model=self.esm_model, 
             optimizer=self.esm_optimizer, 
             n_epochs=5, 
-            device=self.device
+            device=self.device,
+            seed=self.seed
         )
 
         y_ttrain_, y_ttrain_esm1v_pred = esm_test(

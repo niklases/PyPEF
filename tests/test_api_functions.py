@@ -1,17 +1,11 @@
 
-# Run me in file dir:  
-#     python -m pytest .
-# or from parent dir:
-#     python -m pytest tests/
-
+# Linux
+#     Run me in file dir:  
+#         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest .
+#     or from parent dir:
+#         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest tests/
 
 import os.path
-# Uncomment for local file run (e.g., `python ./tests/test_api_functions.py`)
-#import sys
-#sys.path.append(os.path.join(
-#    os.path.dirname(__file__),
-#    '..'
-#))
 
 import numpy as np
 from scipy.stats import spearmanr

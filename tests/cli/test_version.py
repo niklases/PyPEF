@@ -1,5 +1,6 @@
-import os
+import os.path
 import subprocess
+
 
 from pypef import __version__
 
