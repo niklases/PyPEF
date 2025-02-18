@@ -270,8 +270,12 @@ class DCAESMHybridModel:
                 params[3] * y_esm1v_lora 
             )
         )
-        minimizer = differential_evolution(
-            loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
+        try:
+            minimizer = differential_evolution(
+                loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
+        except TypeError:  # SciPy v. 1.15.0 change: `seed` -> `rng` keyword
+            minimizer = differential_evolution(
+                loss, bounds=self.parameter_range, tol=1e-4, seed=self.seed)
         return minimizer.x
 
     def train_and_optimize(
