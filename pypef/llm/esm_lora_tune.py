@@ -139,7 +139,9 @@ def esm_infer(xs, attns, model, desc: None | str = None, device: str | None = No
     return torch.flatten(y_preds_total)
 
 
-def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None):
+def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None, seed: int | None = None):
+    if seed is not None:
+        torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     logger.info(f'Training using {device.upper()} device (N_Train={len(scores)})...')

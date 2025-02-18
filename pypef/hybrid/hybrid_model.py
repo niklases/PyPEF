@@ -75,7 +75,8 @@ class DCAESMHybridModel:
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
             batch_size: int | None = None,
-            device: str | None = None
+            device: str | None = None,
+            seed: int | None = None
     ):
         if parameter_range is None:
             parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
@@ -88,15 +89,21 @@ class DCAESMHybridModel:
         self.x_wild_type = x_wt
         self.x_train_esm = x_train_esm
         self.x_train_esm_attention_masks = x_train_esm_attention_masks
-        self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = \
-            None, None, None, None, None
         self.esm_base_model = esm_base_model
         self.esm_model = esm_model
         self.esm_optimizer = esm_optimizer
         self.device = device
+        self.seed = seed
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
+        (
+            self.ridge_opt, 
+            self.beta1, 
+            self.beta2, 
+            self.beta3, 
+            self.beta4
+        ) = None, None, None, None, None
         self.train_and_optimize()
 
     @staticmethod
@@ -219,7 +226,11 @@ class DCAESMHybridModel:
         Ridge object trained on 'x_train' and 'y_train' (cv=5)
         with optimized 'alpha'. 
         """
-        grid = GridSearchCV(Ridge(), {'alpha': self.alphas}, cv=5)
+        grid = GridSearchCV(
+            Ridge(), 
+            {'alpha': self.alphas, 'random_state': [self.seed]}, 
+            cv=5
+        )
         grid.fit(x_train, y_train)
         return Ridge(**grid.best_params_).fit(x_train, y_train)
 
@@ -259,7 +270,8 @@ class DCAESMHybridModel:
                 params[3] * y_esm1v_lora 
             )
         )
-        minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
+        minimizer = differential_evolution(
+            loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
         return minimizer.x
 
     def train_and_optimize(
@@ -364,7 +376,8 @@ class DCAESMHybridModel:
             scores_ttest_b, 
             loss_fn=corr_loss, 
             model=self.esm_base_model, 
-            device=self.device
+            device=self.device,
+            seed=self.seed
         )
 
         print('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
