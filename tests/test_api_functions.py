@@ -1,7 +1,9 @@
 
-# Linux
-#     Run me from parent dir:
-#         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest tests/
+# Run me from parent dir:
+#   Linux
+#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/
+#   Windows
+#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\
 
 import os.path
 
