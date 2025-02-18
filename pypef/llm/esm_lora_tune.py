@@ -17,6 +17,8 @@ from tqdm import tqdm
 import logging
 
 from peft import LoraConfig, get_peft_model
+from transformers import logging as hf_logging
+hf_logging.set_verbosity_error()
 from transformers import EsmForMaskedLM, EsmTokenizer
 
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
