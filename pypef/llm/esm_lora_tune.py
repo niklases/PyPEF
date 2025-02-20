@@ -175,5 +175,5 @@ def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: 
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
                 #f"(LoRA weight sum:{sum(saved_params):.3f})"
             )
-    y_preds.detach()
+    y_preds = y_preds.detach()
     model.train(False)

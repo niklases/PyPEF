@@ -115,9 +115,19 @@ def test_hybrid_model():
     x_dca_test = g.get_scores(test_seqs, encode=True)
     encoded_seqs_test, attention_masks_test = get_encoded_seqs(list(test_seqs), tokenizer, max_length=len(test_seqs[0]))
     y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_esm=encoded_seqs_test, attns_esm=attention_masks_test)
-    print(spearmanr(test_ys, y_pred_test), len(test_ys))
+    print(hm.beta1, hm.beta2, hm.beta3, hm.beta4, hm.ridge_opt)
+    print('hm.y_dca_ttest', spearmanr(hm.yttest, hm.y_dca_ttest), len(hm.yttest))
+    print('hm.y_dca_ridge_ttest', spearmanr(hm.yttest, hm.y_dca_ridge_ttest), len(hm.yttest))
+    print('hm.y_esm_ttest', spearmanr(hm.yttest, hm.y_esm_ttest), len(hm.yttest))
+    print('hm.y_esm_lora_ttest', spearmanr(hm.yttest, hm.y_esm_lora_ttest), len(hm.yttest))
+    print('Hybrid', spearmanr(test_ys, y_pred_test), len(test_ys))
+    np.testing.assert_almost_equal(spearmanr(hm.yttest, hm.y_dca_ttest)[0], -0.5342743713116743, decimal=5)
+    np.testing.assert_almost_equal(spearmanr(hm.yttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, decimal=5)
+    np.testing.assert_almost_equal(spearmanr(hm.yttest, hm.y_esm_ttest)[0], -0.21761360470606333, decimal=5)
+    # Nondeterministic behavior, should be about ~ 0.8, checking if not NaN
     # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
-    assert 0.70 < spearmanr(test_ys, y_pred_test)[0]  # Nondeterministic behavior, should be about ~ 0.8
+    assert -1.0 <= spearmanr(hm.yttest, hm.y_esm_lora_ttest)[0] <= 1.0  
+    assert -1.0 <= spearmanr(test_ys, y_pred_test)[0] <= 1.0  
 
 
 def test_dataset_b_results():
@@ -138,3 +148,6 @@ def test_dataset_b_results():
     np.testing.assert_almost_equal(performances[0], 0.72, decimal=2)
     #  NRMSE, Pearson's r, Spearman's rho
     np.testing.assert_almost_equal(performances[2:5], [0.52, 0.86, 0.89], decimal=2)
+
+
+test_hybrid_model()

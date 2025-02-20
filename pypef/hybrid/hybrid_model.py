@@ -420,13 +420,19 @@ class DCAESMHybridModel:
             model=self.esm_model, 
             device=self.device
         )
-        y_ttest_.detach().cpu()
-        y_esm_lora_ttest.detach().cpu()
-        print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_)}:', spearmanr(y_ttest_, y_esm_lora_ttest))
+        y_ttest_ = y_ttest_.cpu().numpy()
+        y_esm_ttest = y_esm_ttest.cpu().numpy()
+        y_esm_lora_ttest = y_esm_lora_ttest.cpu().numpy()
 
+        print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_)}:', spearmanr(y_ttest_, y_esm_lora_ttest))
+        print(type(y_ttest_), type(y_dca_ttest), type(y_ridge_ttest), type(y_esm_ttest), type(y_esm_lora_ttest))
         self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
-            y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest.detach().cpu().numpy(), y_esm_lora_ttest.detach().cpu().numpy()
+            y_ttest_, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
         )
+        (
+            self.yttest, self.y_dca_ttest, self.y_dca_ridge_ttest, 
+            self.y_esm_ttest, self.y_esm_lora_ttest
+        ) = y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
         return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
 
     def hybrid_prediction(
