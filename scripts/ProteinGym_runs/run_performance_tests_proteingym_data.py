@@ -14,7 +14,7 @@ from adjustText import adjust_text
 # Add local PyPEF path if not using pip-installed PyPEF version
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.hybrid.hybrid_model import DCAHybridModel, get_delta_e_statistical_model  # , remove_gap_pos
+from pypef.hybrid.hybrid_model import DCAHybridModel, get_delta_e_statistical_model  # , remove_gap_pos TODO: UPDATE
 from pypef.utils.variant_data import get_seqs_from_var_name
 
 if not tf.config.list_physical_devices('GPU'):

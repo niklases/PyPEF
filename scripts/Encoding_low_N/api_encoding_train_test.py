@@ -20,9 +20,9 @@ from pypef.ml.regression import (
     OneHotEncoding, AAIndexEncoding, get_regressor_performances,
     path_aaindex_dir, full_aaidx_txt_path
 )
-from pypef.hybrid.hybrid_model import DCAESMHybridModel, remove_gap_pos, get_delta_e_statistical_model
+from pypef.hybrid.hybrid_model import DCAESMHybridModel, remove_gap_pos
 from pypef.dca.plmc_encoding import PLMC
-from pypef.dca.gremlin_inference import GREMLIN
+from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 
 
 use_gremlin = True  # if False uses plmc (requires plmc-generated .params file)

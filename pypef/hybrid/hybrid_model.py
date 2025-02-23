@@ -46,7 +46,7 @@ from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_seq
 from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
-from pypef.dca.gremlin_inference import GREMLIN
+from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.llm.esm_lora_tune import get_batches, esm_train, esm_test, esm_infer, corr_loss
 
 
@@ -66,11 +66,11 @@ class DCAESMHybridModel:
             self,
             x_train_dca: np.ndarray,               # DCA-encoded sequences
             x_train_esm: np.ndarray, 
-            x_train_esm_attention_masks: np.ndarray,
             y_train: np.ndarray,                   # true labels
             esm_base_model,
             esm_model,
             esm_optimizer,
+            x_train_esm_attention_masks: np.ndarray | None = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
@@ -304,47 +304,43 @@ class DCAESMHybridModel:
         Tuple containing the adjusted parameters 'beta_1' and 'beta_2',
         as well as the tuned regressor of the hybrid model.
         """
-        #try:
-        print('Orig. train size:', int(train_size_fit * len(self.y_train)))
-        train_size_fit = int(
-            (train_size_fit * len(self.y_train)) - 
-            ((train_size_fit * len(self.y_train)) % self.batch_size)
-        )
-        print('New train size:', train_size_fit)
-        print('Remaining for testing:', len(self.y_train) - train_size_fit)
-        train_test_size = int(
-            (len(self.y_train) - train_size_fit) - 
-            ((len(self.y_train) - train_size_fit) % self.batch_size))
-        print('New test size:', train_test_size)
+        try:
+            train_size_fit = int(
+                (train_size_fit * len(self.y_train)) - 
+                ((train_size_fit * len(self.y_train)) % self.batch_size)
+            )
+            train_test_size = int(
+                (len(self.y_train) - train_size_fit) - 
+                ((len(self.y_train) - train_size_fit) % self.batch_size))
+            print('New test size:', train_test_size)
 
-        (
-            x_dca_ttrain, x_dca_ttest, 
-            x_esm1v_ttrain, x_esm1v_ttest,
-            attn_esm_1v_ttrain, attn_esm_1v_ttest,
-            y_ttrain, y_ttest
-        ) = train_test_split(
-            self.x_train_dca, 
-            self.x_train_esm,
-            self.x_train_esm_attention_masks,
-            self.y_train, 
-            train_size=train_size_fit,
-            random_state=random_state
-        )
-        # Reducing by batch size modulo for X, attention masks, and y
-        x_dca_ttest = x_dca_ttest[:train_test_size]   
-        x_esm1v_ttest = x_esm1v_ttest[:train_test_size]
-        attn_esm_1v_ttest = attn_esm_1v_ttest[:train_test_size]
-        y_ttest = y_ttest[:train_test_size]
+            (
+                x_dca_ttrain, x_dca_ttest, 
+                x_esm1v_ttrain, x_esm1v_ttest,
+                attn_esm_1v_ttrain, attn_esm_1v_ttest,
+                y_ttrain, y_ttest
+            ) = train_test_split(
+                self.x_train_dca, 
+                self.x_train_esm,
+                self.x_train_esm_attention_masks,
+                self.y_train, 
+                train_size=train_size_fit,
+                random_state=random_state
+            )
+            # Reducing by batch size modulo for X, attention masks, and y
+            x_dca_ttest = x_dca_ttest[:train_test_size]   
+            x_esm1v_ttest = x_esm1v_ttest[:train_test_size]
+            attn_esm_1v_ttest = attn_esm_1v_ttest[:train_test_size]
+            y_ttest = y_ttest[:train_test_size]
 
-        #except ValueError:
-        """
+        except ValueError:
+            """
             Not enough sequences to construct a sub-training and sub-testing 
             set when splitting the training set.
-
             Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
             possible -> return parameter setting for 'EVmutation/GREMLIN' model.
-        """
-            #return 1.0, 0.0, 1.0, 0.0, None
+            """
+            return 1.0, 0.0, 1.0, 0.0, None
 
         """
         The sub-training set 'y_ttrain' is subjected to a five-fold cross 
@@ -383,7 +379,7 @@ class DCAESMHybridModel:
             device=self.device
         )
 
-        print('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
+        logger.info('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
               'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
         
         # void function, training model in place
@@ -410,7 +406,6 @@ class DCAESMHybridModel:
 
         y_ttrain_.detach().cpu()
         y_ttrain_esm1v_pred.detach().cpu()
-        print(f'Hybrid opt. LoRA Train-perf., N={len(y_ttrain_)}:', spearmanr(y_ttrain_, y_ttrain_esm1v_pred))
 
         y_ttest_, y_esm_lora_ttest = esm_test(
             x_esm1v_ttest_b, 
@@ -424,8 +419,6 @@ class DCAESMHybridModel:
         y_esm_ttest = y_esm_ttest.cpu().numpy()
         y_esm_lora_ttest = y_esm_lora_ttest.cpu().numpy()
 
-        print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_)}:', spearmanr(y_ttest_, y_esm_lora_ttest))
-        print(type(y_ttest_), type(y_dca_ttest), type(y_ridge_ttest), type(y_esm_ttest), type(y_esm_lora_ttest))
         self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
             y_ttest_, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
         )
@@ -433,6 +426,7 @@ class DCAESMHybridModel:
             self.yttest, self.y_dca_ttest, self.y_dca_ridge_ttest, 
             self.y_esm_ttest, self.y_esm_lora_ttest
         ) = y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
+
         return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
 
     def hybrid_prediction(
@@ -483,7 +477,6 @@ class DCAESMHybridModel:
             reduce_by_batch_modulo(y_esm_lora, batch_size=self.batch_size)
         )
         
-        # adjusting: + or - on train data --> +-beta_1 * y_dca + beta_2 * y_ridge
         return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
 
     def split_performance(
@@ -914,36 +907,6 @@ def remove_gap_pos(
                     sequences_v.append(sequences[i])
                     fitnesses_v.append(fitnesses[i])
     return variants_v, sequences_v, fitnesses_v
-
-
-def get_delta_e_statistical_model(
-        x_test: np.ndarray,
-        x_wt: np.ndarray
-):
-    """
-    Description
-    -----------
-    Delta_E means difference in evolutionary energy in plmc terms.
-    In other words, this is the delta of the sum of Hamiltonian-encoded
-    sequences of local fields and couplings of encoded sequence and wild-type
-    sequence in GREMLIN terms.
-
-    Parameters
-    -----------
-    x_test: np.ndarray [2-dim]
-        Encoded sequences to be subtracted by x_wt to compute delta E.
-    x_wt: np.ndarray [1-dim]
-        Encoded wild-type sequence.
-
-    Returns
-    -----------
-    delta_e: np.ndarray [1-dim]
-        Summed subtracted encoded sequences.
-
-    """
-    delta_x = np.subtract(x_test, x_wt)
-    delta_e = np.sum(delta_x, axis=1)
-    return delta_e
 
 
 def generate_model_and_save_pkl(

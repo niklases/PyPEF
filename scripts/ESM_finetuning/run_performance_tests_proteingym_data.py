@@ -416,12 +416,15 @@ if __name__ == '__main__':
         except IndexError:
             start_i = 0
             already_tested_is = []
-        print(list(s_mut_data.keys())[start_i-1])
+        print(list(combined_mut_data.keys())[start_i-1])
         print(f'Already tested datasets:')
         for i in already_tested_is:
-            print(f'{i + 1} {list(s_mut_data.keys())[i]}')
-        print(f'\nContinuing getting model performances at {start_i + 1} {list(s_mut_data.keys())[start_i]} '
-              f'(last tested dataset: {start_i}, {list(s_mut_data.keys())[start_i - 1]})')
+            print(f'{i + 1} {list(combined_mut_data.keys())[i]}')
+        try:
+            print(f'\nContinuing getting model performances at {start_i + 1} {list(combined_mut_data.keys())[start_i]} '
+                  f'(last tested dataset: {start_i}, {list(combined_mut_data.keys())[start_i - 1]})')
+        except IndexError:
+            print('\nComputed all results already?!')
     else:
         with open(out_results_csv, 'w') as fh:
             print(f'\nCreating new file {out_results_csv}...')

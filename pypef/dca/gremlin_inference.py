@@ -647,6 +647,36 @@ def save_gremlin_as_pickle(alignment: str, wt_seq: str, opt_iter: int = 100):
     return gremlin
 
 
+def get_delta_e_statistical_model(
+        x_test: np.ndarray,
+        x_wt: np.ndarray
+):
+    """
+    Description
+    -----------
+    Delta_E means difference in evolutionary energy in plmc terms.
+    In other words, this is the delta of the sum of Hamiltonian-encoded
+    sequences of local fields and couplings of encoded sequence and wild-type
+    sequence in GREMLIN terms.
+
+    Parameters
+    -----------
+    x_test: np.ndarray [2-dim]
+        Encoded sequences to be subtracted by x_wt to compute delta E.
+    x_wt: np.ndarray [1-dim]
+        Encoded wild-type sequence.
+
+    Returns
+    -----------
+    delta_e: np.ndarray [1-dim]
+        Summed subtracted encoded sequences.
+
+    """
+    delta_x = np.subtract(x_test, x_wt)
+    delta_e = np.sum(delta_x, axis=1)
+    return delta_e
+
+
 def plot_all_corr_mtx(gremlin: GREMLIN):
     gremlin.plot_correlation_matrix(matrix_type='raw')
     gremlin.plot_correlation_matrix(matrix_type='apc')

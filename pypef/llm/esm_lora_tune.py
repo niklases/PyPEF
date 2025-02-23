@@ -57,7 +57,7 @@ def get_encoded_seqs(sequences, tokenizer, max_length=104):
 def get_y_pred_scores(encoded_sequences, attention_masks, model, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    #logger.info(f'Getting scores (y_pred) using {device.upper()} device...')
+    logger.info(f'Getting scores (y_pred) using {device.upper()} device...')
     model = model.to(device)
     out = model(encoded_sequences.to(device), attention_masks.to(device), output_hidden_states=True)
     logits = out.logits
@@ -65,7 +65,6 @@ def get_y_pred_scores(encoded_sequences, attention_masks, model, device: str | N
     for i_s, sequence in enumerate(encoded_sequences):
         for i_aa, aa in enumerate(sequence):
             # alternative: use Tensor.index_select() function
-            #logger.info('Target AA:', i_aa, aa, proteinseq_toks['toks'][aa], token_probs[i_s, i_aa, aa])
             if i_aa == 0:
                 seq_log_probs = token_probs[i_s, i_aa, aa].reshape(1)
             else:
@@ -151,29 +150,20 @@ def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: 
     xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     for epoch in pbar_epochs:
-        #logger.info(f'VRAM CHECK --- EPOCH {epoch} --- CHECK VRAM')
-        #get_vram()
         pbar_epochs.set_description(f'EPOCH {epoch}/{n_epochs}')
         model.train()
         pbar_batches = tqdm(zip(xs, attns, scores), total=len(xs), leave=False)
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
-            #logger.info(xs_b.size(), attns_b.size(), scores_b.size())
             y_preds = get_y_pred_scores(xs_b, attns_b, model, device=device)
-            #scores_b = scores_b.to(device)
             loss = loss_fn(scores_b, y_preds)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            #saved_params = []
-            #for i, (name, param) in enumerate(model.named_parameters()):  # 33 layers (0-32)
-            #    if 'lora' in name:
-            #        saved_params.append(torch.sum(param).clone())
             pbar_batches.set_description(
                 f"EPOCH: {epoch}. Loss: {loss.item():>1f}  "
                 f"[batch: {batch+1}/{len(xs)} | "
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
-                #f"(LoRA weight sum:{sum(saved_params):.3f})"
             )
     y_preds = y_preds.detach()
     model.train(False)
