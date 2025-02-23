@@ -19,6 +19,25 @@ from pypef.llm.esm_lora_tune import corr_loss
 from pypef.llm.prosst_structure.quantizer import PdbQuantizer
 
 
+def get_logits_from_full_seqs(sequences, model, input_ids, attention_mask, structure_input_ids):
+    outputs = model(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            ss_input_ids=structure_input_ids
+    )
+    vocab = tokenizer.get_vocab()
+    logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
+    for i_s, sequence in enumerate(sequences):
+        for i_aa, aa in enumerate(sequence):
+            if i_aa == 0:
+                seq_log_probs = logits[i_aa, vocab[aa]].reshape(1)
+            else:
+                seq_log_probs = torch.cat((seq_log_probs, logits[i_aa, vocab[aa]].reshape(1)), 0)
+        if i_s == 0:
+            log_probs = torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
+        else:
+            log_probs = torch.cat((log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
+    return log_probs
 
 
 def get_scores(wt_seq, variants, y_true, pdb_path):
@@ -57,4 +76,8 @@ def get_scores(wt_seq, variants, y_true, pdb_path):
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
+
+if __name__ == '__main__':
+    pass
+    # Test on dataset GRB2_HUMAN_Faure_2021: SignificanceResult(statistic=0.6997442598613315, pvalue=0.0)
 
