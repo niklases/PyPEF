@@ -395,7 +395,7 @@ class GREMLIN:
             return self.v, self.w
         except AttributeError:
             raise SystemError(
-                "No v_opt and w_opt available, this means GREMLIN "
+                "No v and w available, this means GREMLIN "
                 "has not been initialized setting optimize to True, "
                 "e.g., try GREMLIN('Alignment.fasta', optimize=True)."
             )
@@ -528,7 +528,7 @@ class GREMLIN:
         zscore      : normalize(apc)    shape=(L,L)
         """
         # l2norm of 20x20 matrices (note: gaps already excluded)
-        raw = np.sqrt(np.sum(np.square(self.w_opt), (1, 3)))
+        raw = np.sqrt(np.sum(np.square(self.w), (1, 3)))
 
         # apc (average product correction)
         ap = np.sum(raw, 0, keepdims=True) * np.sum(raw, 1, keepdims=True) / np.sum(raw)
