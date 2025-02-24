@@ -97,7 +97,7 @@ class GREMLIN:
                 else "cpu"
             )
         self.device = device    
-        print(f'Using {self.device.upper()} for GREMLIN computations...')   
+        logger.info(f'Using {self.device.upper()} for GREMLIN computations...')   
         self.char_alphabet = char_alphabet
         self.allowed_chars = "ARNDCQEGHILKMFPSTWYV-"
         self.allowed_chars += self.allowed_chars.lower()
@@ -111,35 +111,35 @@ class GREMLIN:
         else:
             self.max_msa_seqs = max_msa_seqs
         self.states = len(self.char_alphabet)
-        print('Loading MSA...')
+        logger.info('Loading MSA...')
         if seqs is None:
             self.seqs, self.seq_ids = self.get_sequences_from_msa(alignment)
         else:
             self.seqs = seqs
             self.seq_ids = np.array([n for n in range(len(self.seqs))])
-        print(f'Found {len(self.seqs)} sequences in the MSA...')
+        logger.info(f'Found {len(self.seqs)} sequences in the MSA...')
         self.msa_ori = self.get_msa_ori()
-        print(f'MSA shape: {np.shape(self.msa_ori)}')
+        logger.info(f'MSA shape: {np.shape(self.msa_ori)}')
         self.n_col_ori = self.msa_ori.shape[1]
         if wt_seq is not None:
             self.wt_seq = wt_seq
         else:  # Taking the first sequence in the MSA as wild type sequence
             self.wt_seq = "".join([self.char_alphabet[i] for i in self.msa_ori[0]])
-            print(f"No wild-type sequence provided: The first sequence "
+            logger.info(f"No wild-type sequence provided: The first sequence "
                         f"in the MSA is considered the wild-type sequence "
                         f"(Length: {len(self.wt_seq)}):\n{self.wt_seq}\n")
         if len(self.wt_seq) != self.n_col_ori:
             raise SystemError(f"Length of (provided) wild-type sequence ({len(self.wt_seq)}) "
                               f"does not match number of MSA columns ({self.n_col_ori}), "
                               f"i.e., common MSA sequence length.")
-        print('Filtering gaps...')
+        logger.info('Filtering gaps...')
         self.msa_trimmed, self.v_idx, self.w_idx, self.w_rel_idx, self.gaps = self.filt_gaps(self.msa_ori)
-        print('Getting effective sequence weights...')
+        logger.info('Getting effective sequence weights...')
         self.msa_weights = self.get_eff_msa_weights(self.msa_trimmed)
         self.n_eff = np.sum(self.msa_weights)
         self.n_row = self.msa_trimmed.shape[0]
         self.n_col = self.msa_trimmed.shape[1]
-        print('Initializing v and W terms based on MSA frequencies...')
+        logger.info('Initializing v and W terms based on MSA frequencies...')
         self.v_ini, self.w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
         self.aa_freqs = self.aa_counts / self.n_row
         self.optimize = optimize
@@ -215,7 +215,7 @@ class GREMLIN:
             if i < self.max_msa_seqs:
                 msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
             else:
-                print(f'Reached max. number of MSA sequences ({self.max_msa_seqs})...')
+                logger.info(f'Reached max. number of MSA sequences ({self.max_msa_seqs})...')
                 break
         msa_ori = np.array(msa_ori)
         return msa_ori
@@ -226,9 +226,9 @@ class GREMLIN:
         non_gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] < self.gap_cutoff)[0]
         gaps = np.where(np.sum(tmp.T, -1).T / msa_ori.shape[0] >= self.gap_cutoff)[0]
         self.gaps_1_indexed = [int(g + 1) for g in gaps]
-        print(f'Gap positions (removed from MSA; 1-indexed):\n{self.gaps_1_indexed}')
+        logger.info(f'Gap positions (removed from MSA; 1-indexed):\n{self.gaps_1_indexed}')
         ncol_trimmed = len(non_gaps)
-        print(f'Positions remaining: {ncol_trimmed} of {np.shape(msa_ori)[1]} '
+        logger.info(f'Positions remaining: {ncol_trimmed} of {np.shape(msa_ori)[1]} '
                     f'({(ncol_trimmed / np.shape(msa_ori)[1]) * 100 :.2f}%)')
         v_idx = non_gaps
         w_idx = v_idx[np.stack(np.triu_indices(ncol_trimmed, 1), -1)]
@@ -326,8 +326,11 @@ class GREMLIN:
         loss = -torch.sum(pll * self.msa_weights) / torch.sum(self.msa_weights)
         loss = loss + (l2_v + lw_w) / self.n_eff
         return loss
+    
+    def _loss(self, decimals=2):
+        return  torch.round(self.loss(self.v, self.w) * self.n_eff, decimals=decimals)
 
-    def run_optimization(self, opt_rate=1.0, batch_size=None):
+    def run_optimization(self):
         """
         For optimization of v and w ADAM is used here (L-BFGS-B not (yet) implemented
         for TF 2.x, e.g. using scipy.optimize.minimize).
@@ -342,30 +345,31 @@ class GREMLIN:
         v_ini = np.log(np.sum(msa_cat.T * self.msa_weights, -1).T + pseudo_count)
         v_ini = v_ini - np.mean(v_ini, -1, keepdims=True)
         self.v = torch.from_numpy(v_ini).to(torch.float32).requires_grad_(True).to(self.device)
-        self.w = torch.zeros(size=(self.n_col, self.states, self.n_col, self.states)).to(torch.float32).requires_grad_(True).to(self.device)
+        self.w = torch.zeros(
+            size=(self.n_col, self.states, self.n_col, self.states)
+            ).to(torch.float32).requires_grad_(True).to(self.device)
 
         self.msa = torch.Tensor(self.msa_trimmed).to(torch.int64).to(self.device)
         self.oh_msa = torch.nn.functional.one_hot(self.msa, self.states).to(torch.float32).to(self.device)
         self.msa_weights = torch.from_numpy(self.msa_weights).to(torch.float32).to(self.device)
 
-        initial_loss = self.loss(self.v, self.w)
         self.mt_v, self.vt_v = torch.zeros_like(self.v), torch.zeros_like(self.v)
         self.mt_w, self.vt_w = torch.zeros_like(self.w), torch.zeros_like(self.w)
-
-        logger.info('Initial loss:', round(initial_loss.detach().cpu().numpy() * self.n_eff, 2))
-        i = 0
-        while i < self.opt_iter:
+        logger.info(f'Initial loss: {self._loss()}')
+        for i in range(self.opt_iter):
             self.opt_adam_step()
-            if (i + 1) % 10 == 0:
-                logger.info(i+1, 'LOSS:', round(self.loss(self.v, self.w).detach().cpu().numpy() * self.n_eff, 2))  # , 'SpearmanR:', round(spearmanr(y_trues_, y_pred)[0], 3))
-            i += 1
+            try:
+                if (i + 1) % int(self.opt_iter / 10) == 0:
+                    logger.info(f'Loss step {i + 1}: {self._loss()}')
+            except ZeroDivisionError:
+                logger.info(f'Loss step {i + 1}: {self._loss()}')
         
-        self.v.detach().cpu().numpy()
-        self.w.detach().cpu().numpy()
-        self.vt_v.detach().cpu().numpy()
-        self.mt_v.detach().cpu().numpy()
-        self.vt_w.detach().cpu().numpy()
-        self.mt_w.detach().cpu().numpy()
+        self.v = self.v.detach().cpu().numpy()
+        self.w = self.w.detach().cpu().numpy()
+        self.vt_v = self.vt_v.detach().cpu().numpy()
+        self.mt_v = self.mt_v.detach().cpu().numpy()
+        self.vt_w = self.vt_w.detach().cpu().numpy()
+        self.mt_w = self.mt_w.detach().cpu().numpy()
 
 
     def initialize_v_w(self, remove_gap_entries=True):
@@ -406,8 +410,8 @@ class GREMLIN:
         """
         if v is None and w is None:
             if self.optimize:
-                v = self.v.detach().cpu().numpy()[:, :self.states-1], 
-                w = self.w.detach().cpu().numpy()[:, :self.states-1, :, :self.states-1]
+                v = self.v[:, :self.states-1], 
+                w = self.w[:, :self.states-1, :, :self.states-1]
             else:
                 v, w, _ = self.initialize_v_w(remove_gap_entries=True)
         if v_idx is None:
@@ -416,9 +420,9 @@ class GREMLIN:
 
         try:
             if seqs_int.shape[-1] != len(v_idx):
-                #print(f'The input sequence length ({seqs_int.shape[-1]}) does not match the common gap-trimmed MSA sequence length ({len(v_idx)})!')
+                #logger.info(f'The input sequence length ({seqs_int.shape[-1]}) does not match the common gap-trimmed MSA sequence length ({len(v_idx)})!')
                 seqs_int = seqs_int[..., v_idx]
-                #print(f'Updated shape: ({seqs_int.shape[-1]}) matches common MSA sequence length ({len(v_idx)}) now')
+                #logger.info(f'Updated shape: ({seqs_int.shape[-1]}) matches common MSA sequence length ({len(v_idx)}) now')
         except IndexError:
             raise SystemError(
                 "The loaded GREMLIN parameter model does not match the input model "
@@ -528,7 +532,7 @@ class GREMLIN:
         zscore      : normalize(apc)    shape=(L,L)
         """
         # l2norm of 20x20 matrices (note: gaps already excluded)
-        raw = np.sqrt(np.sum(np.square(self.w), (1, 3)))
+        raw = np.sqrt(np.sum(np.square(self.w.cpu().numpy()), (1, 3)))
 
         # apc (average product correction)
         ap = np.sum(raw, 0, keepdims=True) * np.sum(raw, 1, keepdims=True) / np.sum(raw)
@@ -548,7 +552,7 @@ class GREMLIN:
         if set_diag_zero:
             np.fill_diagonal(matrix, 0.0)
 
-        fig, ax = plt.subplots(figsize=(10, 10))
+        _fig, ax = plt.subplots(figsize=(10, 10))
 
         if matrix_type == 'zscore' or matrix_type == 'z_score':
             ax.imshow(matrix, cmap='Blues', interpolation='none', vmin=1, vmax=3)
