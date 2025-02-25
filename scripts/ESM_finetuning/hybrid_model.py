@@ -22,7 +22,7 @@ from __future__ import annotations
 import pickle
 import copy
 import logging
-logger = logging.getLogger('pypef.dca.hybrid_model')
+logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 import numpy as np
 from scipy.stats import spearmanr
@@ -46,16 +46,16 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
 # TODO: Implementation of other regression techniques (CVRegression models)
 # TODO: Differential evolution of multiple Zero Shot predictors
 #       (and supervised model predictions thereof) and y_true
-class DCAESMHybridModel:
+class DCALLMHybridModel:
     def __init__(
             self,
             x_train_dca: np.ndarray,               # DCA-encoded sequences
-            x_train_esm: np.ndarray, 
-            x_train_esm_attention_masks: np.ndarray,
+            x_train_llm: np.ndarray, 
+            x_train_llm_attention_masks: np.ndarray,
             y_train: np.ndarray,                   # true labels
-            esm_base_model,
-            esm_model,
-            esm_optimizer,
+            llm_base_model,
+            llm_model,
+            llm_optimizer,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list | None = None    # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
@@ -69,12 +69,12 @@ class DCAESMHybridModel:
         self.x_train_dca = x_train_dca
         self.y_train = y_train
         self.x_wild_type = x_wt
-        self.x_train_esm = x_train_esm
-        self.x_train_esm_attention_masks = x_train_esm_attention_masks
+        self.x_train_llm = x_train_llm
+        self.x_train_llm_attention_masks = x_train_llm_attention_masks
         self.ridge_opt, self.beta1, self.beta2, self.beta3, self.beta4 = None, None, None, None, None
-        self.esm_base_model = esm_base_model
-        self.esm_model = esm_model
-        self.esm_optimizer = esm_optimizer
+        self.llm_base_model = llm_base_model
+        self.llm_model = llm_model
+        self.llm_optimizer = llm_optimizer
         self.train_and_optimize()
 
     @staticmethod
@@ -275,8 +275,8 @@ class DCAESMHybridModel:
                 y_ttrain, y_ttest
         ) = train_test_split(
                 self.x_train_dca, 
-                self.x_train_esm,
-                self.x_train_esm_attention_masks,
+                self.x_train_llm,
+                self.x_train_llm_attention_masks,
                 self.y_train, 
                 train_size=train_size_fit,
                 random_state=random_state
@@ -329,13 +329,13 @@ class DCAESMHybridModel:
             get_batches(y_ttest, batch_size=batch_size)
         )
 
-        y_ttest_, y_esm_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.esm_base_model)
+        y_ttest_, y_esm_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.llm_base_model)
         print(f'Hybrid opt. Test-perf. (untrained, N={len(y_ttest_)}):', spearmanr(y_ttest_.cpu(), y_esm_ttest.cpu()))
 
-        train(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.esm_model, optimizer=self.esm_optimizer, n_epochs=5)
-        y_ttrain_, y_ttrain_esm1v_pred = test(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.esm_model)
+        train(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.llm_model, optimizer=self.llm_optimizer, n_epochs=5)
+        y_ttrain_, y_ttrain_esm1v_pred = test(x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b, loss_fn=corr_loss, model=self.llm_model)
         print(f'Hybrid opt. LoRA Train-perf., N={len(y_ttrain_.cpu())}:', spearmanr(y_ttrain_.cpu(), y_ttrain_esm1v_pred.cpu()))
-        y_ttest_, y_esm_lora_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.esm_model)
+        y_ttest_, y_esm_lora_ttest = test(x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b, loss_fn=corr_loss, model=self.llm_model)
         print(f'Hybrid opt. LoRA Test-perf., N={len(y_ttest_.cpu())}:', spearmanr(y_ttest_.cpu(), y_esm_lora_ttest.cpu()))
 
         # Hybrid DCA model performance (N Train: 200, N Test: 6027). Spearman's rho: 0.519 (Unnorm.), 0.496 normal., 0.496 min-max norm.
@@ -383,8 +383,8 @@ class DCAESMHybridModel:
             get_batches(attns_esm, batch_size=batch_size)
         )
         
-        y_esm = infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model').detach().cpu().numpy()
-        y_esm_lora = infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model').detach().cpu().numpy()
+        y_esm = infer(x_esm_b, attns_b, self.llm_base_model, desc='Infering base model').detach().cpu().numpy()
+        y_esm_lora = infer(x_esm_b, attns_b, self.llm_model, desc='Infering LoRA-tuned model').detach().cpu().numpy()
         
         y_dca, y_ridge, y_esm, y_esm_lora = (
             reduce_by_batch_modulo(y_dca), 
@@ -686,7 +686,7 @@ if __name__ == '__main__':
 
     (
         x_train_dca, x_test_dca,
-        x_train_esm1v, x_test_esm,
+        x_train_llm1v, x_test_llm,
         attn_train_esm, attn_test_esm,
         y_train, y_test
     ) = train_test_split(
@@ -698,17 +698,17 @@ if __name__ == '__main__':
         random_state=42
     )
 
-    hm = DCAESMHybridModel(
+    hm = DCALLMHybridModel(
         x_train_dca=np.array(x_train_dca), 
-        x_train_esm=np.array(x_train_esm1v), 
-        x_train_esm_attention_masks=np.array(attn_train_esm), 
+        x_train_llm=np.array(x_train_llm1v), 
+        x_train_llm_attention_masks=np.array(attn_train_esm), 
         y_train=y_train,
-        esm_model=model,
+        llm_model=model,
         x_wt=x_wt
     )
 
     y_test = reduce_by_batch_modulo(y_test)
 
-    y_test_pred = hm.hybrid_prediction(x_dca=np.array(x_test_dca), x_esm=np.array(x_test_esm), attns_esm=np.array(attn_test_esm))
+    y_test_pred = hm.hybrid_prediction(x_dca=np.array(x_test_dca), x_esm=np.array(x_test_llm), attns_esm=np.array(attn_test_esm))
     print(f'Hybrid DCA model performance (N Train: {len(y_train)}, N Test: {len(y_test)}). '
           f'Spearman\'s rho: {abs(spearmanr(y_test, y_test_pred)[0]):.3f}')

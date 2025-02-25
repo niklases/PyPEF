@@ -14,8 +14,8 @@ import torch
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file
-from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, corr_loss, get_batches, esm_test
-from pypef.hybrid.hybrid_model import DCAESMHybridModel
+from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, corr_loss, get_batches, esm_test
+from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
 
 
@@ -91,7 +91,7 @@ def test_hybrid_model():
 
     print(len(train_seqs[0]), train_seqs[0])
     assert len(train_seqs[0]) == len(g.wt_seq)
-    base_model, lora_model, tokenizer, optimizer = get_esm_models()
+    base_model, lora_model, tokenizer, optimizer = get_llm_models()
     encoded_seqs_train, attention_masks_train = get_encoded_seqs(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
     x_esm_b, attention_masks_b = get_batches(encoded_seqs_train), get_batches(attention_masks_train)
     y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, torch.Tensor(train_ys), loss_fn=corr_loss, model=base_model)
@@ -100,14 +100,14 @@ def test_hybrid_model():
         y_pred_esm
     ), len(y_true))
 
-    hm = DCAESMHybridModel(
+    hm = DCALLMHybridModel(
         x_train_dca=np.array(x_dca_train), 
-        x_train_esm=np.array(encoded_seqs_train), 
-        x_train_esm_attention_masks=np.array(attention_masks_train), 
+        x_train_llm=np.array(encoded_seqs_train), 
+        x_train_llm_attention_masks=np.array(attention_masks_train), 
         y_train=train_ys,
-        esm_model=lora_model,
-        esm_base_model=base_model,
-        esm_optimizer=optimizer,
+        llm_model=lora_model,
+        llm_base_model=base_model,
+        llm_optimizer=optimizer,
         x_wt=g.x_wt,
         seed=42
     )

@@ -532,7 +532,7 @@ class GREMLIN:
         zscore      : normalize(apc)    shape=(L,L)
         """
         # l2norm of 20x20 matrices (note: gaps already excluded)
-        raw = np.sqrt(np.sum(np.square(self.w.cpu().numpy()), (1, 3)))
+        raw = np.sqrt(np.sum(np.square(self.w), (1, 3)))
 
         # apc (average product correction)
         ap = np.sum(raw, 0, keepdims=True) * np.sum(raw, 1, keepdims=True) / np.sum(raw)

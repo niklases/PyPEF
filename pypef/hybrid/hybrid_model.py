@@ -61,16 +61,16 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
 # TODO: Implementation of other regression techniques (CVRegression models)
 # TODO: Differential evolution of multiple Zero Shot predictors
 #       (and supervised model predictions thereof) and y_true
-class DCAESMHybridModel:
+class DCALLMHybridModel:
     def __init__(
             self,
             x_train_dca: np.ndarray,               # DCA-encoded sequences
-            x_train_esm: np.ndarray, 
+            x_train_llm: np.ndarray, 
             y_train: np.ndarray,                   # true labels
-            esm_base_model,
-            esm_model,
-            esm_optimizer,
-            x_train_esm_attention_masks: np.ndarray | None = None,
+            llm_base_model,
+            llm_model,
+            llm_optimizer,
+            x_train_llm_attention_masks: np.ndarray | None = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
@@ -87,11 +87,11 @@ class DCAESMHybridModel:
         self.x_train_dca = x_train_dca
         self.y_train = y_train
         self.x_wild_type = x_wt
-        self.x_train_esm = x_train_esm
-        self.x_train_esm_attention_masks = x_train_esm_attention_masks
-        self.esm_base_model = esm_base_model
-        self.esm_model = esm_model
-        self.esm_optimizer = esm_optimizer
+        self.x_train_llm = x_train_llm
+        self.x_train_llm_attention_masks = x_train_llm_attention_masks
+        self.llm_base_model = llm_base_model
+        self.llm_model = llm_model
+        self.llm_optimizer = llm_optimizer
         self.device = device
         self.seed = seed
         if batch_size is None:
@@ -321,8 +321,8 @@ class DCAESMHybridModel:
                 y_ttrain, y_ttest
             ) = train_test_split(
                 self.x_train_dca, 
-                self.x_train_esm,
-                self.x_train_esm_attention_masks,
+                self.x_train_llm,
+                self.x_train_llm_attention_masks,
                 self.y_train, 
                 train_size=train_size_fit,
                 random_state=random_state
@@ -375,7 +375,7 @@ class DCAESMHybridModel:
             attns_ttest_b, 
             scores_ttest_b, 
             loss_fn=corr_loss, 
-            model=self.esm_base_model, 
+            model=self.llm_base_model, 
             device=self.device
         )
 
@@ -388,8 +388,8 @@ class DCAESMHybridModel:
             attns_ttrain_b, 
             scores_ttrain_b, 
             loss_fn=corr_loss, 
-            model=self.esm_model, 
-            optimizer=self.esm_optimizer, 
+            model=self.llm_model, 
+            optimizer=self.llm_optimizer, 
             n_epochs=5, 
             device=self.device,
             seed=self.seed
@@ -400,7 +400,7 @@ class DCAESMHybridModel:
             attns_ttrain_b, 
             scores_ttrain_b, 
             loss_fn=corr_loss, 
-            model=self.esm_model, 
+            model=self.llm_model, 
             device=self.device
         )
 
@@ -412,7 +412,7 @@ class DCAESMHybridModel:
             attns_ttest_b, 
             scores_ttest_b, 
             loss_fn=corr_loss, 
-            model=self.esm_model, 
+            model=self.llm_model, 
             device=self.device
         )
         y_ttest_ = y_ttest_.cpu().numpy()
@@ -467,8 +467,8 @@ class DCAESMHybridModel:
             get_batches(attns_esm, batch_size=self.batch_size)
         )
         
-        y_esm = esm_infer(x_esm_b, attns_b, self.esm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
-        y_esm_lora = esm_infer(x_esm_b, attns_b, self.esm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
+        y_esm = esm_infer(x_esm_b, attns_b, self.llm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
+        y_esm_lora = esm_infer(x_esm_b, attns_b, self.llm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
         
         y_dca, y_ridge, y_esm, y_esm_lora = (
             reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
@@ -655,11 +655,11 @@ class DCAESMHybridModel:
 
 
 """
-Below: Some helper functions that call or are dependent on the DCAESMHybridModel class.
+Below: Some helper functions that call or are dependent on the DCALLMHybridModel class.
 """
 
 
-def check_model_type(model: dict | DCAESMHybridModel | PLMC | GREMLIN):
+def check_model_type(model: dict | DCALLMHybridModel | PLMC | GREMLIN):
     """
     Checks type/instance of model.
     """
@@ -670,7 +670,7 @@ def check_model_type(model: dict | DCAESMHybridModel | PLMC | GREMLIN):
             raise SystemError("Unknown model dictionary taken from Pickle file.")
     if type(model) == pypef.dca.plmc_encoding.PLMC:
         return 'PLMC'
-    elif type(model) == pypef.dca.hybrid_model.DCAESMHybridModel:
+    elif type(model) == pypef.hybrid.hybrid_model.DCALLMHybridModel:
         return 'Hybrid'
     elif type(model) == pypef.dca.gremlin_inference.GREMLIN:
         return 'GREMLIN'
@@ -740,7 +740,7 @@ def get_model_and_type(
 
 
 def save_model_to_dict_pickle(
-        model: DCAESMHybridModel | PLMC | GREMLIN,
+        model: DCALLMHybridModel | PLMC | GREMLIN,
         model_type: str | None = None,
         beta_1: float | None = None,
         beta_2: float | None = None,
@@ -962,7 +962,7 @@ def generate_model_and_save_pkl(
         xs, ys_true, test_size=test_percent, random_state=random_state
     )
 
-    hybrid_model = DCAESMHybridModel(
+    hybrid_model = DCALLMHybridModel(
         x_train=x_train,
         y_train=y_train,
         x_test=x_test,
@@ -1056,7 +1056,7 @@ def performance_ls_ts(
                     f"(after removing substitutions at gap positions)."
                     )
 
-        hybrid_model = DCAESMHybridModel(
+        hybrid_model = DCALLMHybridModel(
             x_train=np.array(x_train),
             y_train=np.array(y_train),
             x_test=np.array(x_test),
@@ -1282,7 +1282,7 @@ def predict_directed_evolution(
     """
     Perform directed in silico evolution and predict the fitness of a
     (randomly) selected variant using the hybrid model. This function opens
-    the stored DCAESMHybridModel and the model parameters to predict the fitness
+    the stored DCALLMHybridModel and the model parameters to predict the fitness
     of the variant encoded herein using the PLMC class. If the variant
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.

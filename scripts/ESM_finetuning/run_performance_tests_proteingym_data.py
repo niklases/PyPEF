@@ -21,7 +21,7 @@ from transformers import EsmForMaskedLM, EsmTokenizer
 from gremlin_inference_torch import GREMLIN
 
 from esm1v_contrastive_learning import get_encoded_seqs, get_batches, test, corr_loss
-from hybrid_model import DCAESMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
+from hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 
 
 def get_seqs_from_var_name(
@@ -235,14 +235,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         ns_y_test.append(np.nan)
                         continue
                     get_vram()
-                    hm = DCAESMHybridModel(
+                    hm = DCALLMHybridModel(
                         x_train_dca=np.array(x_dca_train), 
-                        x_train_esm=np.array(x_esm_train), 
-                        x_train_esm_attention_masks=np.array(attns_train), 
+                        x_train_llm=np.array(x_esm_train), 
+                        x_train_llm_attention_masks=np.array(attns_train), 
                         y_train=y_train,
-                        esm_model=model,
-                        esm_base_model=base_model,
-                        esm_optimizer=optimizer,
+                        llm_model=model,
+                        llm_base_model=base_model,
+                        llm_optimizer=optimizer,
                         x_wt=x_wt
                     )
 

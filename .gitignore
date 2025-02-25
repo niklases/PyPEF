@@ -413,3 +413,5 @@ scripts/ESM_finetuning/results/dca_esm_and_hybrid_opt_results.csv
 scripts/ESM_finetuning/mut_performance.png
 scripts/ESM_finetuning/_Description_DMS_substitutions_data.csv
 scripts/ESM_finetuning/mut_performance_violin.png
+datasets/ANEH/SSM_landscape.png
+datasets/ANEH/SSM_landscape.csv
