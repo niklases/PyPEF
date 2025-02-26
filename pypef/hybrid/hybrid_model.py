@@ -65,21 +65,34 @@ class DCALLMHybridModel:
     def __init__(
             self,
             x_train_dca: np.ndarray,               # DCA-encoded sequences
-            x_train_llm: np.ndarray, 
             y_train: np.ndarray,                   # true labels
-            llm_base_model,
-            llm_model,
-            llm_optimizer,
+            llm_base_model = None,
+            llm_model = None,
+            llm_optimizer = None,
+            x_train_llm: np.ndarray | None = None,
             x_train_llm_attention_masks: np.ndarray | None = None,
+            llm_train_function = None,
+            llm_test_function = None,
+            llm_inference_function = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
-            parameter_range: list | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
+            parameter_range: list[tuple] | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
             batch_size: int | None = None,
             device: str | None = None,
             seed: int | None = None
     ):
         if parameter_range is None:
-            parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
+            if not None in [
+                llm_base_model, llm_model, llm_optimizer, x_train_llm, 
+                x_train_llm_attention_masks, llm_train_function, 
+                llm_test_function, llm_inference_function
+            ]:
+                logger.info("Using LLM as second model next to DCA for hybrid modeling...")
+                parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
+            else:
+                logger.info("Not all required LLM inputs were defined for hybrid modelling. "
+                            "Only using DCA for hybrid modeling...")
+                parameter_range = [(0, 1), (0, 1)]
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
@@ -239,8 +252,8 @@ class DCALLMHybridModel:
             y: np.ndarray,
             y_dca: np.ndarray,
             y_ridge: np.ndarray,
-            y_esm1v: np.ndarray,
-            y_esm1v_lora: np.ndarray
+            y_llm: np.ndarray| None = None,
+            y_llm_lora: np.ndarray | None = None
     ) -> np.ndarray:
         """
         Find parameters that maximize the absolut Spearman rank
@@ -261,15 +274,24 @@ class DCALLMHybridModel:
         'beta_1' and 'beta_2' that maximize the absolut Spearman rank correlation
         coefficient.
         """
-        loss = lambda params: -np.abs(
-            self.spearmanr(
-                y, 
-                params[0] * y_dca + 
-                params[1] * y_ridge + 
-                params[2] * y_esm1v + 
-                params[3] * y_esm1v_lora 
+        if y_llm is None or y_llm_lora is None:
+            loss = lambda params: -np.abs(
+                self.spearmanr(
+                    y, 
+                    params[0] * y_dca + 
+                    params[1] * y_ridge
+                )
             )
-        )
+        else:
+            loss = lambda params: -np.abs(
+                self.spearmanr(
+                    y, 
+                    params[0] * y_dca + 
+                    params[1] * y_ridge + 
+                    params[2] * y_llm + 
+                    params[3] * y_llm_lora 
+                )
+            )
         try:
             minimizer = differential_evolution(
                 loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
@@ -278,11 +300,69 @@ class DCALLMHybridModel:
                 loss, bounds=self.parameter_range, tol=1e-4, seed=self.seed)
         return minimizer.x
 
-    def train_and_optimize(
-            self,
-            train_size_fit: float = 0.66,
-            random_state: int = 42
-    ) -> tuple:
+    def get_subsplits_train(self, train_size_fit: float = 0.66):
+        if len(self.parameter_range) == 4:
+            # Reduce sizes by batch modulo
+            train_size_fit = int(
+                (train_size_fit * len(self.y_train)) - 
+                ((train_size_fit * len(self.y_train)) % self.batch_size)
+            )
+            train_test_size = int(
+                (len(self.y_train) - train_size_fit) - 
+                ((len(self.y_train) - train_size_fit) % self.batch_size)
+            )
+            (
+                self.x_dca_ttrain, self.x_dca_ttest, 
+                self.x_llm_ttrain, self.x_llm_ttest,
+                self.attn_llm_ttrain, self.attn_llm_ttest,
+                self.y_ttrain, self.y_ttest
+            ) = train_test_split(
+                self.x_train_dca, 
+                self.x_train_llm,
+                self.x_train_llm_attention_masks,
+                self.y_train, 
+                train_size=train_size_fit,
+                random_state=self.seed
+            )
+            # Reducing by batch size modulo for X, attention masks, and y
+            self.x_dca_ttrain = self.x_dca_ttrain[:train_size_fit]
+            self.x_llm_ttrain = self.x_llm_ttrain[:train_size_fit]
+            self.attn_llm_ttrain = self.attn_llm_ttrain[:train_size_fit]
+            self.y_ttrain = self.y_ttrain[:train_size_fit]
+            self.x_dca_ttest = self.x_dca_ttest[:train_test_size]   
+            self.x_llm_ttest = self.x_llm_ttest[:train_test_size]
+            self.attn_llm_ttest = self.attn_llm_ttest[:train_test_size]
+            self.y_ttest = self.y_ttest[:train_test_size]
+        else:
+            (
+                self.x_dca_ttrain, self.x_dca_ttest, 
+                self.y_ttrain, self.y_ttest
+            ) = train_test_split(
+                self.x_train_dca,
+                self.y_train, 
+                train_size=train_size_fit,
+                random_state=self.seed
+            )
+            #except ValueError:
+            """
+            Not enough sequences to construct a sub-training and sub-testing 
+            set when splitting the training set.
+            Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
+            possible -> return parameter setting for 'EVmutation/GREMLIN' model.
+            """
+            #return 1.0, 0.0, 1.0, 0.0, None
+            """
+            The sub-training set 'y_ttrain' is subjected to a five-fold cross 
+            validation. This leads to the constraint that at least two sequences
+            need to be in the 20 % of that set in order to allow a ranking. 
+            If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
+            """
+            # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
+            #y_ttrain_min_cv = int(0.2 * len(y_ttrain))
+            #if y_ttrain_min_cv < 5:
+            #    return 1.0, 0.0, 1.0, 0.0, None
+
+    def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
         tuned regressor of the hybrid model.
@@ -304,70 +384,21 @@ class DCALLMHybridModel:
         Tuple containing the adjusted parameters 'beta_1' and 'beta_2',
         as well as the tuned regressor of the hybrid model.
         """
-        try:
-            train_size_fit = int(
-                (train_size_fit * len(self.y_train)) - 
-                ((train_size_fit * len(self.y_train)) % self.batch_size)
-            )
-            train_test_size = int(
-                (len(self.y_train) - train_size_fit) - 
-                ((len(self.y_train) - train_size_fit) % self.batch_size))
-            print('New test size:', train_test_size)
+        self.get_subsplits_train()
+        y_dca_ttest = self._delta_e(self.x_dca_ttest)
+        self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
+        y_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-            (
-                x_dca_ttrain, x_dca_ttest, 
-                x_esm1v_ttrain, x_esm1v_ttest,
-                attn_esm_1v_ttrain, attn_esm_1v_ttest,
-                y_ttrain, y_ttest
-            ) = train_test_split(
-                self.x_train_dca, 
-                self.x_train_llm,
-                self.x_train_llm_attention_masks,
-                self.y_train, 
-                train_size=train_size_fit,
-                random_state=random_state
-            )
-            # Reducing by batch size modulo for X, attention masks, and y
-            x_dca_ttest = x_dca_ttest[:train_test_size]   
-            x_esm1v_ttest = x_esm1v_ttest[:train_test_size]
-            attn_esm_1v_ttest = attn_esm_1v_ttest[:train_test_size]
-            y_ttest = y_ttest[:train_test_size]
-
-        except ValueError:
-            """
-            Not enough sequences to construct a sub-training and sub-testing 
-            set when splitting the training set.
-            Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
-            possible -> return parameter setting for 'EVmutation/GREMLIN' model.
-            """
-            return 1.0, 0.0, 1.0, 0.0, None
-
-        """
-        The sub-training set 'y_ttrain' is subjected to a five-fold cross 
-        validation. This leads to the constraint that at least two sequences
-        need to be in the 20 % of that set in order to allow a ranking. 
-
-        If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
-        """
-        # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
-        y_ttrain_min_cv = int(0.2 * len(y_ttrain))
-        if y_ttrain_min_cv < 5:
-            return 1.0, 0.0, 1.0, 0.0, None
-
-        y_dca_ttest = self._delta_e(x_dca_ttest)
-        self.ridge_opt = self.ridge_predictor(x_dca_ttrain, y_ttrain)
-        y_ridge_ttest = self.ridge_opt.predict(x_dca_ttest)
-
-        # LoRA training on y_esm1v_ttrain --> Testing on y_esm1v_ttest 
+        # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
-            get_batches(x_esm1v_ttrain, batch_size=self.batch_size), 
-            get_batches(attn_esm_1v_ttrain, batch_size=self.batch_size), 
-            get_batches(y_ttrain, batch_size=self.batch_size)
+            get_batches(self.x_llm_ttrain, batch_size=self.batch_size), 
+            get_batches(self.attn_llm_ttrain, batch_size=self.batch_size), 
+            get_batches(self.y_ttrain, batch_size=self.batch_size)
         )
         x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b = (
-            get_batches(x_esm1v_ttest, batch_size=self.batch_size), 
-            get_batches(attn_esm_1v_ttest, batch_size=self.batch_size), 
-            get_batches(y_ttest, batch_size=self.batch_size)
+            get_batches(self.x_esm1v_ttest, batch_size=self.batch_size), 
+            get_batches(self.attn_esm_1v_ttest, batch_size=self.batch_size), 
+            get_batches(self.y_ttest, batch_size=self.batch_size)
         )
 
         y_ttest_, y_esm_ttest = esm_test(

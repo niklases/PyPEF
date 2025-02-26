@@ -206,8 +206,8 @@ class DCALLMHybridModel:
             y: np.ndarray,
             y_dca: np.ndarray,
             y_ridge: np.ndarray,
-            y_esm1v: np.ndarray,
-            y_esm1v_lora: np.ndarray
+            y_llm: np.ndarray,
+            y_llm_lora: np.ndarray
     ) -> np.ndarray:
         """
         Find parameters that maximize the absolut Spearman rank
@@ -228,7 +228,7 @@ class DCALLMHybridModel:
         'beta_1' and 'beta_2' that maximize the absolut Spearman rank correlation
         coefficient.
         """
-        loss = lambda params: -np.abs(self.spearmanr(y, params[0] * y_dca + params[1] * y_ridge + params[2] * y_esm1v + y_esm1v_lora * params[3]))
+        loss = lambda params: -np.abs(self.spearmanr(y, params[0] * y_dca + params[1] * y_ridge + params[2] * y_llm + y_llm_lora * params[3]))
         minimizer = differential_evolution(loss, bounds=self.parameter_range, tol=1e-4)
         return minimizer.x
 
@@ -312,10 +312,10 @@ class DCALLMHybridModel:
         self.ridge_opt = self.ridge_predictor(x_dca_ttrain, y_ttrain)
         y_ridge_ttest = self.ridge_opt.predict(x_dca_ttest)
 
-        # LoRA training on y_esm1v_ttrain
-        # --> Testing on y_esm1v_ttest 
-        # for ß optimization y_esm1v_ttest (raw ESM1v-LLM predicted values)
-        # and y_esm1v_lora_ttest (LoRA-optimized predicted ESM1v values)
+        # LoRA training on y_llm_ttrain
+        # --> Testing on y_llm_ttest 
+        # for ß optimization y_llm_ttest (raw ESM1v-LLM predicted values)
+        # and y_llm_lora_ttest (LoRA-optimized predicted ESM1v values)
 
 
         x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
