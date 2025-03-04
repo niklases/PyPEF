@@ -314,7 +314,6 @@ class DCALLMHybridModel:
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
-        print("\n\nSub-splitting data:", len(self.parameter_range))
         if len(self.parameter_range) == 4:
             # Reduce sizes by batch modulo
             train_size_fit = int(
@@ -398,8 +397,9 @@ class DCALLMHybridModel:
             device=self.device
         )
 
-        print('Refining/training the model (gradient calculation adds an computational graph that requires quite some memory)...'
-              'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
+        print('Refining/training the model (gradient calculation adds a computational '
+              'graph that requires quite some memory)... if you are facing an (out of memory) '
+              'error, try reducing the batch size or sticking to CPU device...')
         
         # void function, training model in place
         self.llm_train_function(
