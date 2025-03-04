@@ -85,7 +85,7 @@ if __name__ == '__main__':
     import pandas as pd
     # Test on dataset GRB2_HUMAN_Faure_2021: SignificanceResult(statistic=0.6997442598613315, pvalue=0.0)
     wt_seq = "MEAIAKYDFKATADDELSFKRGDILKVLNEECDQNWYKAELNGKDGFIPKNYIEMKPHPWFFGKIPRAKAEEMLSKQRHDGAFLIRESESAPGDFSLSVKFGNDVQHFKVLRDGAGKYFLWVVKFNSLNELVDYHRSTSVSRNQQIFLRDIEQVPQQPTYVQALFDFDPQEDGELGFRRGDFIHVMDNSDPNWWKGACHGQTGMFPRNYVTPVNRNV"
-    grb2_folder = os.path.join(os.path.dirname(__file__), '../..', 'datasets', 'GRB2')
+    grb2_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'datasets', 'GRB2'))
     pdb_file = os.path.join(grb2_folder, 'GRB2_HUMAN.pdb')
     csv_file = os.path.join(grb2_folder, 'GRB2_HUMAN_Faure_2021.csv')
     df = pd.read_csv(csv_file)

@@ -1,14 +1,26 @@
+
+# Niklas Siedhoff
+# PyPEF - Pythonic Protein Engineering Framework
+
+# Using (training, testing/infering) ProSST model(s) published under 
+# GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
+# https://github.com/ai4protein/ProSST
+
+
 import torch, functools
 from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
-from torch_scatter import scatter_add
+
+from pypef.llm.prosst_structure.scatter import scatter_add
+
 
 def tuple_sum(*args):
     '''
     Sums any number of tuples (s, V) elementwise.
     '''
     return tuple(map(sum, zip(*args)))
+
 
 def tuple_cat(*args, dim=-1):
     '''
@@ -23,6 +35,7 @@ def tuple_cat(*args, dim=-1):
     s_args, v_args = list(zip(*args))
     return torch.cat(s_args, dim=dim), torch.cat(v_args, dim=dim)
 
+
 def tuple_index(x, idx):
     '''
     Indexes into a tuple (s, V) along the first dimension.
@@ -30,6 +43,7 @@ def tuple_index(x, idx):
     :param idx: any object which can be used to index into a `torch.Tensor`
     '''
     return x[0][idx], x[1][idx]
+
 
 def randn(n, dims, device="cpu"):
     '''
@@ -44,6 +58,7 @@ def randn(n, dims, device="cpu"):
     return torch.randn(n, dims[0], device=device), \
             torch.randn(n, dims[1], 3, device=device)
 
+
 def _norm_no_nan(x, axis=-1, keepdims=False, eps=1e-8, sqrt=True):
     '''
     L2 norm of tensor clamped above a minimum value `eps`.
@@ -52,6 +67,7 @@ def _norm_no_nan(x, axis=-1, keepdims=False, eps=1e-8, sqrt=True):
     '''
     out = torch.clamp(torch.sum(torch.square(x), axis, keepdims), min=eps)
     return torch.sqrt(out) if sqrt else out
+
 
 def _split(x, nv):
     '''
@@ -66,6 +82,7 @@ def _split(x, nv):
     s = x[..., :-3*nv]
     return s, v
 
+
 def _merge(s, v):
     '''
     Merges a tuple (s, V) into a single `torch.Tensor`, where the
@@ -75,6 +92,7 @@ def _merge(s, v):
     '''
     v = torch.reshape(v, v.shape[:-2] + (3*v.shape[-2],))
     return torch.cat([s, v], -1)
+
 
 class GVP(nn.Module):
     '''
@@ -142,6 +160,7 @@ class GVP(nn.Module):
         
         return (s, v) if self.vo else s
 
+
 class _VDropout(nn.Module):
     '''
     Vector channel dropout where the elements of each
@@ -165,6 +184,7 @@ class _VDropout(nn.Module):
         x = mask * x / (1 - self.drop_rate)
         return x
 
+
 class Dropout(nn.Module):
     '''
     Combined dropout for tuples (s, V).
@@ -185,6 +205,7 @@ class Dropout(nn.Module):
             return self.sdropout(x)
         s, v = x
         return self.sdropout(s), self.vdropout(v)
+
 
 class LayerNorm(nn.Module):
     '''
@@ -208,6 +229,7 @@ class LayerNorm(nn.Module):
         vn = _norm_no_nan(v, axis=-1, keepdims=True, sqrt=False)
         vn = torch.sqrt(torch.mean(vn, dim=-2, keepdim=True))
         return self.scalar_norm(s), v / vn
+
 
 class GVPConv(MessagePassing):
     '''

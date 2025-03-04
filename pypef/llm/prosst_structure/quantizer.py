@@ -1,3 +1,12 @@
+
+# Niklas Siedhoff
+# PyPEF - Pythonic Protein Engineering Framework
+
+# Using (training, testing/infering) ProSST model(s) published under 
+# GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
+# https://github.com/ai4protein/ProSST
+
+
 import biotite
 import joblib
 import math
@@ -10,7 +19,6 @@ from Bio import PDB
 from Bio.SeqUtils import seq1
 from pathlib import Path
 from torch_geometric.data import Batch, Data
-from torch_scatter import scatter_mean, scatter_sum, scatter_max
 from tqdm import tqdm
 from typing import List
 from biotite.sequence import ProteinSequence
@@ -20,10 +28,13 @@ from biotite.structure.residues import get_residues
 from pathos.threading import ThreadPool
 
 from pypef.llm.prosst_structure.encoder.gvp import AutoGraphEncoder
+from pypef.llm.prosst_structure.scatter import scatter_mean, scatter_sum, scatter_max
+
 
 def iter_threading_map(func, data, workers: int = 2):
     pool = ThreadPool(workers)
     return pool.imap(func, data)
+
 
 def threading_map(func, data, workers: int = 2):
     pool = ThreadPool(workers)

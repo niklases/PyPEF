@@ -1,7 +1,16 @@
+
+# Niklas Siedhoff
+# PyPEF - Pythonic Protein Engineering Framework
+
+# Using (training, testing/infering) ProSST model(s) published under 
+# GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
+# https://github.com/ai4protein/ProSST
+
+
 import torch
 import torch.nn as nn
-from torch_scatter import scatter_mean
 
+from pypef.llm.prosst_structure.scatter import scatter_mean
 from pypef.llm.prosst_structure.encoder.layer import GVP, GVPConvLayer, LayerNorm
 
 
