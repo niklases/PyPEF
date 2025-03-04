@@ -14,7 +14,7 @@ import torch
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file
-from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, corr_loss, get_batches, esm_test
+from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, corr_loss, get_batches, esm_train, esm_test, esm_infer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
 
@@ -108,6 +108,10 @@ def test_hybrid_model():
         llm_model=lora_model,
         llm_base_model=base_model,
         llm_optimizer=optimizer,
+        llm_train_function=esm_train,
+        llm_test_function=esm_test,
+        llm_inference_function=esm_infer,
+        llm_loss_function=corr_loss,
         x_wt=g.x_wt,
         seed=42
     )
