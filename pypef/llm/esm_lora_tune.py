@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import torch
 import numpy as np
+from scipy.stats import spearmanr
 from tqdm import tqdm
 import logging
 
@@ -109,19 +110,25 @@ def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
     logger.info(f'Infering model for testing using {device.upper()} device...')
     model = model.to(device)
     xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
-    for i ,(xs_b, attns_b) in enumerate(tqdm(zip(xs, attns), total=len(xs))):
+    pbar_epochs = tqdm(zip(xs, attns, scores), total=len(xs))
+    for i ,(xs_b, attns_b, scores_b) in enumerate(pbar_epochs):
         xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
         with torch.no_grad():
             y_preds = get_y_pred_scores(xs_b, attns_b, model, device)
             if i == 0:
                 y_preds_total = y_preds
+                scores_total = scores_b
             else:
                 y_preds_total = torch.cat((y_preds_total, y_preds))
-    loss = loss_fn(
-        torch.flatten(scores), 
-        torch.flatten(y_preds_total)
-    )
-    logger.info(f'TESTING LOSS: {float(loss.cpu()):.3f}')
+                scores_total = torch.cat((scores_total, scores_b))
+        batch_loss = loss_fn(scores_b, y_preds)
+        total_loss = loss_fn(torch.flatten(scores_total), torch.flatten(y_preds_total))
+        batch_scorr = spearmanr(scores_b.cpu(), y_preds.cpu())[0]
+        total_scorr = spearmanr(scores_total.cpu(), y_preds_total.cpu())[0]
+        pbar_epochs.set_description(
+            f"Testing: Batch {i + 1}/{len(xs)} | Batch loss: {batch_loss:.4f} (SpearCorr: "
+            f"{batch_scorr:.4f})| Total loss: {total_loss:.4f} (SpearCorr: {total_scorr:.4f})")
+    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 

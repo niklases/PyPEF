@@ -240,7 +240,7 @@ print(f'N Total variants = {len(variants)}.\nEncoding sequences...')
 
 if use_gremlin:
     variants, sequences, fitnesses = remove_gap_pos(dca_encoder.gaps, variants, sequences, fitnesses)
-    x_dca = dca_encoder.get_score(sequences, encode=True)
+    x_dca = dca_encoder.get_scores(sequences, encode=True)
 else:
     x_dca = dca_encoder.collect_encoded_sequences(variants)
     # removing not DCA-encodable positions (and also reduce fitnesses, variants, and sequences accordingly)

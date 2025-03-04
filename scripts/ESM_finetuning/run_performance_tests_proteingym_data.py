@@ -1,27 +1,24 @@
 
 import os
+import copy
+import gc
 import time
 import json
 import pandas as pd
 import numpy as np
+import torch
 from scipy.stats import spearmanr
+from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import seaborn as sns
-from sklearn.model_selection import train_test_split
 from adjustText import adjust_text
-import copy
-import gc
 
-import torch
-from peft import LoraConfig, get_peft_model
-from transformers import EsmForMaskedLM, EsmTokenizer
+import sys  # Use local directory PyPEF files
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from pypef.dca.gremlin_inference import GREMLIN
+from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 
-
-#from gremlin_inference_tf import GREMLIN
-from gremlin_inference_torch import GREMLIN
-
-from esm1v_contrastive_learning import get_encoded_seqs, get_batches, test, corr_loss
-from hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 
 
 def get_seqs_from_var_name(
@@ -97,17 +94,10 @@ device = (
 )
 print(f"Using {device} device")
 get_vram()
-basemodel = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-peft_config = LoraConfig(r=8, target_modules=["query", "value"])
-base_model = get_peft_model(basemodel, peft_config)
+base_model, lora_model, tokenizer, optimizer = get_llm_models()
 base_model = base_model.to(device)
 MAX_WT_SEQUENCE_LENGTH = 400
 N_EPOCHS = 5
-t = torch.cuda.get_device_properties(0).total_memory
-r = torch.cuda.memory_reserved(0)
-a = torch.cuda.memory_allocated(0)
-f = r-a  # free inside reserved
 get_vram()
 
 
@@ -187,8 +177,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # Torch 10,000: DCA: SignificanceResult(statistic=np.float64(0.6799982280150232), pvalue=np.float64(3.583110693136881e-135)) 989
 
             x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
-            x_esm_b, attention_masks_b = get_batches(x_esm), get_batches(attention_masks)
-            y_true, y_pred_esm = test(x_esm_b, attention_masks_b, torch.Tensor(fitnesses).to(device), loss_fn=corr_loss, model=base_model)
+            x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm), get_batches(attention_masks), get_batches(fitnesses)
+            y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
             y_true.detach().cpu().numpy()
             y_pred_esm.detach().cpu().numpy()
             print('ESM1v:', spearmanr(y_true, y_pred_esm))
@@ -197,10 +187,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             hybrid_perfs = []
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
-                model = copy.deepcopy(base_model)
+                lora_model = copy.deepcopy(base_model)
                 print('TRAIN SIZE:', train_size)
                 get_vram()
-                optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
+                optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.0001)
                 try:
                     (
                         x_dca_train, x_dca_test, 
@@ -240,15 +230,23 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         x_train_llm=np.array(x_esm_train), 
                         x_train_llm_attention_masks=np.array(attns_train), 
                         y_train=y_train,
-                        llm_model=model,
+                        llm_model=lora_model,
                         llm_base_model=base_model,
                         llm_optimizer=optimizer,
+                        llm_train_function=esm_train,
+                        llm_test_function=esm_test,
+                        llm_inference_function=esm_infer,
+                        llm_loss_function=corr_loss,
                         x_wt=x_wt
                     )
 
                     y_test = reduce_by_batch_modulo(y_test)
 
-                    y_test_pred = hm.hybrid_prediction(x_dca=np.array(x_dca_test), x_esm=np.array(x_esm_test), attns_esm=np.array(attns_test))
+                    y_test_pred = hm.hybrid_prediction(
+                        x_dca=np.array(x_dca_test), 
+                        x_llm=np.array(x_esm_test), 
+                        attns_llm=np.array(attns_test)
+                    )
 
                     print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
                     hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
@@ -258,7 +256,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                           f'in N_Train = {train_size} and N_Test (N_Total - N_Train).')
                     hybrid_perfs.append(np.nan)
                     ns_y_test.append(np.nan)
-                del model 
+                del lora_model 
                 torch.cuda.empty_cache()
                 gc.collect()
             dt = time.time() - start_time
@@ -438,11 +436,11 @@ if __name__ == '__main__':
             already_tested_is = []
 
 
-    #compute_performances(
-    #    mut_data=combined_mut_data, 
-    #    start_i=start_i, 
-    #    already_tested_is=already_tested_is
-    #)
+    compute_performances(
+        mut_data=combined_mut_data, 
+        start_i=start_i, 
+        already_tested_is=already_tested_is
+    )
 
 
     with open(out_results_csv, 'r') as fh:

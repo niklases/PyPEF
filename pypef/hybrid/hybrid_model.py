@@ -24,6 +24,7 @@ from os import listdir
 from os.path import isfile, join
 from typing import Union
 import logging
+import warnings
 
 import pypef.dca.plmc_encoding
 logger = logging.getLogger('pypef.hybrid.hybrid_model')
@@ -47,7 +48,12 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.llm.esm_lora_tune import get_batches
+
+# sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
+# will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
+# becomes public and is part of the scikit-learn developer API.
+warnings.filterwarnings(action='ignore', category=FutureWarning, module='sklearn')
 
 
 def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
@@ -74,6 +80,7 @@ class DCALLMHybridModel:
             llm_train_function = None,
             llm_test_function = None,
             llm_inference_function = None,
+            llm_loss_function = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list[tuple] | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
@@ -82,16 +89,18 @@ class DCALLMHybridModel:
             seed: int | None = None
     ):
         if parameter_range is None:
-            if not None in [
-                llm_base_model, llm_model, llm_optimizer, x_train_llm, 
-                x_train_llm_attention_masks, llm_train_function, 
-                llm_test_function, llm_inference_function
-            ]:
-                logger.info("Using LLM as second model next to DCA for hybrid modeling...")
+            if all(
+                v is not None for v in [ 
+                    llm_base_model, llm_model, llm_optimizer, x_train_llm, 
+                    x_train_llm_attention_masks, llm_train_function, 
+                    llm_test_function, llm_inference_function, llm_loss_function
+                ]
+            ):
+                print("Using LLM as second model next to DCA for hybrid modeling...")
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
             else:
-                logger.info("Not all required LLM inputs were defined for hybrid modelling. "
-                            "Only using DCA for hybrid modeling...")
+                print("Not all required LLM inputs were defined for hybrid modelling. "
+                            "Using only DCA for hybrid modeling...")
                 parameter_range = [(0, 1), (0, 1)]
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
@@ -105,6 +114,10 @@ class DCALLMHybridModel:
         self.llm_base_model = llm_base_model
         self.llm_model = llm_model
         self.llm_optimizer = llm_optimizer
+        self.llm_train_function = llm_train_function
+        self.llm_test_function = llm_test_function
+        self.llm_inference_function = llm_inference_function
+        self.llm_loss_function = llm_loss_function
         self.device = device
         self.seed = seed
         if batch_size is None:
@@ -301,6 +314,7 @@ class DCALLMHybridModel:
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
+        print("\n\nSub-splitting data:", len(self.parameter_range))
         if len(self.parameter_range) == 4:
             # Reduce sizes by batch modulo
             train_size_fit = int(
@@ -362,6 +376,56 @@ class DCALLMHybridModel:
             #if y_ttrain_min_cv < 5:
             #    return 1.0, 0.0, 1.0, 0.0, None
 
+    def train_llm(self):
+        # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
+        x_llm_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
+            get_batches(self.x_llm_ttrain, batch_size=self.batch_size), 
+            get_batches(self.attn_llm_ttrain, batch_size=self.batch_size), 
+            get_batches(self.y_ttrain, batch_size=self.batch_size)
+        )
+        x_llm_ttest_b, attns_ttest_b, scores_ttest_b = (
+            get_batches(self.x_llm_ttest, batch_size=self.batch_size), 
+            get_batches(self.attn_llm_ttest, batch_size=self.batch_size), 
+            get_batches(self.y_ttest, batch_size=self.batch_size)
+        )
+
+        y_ttest_, y_esm_ttest = self.llm_test_function(
+            x_llm_ttest_b, 
+            attns_ttest_b, 
+            scores_ttest_b, 
+            loss_fn=self.llm_loss_function, 
+            model=self.llm_base_model, 
+            device=self.device
+        )
+
+        print('Refining/training the model (gradient calculation adds an computational graph that requires quite some memory)...'
+              'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
+        
+        # void function, training model in place
+        self.llm_train_function(
+            x_llm_ttrain_b, 
+            attns_ttrain_b, 
+            scores_ttrain_b, 
+            loss_fn=self.llm_loss_function, 
+            model=self.llm_model, 
+            optimizer=self.llm_optimizer, 
+            n_epochs=5, 
+            device=self.device,
+            seed=self.seed
+        )
+
+        y_ttest_, y_esm_lora_ttest = self.llm_test_function(
+            x_llm_ttest_b, 
+            attns_ttest_b, 
+            scores_ttest_b, 
+            loss_fn=self.llm_loss_function, 
+            model=self.llm_model, 
+            device=self.device
+        )
+
+        self.y_llm_ttest = y_esm_ttest.cpu().numpy()
+        self.y_llm_lora_ttest = y_esm_lora_ttest.cpu().numpy()
+
     def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -389,82 +453,23 @@ class DCALLMHybridModel:
         self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
         y_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-        # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
-        x_esm1v_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
-            get_batches(self.x_llm_ttrain, batch_size=self.batch_size), 
-            get_batches(self.attn_llm_ttrain, batch_size=self.batch_size), 
-            get_batches(self.y_ttrain, batch_size=self.batch_size)
-        )
-        x_esm1v_ttest_b, attns_ttest_b, scores_ttest_b = (
-            get_batches(self.x_esm1v_ttest, batch_size=self.batch_size), 
-            get_batches(self.attn_esm_1v_ttest, batch_size=self.batch_size), 
-            get_batches(self.y_ttest, batch_size=self.batch_size)
-        )
-
-        y_ttest_, y_esm_ttest = esm_test(
-            x_esm1v_ttest_b, 
-            attns_ttest_b, 
-            scores_ttest_b, 
-            loss_fn=corr_loss, 
-            model=self.llm_base_model, 
-            device=self.device
-        )
-
-        logger.info('Refining/training the model (gradient calcualtion adds an computational graph that requires quite some memory)...'
-              'if you are facing an (out of memory) error, try educing the batch size or sticking to CPU device...')
+        if len(self.parameter_range) == 4:
+            self.train_llm()
+            self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
+               self.y_ttest, y_dca_ttest, y_ridge_ttest, self.y_llm_ttest, self.y_llm_lora_ttest
+            )
+            return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
         
-        # void function, training model in place
-        esm_train(
-            x_esm1v_ttrain_b, 
-            attns_ttrain_b, 
-            scores_ttrain_b, 
-            loss_fn=corr_loss, 
-            model=self.llm_model, 
-            optimizer=self.llm_optimizer, 
-            n_epochs=5, 
-            device=self.device,
-            seed=self.seed
-        )
+        else:
+            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, y_dca_ttest, y_ridge_ttest)
+            return self.beta1, self.beta2, self.ridge_opt
 
-        y_ttrain_, y_ttrain_esm1v_pred = esm_test(
-            x_esm1v_ttrain_b, 
-            attns_ttrain_b, 
-            scores_ttrain_b, 
-            loss_fn=corr_loss, 
-            model=self.llm_model, 
-            device=self.device
-        )
-
-        y_ttrain_.detach().cpu()
-        y_ttrain_esm1v_pred.detach().cpu()
-
-        y_ttest_, y_esm_lora_ttest = esm_test(
-            x_esm1v_ttest_b, 
-            attns_ttest_b, 
-            scores_ttest_b, 
-            loss_fn=corr_loss, 
-            model=self.llm_model, 
-            device=self.device
-        )
-        y_ttest_ = y_ttest_.cpu().numpy()
-        y_esm_ttest = y_esm_ttest.cpu().numpy()
-        y_esm_lora_ttest = y_esm_lora_ttest.cpu().numpy()
-
-        self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
-            y_ttest_, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
-        )
-        (
-            self.yttest, self.y_dca_ttest, self.y_dca_ridge_ttest, 
-            self.y_esm_ttest, self.y_esm_lora_ttest
-        ) = y_ttest, y_dca_ttest, y_ridge_ttest, y_esm_ttest, y_esm_lora_ttest
-
-        return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
 
     def hybrid_prediction(
             self,
             x_dca: np.ndarray,
-            x_esm: np.ndarray,
-            attns_esm: np.ndarray
+            x_llm: None | np.ndarray,
+            attns_llm: None | np.ndarray
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -493,22 +498,25 @@ class DCALLMHybridModel:
         else:
             y_ridge = self.ridge_opt.predict(x_dca)
 
-        x_esm_b, attns_b = (
-            get_batches(x_esm, batch_size=self.batch_size), 
-            get_batches(attns_esm, batch_size=self.batch_size)
-        )
+        if x_llm is None or attns_llm is None:
+            return self.beta1 * y_dca + self.beta2
         
-        y_esm = esm_infer(x_esm_b, attns_b, self.llm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
-        y_esm_lora = esm_infer(x_esm_b, attns_b, self.llm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
-        
-        y_dca, y_ridge, y_esm, y_esm_lora = (
-            reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
-            reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
-            reduce_by_batch_modulo(y_esm, batch_size=self.batch_size), 
-            reduce_by_batch_modulo(y_esm_lora, batch_size=self.batch_size)
-        )
-        
-        return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
+        else:
+            x_esm_b, attns_b = (
+                get_batches(x_llm, batch_size=self.batch_size), 
+                get_batches(attns_llm, batch_size=self.batch_size)
+            )
+
+            y_esm = self.llm_inference_function(x_esm_b, attns_b, self.llm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
+            y_esm_lora = self.llm_inference_function(x_esm_b, attns_b, self.llm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
+
+            y_dca, y_ridge, y_esm, y_esm_lora = (
+                reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_esm, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_esm_lora, batch_size=self.batch_size)
+            )
+            return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
 
     def split_performance(
             self,
@@ -680,7 +688,7 @@ class DCALLMHybridModel:
         """
         data = {}
         for t, train_size in enumerate(train_sizes):
-            logger.info(f'{t + 1}/{len(train_sizes)}:{train_size}')
+            print(f'{t + 1}/{len(train_sizes)}:{train_size}')
             data.update(self.split_performance(train_size=train_size, n_runs=n_runs))
         return data
 
@@ -798,7 +806,7 @@ def save_model_to_dict_pickle(
         },
         open(f'Pickles/{model_type}', 'wb')
     )
-    logger.info(f'Saved model as Pickle file ({pkl_path})...')
+    print(f'Saved model as Pickle file ({pkl_path})...')
 
 
 global_model = None
@@ -840,7 +848,7 @@ def plmc_or_gremlin_encoding(
         )
     elif model_type == 'GREMLIN':
         if verbose:
-            logger.info(f"Following positions are frequent gap positions in the MSA "
+            print(f"Following positions are frequent gap positions in the MSA "
                         f"and cannot be considered for effective modeling, i.e., "
                         f"substitutions at these positions are removed as these would be "
                         f"predicted with wild-type fitness:\n{[int(gap) + 1 for gap in model.gaps]}.\n"
@@ -871,10 +879,10 @@ def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, shift_pos=1
         shift_pos=shift_pos, substitution_sep=substitution_sep
     )
     try:
-        xs = gremlin.get_score(sequences, encode=True)
+        xs = gremlin.get_scores(sequences, encode=True)
     except SystemError:
         xs = []
-    x_wt = gremlin.get_score(np.atleast_1d(gremlin.wt_seq), encode=True)
+    x_wt = gremlin.get_scores(np.atleast_1d(gremlin.wt_seq), encode=True)
     return xs, x_wt, variants, sequences, ys_true
 
 
@@ -887,7 +895,7 @@ def plmc_encoding(plmc: PLMC, variants, sequences, ys_true, threads=1, verbose=F
     target_seq, index = plmc.get_target_seq_and_index()
     wt_name = target_seq[0] + str(index[0]) + target_seq[0]
     if verbose:
-        logger.info(f"Using to-self-substitution '{wt_name}' as wild type reference. "
+        print(f"Using to-self-substitution '{wt_name}' as wild type reference. "
                     f"Encoding variant sequences. This might take some time...")
     x_wt = get_encoded_sequence(wt_name, plmc)
     if threads > 1:
@@ -980,7 +988,7 @@ def generate_model_and_save_pkl(
     xs, variants, sequences, ys_true, x_wt, _model, model_type = plmc_or_gremlin_encoding(
         variants, sequences, ys_true, params_file, substitution_sep, threads)
 
-    logger.info(
+    print(
         f'Train size (fitting): {train_percent_fit * 100:.1f} % of training data '
         f'({((1 - test_percent) * train_percent_fit) * 100:.1f} % of all data)\n'
         f'Train size validation: {(1 - train_percent_fit) * 100:.1f} % of training data '
@@ -1009,7 +1017,7 @@ def generate_model_and_save_pkl(
         alpha_ = 'None'
     else:
         alpha_ = f'{reg.alpha:.3f}'
-    logger.info(
+    print(
         f'Individual model weights and regressor hyperparameters:\n'
         f'Hybrid model individual model contributions:\nBeta1 (DCA): '
         f'{beta_1:.3f}, Beta2 (ML): {beta_2:.3f} ('
@@ -1080,7 +1088,7 @@ def performance_ls_ts(
             test_variants, test_sequences, y_test, params_file, substitution_sep, threads, verbose=False
         )
 
-        logger.info(f"\nInitial training set variants: {len(train_sequences)}. "
+        print(f"\nInitial training set variants: {len(train_sequences)}. "
                     f"Remaining: {len(train_variants)} (after removing "
                     f"substitutions at gap positions).\nInitial test set "
                     f"variants: {len(test_sequences)}. Remaining: {len(test_variants)} "
@@ -1103,7 +1111,7 @@ def performance_ls_ts(
             alpha_ = 'None'
         else:
             alpha_ = f'{reg.alpha:.3f}'
-        logger.info(
+        print(
             f'Individual model weights and regressor hyperparameters:\n'
             f'Hybrid model individual model contributions: Beta1 (DCA): '
             f'{beta_1:.3f}, Beta2 (ML): {beta_2:.3f} (regressor: '
@@ -1113,7 +1121,7 @@ def performance_ls_ts(
         save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, spearman_r, reg)
 
     elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
-        logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
+        print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
 
         model, model_type = get_model_and_type(model_pickle_file)
 
@@ -1130,14 +1138,14 @@ def performance_ls_ts(
             ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
 
     elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
-        logger.info(f'No learning set provided, falling back to statistical DCA model: '
+        print(f'No learning set provided, falling back to statistical DCA model: '
                     f'no adjustments of individual hybrid model parameters (beta_1 and beta_2).')
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
         x_test, test_variants, test_sequences, y_test, x_wt, model, model_type = plmc_or_gremlin_encoding(
             test_variants, test_sequences, y_test, params_file, substitution_sep, threads
         )
 
-        logger.info(f"Initial test set variants: {len(test_sequences)}. "
+        print(f"Initial test set variants: {len(test_sequences)}. "
                     f"Remaining: {len(test_variants)} (after removing "
                     f"substitutions at gap positions).")
 
@@ -1151,7 +1159,7 @@ def performance_ls_ts(
         raise SystemError('No Test Set given for performance estimation.')
 
     spearman_rho = spearmanr(y_test, ys_pred)
-    logger.info(f'Spearman Rho = {spearman_rho[0]:.3f}')
+    print(f'Spearman Rho = {spearman_rho[0]:.3f}')
 
     plot_y_true_vs_y_pred(
         np.array(y_test), np.array(ys_pred), np.array(test_variants), 
@@ -1219,20 +1227,20 @@ def predict_ps(  # also predicting "pmult" dict directories
     """
     if model_pickle_file is None:
         model_pickle_file = params_file
-        logger.info(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
+        print(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
     else:
-        logger.info(f'Loading model from saved model (Pickle file {os.path.abspath(model_pickle_file)})...')
+        print(f'Loading model from saved model (Pickle file {os.path.abspath(model_pickle_file)})...')
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
-        logger.info(f'No hybrid model provided - falling back to a statistical DCA model.')
+        print(f'No hybrid model provided - falling back to a statistical DCA model.')
     elif model_type == 'Hybrid':
         beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
         if reg is None:
             alpha_ = 'None'
         else:
             alpha_ = f'{reg.alpha:.3f}'
-        logger.info(
+        print(
             f'Individual model weights and regressor hyperparameters:\n'
             f'Hybrid model individual model contributions: Beta1 (DCA): {beta_1:.3f}, '
             f'Beta2 (ML): {beta_2:.3f} (regressor: Ridge(alpha={alpha_})).'
@@ -1246,11 +1254,11 @@ def predict_ps(  # also predicting "pmult" dict directories
     if True in prediction_dict.values():
         for ps, path in zip(prediction_dict.values(), pmult):
             if ps:  # if True, run prediction in this directory, e.g. for drecomb
-                logger.info(f'Running predictions for variant-sequence files in directory {path}...')
+                print(f'Running predictions for variant-sequence files in directory {path}...')
                 all_y_v_pred = []
                 files = [f for f in listdir(path) if isfile(join(path, f)) if f.endswith('.fasta')]
                 for i, file in enumerate(files):  # collect and predict for each file in the directory
-                    logger.info(f'Encoding files ({i + 1}/{len(files)}) for prediction...\n')
+                    print(f'Encoding files ({i + 1}/{len(files)}) for prediction...\n')
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
                     if model_type != 'Hybrid':
