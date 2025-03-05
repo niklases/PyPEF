@@ -128,8 +128,12 @@ class DCALLMHybridModel:
             self.beta1, 
             self.beta2, 
             self.beta3, 
-            self.beta4
-        ) = None, None, None, None, None
+            self.beta4,
+            self.y_dca_ttest,
+            self.y_dca_ridge_ttest,
+            self.y_llm_ttest,
+            self.y_llm_lora_ttest
+        ) = None, None, None, None, None, None, None, None, None
         self.train_and_optimize()
 
     @staticmethod
@@ -346,6 +350,7 @@ class DCALLMHybridModel:
             self.x_llm_ttest = self.x_llm_ttest[:train_test_size]
             self.attn_llm_ttest = self.attn_llm_ttest[:train_test_size]
             self.y_ttest = self.y_ttest[:train_test_size]
+
         else:
             (
                 self.x_dca_ttrain, self.x_dca_ttest, 
@@ -449,19 +454,19 @@ class DCALLMHybridModel:
         as well as the tuned regressor of the hybrid model.
         """
         self.get_subsplits_train()
-        y_dca_ttest = self._delta_e(self.x_dca_ttest)
+        self.y_dca_ttest = self._delta_e(self.x_dca_ttest)
         self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
-        y_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
+        self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
         if len(self.parameter_range) == 4:
             self.train_llm()
             self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
-               self.y_ttest, y_dca_ttest, y_ridge_ttest, self.y_llm_ttest, self.y_llm_lora_ttest
+               self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest, self.y_llm_ttest, self.y_llm_lora_ttest
             )
             return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
         
         else:
-            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, y_dca_ttest, y_ridge_ttest)
+            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest)
             return self.beta1, self.beta2, self.ridge_opt
 
 
