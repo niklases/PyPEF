@@ -5,6 +5,7 @@
 #   Windows
 #       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\
 
+
 import os.path
 import numpy as np
 from scipy.stats import spearmanr
@@ -14,7 +15,6 @@ from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file
 from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, corr_loss, get_batches, esm_train, esm_test, esm_infer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
-
 
 
 msa_file_avgfp = os.path.abspath(
@@ -150,6 +150,7 @@ def test_dataset_b_results():
     np.testing.assert_almost_equal(performances[0], 0.72, decimal=2)
     #  NRMSE, Pearson's r, Spearman's rho
     np.testing.assert_almost_equal(performances[2:5], [0.52, 0.86, 0.89], decimal=2)
+
 
 if __name__ == "__main__":
     test_gremlin()

@@ -554,7 +554,7 @@ class PdbQuantizer:
             edge_h_dim=edge_dim,
             num_layers=6,
         )
-        model.load_state_dict(torch.load(self.model_path))
+        model.load_state_dict(torch.load(self.model_path, weights_only=True))
         model = model.to(self.device)
         model = model.eval()
         self.model = model
