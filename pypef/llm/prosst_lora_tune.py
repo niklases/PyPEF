@@ -59,18 +59,19 @@ def get_scores(sequences, y_true, pdb_path):
     attention_mask = tokenized_res['attention_mask']
     structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
 
-    pred_scores = get_logits_from_full_seqs(sequences, prosst_model, input_ids, attention_mask, structure_input_ids, train=True)
-    print(spearmanr(y_true, pred_scores.detach().cpu().numpy()))
+    pred_scores1 = get_logits_from_full_seqs(sequences, prosst_model, input_ids, attention_mask, structure_input_ids, train=False)
+    print(spearmanr(y_true, pred_scores1.detach().cpu().numpy()))
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_model_peft = get_peft_model(prosst_model, peft_config)
     optimizer = torch.optim.Adam(prosst_model_peft.parameters(), lr=0.01)
+    pred_scores2 = get_logits_from_full_seqs(sequences, prosst_model, input_ids, attention_mask, structure_input_ids, train=True)
     loss_fn = corr_loss
-    loss = loss_fn(torch.Tensor(y_true), pred_scores)
+    loss = loss_fn(torch.Tensor(y_true), pred_scores2)
     loss.backward()
     optimizer.step()
     optimizer.zero_grad()
-    pred_scores2 = get_logits_from_full_seqs(sequences, prosst_model_peft, input_ids, attention_mask, structure_input_ids, train=False)
-    print(spearmanr(y_true, pred_scores2))
+    pred_scores3 = get_logits_from_full_seqs(sequences, prosst_model_peft, input_ids, attention_mask, structure_input_ids, train=False)
+    print(spearmanr(y_true, pred_scores3))
 
 if __name__ == '__main__':
     import os
@@ -83,11 +84,11 @@ if __name__ == '__main__':
     df = pd.read_csv(csv_file)
     print(df)
     structure_sequence = PdbQuantizer()(pdb_file=pdb_file)
-    structure_sequence_offset = [i + 3 for i in structure_sequence]
-    tokenized_res = tokenizer([wt_seq], return_tensors='pt')
-    input_ids = tokenized_res['input_ids']
-    attention_mask = tokenized_res['attention_mask']
-    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
-    y_pred = get_logits_from_full_seqs(df['mutated_sequence'], prosst_model, input_ids, attention_mask, structure_input_ids, train=False)
-    print(spearmanr(df['DMS_score'], y_pred.detach().cpu().numpy()))  # SignificanceResult(statistic=np.float64(0.7216670719282277), pvalue=np.float64(0.0))
-    get_scores(df['mutated_sequence'], df['DMS_score'].to_numpy(), pdb_file)
+    #structure_sequence_offset = [i + 3 for i in structure_sequence]
+    #tokenized_res = tokenizer([wt_seq], return_tensors='pt')
+    #input_ids = tokenized_res['input_ids']
+    #attention_mask = tokenized_res['attention_mask']
+    #structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
+    #y_pred = get_logits_from_full_seqs(df['mutated_sequence'], prosst_model, input_ids, attention_mask, structure_input_ids, train=False)
+    #print(spearmanr(df['DMS_score'], y_pred.detach().cpu().numpy()))  # SignificanceResult(statistic=np.float64(0.7216670719282277), pvalue=np.float64(0.0))
+    get_scores(df['mutated_sequence'][100:150], df['DMS_score'].to_numpy()[100:150], pdb_file)
