@@ -8,7 +8,6 @@
 
 
 import biotite
-import joblib
 import math
 import numpy as np
 import os
@@ -20,6 +19,7 @@ from Bio.SeqUtils import seq1
 from pathlib import Path
 from torch_geometric.data import Batch, Data
 from tqdm import tqdm
+from sklearn.cluster import KMeans
 from typing import List
 from biotite.sequence import ProteinSequence
 from biotite.structure import filter_peptide_backbone, get_chains
@@ -79,7 +79,7 @@ def _sidechains(X):
     n, origin, c = X[:, 0], X[:, 1], X[:, 2]
     c, n = _normalize(c - origin), _normalize(n - origin)
     bisector = _normalize(c + n)
-    perp = _normalize(torch.cross(c, n))
+    perp = _normalize(torch.cross(c, n, dim=1))
     vec = -bisector * math.sqrt(1 / 3) - perp * math.sqrt(2 / 3)
     return vec
 
@@ -159,6 +159,7 @@ def generate_graph(pdb_file, max_distance=10):
     edge_s = torch.cat([rbf, pos_embeddings], dim=-1)
     edge_v = _normalize(E_vectors).unsqueeze(-2)
 
+    # node_s: torch.zeros(len(ca_coords), 20)
     # node_v: [node_num, 3, 3]
     # edge_index: [2, edge_num]
     # edge_s: [edge_num, 16+16]
@@ -240,9 +241,10 @@ def generate_pos_subgraph(
                 node_v=new_node_v,
             )
     
-    bar = tqdm(list(range(len(graph_data.aa_seq))), desc="Generating subgraphs")
-    for anchor_node in bar:
-        bar.set_postfix_str(f"Anchor node: {anchor_node}")
+    #bar = tqdm(list(range(len(graph_data.aa_seq))), desc="Generating subgraphs")
+    # for anchor_node in bar:
+    for anchor_node in list(range(len(graph_data.aa_seq))):
+        #bar.set_postfix_str(f"Anchor node: {anchor_node}")
         if anchor_node % subgraph_interval != 0:
             continue
         subgraph_dict[anchor_node] = quick_get_anchor_graph(anchor_node)
@@ -350,7 +352,18 @@ def predict_sturcture(model, cluster_models, dataloader, device):
     for cluster_model_path in cluster_models:
         cluster_model_name = cluster_model_path.split("/")[-1].split(".")[0]
         struc_label_dict[cluster_model_name] = []
-        cluster_model_dict[cluster_model_name] = joblib.load(cluster_model_path)
+        #kmeans_model = joblib.load(cluster_model_path)
+        #cluster_model_dict[cluster_model_name] = joblib.load(cluster_model_path)
+        #np.save(open('2048_kmeans_cluster_centers.npy', 'wb'), kmeans_model.cluster_centers_, allow_pickle=False)
+        cluster_centers = np.load(open(cluster_model_path, 'rb'), allow_pickle=False)
+        kmeans_ = {
+            'algorithm': 'lloyd', 'copy_x': True, 'init': 'k-means++', 'max_iter': 1, 'n_clusters': 2048, 
+            'random_state': 0, 'tol': 0.0001, 'verbose': 0
+        }
+        kmeans__model = KMeans().set_params(**kmeans_)
+        kmeans__model.fit(cluster_centers)
+        kmeans__model.cluster_centers_ = cluster_centers
+        cluster_model_dict[cluster_model_name] = kmeans__model
 
     with torch.no_grad():
         for batch in epoch_iterator:
@@ -399,7 +412,7 @@ def process_pdb_file(
     subgraph_depth,
     subgraph_interval,
     max_distance,
-    threads=64,
+    #threads=64,
 ):
     result_dict, subgraph_dict = {}, {}
     result_dict["name"] = Path(pdb_file).name
@@ -427,13 +440,13 @@ def process_pdb_file(
         subgraph = convert_graph(subgraph)
         return anchor_node, subgraph
     
-    processed_anchor_nodes = tqdm(iter_threading_map(process_subgraph, anchor_nodes, threads))
-    for anchor, subgraph in processed_anchor_nodes:
-        subgraph_dict[anchor] = subgraph
+    #processed_anchor_nodes = tqdm(iter_threading_map(process_subgraph, anchor_nodes, threads))
+    #for anchor, subgraph in processed_anchor_nodes:
+    #    subgraph_dict[anchor] = subgraph
     
-    # for anchor_node in tqdm(anchor_nodes):
-    #     anchor, subgraph = process_subgraph(anchor_node)
-    #     subgraph_dict[anchor] = subgraph
+    for anchor_node in tqdm(anchor_nodes):
+         anchor, subgraph = process_subgraph(anchor_node)
+         subgraph_dict[anchor] = subgraph
 
     subgraph_dict = dict(sorted(subgraph_dict.items(), key=lambda x: x[0]))
     subgraphs = list(subgraph_dict.values())
@@ -445,7 +458,7 @@ def pdb_conventer(
     subgraph_depth,
     subgraph_interval,
     max_distance,
-    threads=64,
+    #threads=64,
 ):
     error_proteins, error_messages = [], []
     dataset, results, node_counts = [], [], []
@@ -456,7 +469,7 @@ def pdb_conventer(
             subgraph_depth,
             subgraph_interval,
             max_distance,
-            threads=threads,
+            #threads=threads,
         )
 
         if pdb_subgraphs is None:
@@ -494,7 +507,7 @@ class PdbQuantizer:
 
     def __init__(
         self,
-        structure_vocab_size=2048,
+        #structure_vocab_size=2048,
         max_distance=10,
         subgraph_depth=None,
         subgraph_interval=1,
@@ -503,10 +516,10 @@ class PdbQuantizer:
         cluster_dir=None,
         cluster_model=None,
         device=None,
-        threads=64,
+        #threads=64,
     ) -> None:
-        assert structure_vocab_size in [20, 64, 128, 512, 1024, 2048, 4096]
-        self.threads = threads
+        #assert structure_vocab_size in [20, 64, 128, 512, 1024, 2048, 4096]
+        #self.threads = threads
         self.max_distance = max_distance
         self.subgraph_depth = subgraph_depth
         self.subgraph_interval = subgraph_interval
@@ -515,12 +528,12 @@ class PdbQuantizer:
             self.model_path = str(Path(__file__).parent / "static" / "AE.pt")
         else:
             self.model_path = model_path
-        self.structure_vocab_size = structure_vocab_size
+        #self.structure_vocab_size = structure_vocab_size
 
         if cluster_dir is None:
             self.cluster_dir = str(Path(__file__).parent / "static")
             self.cluster_model = [
-                Path(self.cluster_dir) / f"{structure_vocab_size}.joblib",
+                Path(self.cluster_dir) / "2048_kmeans_cluster_centers.npy",
             ]
         else:
             self.cluster_dir = cluster_dir
@@ -557,7 +570,7 @@ class PdbQuantizer:
             self.subgraph_depth,
             self.subgraph_interval,
             self.max_distance,
-            threads=self.threads,
+            #threads=self.threads,
         )
         sturctures = predict_sturcture(
             self.model, self.cluster_models, data_loader, self.device

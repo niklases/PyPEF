@@ -4,7 +4,8 @@
 # Using (training, testing/infering) ProSST model(s) published under 
 # GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
 # https://github.com/ai4protein/ProSST
-
+#import warnings
+#warnings.filterwarnings('error')
 
 import torch
 from scipy.stats import spearmanr
