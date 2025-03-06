@@ -31,7 +31,7 @@ def get_vram(verbose: bool = True):
     total_cubes = 24
     free_cubes = int(total_cubes * free / total)
     if verbose:
-        logger.info(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
+        print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
             total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
     return free, total
 
@@ -58,7 +58,7 @@ def get_encoded_seqs(sequences, tokenizer, max_length=104):
 def get_y_pred_scores(encoded_sequences, attention_masks, model, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    logger.info(f'Getting scores (y_pred) using {device.upper()} device...')
+    print(f'Getting scores (y_pred) using {device.upper()} device...')
     model = model.to(device)
     out = model(encoded_sequences.to(device), attention_masks.to(device), output_hidden_states=True)
     logits = out.logits
@@ -88,7 +88,7 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
     return - cov / (sigma_true * sigma_pred)
 
 
-def get_batches(a, batch_size=5, verbose: bool = False):
+def get_batches(a, batch_size=5, keep_numpy: bool = False, verbose: bool = False):
     a = np.array(a)
     orig_shape = np.shape(a)
     remaining = len(a) % batch_size
@@ -100,14 +100,16 @@ def get_batches(a, batch_size=5, verbose: bool = False):
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
     new_shape = np.shape(a)
     if verbose:
-        logger.info(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
+        print(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
+    if keep_numpy:
+        return a
     return torch.Tensor(a)
     
 
 def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    logger.info(f'Infering model for testing using {device.upper()} device...')
+    print(f'Infering model for testing using {device.upper()} device...')
     model = model.to(device)
     xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
     pbar_epochs = tqdm(zip(xs, attns, scores), total=len(xs))
@@ -128,14 +130,14 @@ def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
         pbar_epochs.set_description(
             f"Testing: Batch {i + 1}/{len(xs)} | Batch loss: {batch_loss:.4f} (SpearCorr: "
             f"{batch_scorr:.4f})| Total loss: {total_loss:.4f} (SpearCorr: {total_scorr:.4f})")
-    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
+    print(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
 def esm_infer(xs, attns, model, desc: None | str = None, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    logger.info(f'Infering model for predictions using {device.upper()} device...')
+    print(f'Infering model for predictions using {device.upper()} device...')
     for i ,(xs_b, attns_b) in enumerate(tqdm(zip(xs, attns), total=len(xs), desc=desc)):
         xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
         with torch.no_grad():
@@ -152,7 +154,7 @@ def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: 
         torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    logger.info(f'Training using {device.upper()} device (N_Train={len(scores)})...')
+    print(f'Training using {device.upper()} device (N_Train={len(torch.flatten(scores))})...')
     model = model.to(device)
     xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1))
@@ -162,8 +164,8 @@ def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: 
         pbar_batches = tqdm(zip(xs, attns, scores), total=len(xs), leave=False)
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
-            y_preds = get_y_pred_scores(xs_b, attns_b, model, device=device)
-            loss = loss_fn(scores_b, y_preds)
+            y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
+            loss = loss_fn(scores_b, y_preds_b)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -172,5 +174,5 @@ def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: 
                 f"[batch: {batch+1}/{len(xs)} | "
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
             )
-    y_preds = y_preds.detach()
+    y_preds_b = y_preds_b.detach()
     model.train(False)
