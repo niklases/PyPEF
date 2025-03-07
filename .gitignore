@@ -27,6 +27,7 @@ scripts/ProteinGym_runs/single_point_mut_performance.png
 scripts/ProteinGym_runs/multi_point_mut_performance.png
 
 # Created test/output files
+model_saves/*
 scripts/Setup/windows/Miniconda3-latest-Windows-x86_64.exe
 scripts/Setup/windows/Miniconda3/*
 scripts/Encoding_low_N/apc.png
@@ -415,3 +416,4 @@ scripts/ESM_finetuning/_Description_DMS_substitutions_data.csv
 scripts/ESM_finetuning/mut_performance_violin.png
 datasets/ANEH/SSM_landscape.png
 datasets/ANEH/SSM_landscape.csv
+

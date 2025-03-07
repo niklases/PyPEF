@@ -8,6 +8,7 @@
 #warnings.filterwarnings('error')
 
 import torch
+import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
 
@@ -73,6 +74,15 @@ def get_scores(sequences, y_true, pdb_path):
     print(spearmanr(y_true, pred_scores3))
 
 
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
+
+
+def load_model(model, filename):
+    print(f'Loading best model: {filename}...')
+    model.load_state_dict(torch.load(filename))
+
+
 def prosst_train(sequences, scores, loss_fn, model, optimizer, pdb_path, n_epochs=3, device: str | None = None, seed: int | None = None):
     if seed is not None:
         torch.manual_seed(seed)
@@ -90,23 +100,36 @@ def prosst_train(sequences, scores, loss_fn, model, optimizer, pdb_path, n_epoch
 
     y_preds_train = get_logits_from_full_seqs(sequences.flatten(), model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
     print(f'Train-->Train UNTRAINED Performance (N={len(scores.flatten())}):', spearmanr(scores.flatten(), y_preds_train))
-
     pbar_epochs = tqdm(range(1, n_epochs + 1))
+    epoch_spearman_1 = 0.0
     for epoch in pbar_epochs:
-        pbar_epochs.set_description(f'EPOCH {epoch}/{n_epochs}')
+        if epoch == 0:
+            pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs}')
         model.train()
+        y_preds_detached = []
         pbar_batches = tqdm(zip(sequences, scores), total=len(sequences), leave=False)
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
             y_preds_b = get_logits_from_full_seqs(seqs_b, model, input_ids, attention_mask, structure_input_ids, train=True, verbose=False)
+            y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
             pbar_batches.set_description(
-                f"EPOCH: {epoch}. Loss: {loss.item():>1f}  "
+                f"Epoch: {epoch}. Loss: {loss.item():>1f}  "
                 f"[batch: {batch+1}/{len(sequences)} | "
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(sequences) * len(seqs_b)}]  "
             )
+        print(np.shape(scores.cpu().numpy().flatten()), np.shape(np.array(y_preds_detached).flatten()))
+        epoch_spearman_2 = spearmanr(scores.cpu().numpy().flatten(), np.array(y_preds_detached).flatten())[0]
+        if epoch_spearman_2 > epoch_spearman_1:
+            checkpoint(model, f"model_saves/Epoch{epoch}-Ntrain{len(scores.cpu().numpy().flatten())}-SpearCorr{epoch_spearman_2:.3f}.pt")
+            epoch_spearman_1 = epoch_spearman_2
+            best_model = f"model_saves/Epoch{epoch}-Ntrain{len(scores.cpu().numpy().flatten())}-SpearCorr{epoch_spearman_2:.3f}.pt"
+        loss_total = loss_fn(torch.flatten(scores), torch.flatten(torch.Tensor(np.array(y_preds_detached).flatten())))
+        pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}]')
+        os.makedirs('model_saves', exist_ok=True)
+    load_model(model, best_model)
     y_preds_train = get_logits_from_full_seqs(sequences.flatten(), model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
     print(f'Train-->Train Performance (N={len(scores.flatten())}):', spearmanr(scores.flatten(), y_preds_train))
 
@@ -142,13 +165,13 @@ if __name__ == '__main__':
         prosst_model_peft_copy = copy.deepcopy(prosst_model_peft)
         print(f"\n=========\nTRAIN SIZE: {train_size}\n=========")
         y_pred = get_logits_from_full_seqs(df['mutated_sequence'], prosst_model_peft_copy, input_ids, attention_mask, structure_input_ids, train=False)
-        print(spearmanr(df['DMS_score'], y_pred.detach().cpu().numpy()))
+        print(f'Train-->Test UNTRAINED Performance (N={len(y_pred.flatten())}):',spearmanr(df['DMS_score'], y_pred.detach().cpu().numpy()))
         seqs_train, seqs_test, scores_train, scores_test = train_test_split(
             df['mutated_sequence'].to_numpy(), df['DMS_score'].to_numpy().astype(float), train_size=train_size
         )
-        seqs_train = get_batches(seqs_train, batch_size=5, keep_numpy=True, verbose=True)
-        scores_train = get_batches(scores_train, batch_size=5, verbose=True)
-        prosst_train(seqs_train, scores_train, corr_loss, prosst_model_peft_copy, optimizer, pdb_file, n_epochs=25)
+        seqs_train = get_batches(seqs_train, batch_size=50, keep_numpy=True, verbose=True)
+        scores_train = get_batches(scores_train, batch_size=50, verbose=True)
+        prosst_train(seqs_train, scores_train, corr_loss, prosst_model_peft_copy, optimizer, pdb_file, n_epochs=50)
         
         y_pred = get_logits_from_full_seqs(df['mutated_sequence'], prosst_model_peft_copy, input_ids, attention_mask, structure_input_ids, train=False)
         print(f'Train-->Test Performance (N={len(y_pred.flatten())}):', spearmanr(df['DMS_score'], y_pred.detach().cpu().numpy()))
