@@ -357,8 +357,8 @@ def predict_sturcture(model, cluster_models, dataloader, device):
         #np.save(open('2048_kmeans_cluster_centers.npy', 'wb'), kmeans_model.cluster_centers_, allow_pickle=False)
         cluster_centers = np.load(open(cluster_model_path, 'rb'), allow_pickle=False)
         kmeans_ = {
-            'algorithm': 'lloyd', 'copy_x': True, 'init': 'k-means++', 'max_iter': 1, 'n_clusters': 2048, 
-            'random_state': 0, 'tol': 0.0001, 'verbose': 0
+            'algorithm': 'lloyd', 'copy_x': True, 'init': 'k-means++', 'n_init': 'auto', 
+            'max_iter': 1, 'n_clusters': 2048, 'random_state': 0, 'tol': 0.0001, 'verbose': 0
         }
         kmeans__model = KMeans().set_params(**kmeans_)
         kmeans__model.fit(cluster_centers)
@@ -384,7 +384,7 @@ def predict_sturcture(model, cluster_models, dataloader, device):
 
 
 def get_embeds(model, dataloader, device, pooling="mean"):
-    epoch_iterator = tqdm(dataloader)
+    epoch_iterator = tqdm(dataloader, desc='')
     embeds = []
     with torch.no_grad():
         for batch in epoch_iterator:
@@ -444,7 +444,7 @@ def process_pdb_file(
     #for anchor, subgraph in processed_anchor_nodes:
     #    subgraph_dict[anchor] = subgraph
     
-    for anchor_node in tqdm(anchor_nodes):
+    for anchor_node in tqdm(anchor_nodes, desc='Getting structure embeddings'):
          anchor, subgraph = process_subgraph(anchor_node)
          subgraph_dict[anchor] = subgraph
 
@@ -504,7 +504,6 @@ def pdb_conventer(
 
 
 class PdbQuantizer:
-
     def __init__(
         self,
         #structure_vocab_size=2048,

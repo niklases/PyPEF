@@ -36,7 +36,7 @@ def get_vram(verbose: bool = True):
     return free, total
 
 
-def get_llm_models():
+def get_esm_models():
     base_model = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
     tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])

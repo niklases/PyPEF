@@ -16,7 +16,8 @@ from adjustText import adjust_text
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.llm.prosst_lora_tune import get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 
 
@@ -94,7 +95,8 @@ device = (
 )
 print(f"Using {device} device")
 get_vram()
-base_model, lora_model, tokenizer, optimizer = get_llm_models()
+#base_model, lora_model, tokenizer, optimizer = get_esm_models()
+base_model, lora_model, tokenizer, optimizer = get_prosst_models()
 base_model = base_model.to(device)
 MAX_WT_SEQUENCE_LENGTH = 400
 N_EPOCHS = 5
@@ -114,7 +116,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is:  # if i == 18 - 1
+        if i >= start_i and i not in already_tested_is and i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
@@ -123,6 +125,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             wt_seq = dset_paths['WT_sequence']
             msa_start = dset_paths['MSA_start']
             msa_end = dset_paths['MSA_end']
+            pdb = dset_paths['PDB_path']
             wt_seq = wt_seq[msa_start - 1:msa_end]
             print('CSV path:', csv_path)
             print('MSA path:', msa_path)
@@ -157,7 +160,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                       f'(when running on GPU, set threshold to length ~400 dependent on available VRAM), '
                       f'skipping dataset...')
                 continue
-            variants, variants_split, sequences, fitnesses = reduce_by_batch_modulo(variants), reduce_by_batch_modulo(variants_split), reduce_by_batch_modulo(sequences), reduce_by_batch_modulo(fitnesses)
+            variants, variants_split, sequences, fitnesses = (
+                reduce_by_batch_modulo(variants), 
+                reduce_by_batch_modulo(variants_split), 
+                reduce_by_batch_modulo(sequences), 
+                reduce_by_batch_modulo(fitnesses)
+            )
             count_gap_variants = 0
             n_muts = []
             for variant in variants_split:
@@ -176,12 +184,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # TF    10,000: DCA: SignificanceResult(statistic=np.float64(0.6486616550552755), pvalue=np.float64(3.647740047145113e-119))  989
             # Torch 10,000: DCA: SignificanceResult(statistic=np.float64(0.6799982280150232), pvalue=np.float64(3.583110693136881e-135)) 989
 
-            x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
-            x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm), get_batches(attention_masks), get_batches(fitnesses)
-            y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
-            y_true.detach().cpu().numpy()
-            y_pred_esm.detach().cpu().numpy()
-            print('ESM1v:', spearmanr(y_true, y_pred_esm))
+            #x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
+            input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb_file=pdb)
+            y_prosst = get_logits_from_full_seqs(sequences, base_model, input_ids, attention_mask, structure_input_ids, train=False)
+            #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm), get_batches(attention_masks), get_batches(fitnesses)
+            #y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
+            #y_true.detach().cpu().numpy()
+            #y_pred_esm.detach().cpu().numpy()
+            #print('ESM1v:', spearmanr(y_true, y_pred_esm))
+            print('ProSST:', spearmanr(fitnesses, y_prosst))
             esm_unopt_perf = spearmanr(y_true, y_pred_esm)[0]
 
             hybrid_perfs = []

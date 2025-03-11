@@ -10,5 +10,8 @@ scikit-learn-intelex
 biopython
 schema
 ray[default]
+pathos
 peft
-torch[and-cuda]
+torch
+torch-geometric
+biotite
