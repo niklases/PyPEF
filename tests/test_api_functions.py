@@ -13,7 +13,7 @@ from scipy.stats import spearmanr
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file
-from pypef.llm.esm_lora_tune import get_llm_models, get_encoded_seqs, corr_loss, get_batches, esm_train, esm_test, esm_infer
+from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, corr_loss, get_batches, esm_train, esm_test, esm_infer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
 
@@ -89,7 +89,7 @@ def test_hybrid_model():
 
     print(len(train_seqs[0]), train_seqs[0])
     assert len(train_seqs[0]) == len(g.wt_seq)
-    base_model, lora_model, tokenizer, optimizer = get_llm_models()
+    base_model, lora_model, tokenizer, optimizer = get_esm_models()
     encoded_seqs_train, attention_masks_train = get_encoded_seqs(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
     x_esm_b, attention_masks_b, train_ys_b = get_batches(encoded_seqs_train), get_batches(attention_masks_train), get_batches(train_ys)
     y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, train_ys_b, loss_fn=corr_loss, model=base_model)

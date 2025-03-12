@@ -18,60 +18,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, get_batches, esm_train, esm_test, esm_infer, corr_loss
 from pypef.llm.prosst_lora_tune import get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied
+from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
-
-
-
-def get_seqs_from_var_name(
-        wt_seq: str,
-        substitutions: list,
-        fitness_values: None | list = None,
-        shift_pos: int = 0
-) -> tuple[list, list, list]:
-    """
-    Similar to function "get_sequences_from_file" but instead of getting 
-    sequences from fasta file it directly gets them from wt sequence and
-    variant specifiers.
-
-    wt_seq: str
-        Wild-type sequence as string
-    substitutions: list
-        List of amino acid substitutions of a single variant of the format:
-            - Single substitution variant, e.g. variant A123C: ['A123C']
-            - Higher variants, e.g. variant A123C/D234E/F345G: ['A123C', 'D234E, 'F345G']
-            --> Full substitutions list, e.g.: [['A123C'], ['A123C', 'D234E, 'F345G']]
-    fitness_values: list
-        List of ints/floats of the variant fitness values, e.g. for two variants: [1.4, 0.8]
-    """
-    if fitness_values is None:
-        fitness_values = np.zeros(len(substitutions)).tolist()
-    variants, values, sequences = [], [], []
-    for i, var in enumerate(substitutions):  # var are lists of (single or multiple) substitutions
-        temp = list(wt_seq)
-        name = ''
-        separation = 0
-        if var == ['WT']:
-            name = 'WT'
-        else:
-            for single_var in var:  # single entries of substitution list
-                position_index = int(str(single_var)[1:-1]) - 1 - shift_pos
-                new_amino_acid = str(single_var)[-1]
-                if str(single_var)[0].isalpha(): # Assertion only possible for format AaPosAa, e.g. A123C
-                    assert str(single_var)[0] == temp[position_index], f"Input variant: "\
-                        f"{str(single_var)[0]}{position_index + 1}{new_amino_acid}, WT amino "\
-                        f"acid variant {temp[position_index]}{position_index + 1}{new_amino_acid}"
-                temp[position_index] = new_amino_acid
-                # checking if multiple entries are inside list
-                if separation == 0:
-                    name += single_var
-                else:
-                    name += '/' + single_var
-                separation += 1
-        variants.append(name)
-        values.append(fitness_values[i])
-        sequences.append(''.join(temp))
-
-    return variants, values, sequences
 
 
 def get_vram(verbose: bool = True):
@@ -185,15 +133,16 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # Torch 10,000: DCA: SignificanceResult(statistic=np.float64(0.6799982280150232), pvalue=np.float64(3.583110693136881e-135)) 989
 
             #x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
-            input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb_file=pdb)
-            y_prosst = get_logits_from_full_seqs(sequences, base_model, input_ids, attention_mask, structure_input_ids, train=False)
+            input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb, tokenizer, wt_seq)
+            y_prosst = get_logits_from_full_seqs(
+                sequences, base_model, input_ids, attention_mask, structure_input_ids, tokenizer, train=False)
             #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm), get_batches(attention_masks), get_batches(fitnesses)
             #y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
             #y_true.detach().cpu().numpy()
             #y_pred_esm.detach().cpu().numpy()
             #print('ESM1v:', spearmanr(y_true, y_pred_esm))
-            print('ProSST:', spearmanr(fitnesses, y_prosst))
-            esm_unopt_perf = spearmanr(y_true, y_pred_esm)[0]
+            print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
+            #esm_unopt_perf = spearmanr(y_true, y_pred_esm)[0]
 
             hybrid_perfs = []
             ns_y_test = [len(variants)]
@@ -414,7 +363,7 @@ if __name__ == '__main__':
     combined_mut_data = s_mut_data.copy()
     combined_mut_data.update(h_mut_data)
 
-    os.makedirs('results', exist_ok=True)
+    os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
     out_results_csv = os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_opt_results.csv')
     if os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')

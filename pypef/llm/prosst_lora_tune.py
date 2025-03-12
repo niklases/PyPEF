@@ -27,7 +27,25 @@ from pypef import __path__
 pypef_path = __path__[0]
 
 
-def get_logits_from_full_seqs(sequences, model, input_ids, attention_mask, structure_input_ids, train: bool = False, verbose: bool = True):
+def get_logits_from_full_seqs(
+        sequences, 
+        model, 
+        input_ids, 
+        attention_mask, 
+        structure_input_ids,
+        tokenizer,
+        train: bool = False,
+        verbose: bool = True,
+        device: str | None = None
+):
+    if device is None:
+        device =  ("cuda" if torch.cuda.is_available()
+                   else "mps" if torch.backends.mps.is_available()
+                   else "cpu")
+    model = model.to(device)
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    structure_input_ids = structure_input_ids.to(device)
     if train:
         outputs = model(
                 input_ids=input_ids,
@@ -54,29 +72,6 @@ def get_logits_from_full_seqs(sequences, model, input_ids, attention_mask, struc
         else:
             log_probs = torch.cat((log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
     return log_probs
-
-
-def get_scores(sequences, y_true, pdb_path):
-    structure_sequence = PdbQuantizer()(pdb_file=pdb_path)
-    structure_sequence_offset = [i + 3 for i in structure_sequence]
-    tokenized_res = tokenizer([wt_seq], return_tensors='pt')
-    input_ids = tokenized_res['input_ids']
-    attention_mask = tokenized_res['attention_mask']
-    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
-
-    pred_scores1 = get_logits_from_full_seqs(sequences, prosst_model, input_ids, attention_mask, structure_input_ids, train=False)
-    print(spearmanr(y_true, pred_scores1.detach().cpu().numpy()))
-    peft_config = LoraConfig(r=8, target_modules=["query", "value"])
-    prosst_model_peft = get_peft_model(prosst_model, peft_config)
-    optimizer = torch.optim.Adam(prosst_model_peft.parameters(), lr=0.01)
-    pred_scores2 = get_logits_from_full_seqs(sequences, prosst_model, input_ids, attention_mask, structure_input_ids, train=True)
-    loss_fn = corr_loss
-    loss = loss_fn(torch.Tensor(y_true), pred_scores2)
-    loss.backward()
-    optimizer.step()
-    optimizer.zero_grad()
-    pred_scores3 = get_logits_from_full_seqs(sequences, prosst_model_peft, input_ids, attention_mask, structure_input_ids, train=False)
-    print(spearmanr(y_true, pred_scores3))
 
 
 def checkpoint(model, filename):
@@ -154,7 +149,7 @@ def get_prosst_models():
     return prosst_base_model, prosst_lora_model, tokenizer, optimizer
 
 
-def get_structure_quantizied(pdb_file):
+def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
     structure_sequence = PdbQuantizer()(pdb_file=pdb_file)
     structure_sequence_offset = [i + 3 for i in structure_sequence]
     tokenized_res = tokenizer([wt_seq], return_tensors='pt')
