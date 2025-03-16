@@ -16,7 +16,7 @@ from adjustText import adjust_text
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.llm.esm_lora_tune import get_esm_models, get_encoded_seqs, get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.llm.esm_lora_tune import get_esm_models, esm_tokenize_sequences, get_batches, esm_train, esm_test, esm_infer, corr_loss
 from pypef.llm.prosst_lora_tune import get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model

@@ -45,7 +45,7 @@ def get_esm_models():
     return base_model, lora_model, tokenizer, optimizer
 
 
-def get_encoded_seqs(sequences, tokenizer, max_length=104):
+def esm_tokenize_sequences(sequences, tokenizer, max_length):
     encoded_sequences, attention_masks = tokenizer(
         sequences, 
         padding='max_length', 
@@ -88,8 +88,8 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
     return - cov / (sigma_true * sigma_pred)
 
 
-def get_batches(a, batch_size=5, keep_numpy: bool = False, verbose: bool = False):
-    a = np.array(a)
+def get_batches(a, batch_size=5, keep_numpy: bool = False, verbose: bool = False, dtype=int):
+    a = np.array(a, dtype=dtype)
     orig_shape = np.shape(a)
     remaining = len(a) % batch_size
     if remaining != 0:
@@ -103,7 +103,7 @@ def get_batches(a, batch_size=5, keep_numpy: bool = False, verbose: bool = False
         print(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
     if keep_numpy:
         return a
-    return torch.Tensor(a)
+    return torch.Tensor(a).to(dtype)
     
 
 def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
@@ -111,7 +111,7 @@ def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f'Infering model for testing using {device.upper()} device...')
     model = model.to(device)
-    xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
+    xs, attns, scores = xs.to(device), attns.to(device), scores.to(torch.float).to(device) 
     pbar_epochs = tqdm(zip(xs, attns, scores), total=len(xs))
     for i ,(xs_b, attns_b, scores_b) in enumerate(pbar_epochs):
         xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
