@@ -88,7 +88,7 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
     return - cov / (sigma_true * sigma_pred)
 
 
-def get_batches(a, batch_size=5, keep_numpy: bool = False, verbose: bool = False, dtype=int):
+def get_batches(a, dtype, batch_size=5, keep_numpy: bool = False, verbose: bool = False):
     a = np.array(a, dtype=dtype)
     orig_shape = np.shape(a)
     remaining = len(a) % batch_size
