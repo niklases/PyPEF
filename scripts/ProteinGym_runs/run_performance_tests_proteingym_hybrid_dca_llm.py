@@ -136,7 +136,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb, tokenizer, wt_seq)
             y_prosst = get_logits_from_full_seqs(
                 sequences, base_model, input_ids, attention_mask, structure_input_ids, tokenizer, train=False)
-            #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm), get_batches(attention_masks), get_batches(fitnesses)
+            #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm, dtype=int), get_batches(attention_masks,  dtype=int), get_batches(fitnesses, dtype=float)
             #y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
             #y_true.detach().cpu().numpy()
             #y_pred_esm.detach().cpu().numpy()

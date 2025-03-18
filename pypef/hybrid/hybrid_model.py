@@ -383,14 +383,14 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         x_llm_ttrain_b, attns_ttrain_b, scores_ttrain_b = (
-            get_batches(self.x_llm_ttrain, batch_size=self.batch_size), 
-            get_batches(self.attn_llm_ttrain, batch_size=self.batch_size), 
-            get_batches(self.y_ttrain, batch_size=self.batch_size)
+            get_batches(self.x_llm_ttrain, batch_size=self.batch_size, dtype=int), 
+            get_batches(self.attn_llm_ttrain, batch_size=self.batch_size, dtype=int), 
+            get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float)
         )
         x_llm_ttest_b, attns_ttest_b, scores_ttest_b = (
-            get_batches(self.x_llm_ttest, batch_size=self.batch_size), 
-            get_batches(self.attn_llm_ttest, batch_size=self.batch_size), 
-            get_batches(self.y_ttest, batch_size=self.batch_size)
+            get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int), 
+            get_batches(self.attn_llm_ttest, batch_size=self.batch_size, dtype=int), 
+            get_batches(self.y_ttest, batch_size=self.batch_size, dtype=float)
         )
 
         y_ttest_, y_esm_ttest = self.llm_test_function(
@@ -508,8 +508,8 @@ class DCALLMHybridModel:
         
         else:
             x_esm_b, attns_b = (
-                get_batches(x_llm, batch_size=self.batch_size), 
-                get_batches(attns_llm, batch_size=self.batch_size)
+                get_batches(x_llm, batch_size=self.batch_size, dtype=int), 
+                get_batches(attns_llm, batch_size=self.batch_size, dtype=int)
             )
 
             y_esm = self.llm_inference_function(x_esm_b, attns_b, self.llm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
