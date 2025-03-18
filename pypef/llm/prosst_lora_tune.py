@@ -130,8 +130,13 @@ def prosst_train(x_sequence_batches, score_batches, loss_fn, model, optimizer, p
                 f"[batch: {batch+1}/{len(x_sequence_batches)} | "
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}]  "
             )
-        #print(np.shape(scores.cpu().numpy().flatten()), np.shape(np.array(y_preds_detached).flatten()))
         epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(), np.array(y_preds_detached).flatten())[0]
+        if epoch_spearman_2 == np.nan:
+            raise SystemError(
+                f"No correlation between Y_true and Y_pred could be computed...\n"
+                f"Y_true: {score_batches.cpu().numpy().flatten()}, "
+                f"Y_pred: {np.array(y_preds_detached)}"
+            )
         if epoch_spearman_2 > epoch_spearman_1:
             did_not_improve_counter = 0
             best_model_epoch = epoch
@@ -204,21 +209,21 @@ if __name__ == '__main__':
     for batch_size in [5, 10, 25, 50, 100]:
         train_perfs_unsup, test_perfs_unsup = [], []
         train_perfs, test_perfs = [], []
-        for train_size in [100, 200, 1000, 10000]:
-            prosst_model_peft_copy = copy.deepcopy(prosst_base_model)
+        for train_size in [200, 1000, 10000]:
+            prosst_model_copy = copy.deepcopy(prosst_base_model)
             x_train, x_test, scores_train, scores_test = train_test_split(
                 x_sequences, df['DMS_score'].to_numpy().astype(float), train_size=train_size, random_state=42
             )
             print(f"\n=========================\nTRAIN SIZE: {train_size} TEST SIZE: {len(x_test)} -- BATCH SIZE: {batch_size}\n=========================")
 
             y_pred = get_logits_from_full_seqs(
-                x_test, prosst_model_peft_copy, input_ids, attention_mask, structure_input_ids, train=False)
+                x_test, prosst_model_copy, input_ids, attention_mask, structure_input_ids, train=False)
             print(f'Train-->Test UNTRAINED Performance (N={len(y_pred.flatten())}):',spearmanr(scores_test, y_pred.detach().cpu().numpy()))
             test_perfs_unsup.append(spearmanr(scores_test, y_pred.detach().cpu().numpy()))
 
 
             y_preds_train_unsup = get_logits_from_full_seqs(
-                x_train, prosst_model_peft_copy, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
+                x_train, prosst_model_copy, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
             y_preds_train_unsup = y_preds_train_unsup.cpu().numpy()
             print(f'Train-->Train UNTRAINED Performance (N={len(y_preds_train_unsup)}):', spearmanr(scores_train, y_preds_train_unsup))
             train_perfs_unsup.append(spearmanr(scores_train, y_preds_train_unsup)[0])
@@ -226,12 +231,12 @@ if __name__ == '__main__':
             # TRAINING
             x_train_b = get_batches(x_train, dtype=int, batch_size=batch_size, verbose=True)
             scores_train_b = get_batches(scores_train, dtype=float, batch_size=batch_size, verbose=True)
-            y_preds_train = prosst_train(x_train_b, scores_train_b, corr_loss, prosst_model_peft_copy, optimizer, pdb_file, n_epochs=500)
+            y_preds_train = prosst_train(x_train_b, scores_train_b, corr_loss, prosst_model_copy, optimizer, pdb_file, n_epochs=500)
             print(f'Train-->Train Performance (N={len(y_preds_train)}):', spearmanr(scores_train, y_preds_train))
             train_perfs.append(spearmanr(scores_train, y_preds_train)[0])
 
             y_pred = get_logits_from_full_seqs(
-                x_test, prosst_model_peft_copy, input_ids, attention_mask, structure_input_ids, train=False)
+                x_test, prosst_model_copy, input_ids, attention_mask, structure_input_ids, train=False)
             print(f'Train-->Test Performance (N={len(y_pred.flatten())}):', spearmanr(scores_test, y_pred.detach().cpu().numpy()))
             test_perfs.append(spearmanr(scores_test, y_pred.detach().cpu().numpy())[0])
         for k in [train_perfs_unsup, train_perfs, test_perfs_unsup, test_perfs]:

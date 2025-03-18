@@ -91,7 +91,11 @@ def test_hybrid_model():
     assert len(train_seqs[0]) == len(g.wt_seq)
     base_model, lora_model, tokenizer, optimizer = get_esm_models()
     encoded_seqs_train, attention_masks_train = esm_tokenize_sequences(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
-    x_esm_b, attention_masks_b, train_ys_b = get_batches(encoded_seqs_train), get_batches(attention_masks_train), get_batches(train_ys)
+    x_esm_b, attention_masks_b, train_ys_b = (
+        get_batches(encoded_seqs_train, dtype=int), 
+        get_batches(attention_masks_train, dtype=int), 
+        get_batches(train_ys, dtype=float)
+    )
     y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, train_ys_b, loss_fn=corr_loss, model=base_model)
     print(spearmanr(
         y_true,
