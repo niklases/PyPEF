@@ -111,7 +111,6 @@ def test_hybrid_model():
         llm_base_model=base_model,
         llm_optimizer=optimizer,
         llm_train_function=esm_train,
-        llm_test_function=esm_test,
         llm_inference_function=esm_infer,
         llm_loss_function=corr_loss,
         x_wt=g.x_wt,
