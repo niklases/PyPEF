@@ -17,7 +17,8 @@ import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.llm.esm_lora_tune import get_esm_models, esm_tokenize_sequences, get_batches, esm_train, esm_test, esm_infer, corr_loss
-from pypef.llm.prosst_lora_tune import get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied
+from pypef.llm.prosst_lora_tune import (
+    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, prosst_tokenize_sequences, prosst_train)
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 
@@ -44,8 +45,9 @@ device = (
 print(f"Using {device} device")
 get_vram()
 #base_model, lora_model, tokenizer, optimizer = get_esm_models()
-base_model, lora_model, tokenizer, optimizer = get_prosst_models()
-base_model = base_model.to(device)
+prosst_base_model, prosst_lora_model, tokenizer, optimizer = get_prosst_models()
+vocab = tokenizer.get_vocab()
+base_model = prosst_base_model.to(device)
 MAX_WT_SEQUENCE_LENGTH = 400
 N_EPOCHS = 5
 get_vram()
@@ -134,14 +136,16 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             #x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
             input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb, tokenizer, wt_seq)
+            x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=vocab)
             y_prosst = get_logits_from_full_seqs(
-                sequences, base_model, input_ids, attention_mask, structure_input_ids, tokenizer, train=False)
+                x_prosst, base_model, input_ids, attention_mask, structure_input_ids, train=False)
             #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm, dtype=int), get_batches(attention_masks,  dtype=int), get_batches(fitnesses, dtype=float)
             #y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
             #y_true.detach().cpu().numpy()
             #y_pred_esm.detach().cpu().numpy()
             #print('ESM1v:', spearmanr(y_true, y_pred_esm))
             print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
+            prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
             #esm_unopt_perf = spearmanr(y_true, y_pred_esm)[0]
 
             hybrid_perfs = []
@@ -159,8 +163,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         y_train, y_test
                     ) = train_test_split(
                         x_dca,
-                        x_esm, 
-                        attention_masks, 
+                        x_prosst, 
+                        attention_mask, 
                         fitnesses, 
                         train_size=train_size, 
                         random_state=42
@@ -187,15 +191,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     get_vram()
                     hm = DCALLMHybridModel(
                         x_train_dca=np.array(x_dca_train), 
-                        x_train_llm=np.array(x_esm_train), 
+                        x_train_llm=np.array(x_prosst),  # x_esm_train), 
                         x_train_llm_attention_masks=np.array(attns_train), 
                         y_train=y_train,
                         llm_model=lora_model,
                         llm_base_model=base_model,
                         llm_optimizer=optimizer,
-                        llm_train_function=esm_train,
-                        llm_test_function=esm_test,
-                        llm_inference_function=esm_infer,
+                        llm_train_function=prosst_train,  #esm_train,
+                        llm_inference_function=get_logits_from_full_seqs,  #,esm_infer,
                         llm_loss_function=corr_loss,
                         x_wt=x_wt
                     )
@@ -211,8 +214,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
                     hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                     ns_y_test.append(len(y_test_pred))
-                except ValueError:
-                    print(f'Only {len(y_true)} variant-fitness pairs in total, cannot split the data '
+                except ValueError as e:
+                    raise e
+                    print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
                           f'in N_Train = {train_size} and N_Test (N_Total - N_Train).')
                     hybrid_perfs.append(np.nan)
                     ns_y_test.append(np.nan)
@@ -230,7 +234,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             numbers_of_datasets[i]
             n_max_muts.append(max_muts)
             dset_dca_perfs.append(dca_unopt_perf)
-            dset_esm_perfs.append(esm_unopt_perf)
+            dset_esm_perfs.append(prosst_unopt_perf)
             dset_hybrid_perfs_i = ''
             for hp in hybrid_perfs:
                 dset_hybrid_perfs_i += f'{hp},'
@@ -242,7 +246,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             with open(out_results_csv, 'a') as fh:
                 fh.write(
                     f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
-                    f'{esm_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{dt}\n')
+                    f'{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{dt}\n')
                 
 
 def plot_csv_data(csv, plot_name):

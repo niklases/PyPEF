@@ -93,7 +93,9 @@ def load_model(model, filename):
     model.load_state_dict(torch.load(filename, weights_only=True))
 
 
-def prosst_train(x_sequence_batches, score_batches, loss_fn, model, optimizer, pdb_path, n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50):
+def prosst_train(
+        x_sequence_batches, score_batches, loss_fn, model, optimizer, pdb_path, 
+        n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:

@@ -78,7 +78,6 @@ class DCALLMHybridModel:
             x_train_llm: np.ndarray | None = None,
             x_train_llm_attention_masks: np.ndarray | None = None,
             llm_train_function = None,
-            llm_test_function = None,
             llm_inference_function = None,
             llm_loss_function = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
@@ -93,7 +92,7 @@ class DCALLMHybridModel:
                 v is not None for v in [ 
                     llm_base_model, llm_model, llm_optimizer, x_train_llm, 
                     x_train_llm_attention_masks, llm_train_function, 
-                    llm_test_function, llm_inference_function, llm_loss_function
+                    llm_inference_function, llm_loss_function
                 ]
             ):
                 print("Using LLM as second model next to DCA for hybrid modeling...")
@@ -115,7 +114,6 @@ class DCALLMHybridModel:
         self.llm_model = llm_model
         self.llm_optimizer = llm_optimizer
         self.llm_train_function = llm_train_function
-        self.llm_test_function = llm_test_function
         self.llm_inference_function = llm_inference_function
         self.llm_loss_function = llm_loss_function
         self.device = device
@@ -393,7 +391,7 @@ class DCALLMHybridModel:
             get_batches(self.y_ttest, batch_size=self.batch_size, dtype=float)
         )
 
-        y_ttest_, y_esm_ttest = self.llm_test_function(
+        y_esm_ttest = self.llm_inference_function(
             x_llm_ttest_b, 
             attns_ttest_b, 
             scores_ttest_b, 
@@ -419,7 +417,7 @@ class DCALLMHybridModel:
             seed=self.seed
         )
 
-        y_ttest_, y_esm_lora_ttest = self.llm_test_function(
+        y_esm_lora_ttest = self.llm_inference_function(
             x_llm_ttest_b, 
             attns_ttest_b, 
             scores_ttest_b, 
