@@ -394,10 +394,8 @@ class DCALLMHybridModel:
         y_esm_ttest = self.llm_inference_function(
             x_llm_ttest_b, 
             attns_ttest_b, 
-            scores_ttest_b, 
-            loss_fn=self.llm_loss_function, 
-            model=self.llm_base_model, 
-            device=self.device
+            self.llm_base_model, 
+            self.device
         )
 
         print('Refining/training the model (gradient calculation adds a computational '
@@ -409,9 +407,9 @@ class DCALLMHybridModel:
             x_llm_ttrain_b, 
             attns_ttrain_b, 
             scores_ttrain_b, 
-            loss_fn=self.llm_loss_function, 
-            model=self.llm_model, 
-            optimizer=self.llm_optimizer, 
+            self.llm_loss_function, 
+            self.llm_model, 
+            self.llm_optimizer, 
             n_epochs=5, 
             device=self.device,
             seed=self.seed
@@ -420,8 +418,6 @@ class DCALLMHybridModel:
         y_esm_lora_ttest = self.llm_inference_function(
             x_llm_ttest_b, 
             attns_ttest_b, 
-            scores_ttest_b, 
-            loss_fn=self.llm_loss_function, 
             model=self.llm_model, 
             device=self.device
         )
