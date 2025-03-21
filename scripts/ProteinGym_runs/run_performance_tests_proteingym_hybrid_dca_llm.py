@@ -158,26 +158,26 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 try:
                     (
                         x_dca_train, x_dca_test, 
-                        x_esm_train, x_esm_test, 
-                        attns_train, attns_test, 
+                        x_llm_train, x_llm_test, 
+                        #attns_train, attns_test, 
                         y_train, y_test
                     ) = train_test_split(
                         x_dca,
                         x_prosst, 
-                        attention_mask, 
+                        #attention_mask, 
                         fitnesses, 
                         train_size=train_size, 
                         random_state=42
                     )
                     (
                         x_dca_train, x_dca_test, 
-                        x_esm_train, x_esm_test, 
-                        attns_train, attns_test, 
+                        x_llm_train, x_llm_test, 
+                        #attns_train, attns_test, 
                         y_train, y_test
                     ) = (
                         reduce_by_batch_modulo(x_dca_train), reduce_by_batch_modulo(x_dca_test), 
-                        reduce_by_batch_modulo(x_esm_train), reduce_by_batch_modulo(x_esm_test), 
-                        reduce_by_batch_modulo(attns_train), reduce_by_batch_modulo(attns_test), 
+                        reduce_by_batch_modulo(x_llm_train), reduce_by_batch_modulo(x_llm_test), 
+                        #reduce_by_batch_modulo(attns_train), reduce_by_batch_modulo(attns_test), 
                         reduce_by_batch_modulo(y_train), reduce_by_batch_modulo(y_test)
                     )
                     print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
@@ -191,9 +191,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     get_vram()
                     hm = DCALLMHybridModel(
                         x_train_dca=np.array(x_dca_train), 
-                        x_train_llm=np.array(x_prosst),  # x_esm_train), 
-                        x_train_llm_attention_masks=np.array(attns_train), 
+                        x_train_llm=np.array(x_llm_train),  # x_esm_train), 
                         y_train=y_train,
+                        x_train_llm_attention_mask=attention_mask,  #np.array(attns_train), 
+                        input_ids=input_ids,
+                        structure_input_ids=structure_input_ids,
                         llm_model=lora_model,
                         llm_base_model=base_model,
                         llm_optimizer=optimizer,
@@ -207,8 +209,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
                     y_test_pred = hm.hybrid_prediction(
                         x_dca=np.array(x_dca_test), 
-                        x_llm=np.array(x_esm_test), 
-                        attns_llm=np.array(attns_test)
+                        x_llm=np.array(x_llm_test), 
+                        attns_llm=attention_mask#np.array(attns_test)
                     )
 
                     print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
