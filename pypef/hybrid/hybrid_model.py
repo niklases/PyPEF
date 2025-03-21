@@ -398,47 +398,54 @@ class DCALLMHybridModel:
         #    train: bool = False,
         #    verbose: bool = True,
         #    device: str | None = None
-        y_esm_ttest = self.llm_inference_function(
-            x_llm_ttest_b, 
-            self.llm_model,
-            self.x_train_llm_attention_mask, 
-            self.structure_input_ids,
+        y_llm_ttest = self.llm_inference_function(
+            x_sequences=self.x_llm_ttest,
+            model=self.llm_base_model,
+            input_ids=self.input_ids,
+            attention_mask=self.x_train_llm_attention_mask,
+            structure_input_ids=self.structure_input_ids,
+            train=True,
             device=self.device
         )
+
+        print('1:::', spearmanr(self.y_ttest, y_llm_ttest.detach().cpu()), len(self.y_ttest))
 
         print('Refining/training the model (gradient calculation adds a computational '
               'graph that requires quite some memory)... if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
         # void function, training model in place
-        # x_sequence_batches, 
-        # score_batches, 
-        # #loss_fn, 
-        # model, 
-        # optimizer, 
-        # pdb_path, 
-        #n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50
+        # x_sequence_batches, score_batches, loss_fn, model, optimizer,  
+        # input_ids, attention_mask, structure_input_ids,
+        # n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50
         self.llm_train_function(
             x_llm_ttrain_b, 
-            self.x_train_llm_attention_mask, 
-            scores_ttrain_b, 
-            self.llm_loss_function, 
-            self.llm_model, 
+            scores_ttrain_b,
+            self.llm_loss_function,
+            self.llm_model,
             self.llm_optimizer, 
-            n_epochs=5, 
+            self.input_ids,
+            self.x_train_llm_attention_mask,  
+            self.structure_input_ids,
+            n_epochs=50, 
             device=self.device,
-            seed=self.seed
+            #seed=self.seed
         )
 
-        y_esm_lora_ttest = self.llm_inference_function(
-            x_llm_ttest_b, 
-            self.x_train_llm_attention_mask, 
-            model=self.llm_model, 
+        y_llm_lora_ttest = self.llm_inference_function(
+            x_sequences=self.x_llm_ttest,
+            model=self.llm_model,
+            input_ids=self.input_ids,
+            attention_mask=self.x_train_llm_attention_mask,
+            structure_input_ids=self.structure_input_ids,
+            train=True,
             device=self.device
         )
 
-        self.y_llm_ttest = y_esm_ttest.cpu().numpy()
-        self.y_llm_lora_ttest = y_esm_lora_ttest.cpu().numpy()
+        print('2:::', spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu()), len(self.y_ttest))
+
+        self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
+        self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
 
     def train_and_optimize(self) -> tuple:
         """
@@ -516,10 +523,34 @@ class DCALLMHybridModel:
             return self.beta1 * y_dca + self.beta2
         
         else:
-            x_esm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
+            #x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
 
-            y_esm = self.llm_inference_function(x_esm_b, self.x_train_llm_attention_mask, self.llm_base_model, desc='Infering base model', device=self.device).detach().cpu().numpy()
-            y_esm_lora = self.llm_inference_function(x_esm_b, self.x_train_llm_attention_mask, self.llm_model, desc='Infering LoRA-tuned model', device=self.device).detach().cpu().numpy()
+            #    x_sequences, 
+            #    model, 
+            #    input_ids, 
+            #    attention_mask, 
+            #    structure_input_ids,
+            #    train: bool = False,
+            #    verbose: bool = True,
+            #    device: str | None = None
+            y_esm = self.llm_inference_function(
+                x_llm, #_b, 
+                self.llm_base_model, 
+                self.input_ids,
+                self.x_train_llm_attention_mask, 
+                self.structure_input_ids,
+                train=False,
+                #desc='Infering base model', 
+                device=self.device).detach().cpu().numpy()
+            y_esm_lora = self.llm_inference_function(
+                x_llm, #_b, 
+                self.llm_model, 
+                self.input_ids,
+                self.x_train_llm_attention_mask, 
+                self.structure_input_ids,
+                train=False,
+                #desc='Infering LoRA-tuned model', 
+                device=self.device).detach().cpu().numpy()
 
             y_dca, y_ridge, y_esm, y_esm_lora = (
                 reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 

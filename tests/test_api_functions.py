@@ -105,7 +105,7 @@ def test_hybrid_model():
     hm = DCALLMHybridModel(
         x_train_dca=np.array(x_dca_train), 
         x_train_llm=np.array(encoded_seqs_train), 
-        x_train_llm_attention_masks=np.array(attention_masks_train), 
+        x_train_llm_attention_mask=np.array(attention_masks_train), 
         y_train=train_ys,
         llm_model=lora_model,
         llm_base_model=base_model,

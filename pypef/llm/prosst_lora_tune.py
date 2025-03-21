@@ -94,19 +94,20 @@ def load_model(model, filename):
 
 
 def prosst_train(
-        x_sequence_batches, score_batches, loss_fn, model, optimizer, pdb_path, 
+        x_sequence_batches, score_batches, loss_fn, model, optimizer,  
+        input_ids, attention_mask, structure_input_ids,
         n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f'Training using {device.upper()} device (N_Train={len(torch.flatten(score_batches))})...')
-    structure_sequence = PdbQuantizer()(pdb_file=pdb_path)
-    structure_sequence_offset = [i + 3 for i in structure_sequence]
-    tokenized_res = tokenizer([wt_seq], return_tensors='pt')
-    input_ids = tokenized_res['input_ids']
-    attention_mask = tokenized_res['attention_mask']
-    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
+    #structure_sequence = PdbQuantizer()(pdb_file=pdb_path)
+    #structure_sequence_offset = [i + 3 for i in structure_sequence]
+    #tokenized_res = tokenizer([wt_seq], return_tensors='pt')
+    #input_ids = tokenized_res['input_ids']
+    #attention_mask = tokenized_res['attention_mask']
+    #structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
     x_sequence_batches = x_sequence_batches.to(device)
     score_batches = score_batches.to(device)
 
