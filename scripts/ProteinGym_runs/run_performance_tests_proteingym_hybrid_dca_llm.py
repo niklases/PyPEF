@@ -66,7 +66,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is and i == 18 - 1:
+        if i >= start_i and i not in already_tested_is and i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
@@ -137,6 +137,30 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             #x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
             input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb, tokenizer, wt_seq)
             x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=vocab)
+            llm_dict = {'prosst': {
+                'llm_base_model': base_model,
+                'llm_model': lora_model,
+                'llm_optimizer': optimizer,
+                'llm_train_function': get_logits_from_full_seqs,
+                'llm_inference_function': get_logits_from_full_seqs,
+                'llm_loss_function': corr_loss,
+                'x_llm_train' : x_llm_train,
+
+
+
+
+                }
+            }
+                    self.llm_base_model = llm_model_input['prosst']['llm_base_model']
+                    self.llm_model = llm_model_input['prosst']['llm_model']
+                    self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
+                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
+                    self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
+                    self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
+                    self.x_train_llm = llm_model_input['prosst']['x_train_llm']
+                    self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
+                    self.input_ids = llm_model_input['prosst']['input_ids']
+                    self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
             y_prosst = get_logits_from_full_seqs(
                 x_prosst, base_model, input_ids, attention_mask, structure_input_ids, train=False)
             #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm, dtype=int), get_batches(attention_masks,  dtype=int), get_batches(fitnesses, dtype=float)

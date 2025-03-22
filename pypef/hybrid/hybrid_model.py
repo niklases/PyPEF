@@ -72,16 +72,7 @@ class DCALLMHybridModel:
             self,
             x_train_dca: np.ndarray,               # DCA-encoded sequences
             y_train: np.ndarray,                   # true labels
-            llm_base_model = None,
-            llm_model = None,
-            llm_optimizer = None,
-            x_train_llm: np.ndarray | None = None,
-            x_train_llm_attention_mask: np.ndarray | None = None,
-            input_ids: np.ndarray | None = None,
-            structure_input_ids: np.ndarray | None = None,
-            llm_train_function = None,
-            llm_inference_function = None,
-            llm_loss_function = None,
+            llm_model_input: dict | None = None,
             x_wt: np.ndarray | None = None,        # Wild type encoding
             alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
             parameter_range: list[tuple] | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
@@ -89,19 +80,42 @@ class DCALLMHybridModel:
             device: str | None = None,
             seed: int | None = None
     ):
-        if parameter_range is None:
-            if all(
-                v is not None for v in [ 
-                    llm_base_model, llm_model, llm_optimizer, x_train_llm, 
-                    x_train_llm_attention_mask, llm_train_function, 
-                    llm_inference_function, llm_loss_function
-                ]
-            ):
-                print("Using LLM as second model next to DCA for hybrid modeling...")
-                parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
+        if llm_model_input is not None:
+            if type(llm_model_input) is not dict:
+                raise SystemError(f"Model input must be in form of a dictionary.")
             else:
-                print("Not all required LLM inputs were defined for hybrid modelling. "
-                            "Using only DCA for hybrid modeling...")
+                print("Using LLM as second model next to DCA for hybrid modeling...")
+                if len(llm_model_input.keys()) == 1 and llm_model_input.keys()[0] == 'esm1v':
+                    self.llm_key = 'esm1v'
+                    self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
+                    self.llm_model = llm_model_input['esm1v']['llm_model']
+                    self.llm_optimizer = llm_model_input['esm1v']['llm_optimizer']
+                    self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
+                    self.llm_inference_function = llm_model_input['esm1v']['llm_inference_function']
+                    self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
+                    self.x_train_llm = llm_model_input['esm1v']['x_llm_train']
+                    self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
+                elif len(llm_model_input.keys()) == 1 and llm_model_input.keys()[0] == 'prosst':
+                    self.llm_key = 'prosst'
+                    self.llm_base_model = llm_model_input['prosst']['llm_base_model']
+                    self.llm_model = llm_model_input['prosst']['llm_model']
+                    self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
+                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
+                    self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
+                    self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
+                    self.x_train_llm = llm_model_input['prosst']['x_llm_train']
+                    self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
+                    self.input_ids = llm_model_input['prosst']['input_ids']
+                    self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
+                else:
+                    raise SystemError("LLM input model dictionary not supported. Currently supported "
+                                      "models are 'esm1v' or 'prosst'")
+            if parameter_range is None:
+                parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
+        else:
+            print("No LLM inputs were defined for hybrid modelling. "
+                  "Using only DCA for hybrid modeling...")
+            if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
@@ -110,16 +124,6 @@ class DCALLMHybridModel:
         self.x_train_dca = x_train_dca
         self.y_train = y_train
         self.x_wild_type = x_wt
-        self.x_train_llm = x_train_llm
-        self.x_train_llm_attention_mask = x_train_llm_attention_mask
-        self.input_ids = input_ids
-        self.structure_input_ids = structure_input_ids
-        self.llm_base_model = llm_base_model
-        self.llm_model = llm_model
-        self.llm_optimizer = llm_optimizer
-        self.llm_train_function = llm_train_function
-        self.llm_inference_function = llm_inference_function
-        self.llm_loss_function = llm_loss_function
         self.device = device
         self.seed = seed
         if batch_size is None:
@@ -338,7 +342,7 @@ class DCALLMHybridModel:
             ) = train_test_split(
                 self.x_train_dca, 
                 self.x_train_llm,
-                #self.x_train_llm_attention_masks,
+                #self.llm_attention_mask,
                 self.y_train, 
                 train_size=train_size_fit,
                 random_state=self.seed
@@ -402,7 +406,7 @@ class DCALLMHybridModel:
             x_sequences=self.x_llm_ttest,
             model=self.llm_base_model,
             input_ids=self.input_ids,
-            attention_mask=self.x_train_llm_attention_mask,
+            attention_mask=self.llm_attention_mask,
             structure_input_ids=self.structure_input_ids,
             train=True,
             device=self.device
@@ -425,7 +429,7 @@ class DCALLMHybridModel:
             self.llm_model,
             self.llm_optimizer, 
             self.input_ids,
-            self.x_train_llm_attention_mask,  
+            self.llm_attention_mask,  
             self.structure_input_ids,
             n_epochs=50, 
             device=self.device,
@@ -436,7 +440,7 @@ class DCALLMHybridModel:
             x_sequences=self.x_llm_ttest,
             model=self.llm_model,
             input_ids=self.input_ids,
-            attention_mask=self.x_train_llm_attention_mask,
+            attention_mask=self.llm_attention_mask,
             structure_input_ids=self.structure_input_ids,
             train=True,
             device=self.device
@@ -537,7 +541,7 @@ class DCALLMHybridModel:
                 x_llm, #_b, 
                 self.llm_base_model, 
                 self.input_ids,
-                self.x_train_llm_attention_mask, 
+                self.llm_attention_mask, 
                 self.structure_input_ids,
                 train=False,
                 #desc='Infering base model', 
@@ -546,7 +550,7 @@ class DCALLMHybridModel:
                 x_llm, #_b, 
                 self.llm_model, 
                 self.input_ids,
-                self.x_train_llm_attention_mask, 
+                self.llm_attention_mask, 
                 self.structure_input_ids,
                 train=False,
                 #desc='Infering LoRA-tuned model', 
