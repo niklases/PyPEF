@@ -52,13 +52,14 @@ def esm_tokenize_sequences(sequences, tokenizer, max_length):
         truncation=True, 
         max_length=max_length
     ).values()
-    return encoded_sequences, attention_masks
+    return encoded_sequences, attention_masks[0]
 
 
-def get_y_pred_scores(encoded_sequences, attention_masks, model, device: str | None = None):
+def get_y_pred_scores(encoded_sequences, attention_masks, model, verbose: bool = False, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f'Getting scores (y_pred) using {device.upper()} device...')
+    #if verbose:
+    #    print(f'Getting scores (y_pred) using {device.upper()} device...')
     model = model.to(device)
     out = model(encoded_sequences.to(device), attention_masks.to(device), output_hidden_states=True)
     logits = out.logits
@@ -134,14 +135,15 @@ def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
-def esm_infer(xs, attns, model, desc: None | str = None, device: str | None = None):
+def esm_infer(xs, attention_mask, model, desc: None | str = None, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     print(f'Infering model for predictions using {device.upper()} device...')
-    for i ,(xs_b, attns_b) in enumerate(tqdm(zip(xs, attns), total=len(xs), desc=desc)):
-        xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
+    for i , (xs_b, am_b) in enumerate(tqdm(zip(xs, attention_masks), total=len(xs), desc=desc)):
+        xs_b = xs_b.to(torch.int64)
         with torch.no_grad():
-            y_preds = get_y_pred_scores(xs_b, attns_b, model, device)
+            y_preds = get_y_pred_scores(xs_b, am_b, model, device)
             if i == 0:
                 y_preds_total = y_preds
             else:
@@ -149,19 +151,20 @@ def esm_infer(xs, attns, model, desc: None | str = None, device: str | None = No
     return torch.flatten(y_preds_total)
 
 
-def esm_train(xs, attns, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None, seed: int | None = None):
+def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, device: str | None = None, seed: int | None = None):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f'Training using {device.upper()} device (N_Train={len(torch.flatten(scores))})...')
     model = model.to(device)
-    xs, attns, scores = xs.to(device), attns.to(device), scores.to(device) 
+    attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
+    xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     for epoch in pbar_epochs:
         pbar_epochs.set_description(f'EPOCH {epoch}/{n_epochs}')
         model.train()
-        pbar_batches = tqdm(zip(xs, attns, scores), total=len(xs), leave=False)
+        pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False)
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)

@@ -34,26 +34,25 @@ def get_vram(verbose: bool = True):
     return free, total
 
 
-# Get cpu, gpu or mps device for training.
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-print(f"Using {device} device")
-get_vram()
-#base_model, lora_model, tokenizer, optimizer = get_esm_models()
-prosst_base_model, prosst_lora_model, tokenizer, optimizer = get_prosst_models()
-vocab = tokenizer.get_vocab()
-base_model = prosst_base_model.to(device)
-MAX_WT_SEQUENCE_LENGTH = 400
-N_EPOCHS = 5
-get_vram()
-
-
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
+    # Get cpu, gpu or mps device for training.
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
+    print(f"Using {device} device")
+    get_vram()
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to(device)
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model = esm_base_model.to(device)
+    MAX_WT_SEQUENCE_LENGTH = 400
+    N_EPOCHS = 5
+    get_vram()
     tested_dsets = []
     tested_dsets_only = []
     tested_ns = []
@@ -66,7 +65,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is and i > 3 and i <21:  #i == 18 - 1:
+        if i >= start_i and i not in already_tested_is and i == 18 - 1: # i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
@@ -134,60 +133,39 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # TF    10,000: DCA: SignificanceResult(statistic=np.float64(0.6486616550552755), pvalue=np.float64(3.647740047145113e-119))  989
             # Torch 10,000: DCA: SignificanceResult(statistic=np.float64(0.6799982280150232), pvalue=np.float64(3.583110693136881e-135)) 989
 
-            #x_esm, attention_masks = get_encoded_seqs(sequences, tokenizer, max_length=len(wt_seq))
-            input_ids, attention_mask, structure_input_ids = get_structure_quantizied(pdb, tokenizer, wt_seq)
-            x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=vocab)
-            llm_dict = {'prosst': {
-                'llm_base_model': base_model,
-                'llm_model': lora_model,
-                'llm_optimizer': optimizer,
-                'llm_train_function': get_logits_from_full_seqs,
-                'llm_inference_function': get_logits_from_full_seqs,
-                'llm_loss_function': corr_loss,
-                'x_llm_train' : x_llm_train,
+            x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
+            y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=5), esm_attention_mask, esm_base_model)
+            print('ESM1v:', spearmanr(fitnesses, y_esm.cpu()))
 
-
-
-
-                }
-            }
-                    self.llm_base_model = llm_model_input['prosst']['llm_base_model']
-                    self.llm_model = llm_model_input['prosst']['llm_model']
-                    self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
-                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
-                    self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
-                    self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
-                    self.x_train_llm = llm_model_input['prosst']['x_train_llm']
-                    self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
-                    self.input_ids = llm_model_input['prosst']['input_ids']
-                    self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
+            input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb, prosst_tokenizer, wt_seq)
+            x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
             y_prosst = get_logits_from_full_seqs(
-                x_prosst, base_model, input_ids, attention_mask, structure_input_ids, train=False)
-            #x_esm_b, attention_masks_b, fitnesses_b = get_batches(x_esm, dtype=int), get_batches(attention_masks,  dtype=int), get_batches(fitnesses, dtype=float)
-            #y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, fitnesses_b, loss_fn=corr_loss, model=base_model)
-            #y_true.detach().cpu().numpy()
-            #y_pred_esm.detach().cpu().numpy()
-            #print('ESM1v:', spearmanr(y_true, y_pred_esm))
+                x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
             print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
+
             prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
-            #esm_unopt_perf = spearmanr(y_true, y_pred_esm)[0]
+            esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
 
             hybrid_perfs = []
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
-                lora_model = copy.deepcopy(base_model)
-                print('TRAIN SIZE:', train_size)
+                prosst_lora_model = copy.deepcopy(prosst_lora_model)
+                prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
+                esm_lora_model = copy.deepcopy(esm_lora_model)
+                esm_optimizer = torch.optim.Adam(esm_lora_model.parameters(), lr=0.0001)
+                print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
                 get_vram()
-                optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.0001)
                 try:
                     (
                         x_dca_train, x_dca_test, 
-                        x_llm_train, x_llm_test, 
+                        x_llm_train_prosst, x_llm_test_prosst,
+                        x_llm_train_esm, x_llm_test_esm, 
                         #attns_train, attns_test, 
                         y_train, y_test
                     ) = train_test_split(
                         x_dca,
-                        x_prosst, 
+                        x_prosst,
+                        x_esm, 
                         #attention_mask, 
                         fitnesses, 
                         train_size=train_size, 
@@ -195,15 +173,41 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     )
                     (
                         x_dca_train, x_dca_test, 
-                        x_llm_train, x_llm_test, 
-                        #attns_train, attns_test, 
+                        x_llm_train_prosst, x_llm_test_prosst, 
+                        x_llm_train_esm, x_llm_test_esm,
                         y_train, y_test
                     ) = (
                         reduce_by_batch_modulo(x_dca_train), reduce_by_batch_modulo(x_dca_test), 
-                        reduce_by_batch_modulo(x_llm_train), reduce_by_batch_modulo(x_llm_test), 
-                        #reduce_by_batch_modulo(attns_train), reduce_by_batch_modulo(attns_test), 
+                        reduce_by_batch_modulo(x_llm_train_prosst), reduce_by_batch_modulo(x_llm_test_prosst), 
+                        reduce_by_batch_modulo(x_llm_train_esm), reduce_by_batch_modulo(x_llm_test_esm), 
                         reduce_by_batch_modulo(y_train), reduce_by_batch_modulo(y_test)
                     )
+                    llm_dict_prosst = {
+                        'prosst': {
+                            'llm_base_model': prosst_base_model,
+                            'llm_model': prosst_lora_model,
+                            'llm_optimizer': prosst_optimizer,
+                            'llm_train_function': prosst_train,
+                            'llm_inference_function': get_logits_from_full_seqs,
+                            'llm_loss_function': corr_loss,
+                            'x_llm_train' : x_llm_train_prosst,
+                            'llm_attention_mask':  prosst_attention_mask,
+                            'input_ids': input_ids,
+                            'structure_input_ids': structure_input_ids
+                        }
+                    }
+                    llm_dict_esm = {
+                        'esm1v': {
+                            'llm_base_model': esm_base_model,
+                            'llm_model': esm_lora_model,
+                            'llm_optimizer': esm_optimizer,
+                            'llm_train_function': esm_train,
+                            'llm_inference_function': esm_infer,
+                            'llm_loss_function': corr_loss,
+                            'x_llm_train' : x_llm_train_esm,
+                            'llm_attention_mask':  esm_attention_mask
+                        }
+                    }
                     print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 50:
                         print(f'Only {len(fitnesses)} in total, splitting the data in N_Train = {len(y_train)} '
@@ -215,17 +219,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     get_vram()
                     hm = DCALLMHybridModel(
                         x_train_dca=np.array(x_dca_train), 
-                        x_train_llm=np.array(x_llm_train),  # x_esm_train), 
                         y_train=y_train,
-                        x_train_llm_attention_mask=attention_mask,  #np.array(attns_train), 
-                        input_ids=input_ids,
-                        structure_input_ids=structure_input_ids,
-                        llm_model=lora_model,
-                        llm_base_model=base_model,
-                        llm_optimizer=optimizer,
-                        llm_train_function=prosst_train,  #esm_train,
-                        llm_inference_function=get_logits_from_full_seqs,  #,esm_infer,
-                        llm_loss_function=corr_loss,
+                        llm_model_input=llm_dict_esm,#prosst,
                         x_wt=x_wt
                     )
 
@@ -233,20 +228,20 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
                     y_test_pred = hm.hybrid_prediction(
                         x_dca=np.array(x_dca_test), 
-                        x_llm=np.array(x_llm_test), 
-                        attns_llm=attention_mask#np.array(attns_test)
+                        x_llm=np.array(x_llm_test_esm), 
+                        attns_llm=prosst_attention_mask  # np.array(attns_test)
                     )
 
                     print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
                     hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                     ns_y_test.append(len(y_test_pred))
                 except ValueError as e:
-                    raise e
+                    #raise e
                     print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
                           f'in N_Train = {train_size} and N_Test (N_Total - N_Train).')
                     hybrid_perfs.append(np.nan)
                     ns_y_test.append(np.nan)
-                del lora_model 
+                del prosst_lora_model 
                 torch.cuda.empty_cache()
                 gc.collect()
             dt = time.time() - start_time

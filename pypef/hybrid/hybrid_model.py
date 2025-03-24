@@ -85,7 +85,7 @@ class DCALLMHybridModel:
                 raise SystemError(f"Model input must be in form of a dictionary.")
             else:
                 print("Using LLM as second model next to DCA for hybrid modeling...")
-                if len(llm_model_input.keys()) == 1 and llm_model_input.keys()[0] == 'esm1v':
+                if len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'esm1v':
                     self.llm_key = 'esm1v'
                     self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
                     self.llm_model = llm_model_input['esm1v']['llm_model']
@@ -95,7 +95,7 @@ class DCALLMHybridModel:
                     self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
                     self.x_train_llm = llm_model_input['esm1v']['x_llm_train']
                     self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
-                elif len(llm_model_input.keys()) == 1 and llm_model_input.keys()[0] == 'prosst':
+                elif len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'prosst':
                     self.llm_key = 'prosst'
                     self.llm_base_model = llm_model_input['prosst']['llm_base_model']
                     self.llm_model = llm_model_input['prosst']['llm_model']
@@ -394,25 +394,32 @@ class DCALLMHybridModel:
             get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float)
         )
         x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
-        #    x_sequences, 
-        #    model, 
-        #    input_ids, 
-        #    attention_mask, 
-        #    structure_input_ids,
-        #    train: bool = False,
-        #    verbose: bool = True,
-        #    device: str | None = None
-        y_llm_ttest = self.llm_inference_function(
-            x_sequences=self.x_llm_ttest,
-            model=self.llm_base_model,
-            input_ids=self.input_ids,
-            attention_mask=self.llm_attention_mask,
-            structure_input_ids=self.structure_input_ids,
-            train=True,
-            device=self.device
-        )
-
-        print('1:::', spearmanr(self.y_ttest, y_llm_ttest.detach().cpu()), len(self.y_ttest))
+        #x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
+        if self.llm_key == 'prosst':
+            y_llm_ttest = self.llm_inference_function(
+                x_sequences=self.x_llm_ttest,
+                model=self.llm_base_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
+                train=True,
+                device=self.device
+            )
+        elif self.llm_key == 'esm1v':
+            y_llm_ttest = self.llm_inference_function(
+                xs=x_llm_ttest_b,
+                model=self.llm_model,
+                attention_mask=self.llm_attention_mask,
+                device=self.device
+            )
+            y_llm_ttrain = self.llm_inference_function(
+                xs=x_llm_ttrain_b,
+                model=self.llm_model,
+                attention_mask=self.llm_attention_mask,
+                device=self.device
+            )
+        print('1:::spearmanr(self.y_ttrain, y_llm_ttrain) UNTRAINED:', spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu()), len(self.y_ttrain))
+        print('1:::spearmanr(self.y_ttest, y_llm_ttest) UNTRAINED:', spearmanr(self.y_ttest, y_llm_ttest.detach().cpu()), len(self.y_ttest))
 
         print('Refining/training the model (gradient calculation adds a computational '
               'graph that requires quite some memory)... if you are facing an (out of memory) '
@@ -422,31 +429,56 @@ class DCALLMHybridModel:
         # x_sequence_batches, score_batches, loss_fn, model, optimizer,  
         # input_ids, attention_mask, structure_input_ids,
         # n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50
-        self.llm_train_function(
-            x_llm_ttrain_b, 
-            scores_ttrain_b,
-            self.llm_loss_function,
-            self.llm_model,
-            self.llm_optimizer, 
-            self.input_ids,
-            self.llm_attention_mask,  
-            self.structure_input_ids,
-            n_epochs=50, 
-            device=self.device,
-            #seed=self.seed
-        )
-
-        y_llm_lora_ttest = self.llm_inference_function(
-            x_sequences=self.x_llm_ttest,
-            model=self.llm_model,
-            input_ids=self.input_ids,
-            attention_mask=self.llm_attention_mask,
-            structure_input_ids=self.structure_input_ids,
-            train=True,
-            device=self.device
-        )
-
-        print('2:::', spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu()), len(self.y_ttest))
+        if self.llm_key == 'prosst':
+            self.llm_train_function(
+                x_llm_ttrain_b, 
+                scores_ttrain_b,
+                self.llm_loss_function,
+                self.llm_model,
+                self.llm_optimizer, 
+                self.input_ids,
+                self.llm_attention_mask,  
+                self.structure_input_ids,
+                n_epochs=50, 
+                device=self.device,
+                #seed=self.seed
+            )
+            y_llm_lora_ttest = self.llm_inference_function(
+                x_sequences=self.x_llm_ttest,
+                model=self.llm_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
+                train=True,
+                device=self.device
+            )
+        elif self.llm_key == 'esm1v':
+            # xs, attns, scores, loss_fn, model, optimizer
+            self.llm_train_function(
+                x_llm_ttrain_b, 
+                self.llm_attention_mask,
+                scores_ttrain_b,
+                self.llm_loss_function,
+                self.llm_model,
+                self.llm_optimizer,  
+                n_epochs=5, 
+                device=self.device,
+                #seed=self.seed
+            )
+            y_llm_lora_ttrain = self.llm_inference_function(
+                xs=x_llm_ttrain_b,
+                model=self.llm_model,
+                attention_mask=self.llm_attention_mask,
+                device=self.device
+            )
+            y_llm_lora_ttest = self.llm_inference_function(
+                xs=x_llm_ttest_b,
+                model=self.llm_model,
+                attention_mask=self.llm_attention_mask,
+                device=self.device
+            )
+        print('2:::spearmanr(self.y_ttrain, y_llm_lora_ttrain) TRAINED:', spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu()), len(self.y_ttrain))
+        print('2:::spearmanr(self.y_ttest, y_llm_lora_ttest): TRAINED', spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu()), len(self.y_ttest))
 
         self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
         self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
@@ -527,42 +559,48 @@ class DCALLMHybridModel:
             return self.beta1 * y_dca + self.beta2
         
         else:
-            #x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
+            if self.llm_key == 'prosst':
+                y_llm = self.llm_inference_function(
+                    x_llm, 
+                    self.llm_base_model, 
+                    self.input_ids,
+                    self.llm_attention_mask, 
+                    self.structure_input_ids,
+                    train=False,
+                    #desc='Infering base model', 
+                    device=self.device).detach().cpu().numpy()
+                y_llm_lora = self.llm_inference_function(
+                    x_llm, 
+                    self.llm_model, 
+                    self.input_ids,
+                    self.llm_attention_mask, 
+                    self.structure_input_ids,
+                    train=False,
+                    #desc='Infering LoRA-tuned model', 
+                    device=self.device).detach().cpu().numpy()
+            elif self.llm_key == 'esm1v':
+                x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
+                y_llm = self.llm_inference_function(
+                    x_llm_b, 
+                    self.llm_attention_mask,
+                    self.llm_base_model, 
+                    #desc='Infering base model', 
+                    device=self.device).detach().cpu().numpy()
+                y_llm_lora = self.llm_inference_function(
+                    x_llm_b, 
+                    self.llm_attention_mask,
+                    self.llm_model, 
+                    #desc='Infering LoRA-tuned model', 
+                    device=self.device).detach().cpu().numpy()
+            
 
-            #    x_sequences, 
-            #    model, 
-            #    input_ids, 
-            #    attention_mask, 
-            #    structure_input_ids,
-            #    train: bool = False,
-            #    verbose: bool = True,
-            #    device: str | None = None
-            y_esm = self.llm_inference_function(
-                x_llm, #_b, 
-                self.llm_base_model, 
-                self.input_ids,
-                self.llm_attention_mask, 
-                self.structure_input_ids,
-                train=False,
-                #desc='Infering base model', 
-                device=self.device).detach().cpu().numpy()
-            y_esm_lora = self.llm_inference_function(
-                x_llm, #_b, 
-                self.llm_model, 
-                self.input_ids,
-                self.llm_attention_mask, 
-                self.structure_input_ids,
-                train=False,
-                #desc='Infering LoRA-tuned model', 
-                device=self.device).detach().cpu().numpy()
-
-            y_dca, y_ridge, y_esm, y_esm_lora = (
+            y_dca, y_ridge, y_llm, y_llm_lora = (
                 reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
                 reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_esm, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_esm_lora, batch_size=self.batch_size)
+                reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
             )
-            return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_esm + self.beta4 * y_esm_lora
+            return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
     def split_performance(
             self,

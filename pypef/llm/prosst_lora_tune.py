@@ -39,7 +39,7 @@ def prosst_tokenize_sequences(sequences, vocab):
 
 
 def get_logits_from_full_seqs(
-        x_sequences, 
+        xs, 
         model, 
         input_ids, 
         attention_mask, 
@@ -71,7 +71,7 @@ def get_logits_from_full_seqs(
             )
 
     logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
-    for i_s, sequence in enumerate(tqdm(x_sequences, disable=not verbose, desc='Getting sequence logits')):
+    for i_s, sequence in enumerate(tqdm(xs, disable=not verbose, desc='Getting sequence logits')):
         for i_aa, x_aa in enumerate(sequence):
             if i_aa == 0:
                 seq_log_probs = logits[i_aa, x_aa].reshape(1)
@@ -174,7 +174,8 @@ def get_prosst_models():
     tokenizer = AutoTokenizer.from_pretrained("AI4Protein/ProSST-2048", trust_remote_code=True)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
-    optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.01)
+    # TODO: Check: LoRa or base model parameters better for ProSST fine-tuning and learning rate?
+    optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.01)  
     return prosst_base_model, prosst_lora_model, tokenizer, optimizer
 
 
