@@ -59,8 +59,6 @@ from scipy.stats import boxcox
 import pandas as pd
 from tqdm import tqdm
 import torch
-# Uncomment to hide GPU devices
-#environ['CUDA_VISIBLE_DEVICES'] = '-1'  
 
 
 class GREMLIN:

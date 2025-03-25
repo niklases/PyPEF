@@ -115,6 +115,7 @@ class DCALLMHybridModel:
         else:
             print("No LLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
+            self.llm_attention_mask = None
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
         if alphas is None:
@@ -337,12 +338,10 @@ class DCALLMHybridModel:
             (
                 self.x_dca_ttrain, self.x_dca_ttest, 
                 self.x_llm_ttrain, self.x_llm_ttest,
-                #self.attn_llm_ttrain, self.attn_llm_ttest,
                 self.y_ttrain, self.y_ttest
             ) = train_test_split(
                 self.x_train_dca, 
                 self.x_train_llm,
-                #self.llm_attention_mask,
                 self.y_train, 
                 train_size=train_size_fit,
                 random_state=self.seed
@@ -525,8 +524,7 @@ class DCALLMHybridModel:
     def hybrid_prediction(
             self,
             x_dca: np.ndarray,
-            x_llm: None | np.ndarray,
-            attns_llm: None | np.ndarray
+            x_llm: None | np.ndarray
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -555,7 +553,13 @@ class DCALLMHybridModel:
         else:
             y_ridge = self.ridge_opt.predict(x_dca)
 
-        if x_llm is None or attns_llm is None:
+        if x_llm is None:
+            if self.llm_attention_mask is not None:
+                print('No LLM input for hybrid prediction but the model '
+                      'has been trained using an LLM model input.. '
+                      'Using only DCA for hybridprediction.. This can lead '
+                      'to unwanted prediction behavior if the hybrid model '
+                      'is trained including an LLM...')
             return self.beta1 * y_dca + self.beta2
         
         else:

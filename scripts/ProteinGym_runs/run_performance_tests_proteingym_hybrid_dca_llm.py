@@ -16,14 +16,24 @@ from adjustText import adjust_text
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.llm.esm_lora_tune import get_esm_models, esm_tokenize_sequences, get_batches, esm_train, esm_test, esm_infer, corr_loss
+from pypef.llm.esm_lora_tune import (
+    get_esm_models, esm_tokenize_sequences, 
+    get_batches, esm_train, esm_infer, corr_loss
+)
 from pypef.llm.prosst_lora_tune import (
-    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, prosst_tokenize_sequences, prosst_train)
+    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
+    prosst_tokenize_sequences, prosst_train
+)
 from pypef.utils.variant_data import get_seqs_from_var_name
-from pypef.hybrid.hybrid_model import DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
+from pypef.hybrid.hybrid_model import (
+    DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
+)
 
 
 def get_vram(verbose: bool = True):
+    if not torch.cuda.is_available():
+        print("No CUDA/GPU device available for VRAM checking...")
+        return
     free = torch.cuda.mem_get_info()[0] / 1024 ** 3
     total = torch.cuda.mem_get_info()[1] / 1024 ** 3
     total_cubes = 24
@@ -105,8 +115,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # Only model sequences with length of max. 800 amino acids to avoid out of memory errors 
             print('Sequence length:', len(wt_seq))
             if len(wt_seq) > MAX_WT_SEQUENCE_LENGTH:
-                print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents a potential out-of-memory risk '
-                      f'(when running on GPU, set threshold to length ~400 dependent on available VRAM), '
+                print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents '
+                      f'a potential out-of-memory risk (when running on GPU, set '
+                      f'threshold to length ~400 dependent on available VRAM); '
                       f'skipping dataset...')
                 continue
             variants, variants_split, sequences, fitnesses = (
@@ -160,13 +171,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         x_dca_train, x_dca_test, 
                         x_llm_train_prosst, x_llm_test_prosst,
                         x_llm_train_esm, x_llm_test_esm, 
-                        #attns_train, attns_test, 
                         y_train, y_test
                     ) = train_test_split(
                         x_dca,
                         x_prosst,
                         x_esm, 
-                        #attention_mask, 
                         fitnesses, 
                         train_size=train_size, 
                         random_state=42
@@ -217,24 +226,24 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         ns_y_test.append(np.nan)
                         continue
                     get_vram()
-                    hm = DCALLMHybridModel(
-                        x_train_dca=np.array(x_dca_train), 
-                        y_train=y_train,
-                        llm_model_input=llm_dict_esm,#prosst,
-                        x_wt=x_wt
-                    )
+                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
+                        hm = DCALLMHybridModel(
+                            x_train_dca=np.array(x_dca_train), 
+                            y_train=y_train,
+                            llm_model_input=method,
+                            x_wt=x_wt
+                        )
 
-                    y_test = reduce_by_batch_modulo(y_test)
+                        y_test = reduce_by_batch_modulo(y_test)
 
-                    y_test_pred = hm.hybrid_prediction(
-                        x_dca=np.array(x_dca_test), 
-                        x_llm=np.array(x_llm_test_esm), 
-                        attns_llm=prosst_attention_mask  # np.array(attns_test)
-                    )
+                        y_test_pred = hm.hybrid_prediction(
+                            x_dca=np.array(x_dca_test), 
+                            x_llm=[None, np.array(x_llm_test_esm), np.array(x_llm_test_prosst)][i]
+                        )
 
-                    print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
-                    hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
-                    ns_y_test.append(len(y_test_pred))
+                        print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
+                        hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
+                        ns_y_test.append(len(y_test_pred))
                 except ValueError as e:
                     #raise e
                     print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
