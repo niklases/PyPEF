@@ -71,7 +71,7 @@ def test_gremlin():
     )
 
 
-def test_hybrid_model():
+def test_hybrid_model_dca_esm():
     g = GREMLIN(
         alignment=msa_file_aneh,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -90,45 +90,58 @@ def test_hybrid_model():
     print(len(train_seqs[0]), train_seqs[0])
     assert len(train_seqs[0]) == len(g.wt_seq)
     base_model, lora_model, tokenizer, optimizer = get_esm_models()
-    encoded_seqs_train, attention_masks_train = esm_tokenize_sequences(list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
-    x_esm_b, attention_masks_b, train_ys_b = (
-        get_batches(encoded_seqs_train, dtype=int), 
-        get_batches(attention_masks_train, dtype=int), 
+    x_train_esm, attention_mask_esm = esm_tokenize_sequences(
+        list(train_seqs), tokenizer, max_length=len(train_seqs[0]))
+    x_esm_b, train_ys_b = (
+        get_batches(x_train_esm, dtype=int), 
         get_batches(train_ys, dtype=float)
     )
-    y_true, y_pred_esm = esm_test(x_esm_b, attention_masks_b, train_ys_b, loss_fn=corr_loss, model=base_model)
+    y_true, y_pred_esm = esm_test(
+        x_esm_b, attention_mask_esm, train_ys_b, 
+        loss_fn=corr_loss, model=base_model
+    )
     print(spearmanr(
         y_true,
         y_pred_esm
     ), len(y_true))
 
+    llm_dict_esm = {
+        'esm1v': {
+            'llm_base_model': base_model,
+            'llm_model': lora_model,
+            'llm_optimizer': optimizer,
+            'llm_train_function': esm_train,
+            'llm_inference_function': esm_infer,
+            'llm_loss_function': corr_loss,
+            'x_llm_train' : x_train_esm,
+            'llm_attention_mask':  attention_mask_esm
+        }
+    }
+
     hm = DCALLMHybridModel(
         x_train_dca=np.array(x_dca_train), 
-        x_train_llm=np.array(encoded_seqs_train), 
-        x_train_llm_attention_mask=np.array(attention_masks_train), 
         y_train=train_ys,
-        llm_model=lora_model,
-        llm_base_model=base_model,
-        llm_optimizer=optimizer,
-        llm_train_function=esm_train,
-        llm_inference_function=esm_infer,
-        llm_loss_function=corr_loss,
+        llm_model_input=llm_dict_esm,
         x_wt=g.x_wt,
         seed=42
     )
 
     x_dca_test = g.get_scores(test_seqs, encode=True)
-    encoded_seqs_test, attention_masks_test = esm_tokenize_sequences(list(test_seqs), tokenizer, max_length=len(test_seqs[0]))
-    y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=encoded_seqs_test, attns_llm=attention_masks_test)
+    encoded_seqs_test, attention_masks_test = esm_tokenize_sequences(
+        list(test_seqs), tokenizer, max_length=len(test_seqs[0]))
+    y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=encoded_seqs_test)
     print(hm.beta1, hm.beta2, hm.beta3, hm.beta4, hm.ridge_opt)
     print('hm.y_dca_ttest', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
     print('hm.y_dca_ridge_ttest', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
     print('hm.y_llm_ttest', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
     print('hm.y_llm_lora_ttest', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
     print('Hybrid', spearmanr(test_ys, y_pred_test), len(test_ys))
-    np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], -0.5342743713116743, decimal=5)
-    np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, decimal=5)
-    np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.21761360470606333, decimal=5)
+    np.testing.assert_almost_equal(spearmanr(
+        hm.y_ttest, hm.y_dca_ttest)[0], -0.5342743713116743, decimal=5)
+    np.testing.assert_almost_equal(spearmanr(
+        hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, decimal=5)
+    np.testing.assert_almost_equal(spearmanr(
+        hm.y_ttest, hm.y_llm_ttest)[0], -0.21761360470606333, decimal=5)
     # Nondeterministic behavior, should be about ~ 0.8, checking if not NaN
     # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
     assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
@@ -137,8 +150,12 @@ def test_hybrid_model():
 
 def test_dataset_b_results():
     aaindex = "WOLR810101.txt"
-    x_fft_train, _ = AAIndexEncoding(full_aaidx_txt_path(aaindex), train_seqs).collect_encoded_sequences()
-    x_fft_test, _ = AAIndexEncoding(full_aaidx_txt_path(aaindex), test_seqs).collect_encoded_sequences()
+    x_fft_train, _ = AAIndexEncoding(
+        full_aaidx_txt_path(aaindex), train_seqs
+    ).collect_encoded_sequences()
+    x_fft_test, _ = AAIndexEncoding(
+        full_aaidx_txt_path(aaindex), test_seqs
+    ).collect_encoded_sequences()
     performances = get_regressor_performances(
         x_learn=x_fft_train, 
         x_test=x_fft_test, 
@@ -157,6 +174,6 @@ def test_dataset_b_results():
 
 if __name__ == "__main__":
     test_gremlin()
-    test_hybrid_model()
+    test_hybrid_model_dca_esm()
     test_dataset_b_results()
     

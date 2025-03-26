@@ -107,13 +107,14 @@ def get_batches(a, dtype, batch_size=5, keep_numpy: bool = False, verbose: bool 
     return torch.Tensor(a).to(dtype)
     
 
-def esm_test(xs, attns, scores, loss_fn, model, device: str | None = None):
+def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = None):
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+    attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     print(f'Infering model for testing using {device.upper()} device...')
     model = model.to(device)
-    xs, attns, scores = xs.to(device), attns.to(device), scores.to(torch.float).to(device) 
-    pbar_epochs = tqdm(zip(xs, attns, scores), total=len(xs))
+    xs, attention_masks, scores = torch.Tensor(xs).to(device), attention_masks.to(device), torch.Tensor(scores).to(torch.float).to(device) 
+    pbar_epochs = tqdm(zip(xs, attention_masks, scores), total=len(xs))
     for i ,(xs_b, attns_b, scores_b) in enumerate(pbar_epochs):
         xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
         with torch.no_grad():
