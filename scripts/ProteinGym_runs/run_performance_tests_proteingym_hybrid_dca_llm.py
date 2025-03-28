@@ -160,10 +160,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             hybrid_perfs = []
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
-                prosst_lora_model = copy.deepcopy(prosst_lora_model)
-                prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
-                esm_lora_model = copy.deepcopy(esm_lora_model)
-                esm_optimizer = torch.optim.Adam(esm_lora_model.parameters(), lr=0.0001)
+                prosst_lora_model_2 = copy.deepcopy(prosst_lora_model)
+                prosst_optimizer = torch.optim.Adam(prosst_lora_model_2.parameters(), lr=0.0001)
+                esm_lora_model_2 = copy.deepcopy(esm_lora_model)
+                esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
                 get_vram()
                 try:
@@ -194,7 +194,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     llm_dict_prosst = {
                         'prosst': {
                             'llm_base_model': prosst_base_model,
-                            'llm_model': prosst_lora_model,
+                            'llm_model': prosst_lora_model_2,
                             'llm_optimizer': prosst_optimizer,
                             'llm_train_function': prosst_train,
                             'llm_inference_function': get_logits_from_full_seqs,
@@ -208,7 +208,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     llm_dict_esm = {
                         'esm1v': {
                             'llm_base_model': esm_base_model,
-                            'llm_model': esm_lora_model,
+                            'llm_model': esm_lora_model_2,
                             'llm_optimizer': esm_optimizer,
                             'llm_train_function': esm_train,
                             'llm_inference_function': esm_infer,
@@ -227,6 +227,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         continue
                     get_vram()
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
+                        print('~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
                         hm = DCALLMHybridModel(
                             x_train_dca=np.array(x_dca_train), 
                             y_train=y_train,
@@ -238,7 +239,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
                         y_test_pred = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test), 
-                            x_llm=[None, np.array(x_llm_test_esm), np.array(x_llm_test_prosst)][i]
+                            x_llm=[None, np.asarray(x_llm_test_esm), np.asarray(x_llm_test_prosst)][i_m]
                         )
 
                         print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
@@ -250,7 +251,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                           f'in N_Train = {train_size} and N_Test (N_Total - N_Train).')
                     hybrid_perfs.append(np.nan)
                     ns_y_test.append(np.nan)
-                del prosst_lora_model 
+                del prosst_lora_model_2
+                del esm_lora_model_2
                 torch.cuda.empty_cache()
                 gc.collect()
             dt = time.time() - start_time

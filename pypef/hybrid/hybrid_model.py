@@ -396,7 +396,16 @@ class DCALLMHybridModel:
         #x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
-                x_sequences=self.x_llm_ttest,
+                xs=self.x_llm_ttest,
+                model=self.llm_base_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
+                train=True,
+                device=self.device
+            )
+            y_llm_ttrain = self.llm_inference_function(
+                xs=self.x_llm_ttrain,
                 model=self.llm_base_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -442,8 +451,17 @@ class DCALLMHybridModel:
                 device=self.device,
                 #seed=self.seed
             )
+            y_llm_lora_ttrain = self.llm_inference_function(
+                xs=self.x_llm_ttrain,
+                model=self.llm_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
+                train=True,
+                device=self.device
+            )
             y_llm_lora_ttest = self.llm_inference_function(
-                x_sequences=self.x_llm_ttest,
+                xs=self.x_llm_ttest,
                 model=self.llm_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
