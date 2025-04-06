@@ -44,26 +44,6 @@ def get_vram(verbose: bool = True):
     return free, total
 
 
-def read_pdb(pdbfile):
-    from Bio import PDB
-
-    pdb_io = PDB.PDBIO()
-    pdb_parser = PDB.PDBParser()
-    structure = pdb_parser.get_structure('ppp', pdbfile)
-
-    new_resnums = [i + 200 for i in range(135)]
-
-    print(structure)
-    print(pdbfile)
-
-    for model in structure:
-        for chain in model:
-            for i, residue in enumerate(chain.get_residues()):
-                res_id = list(residue.id)
-                #res_id[1] = new_resnums[i]
-                #residue.id = tuple(res_id)
-
-
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
     device = (
@@ -81,14 +61,13 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
     MAX_WT_SEQUENCE_LENGTH = 2000
-    N_EPOCHS = 5
     get_vram()
     hybrid_perfs = []
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is and i < 21: # i > 3 and i <21:  #i == 18 - 1:
+        if i >= start_i and i not in already_tested_is:  # i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
@@ -103,7 +82,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print('MSA path:', msa_path)
             print('MSA start:', msa_start, '- MSA end:', msa_end)
             print('WT sequence (trimmed from MSA start to MSA end):\n' + wt_seq)
-            read_pdb(pdb)
             #if msa_start != 1:
             #    print('Continuing (TODO: requires cut of PDB input struture residues)...')
             #    continue
@@ -152,8 +130,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print('DCA:', spearmanr(fitnesses, y_pred_dca), len(fitnesses)) 
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
-            # TF    10,000: DCA: SignificanceResult(statistic=np.float64(0.6486616550552755), pvalue=np.float64(3.647740047145113e-119))  989
-            # Torch 10,000: DCA: SignificanceResult(statistic=np.float64(0.6799982280150232), pvalue=np.float64(3.583110693136881e-135)) 989
 
             x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
             y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
@@ -248,7 +224,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 llm_model_input=method,
                                 x_wt=x_wt
                             )
-
                             y_test_pred = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test), 
                                 x_llm=[
@@ -257,7 +232,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                     np.asarray(x_llm_test_prosst)
                                 ][i_m]
                             )
-
                             print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
                             hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                         except RuntimeError:  # modeling_prosst.py, line 920, in forward
@@ -336,7 +310,6 @@ def plot_csv_data(csv, plot_name):
     train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_1000), f'{np.nanmean(dset_hybrid_perfs_dca_1000):.2f}', color='blueviolet'))
 
 
-
     plt.plot(range(len(tested_dsets)), dset_esm_perfs, 'o--', markersize=8, color='tab:green', label='ESM (0)')
     plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_esm_perfs)), color='tab:green', linestyle='--')
     for i, (p, n_test) in enumerate(zip(dset_esm_perfs, df['N_Y_test'].astype('Int64').to_list())):
@@ -360,8 +333,6 @@ def plot_csv_data(csv, plot_name):
     for i, (p, n_test) in enumerate(zip(dset_hybrid_perfs_dca_esm_1000, df['N_Y_test_1000'].astype('Int64').to_list())):
         plt.text(i, 0.995, f'1000'  + r'$\rightarrow$' + f'{n_test}', color='turquoise', size=2)
     train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_esm_1000), f'{np.nanmean(dset_hybrid_perfs_dca_esm_1000):.2f}', color='turquoise'))
-
-
 
 
     plt.plot(range(len(tested_dsets)), dset_prosst_perfs, 'o--', markersize=8, color='tab:red', label='ProSST (0)')
@@ -389,9 +360,6 @@ def plot_csv_data(csv, plot_name):
     train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_prosst_1000), f'{np.nanmean(dset_hybrid_perfs_dca_prosst_1000):.2f}', color='darkred'))
 
 
-
-    
-    
     plt.grid(zorder=-1)
     plt.xticks(range(len(tested_dsets)), tested_dsets, rotation=45, ha='right')
     plt.margins(0.01)
@@ -433,6 +401,13 @@ def plot_csv_data(csv, plot_name):
     print(df.columns)
     dset_ns_y_test = [
         df['N_Y_test'].to_list(), 
+        df['N_Y_test_100'].to_list(), 
+        df['N_Y_test_200'].to_list(), 
+        df['N_Y_test_1000'].to_list(),
+        df['N_Y_test'].to_list(),
+        df['N_Y_test_100'].to_list(), 
+        df['N_Y_test_200'].to_list(), 
+        df['N_Y_test_1000'].to_list(),
         df['N_Y_test'].to_list(),
         df['N_Y_test_100'].to_list(), 
         df['N_Y_test_200'].to_list(), 
