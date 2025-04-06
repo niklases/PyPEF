@@ -117,8 +117,8 @@ def prosst_train(
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     epoch_spearman_1 = 0.0
     did_not_improve_counter = 0
-    best_model_epoch = None
-    best_model_perf = None
+    best_model_epoch = np.nan
+    best_model_perf = np.nan
     os.makedirs('model_saves', exist_ok=True)
     for epoch in pbar_epochs:
         if epoch == 0:

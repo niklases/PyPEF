@@ -60,7 +60,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_base_model = prosst_base_model.to(device)
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
-    MAX_WT_SEQUENCE_LENGTH = 400
+    MAX_WT_SEQUENCE_LENGTH = 2000
     N_EPOCHS = 5
     get_vram()
     hybrid_perfs = []
@@ -68,7 +68,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is and i == 18 - 1 or i == 19 - 1: # i > 3 and i <21:  #i == 18 - 1:
+        if i >= start_i and i not in already_tested_is and i < 21: # i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
