@@ -44,6 +44,26 @@ def get_vram(verbose: bool = True):
     return free, total
 
 
+def read_pdb(pdbfile):
+    from Bio import PDB
+
+    pdb_io = PDB.PDBIO()
+    pdb_parser = PDB.PDBParser()
+    structure = pdb_parser.get_structure('ppp', pdbfile)
+
+    new_resnums = [i + 200 for i in range(135)]
+
+    print(structure)
+    print(pdbfile)
+
+    for model in structure:
+        for chain in model:
+            for i, residue in enumerate(chain.get_residues()):
+                res_id = list(residue.id)
+                #res_id[1] = new_resnums[i]
+                #residue.id = tuple(res_id)
+
+
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
     device = (
@@ -83,6 +103,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print('MSA path:', msa_path)
             print('MSA start:', msa_start, '- MSA end:', msa_end)
             print('WT sequence (trimmed from MSA start to MSA end):\n' + wt_seq)
+            read_pdb(pdb)
+            #if msa_start != 1:
+            #    print('Continuing (TODO: requires cut of PDB input struture residues)...')
+            #    continue
             # Getting % usage of virtual_memory (3rd field)
             import psutil;print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
                   f'GB ({psutil.virtual_memory()[2]} %)')
@@ -92,9 +116,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             #    print('More than 400000 variant-fitness pairs which represents a '
             #          'potential out-of-memory risk, skipping dataset...')
             #    continue
-            variants = variant_fitness_data['mutant'].to_numpy()  # [400:700]
+            variants = variant_fitness_data['mutant'].to_numpy()
             variants_orig = variants
-            fitnesses = variant_fitness_data['DMS_score'].to_numpy()  # [400:700]
+            fitnesses = variant_fitness_data['DMS_score'].to_numpy()
             if len(fitnesses) <= 50: # and len(fitnesses) >= 500:  # TODO: RESET TO 50
                 print('Number of available variants <= 50, skipping dataset...')
                 continue
@@ -137,11 +161,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb, prosst_tokenizer, wt_seq)
             x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
-            y_prosst = get_logits_from_full_seqs(
-                x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
-            print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
-
-            prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
+            try:
+                y_prosst = get_logits_from_full_seqs(
+                    x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
+                print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
+                prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
+            except RuntimeError:
+                prosst_unopt_perf = np.nan
+            
             esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
 
             ns_y_test = [len(variants)]
@@ -214,24 +241,27 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     get_vram()
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
                         print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
-                        hm = DCALLMHybridModel(
-                            x_train_dca=np.array(x_dca_train), 
-                            y_train=y_train,
-                            llm_model_input=method,
-                            x_wt=x_wt
-                        )
+                        try:
+                            hm = DCALLMHybridModel(
+                                x_train_dca=np.array(x_dca_train), 
+                                y_train=y_train,
+                                llm_model_input=method,
+                                x_wt=x_wt
+                            )
 
-                        y_test_pred = hm.hybrid_prediction(
-                            x_dca=np.array(x_dca_test), 
-                            x_llm=[
-                                None, 
-                                np.asarray(x_llm_test_esm), 
-                                np.asarray(x_llm_test_prosst)
-                            ][i_m]
-                        )
+                            y_test_pred = hm.hybrid_prediction(
+                                x_dca=np.array(x_dca_test), 
+                                x_llm=[
+                                    None, 
+                                    np.asarray(x_llm_test_esm), 
+                                    np.asarray(x_llm_test_prosst)
+                                ][i_m]
+                            )
 
-                        print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
-                        hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
+                            print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
+                            hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
+                        except RuntimeError:  # modeling_prosst.py, line 920, in forward
+                            hybrid_perfs.append(np.nan)
                     ns_y_test.append(len(y_test_pred))
                 except ValueError as e:
                     print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
