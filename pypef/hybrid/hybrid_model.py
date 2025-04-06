@@ -601,7 +601,7 @@ class DCALLMHybridModel:
                     #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
+                x_llm_b = get_batches(x_llm, batch_size=1, dtype=int)
                 y_llm = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
@@ -616,12 +616,12 @@ class DCALLMHybridModel:
                     device=self.device).detach().cpu().numpy()
             
 
-            y_dca, y_ridge, y_llm, y_llm_lora = (
-                reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
-            )
+            #y_dca, y_ridge, y_llm, y_llm_lora = (
+            #    reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
+            #    reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
+            #    reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
+            #    reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
+            #)
             return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
     def split_performance(
