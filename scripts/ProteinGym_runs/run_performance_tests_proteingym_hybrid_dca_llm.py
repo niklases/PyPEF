@@ -123,6 +123,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             
             print(len(sequences))
+            print('GREMLIN-DCA: optimization..')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
             x_dca = gremlin.collect_encoded_sequences(sequences)
             x_wt = gremlin.x_wt
@@ -370,7 +371,7 @@ def plot_csv_data(csv, plot_name):
     print('Saved file as ' + os.path.join(os.path.dirname(__file__),  f'{plot_name}.png') + '.')
 
     plt.clf()
-    plt.figure(figsize=(16, 12))
+    plt.figure(figsize=(24, 12))
     sns.set_style("whitegrid")
     df_ = df[[
         'Untrained_Performance_DCA',
@@ -387,10 +388,10 @@ def plot_csv_data(csv, plot_name):
         'Hybrid_DCA_ProSST_Trained_Performance_1000',
         ]]
     print(df_)
-    sns.violinplot(
+    plot = sns.violinplot(
         df_, saturation=0.4, 
         palette=['tab:blue', 'slateblue', 'mediumslateblue', 'blueviolet',
-                 'tab:green','limegreen', 'mediumseagreen' 'turquoise',
+                 'tab:green','limegreen', 'mediumseagreen', 'turquoise',
                  'tab:red', 'indianred', 'red', 'darkred']
     )
     plt.ylim(-0.09, 1.09)
@@ -413,16 +414,16 @@ def plot_csv_data(csv, plot_name):
     ]
     for n in range(0, len(dset_ns_y_test)):
         plt.text(
-            n + 0.2, -0.075, 
+            n + 0.15, -0.075, 
             [
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_dca_perfs):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_100):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_200):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_1000):.2f}'
+                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_1000):.2f}',
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_esm_perfs):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_100):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_200):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_1000):.2f}'
+                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_1000):.2f}',
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_prosst_perfs):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_100):.2f}', 
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_200):.2f}', 
@@ -430,16 +431,19 @@ def plot_csv_data(csv, plot_name):
             ][n]
         )
         plt.text(  # N_Y_test,N_Y_test_100,N_Y_test_200,N_Y_test_1000
-            n + 0.2, -0.05, 
+            n + 0.15, -0.05, 
             r'$\overline{N_{Y_\mathrm{test}}}=$' + f'{int(np.nanmean(np.array(dset_ns_y_test)[n]))}'
         )
         plt.text(
-            n + 0.2, -0.025,
+            n + 0.15, -0.025,
             r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(dset_ns_y_test)[n]))}'
         )
     print(f'\n{np.shape(dset_ns_y_test)[1]} datasets tested with N_Test\'s at N_Train\'s =\n'
-          f'  0    0    100  200  1000\n{np.nan_to_num(dset_ns_y_test).T.astype("int")}')
-    print()
+          f'   0     100   200  1000   0     100   200  1000   0     100   200  1000\n'
+          f'{np.nan_to_num(dset_ns_y_test).T.astype("int")}\n')
+    plot.set_xticks(range(len(plot.get_xticklabels())))
+    plot.set_xticklabels(plot.get_xticklabels(), rotation=45, horizontalalignment='right')
+    plt.tight_layout()
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png'), dpi=300)
     print('Saved file as ' + os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png') + '.')
 
