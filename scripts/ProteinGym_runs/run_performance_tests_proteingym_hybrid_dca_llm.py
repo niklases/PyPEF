@@ -62,15 +62,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     esm_base_model = esm_base_model.to(device)
     MAX_WT_SEQUENCE_LENGTH = 2000
     get_vram()
-    hybrid_perfs = []
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
-    delta_times = []
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
         if i >= start_i and i not in already_tested_is:  # i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
+            hybrid_perfs = []
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
             wt_seq = dset_paths['WT_sequence']
@@ -249,7 +248,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 gc.collect()
 
             dt = time.time() - start_time
-            delta_times.append(dt)
             dset_hybrid_perfs_i = ''
             for hp in hybrid_perfs:
                 dset_hybrid_perfs_i += f'{hp},'
