@@ -211,7 +211,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         print(f'Only {len(fitnesses)} in total, splitting the data in N_Train = {len(y_train)} '
                               f'and N_Test = {len(y_test)} results in N_Test <= 50 variants - '
                               f'not getting performance for N_Train = {len(y_train)}...')
-                        hybrid_perfs.append(np.nan)
+                        for k in [np.nan, np.nan, np.nan]:
+                            hybrid_perfs.append(k)
                         ns_y_test.append(np.nan)
                         continue
                     get_vram()
@@ -495,11 +496,11 @@ if __name__ == '__main__':
             already_tested_is = []
 
 
-    compute_performances(
-        mut_data=combined_mut_data, 
-        start_i=start_i, 
-        already_tested_is=already_tested_is
-    )
+    #compute_performances(
+    #    mut_data=combined_mut_data, 
+    #    start_i=start_i, 
+    #    already_tested_is=already_tested_is
+    #)
 
 
     with open(out_results_csv, 'r') as fh:
