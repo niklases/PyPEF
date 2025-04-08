@@ -65,7 +65,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is:  # i > 3 and i <21:  #i == 18 - 1:
+        if i >= start_i and i not in already_tested_is and i != 19:  # i > 3 and i <21:  #i == 18 - 1:
+            # Skipping 20 BRCA1_HUMAN_Findlay_2018 due to LLM RunTimeErros
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
@@ -131,21 +132,27 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print('DCA:', spearmanr(fitnesses, y_pred_dca), len(fitnesses)) 
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
 
-            x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
-            y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
-            print('ESM1v:', spearmanr(fitnesses, y_esm.cpu()))
-
-            input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb, prosst_tokenizer, wt_seq)
-            x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
             try:
+                x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
+                y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
+                print('ESM1v:', spearmanr(fitnesses, y_esm.cpu()))
+                esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
+            except RuntimeError:
+                esm_unopt_perf = np.nan
+
+            try:
+                input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb, prosst_tokenizer, wt_seq)
+                x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
                 y_prosst = get_logits_from_full_seqs(
-                    x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
+                        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
                 print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
             except RuntimeError:
                 prosst_unopt_perf = np.nan
             
-            esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
+            if np.isnan(esm_unopt_perf) and np.isnan(prosst_unopt_perf):
+                print('Both LLM\'s had RunTimeErrors, skipping dataset...')
+                continue 
 
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
@@ -431,7 +438,7 @@ def plot_csv_data(csv, plot_name):
                 r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_1000):.2f}'
             ][n]
         )
-        plt.text(  # N_Y_test,N_Y_test_100,N_Y_test_200,N_Y_test_1000
+        plt.text(
             n + 0.15, -0.05, 
             r'$\overline{N_{Y_\mathrm{test}}}=$' + f'{int(np.nanmean(np.array(dset_ns_y_test)[n]))}'
         )
@@ -496,11 +503,11 @@ if __name__ == '__main__':
             already_tested_is = []
 
 
-    #compute_performances(
-    #    mut_data=combined_mut_data, 
-    #    start_i=start_i, 
-    #    already_tested_is=already_tested_is
-    #)
+    compute_performances(
+        mut_data=combined_mut_data, 
+        start_i=start_i, 
+        already_tested_is=already_tested_is
+    )
 
 
     with open(out_results_csv, 'r') as fh:
