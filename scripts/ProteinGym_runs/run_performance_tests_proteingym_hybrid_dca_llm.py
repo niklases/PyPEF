@@ -65,8 +65,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is and i != 19:  # i > 3 and i <21:  #i == 18 - 1:
-            # Skipping 20 BRCA1_HUMAN_Findlay_2018 due to LLM RunTimeErros
+        if i >= start_i and i not in already_tested_is:  # i > 3 and i <21:  #i == 18 - 1:
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
