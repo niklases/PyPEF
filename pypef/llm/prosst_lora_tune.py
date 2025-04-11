@@ -134,7 +134,7 @@ def prosst_train(
             optimizer.step()
             optimizer.zero_grad()
             pbar_batches.set_description(
-                f"Epoch: {epoch}. Loss: {loss.item():>1f}  "
+                f"Epoch: {epoch}. Loss: {loss.detach():>1f}  "
                 f"[batch: {batch+1}/{len(x_sequence_batches)} | "
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}]  "
             )
@@ -162,7 +162,10 @@ def prosst_train(
         pbar_epochs.set_description(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
             f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
-    print(f"Loading best model as {best_model}...")
+    try:
+        print(f"Loading best model as {best_model}...")
+    except UnboundLocalError:
+        raise RuntimeError
     load_model(model, best_model)
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 

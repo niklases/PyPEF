@@ -352,10 +352,8 @@ def predict_sturcture(model, cluster_models, dataloader, device):
     for cluster_model_path in cluster_models:
         cluster_model_name = cluster_model_path.split("/")[-1].split(".")[0]
         struc_label_dict[cluster_model_name] = []
-        #kmeans_model = joblib.load(cluster_model_path)
-        #cluster_model_dict[cluster_model_name] = joblib.load(cluster_model_path)
-        #np.save(open('2048_kmeans_cluster_centers.npy', 'wb'), kmeans_model.cluster_centers_, allow_pickle=False)
-        cluster_centers = np.load(open(cluster_model_path, 'rb'), allow_pickle=False)
+        with open(cluster_model_path, 'rb') as fh:
+            cluster_centers = np.load(fh, allow_pickle=False)
         kmeans_ = {
             'algorithm': 'lloyd', 'copy_x': True, 'init': 'k-means++', 'n_init': 'auto', 
             'max_iter': 1, 'n_clusters': 2048, 'random_state': 0, 'tol': 0.0001, 'verbose': 0

@@ -90,7 +90,7 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def get_batches(a, dtype, batch_size=5, keep_numpy: bool = False, verbose: bool = False):
-    a = np.array(a, dtype=dtype)
+    a = np.asarray(a, dtype=dtype)
     orig_shape = np.shape(a)
     remaining = len(a) % batch_size
     if remaining != 0:
@@ -174,7 +174,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
             optimizer.step()
             optimizer.zero_grad()
             pbar_batches.set_description(
-                f"EPOCH: {epoch}. Loss: {loss.item():>1f}  "
+                f"EPOCH: {epoch}. Loss: {loss.detach():>1f}  "
                 f"[batch: {batch+1}/{len(xs)} | "
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
             )

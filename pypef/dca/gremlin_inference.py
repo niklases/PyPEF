@@ -161,7 +161,8 @@ class GREMLIN:
         """
         sequences = []
         seq_ids = []
-        alignment = AlignIO.read(open(msa_file), "fasta")
+        with open(msa_file, 'r') as fh:
+            alignment = AlignIO.read(fh, "fasta")
         for record in alignment:
             sequences.append(str(record.seq))
             seq_ids.append(str(record.id))
@@ -326,7 +327,8 @@ class GREMLIN:
         return loss
     
     def _loss(self, decimals=2):
-        return  torch.round(self.loss(self.v, self.w) * self.n_eff, decimals=decimals)
+        return  torch.round(
+            self.loss(self.v.detach(), self.w.detach()) * self.n_eff, decimals=decimals)
 
     def run_optimization(self):
         """

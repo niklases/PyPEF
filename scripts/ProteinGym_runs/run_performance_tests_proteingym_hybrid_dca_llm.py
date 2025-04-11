@@ -60,7 +60,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_base_model = prosst_base_model.to(device)
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
-    MAX_WT_SEQUENCE_LENGTH = 2000
+    MAX_WT_SEQUENCE_LENGTH = 1000
     get_vram()
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
@@ -241,7 +241,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             )
                             print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
                             hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
-                        except RuntimeError:  # modeling_prosst.py, line 920, in forward
+                        except RuntimeError:  # modeling_prosst.py, line 920, in forward 
+                            # or UnboundLocalError in prosst_lora_tune.py, line 167
                             hybrid_perfs.append(np.nan)
                     ns_y_test.append(len(y_test_pred))
                 except ValueError as e:
