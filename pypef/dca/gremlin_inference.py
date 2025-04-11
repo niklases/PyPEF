@@ -249,7 +249,7 @@ class GREMLIN:
         return torch.cat((v.flatten(), w.flatten()), 0)
 
 
-    def opt_adam_step(self, lr=1.0, b1=0.9, b2=0.999, b_fix=False):
+    def opt_adam_step(self, lr=1.0, b1=0.9, b2=0.999):
         """
         Adam optimizer [https://arxiv.org/abs/1412.6980] with first and second moments
             mt          and
@@ -279,14 +279,16 @@ class GREMLIN:
         self.vt_w = vt_tmp_w
         self.mt_w = mt_tmp_w
 
-    def sym_w(self, w):
+    def sym_w(self, w, device: str | None = None):
         """
         Symmetrize input matrix of shape (x,y,x,y)
         As the full couplings matrix W might/will be slightly "unsymmetrical"
         it will be symmetrized according to one half being "mirrored".
         """
+        if device is None:
+            device = self.device
         x = w.shape[0]
-        w = w * torch.reshape(1 - torch.eye(x), (x, 1, x, 1)).to(self.device)
+        w = w * torch.reshape(1 - torch.eye(x), (x, 1, x, 1)).to(device)
         w = w + torch.permute(w, (2, 3, 0, 1))
         return w
 
@@ -294,21 +296,23 @@ class GREMLIN:
     def l2_reg(x):
         return torch.sum(torch.square(x))
     
-    def loss(self, v, w):
+    def loss(self, v, w, device: str | None = None):
         ##############################################################
         # SETUP COMPUTE GRAPH
         ##############################################################
-
+        if device is None:
+            device = self.device
+        v, w = v.to(device), w.to(device)
         # symmetrize w
-        w = self.sym_w(w).to(torch.float32)
+        w = self.sym_w(w, device).to(torch.float32)
 
         ########################################
         # Pseudo-Log-Likelihood
         ########################################
-        vw = v + torch.tensordot(self.oh_msa, w, dims=2)
+        vw = v + torch.tensordot(self.oh_msa.to(device), w, dims=2)
 
         # Hamiltonian
-        h = torch.sum(torch.mul(self.oh_msa, vw), dim=(1, 2))
+        h = torch.sum(torch.mul(self.oh_msa.to(device), vw), dim=(1, 2))
         # partition function Z
         z = torch.sum(torch.logsumexp(vw, dim=2), dim=1)
 
@@ -322,13 +326,18 @@ class GREMLIN:
         lw_w = 0.01 * self.l2_reg(w) * 0.5 * (self.n_col - 1) * (self.states - 1)
 
         # loss function to minimize
-        loss = -torch.sum(pll * self.msa_weights) / torch.sum(self.msa_weights)
+        loss = (
+            -torch.sum(pll * self.msa_weights.to(device)) / 
+            torch.sum(self.msa_weights.to(device))
+        )
         loss = loss + (l2_v + lw_w) / self.n_eff
         return loss
     
     def _loss(self, decimals=2):
         return  torch.round(
-            self.loss(self.v.detach(), self.w.detach()) * self.n_eff, decimals=decimals)
+            self.loss(self.v.detach(), self.w.detach(), device='cpu') * self.n_eff, 
+            decimals=decimals
+        )
 
     def run_optimization(self):
         """

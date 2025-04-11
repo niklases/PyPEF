@@ -111,7 +111,7 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    print(f'Infering model for testing using {device.upper()} device...')
+    print(f'Infering ESM model for testing using {device.upper()} device...')
     model = model.to(device)
     xs, attention_masks, scores = torch.Tensor(xs).to(device), attention_masks.to(device), torch.Tensor(scores).to(torch.float).to(device) 
     pbar_epochs = tqdm(zip(xs, attention_masks, scores), total=len(xs))
@@ -140,7 +140,7 @@ def esm_infer(xs, attention_mask, model, desc: None | str = None, device: str | 
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    print(f'Infering model for predictions using {device.upper()} device...')
+    print(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(zip(xs, attention_masks), total=len(xs), desc=desc)):
         xs_b = xs_b.to(torch.int64)
         with torch.no_grad():
@@ -174,7 +174,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
             optimizer.step()
             optimizer.zero_grad()
             pbar_batches.set_description(
-                f"EPOCH: {epoch}. Loss: {loss.detach():>1f}  "
+                f"Epoch: {epoch}. Loss: {loss.detach():>1f}  "
                 f"[batch: {batch+1}/{len(xs)} | "
                 f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
             )

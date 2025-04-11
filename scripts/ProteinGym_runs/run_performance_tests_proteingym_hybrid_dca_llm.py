@@ -60,7 +60,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_base_model = prosst_base_model.to(device)
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
-    MAX_WT_SEQUENCE_LENGTH = 1000
+    MAX_WT_SEQUENCE_LENGTH = 1200
     get_vram()
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
@@ -123,7 +123,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             
             print(len(sequences))
-            print('GREMLIN-DCA: optimization..')
+            print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
             x_dca = gremlin.collect_encoded_sequences(sequences)
             x_wt = gremlin.x_wt
@@ -132,7 +132,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
 
             try:
-                x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
+                x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=1000)#len(wt_seq))
                 y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
                 print('ESM1v:', spearmanr(fitnesses, y_esm.cpu()))
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
@@ -505,7 +505,7 @@ if __name__ == '__main__':
 
     compute_performances(
         mut_data=combined_mut_data, 
-        start_i=start_i, 
+        start_i=0,#start_i, 
         already_tested_is=already_tested_is
     )
 
