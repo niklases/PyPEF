@@ -505,15 +505,28 @@ if __name__ == '__main__':
 
     compute_performances(
         mut_data=combined_mut_data, 
-        start_i=0,#start_i, 
+        start_i=start_i, 
         already_tested_is=already_tested_is
     )
 
 
     with open(out_results_csv, 'r') as fh:
-        with open(os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_opt_results_clean.csv'), 'w') as fh2:
-            for line in fh:
-                if not line.split(',')[1].startswith('OOM') and not line.split(',')[1].startswith('X'):
-                    fh2.write(line)
+        lines = fh.readlines()
+    clean_out_results_csv = os.path.join(
+        os.path.dirname(__file__), 
+        'results/dca_esm_and_hybrid_opt_results_clean.csv'
+    )
+    with open(clean_out_results_csv, 'w') as fh2:
+        header = lines[0]
+        content = lines[1:]
+        sort_keys = []
+        for line in content:
+                sort_keys.append(int(line.split(',')[0]))
+        content_sorted, sort_keys_sorted = [l for l in zip(*sorted(
+            zip(content, sort_keys), key=lambda x: x[1]))]
+        fh2.write(header)
+        for line in content_sorted:
+            if not line.split(',')[1].startswith('OOM') and not line.split(',')[1].startswith('X'):
+                fh2.write(line)
     
-    plot_csv_data(csv=os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_opt_results_clean.csv'), plot_name='mut_performance')
+    plot_csv_data(csv=clean_out_results_csv, plot_name='mut_performance')

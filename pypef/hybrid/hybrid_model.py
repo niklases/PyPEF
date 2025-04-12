@@ -575,10 +575,10 @@ class DCALLMHybridModel:
             if self.llm_attention_mask is not None:
                 print('No LLM input for hybrid prediction but the model '
                       'has been trained using an LLM model input.. '
-                      'Using only DCA for hybridprediction.. This can lead '
+                      'Using only DCA for hybrid prediction.. This can lead '
                       'to unwanted prediction behavior if the hybrid model '
                       'is trained including an LLM...')
-            return self.beta1 * y_dca + self.beta2
+            return self.beta1 * y_dca + self.beta2 * y_ridge
         
         else:
             if self.llm_key == 'prosst':
@@ -615,13 +615,6 @@ class DCALLMHybridModel:
                     #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             
-
-            #y_dca, y_ridge, y_llm, y_llm_lora = (
-            #    reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
-            #    reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
-            #    reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
-            #    reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
-            #)
             return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
     def split_performance(
