@@ -71,7 +71,7 @@ def get_logits_from_full_seqs(
             )
 
     logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
-    for i_s, sequence in enumerate(tqdm(xs, disable=not verbose, desc='Getting sequence logits')):
+    for i_s, sequence in enumerate(tqdm(xs, disable=not verbose, desc='Getting ProSST sequence logits')):
         for i_aa, x_aa in enumerate(sequence):
             if i_aa == 0:
                 seq_log_probs = logits[i_aa, x_aa].reshape(1)
@@ -104,7 +104,7 @@ def prosst_train(
         torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f'Training using {device.upper()} device (N_Train={len(torch.flatten(score_batches))})...')
+    print(f'ProSST training using {device.upper()} device (N_Train={len(torch.flatten(score_batches))})...')
     #structure_sequence = PdbQuantizer()(pdb_file=pdb_path)
     #structure_sequence_offset = [i + 3 for i in structure_sequence]
     #tokenized_res = tokenizer([wt_seq], return_tensors='pt')

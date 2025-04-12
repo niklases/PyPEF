@@ -128,13 +128,13 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             x_dca = gremlin.collect_encoded_sequences(sequences)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
-            print('DCA:', spearmanr(fitnesses, y_pred_dca), len(fitnesses)) 
+            print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
 
             try:
                 x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=1000)#len(wt_seq))
                 y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
-                print('ESM1v:', spearmanr(fitnesses, y_esm.cpu()))
+                print(f'ESM1v (unsupervised performance): {spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
             except RuntimeError:
                 esm_unopt_perf = np.nan
@@ -144,7 +144,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
                 y_prosst = get_logits_from_full_seqs(
                         x_prosst, prosst_base_model, input_ids, prosst_attention_mask, structure_input_ids, train=False)
-                print('ProSST:', spearmanr(fitnesses, y_prosst.cpu()))
+                print(f'ProSST (unsupervised performance): {spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
             except RuntimeError:
                 prosst_unopt_perf = np.nan
@@ -239,7 +239,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                     np.asarray(x_llm_test_prosst)
                                 ][i_m]
                             )
-                            print(f'Hybrid perf.: {spearmanr(y_test, y_test_pred)[0]}')
+                            print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
                             hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                         except RuntimeError:  # modeling_prosst.py, line 920, in forward 
                             # or UnboundLocalError in prosst_lora_tune.py, line 167
@@ -263,8 +263,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             dset_ns_y_test_i = ''
             for ns_y_t in ns_y_test:
                 dset_ns_y_test_i += f'{ns_y_t},'
-            print(ns_y_test)
-            print('\nREADME:\n', dset_hybrid_perfs_i, '\n', dset_ns_y_test_i, '\n')
             with open(out_results_csv, 'a') as fh:
                 fh.write(
                     f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
@@ -274,7 +272,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 def plot_csv_data(csv, plot_name):
     train_test_size_texts = []
     df = pd.read_csv(csv, sep=',')  
-    # No.,Dataset,N_Variants,N_Max_Muts,Untrained_Performance_DCA,Untrained_Performance_LLM,Hybrid_Trained_Performance_100,Hybrid_Trained_Performance_200,Hybrid_Trained_Performance_1000
     tested_dsets = df['No.']
     dset_dca_perfs = df['Untrained_Performance_DCA']
     dset_esm_perfs = df['Untrained_Performance_ESM1v']
@@ -290,7 +287,6 @@ def plot_csv_data(csv, plot_name):
     dset_hybrid_perfs_dca_prosst_1000 = df['Hybrid_DCA_ProSST_Trained_Performance_1000']
 
     plt.figure(figsize=(80, 12))
-    #import gc;gc.collect()  # Potentially GC is needed to free some RAM (deallocated VRAM -> partly stored in RAM?) after each run
     plt.plot(range(len(tested_dsets)), dset_dca_perfs, 'o--', markersize=8, color='tab:blue', label='DCA (0)')
     plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_dca_perfs)), color='tab:blue', linestyle='--')
     for i, (p, n_test) in enumerate(zip(dset_dca_perfs, df['N_Y_test'].astype('Int64').to_list())):
