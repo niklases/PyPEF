@@ -184,3 +184,23 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
             )
     y_preds_b = y_preds_b.detach()
     model.train(False)
+
+
+def esm_setup(sequences, device: str | None = None):
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model = esm_base_model.to(device)
+    x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(sequences[0]))
+    llm_dict_esm = {
+        'esm1v': {
+            'llm_base_model': esm_base_model,
+            'llm_model': esm_lora_model,
+            'llm_optimizer': esm_optimizer,
+            'llm_train_function': esm_train,
+            'llm_inference_function': esm_infer,
+            'llm_loss_function': corr_loss,
+            'x_llm_train' : x_esm,
+            'llm_attention_mask':  esm_attention_mask,
+            'llm_tokenizer': esm_tokenizer
+        }
+    }
+    return llm_dict_esm

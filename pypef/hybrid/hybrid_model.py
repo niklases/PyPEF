@@ -48,7 +48,8 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import get_batches
+from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup
+from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
 # will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
@@ -396,16 +397,7 @@ class DCALLMHybridModel:
         #x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
-                model=self.llm_base_model,
-                input_ids=self.input_ids,
-                attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
-                train=True,
-                device=self.device
-            )
-            y_llm_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
+                x_sequences=self.x_llm_ttest,
                 model=self.llm_base_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -451,17 +443,8 @@ class DCALLMHybridModel:
                 device=self.device,
                 #seed=self.seed
             )
-            y_llm_lora_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
-                model=self.llm_model,
-                input_ids=self.input_ids,
-                attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
-                train=True,
-                device=self.device
-            )
             y_llm_lora_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
+                x_sequences=self.x_llm_ttest,
                 model=self.llm_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -575,10 +558,10 @@ class DCALLMHybridModel:
             if self.llm_attention_mask is not None:
                 print('No LLM input for hybrid prediction but the model '
                       'has been trained using an LLM model input.. '
-                      'Using only DCA for hybrid prediction.. This can lead '
+                      'Using only DCA for hybridprediction.. This can lead '
                       'to unwanted prediction behavior if the hybrid model '
                       'is trained including an LLM...')
-            return self.beta1 * y_dca + self.beta2 * y_ridge
+            return self.beta1 * y_dca + self.beta2
         
         else:
             if self.llm_key == 'prosst':
@@ -601,7 +584,7 @@ class DCALLMHybridModel:
                     #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                x_llm_b = get_batches(x_llm, batch_size=1, dtype=int)
+                x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
                 y_llm = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
@@ -615,6 +598,13 @@ class DCALLMHybridModel:
                     #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             
+
+            y_dca, y_ridge, y_llm, y_llm_lora = (
+                reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
+                reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
+            )
             return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
     def split_performance(
@@ -1131,12 +1121,16 @@ def generate_model_and_save_pkl(
     save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
 
 
+
 def performance_ls_ts(
         ls_fasta: str | None,
         ts_fasta: str | None,
         threads: int,
         params_file: str,
         model_pickle_file: str | None = None,
+        llm: str | None = None,
+        wt_seq: str | None = None,
+        pdb_file: str | None = None,
         substitution_sep: str = '/',
         label=False
 ):
@@ -1194,30 +1188,35 @@ def performance_ls_ts(
                     f"(after removing substitutions at gap positions)."
                     )
 
+        if llm == 'esm':
+            llm_dict = esm_setup(train_sequences)
+            x_llm_test = esm_tokenize_sequences(
+                test_sequences, llm_dict['llm_tokenizer'], max_length=len(test_sequences[0])
+            )
+        elif llm == 'prosst':
+            llm_dict = prosst_setup(wt_seq, pdb_file, sequences=train_sequences)
+            x_llm_test = prosst_tokenize_sequences(
+                test_sequences, llm_dict['llm_tokenizer'], max_length=len(test_sequences[0])
+            )
+        else:
+            llm_dict = None
+            x_llm_test = None
+            llm = ''
+
+
         hybrid_model = DCALLMHybridModel(
-            x_train=np.array(x_train),
+            x_train_dca=np.array(x_train),
             y_train=np.array(y_train),
-            x_test=np.array(x_test),
-            y_test=np.array(y_test),
+            llm_model_input=llm_dict,
             x_wt=x_wt
         )
-        model_name = f'HYBRID{model_type.lower()}'
+        model_name = f'HYBRID{model_type.lower()}{llm.lower()}'
 
-        spearman_r, reg, beta_1, beta_2 = hybrid_model.ls_ts_performance()
-        ys_pred = hybrid_model.hybrid_prediction(np.array(x_test), reg, beta_1, beta_2)
+        y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
 
-        if reg is None:
-            alpha_ = 'None'
-        else:
-            alpha_ = f'{reg.alpha:.3f}'
-        print(
-            f'Individual model weights and regressor hyperparameters:\n'
-            f'Hybrid model individual model contributions: Beta1 (DCA): '
-            f'{beta_1:.3f}, Beta2 (ML): {beta_2:.3f} (regressor: '
-            f'Ridge(alpha={alpha_}))\nTesting performance...'
-        )
+        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)}')
 
-        save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, spearman_r, reg)
+        save_model_to_dict_pickle(hybrid_model, model_name)
 
     elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
@@ -1227,18 +1226,18 @@ def performance_ls_ts(
         if model_type != 'Hybrid':  # same as below in next elif
             x_test, test_variants, test_sequences, y_test, x_wt, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, model_pickle_file, substitution_sep, threads, False)
-            ys_pred = get_delta_e_statistical_model(x_test, x_wt)
+            y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model
-            beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
+            #beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
             x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
             )
-            ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
+            y_test_pred = model.hybrid_prediction(x_test)
 
     elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
         print(f'No learning set provided, falling back to statistical DCA model: '
-                    f'no adjustments of individual hybrid model parameters (beta_1 and beta_2).')
+              f'no adjustments of individual hybrid model parameters (beta_1 and beta_2).')
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
         x_test, test_variants, test_sequences, y_test, x_wt, model, model_type = plmc_or_gremlin_encoding(
             test_variants, test_sequences, y_test, params_file, substitution_sep, threads
@@ -1248,20 +1247,20 @@ def performance_ls_ts(
                     f"Remaining: {len(test_variants)} (after removing "
                     f"substitutions at gap positions).")
 
-        ys_pred = get_delta_e_statistical_model(x_test, x_wt)
+        y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
 
-        save_model_to_dict_pickle(model, model_type, None, None, spearmanr(y_test, ys_pred)[0], None)
+        save_model_to_dict_pickle(model, model_type, None, None, spearmanr(y_test, y_test_pred)[0], None)
 
         model_type = f'{model_type}_no_ML'
 
     else:
         raise SystemError('No Test Set given for performance estimation.')
 
-    spearman_rho = spearmanr(y_test, ys_pred)
+    spearman_rho = spearmanr(y_test, y_test_pred)
     print(f'Spearman Rho = {spearman_rho[0]:.3f}')
 
     plot_y_true_vs_y_pred(
-        np.array(y_test), np.array(ys_pred), np.array(test_variants), 
+        np.array(y_test), np.array(y_test_pred), np.array(test_variants), 
         label=label, hybrid=True, name=model_type
     )
 

@@ -192,6 +192,31 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
 
 
 
+def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to(device)
+    prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
+    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb_file, prosst_tokenizer, wt_seq)
+    x_llm_train_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
+    llm_dict_prosst = {
+        'prosst': {
+            'llm_base_model': prosst_base_model,
+            'llm_model': prosst_lora_model,
+            'llm_optimizer': prosst_optimizer,
+            'llm_train_function': prosst_train,
+            'llm_inference_function': get_logits_from_full_seqs,
+            'llm_loss_function': corr_loss,
+            'x_llm_train' : x_llm_train_prosst,
+            'llm_attention_mask':  prosst_attention_mask,
+            'input_ids': input_ids,
+            'structure_input_ids': structure_input_ids,
+            'llm_tokenizer': prosst_tokenizer
+        }
+    }
+    return llm_dict_prosst
+
+
 if __name__ == '__main__':
     import pandas as pd
     import copy
