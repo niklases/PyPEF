@@ -162,10 +162,11 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
     attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1))
+    loss = np.nan
     for epoch in pbar_epochs:
         try:
-            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}') #  noqa: F821
-        except UnboundLocalError:
+            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
+        except AttributeError:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
         model.train()
         pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False)
