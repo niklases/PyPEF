@@ -397,7 +397,7 @@ class DCALLMHybridModel:
         #x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
-                x_sequences=self.x_llm_ttest,
+                xs=self.x_llm_ttest,
                 model=self.llm_base_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
