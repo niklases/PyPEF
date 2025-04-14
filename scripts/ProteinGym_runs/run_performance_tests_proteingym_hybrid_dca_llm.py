@@ -55,12 +55,13 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     )
     print(f"Using {device} device")
     get_vram()
+    MAX_WT_SEQUENCE_LENGTH = 1000
+    print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
-    MAX_WT_SEQUENCE_LENGTH = 1200
     get_vram()
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
@@ -132,7 +133,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
 
             try:
-                x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=1000)#len(wt_seq))
+                x_esm, esm_attention_mask = esm_tokenize_sequences(sequences, esm_tokenizer, max_length=len(wt_seq))
                 y_esm = esm_infer(get_batches(x_esm, dtype=float, batch_size=1), esm_attention_mask, esm_base_model)
                 print(f'ESM1v (unsupervised performance): {spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
@@ -241,7 +242,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             )
                             print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
                             hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
-                        except RuntimeError:  # modeling_prosst.py, line 920, in forward 
+                        except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
                             # or UnboundLocalError in prosst_lora_tune.py, line 167
                             hybrid_perfs.append(np.nan)
                     ns_y_test.append(len(y_test_pred))
@@ -501,7 +502,7 @@ if __name__ == '__main__':
 
     compute_performances(
         mut_data=combined_mut_data, 
-        start_i=start_i, 
+        start_i=2, 
         already_tested_is=already_tested_is
     )
 

@@ -157,13 +157,16 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
         torch.manual_seed(seed)
     if device is None:
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f'Training using {device.upper()} device (N_Train={len(torch.flatten(scores))})...')
+    print(f'Training ESM model using {device.upper()} device (N_Train={len(torch.flatten(scores))})...')
     model = model.to(device)
     attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     for epoch in pbar_epochs:
-        pbar_epochs.set_description(f'EPOCH {epoch}/{n_epochs}')
+        try:
+            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
+        except UnboundLocalError:
+            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
         model.train()
         pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False)
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
