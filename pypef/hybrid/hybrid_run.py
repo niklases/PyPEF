@@ -53,6 +53,7 @@ def run_pypef_hybrid_modeling(arguments):
             threads=threads,
             params_file=arguments['--params'],
             model_pickle_file=arguments['--model'],
+            llm=arguments['--llm'],
             substitution_sep=arguments['--mutation_sep'],
             label=arguments['--label']
         )

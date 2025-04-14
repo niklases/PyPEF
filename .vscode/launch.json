@@ -123,6 +123,25 @@
         },
 
         {
+            "name": "Python: PyPEF hybrid LS-TS GREMLIN-DCA-ESM1v avGFP",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "GREMLIN",   // optional, not required  
+                "--ls", "LS.fasl",
+                "--ts", "TS.fasl", 
+                "--params", "GREMLIN",
+                "--llm", "esm"
+            ]
+        },
+
+        { // Test on test set
             "name": "Python: PyPEF hybrid/only-TS-zero-shot GREMLIN-DCA avGFP",
             "type": "debugpy",
             "request": "launch",
@@ -136,6 +155,24 @@
                 //"-m", "GREMLIN",   // optional, not required  
                 "--ts", "TS.fasl", 
                 "--params", "GREMLIN"
+            ]
+        },
+
+        { // Test on test set: Hybrid DCA-LLM ESM1v
+            "name": "Python: PyPEF hybrid/only-TS-zero-shot GREMLIN-DCA-ESM1v avGFP",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "GREMLIN",   // optional, not required  
+                "--ts", "TS.fasl", 
+                "--params", "GREMLIN",
+                "--llm", "esm"
             ]
         },
 

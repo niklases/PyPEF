@@ -1187,16 +1187,17 @@ def performance_ls_ts(
                     f"variants: {len(test_sequences)}. Remaining: {len(test_variants)} "
                     f"(after removing substitutions at gap positions)."
                     )
-
+        print('LLM:', llm)
         if llm == 'esm':
             llm_dict = esm_setup(train_sequences)
+            print('XX', llm_dict)
             x_llm_test = esm_tokenize_sequences(
-                test_sequences, llm_dict['llm_tokenizer'], max_length=len(test_sequences[0])
+                test_sequences, llm_dict['esm1v']['llm_tokenizer'], max_length=len(test_sequences[0])
             )
         elif llm == 'prosst':
             llm_dict = prosst_setup(wt_seq, pdb_file, sequences=train_sequences)
             x_llm_test = prosst_tokenize_sequences(
-                test_sequences, llm_dict['llm_tokenizer'], max_length=len(test_sequences[0])
+                test_sequences, llm_dict['prosst']['llm_tokenizer'], max_length=len(test_sequences[0])
             )
         else:
             llm_dict = None
@@ -1211,29 +1212,27 @@ def performance_ls_ts(
             x_wt=x_wt
         )
         model_name = f'HYBRID{model_type.lower()}{llm.lower()}'
-
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
-
         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)}')
-
         save_model_to_dict_pickle(hybrid_model, model_name)
 
     elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
-
         model, model_type = get_model_and_type(model_pickle_file)
-
         if model_type != 'Hybrid':  # same as below in next elif
             x_test, test_variants, test_sequences, y_test, x_wt, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, model_pickle_file, substitution_sep, threads, False)
             y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model
-            #beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
             x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
             )
-            y_test_pred = model.hybrid_prediction(x_test)
+            if model.llm_model_input is not None:
+                if list(model.llm_model_input.keys())[0] == 'esm1v':
+                    pass
+            else:
+                y_test_pred = model.hybrid_prediction(x_test)
 
     elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
         print(f'No learning set provided, falling back to statistical DCA model: '

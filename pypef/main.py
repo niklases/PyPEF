@@ -143,7 +143,9 @@ Usage:
     pypef hybrid 
         [--ts TEST_SET] [--ps PREDICTION_SET]
         [--model MODEL] [--params PARAM_FILE]
-        [--ls LEARNING_SET] [--label] [--threads THREADS]
+        [--ls LEARNING_SET] [--label] 
+        [--llm LLM]
+        [--threads THREADS]
     pypef hybrid --model MODEL --params PARAM_FILE
         [--ts TEST_SET] [--label]
         [--ps PREDICTION_SET] [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
@@ -206,6 +208,7 @@ Options:
                                     (line trimming) [default: 0.5].
   --label                           Label the plot instances [default: False].
   -l --ls LEARNING_SET              Input learning set in .fasta format.
+  --llm LLM                         LLM model to use for hybrid modeling next to DCA (options are 'ESM1v' and 'ProSST').
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
   --msa MSA_FILE                    Multiple sequence alignment (MSA) in FASTA or A2M format for
@@ -298,7 +301,7 @@ from docopt import docopt
 from schema import Schema, SchemaError, Optional, Or, Use
 
 from pypef.ml.ml_run import run_pypef_pure_ml
-from pypef.dca.dca_run import run_pypef_hybrid_modeling
+from pypef.hybrid.hybrid_run import run_pypef_hybrid_modeling
 from pypef.utils.utils_run import run_pypef_utils
 
 
@@ -330,6 +333,7 @@ schema = Schema({
     Optional('--inter_gap'): Use(float),
     Optional('--intra_gap'): Use(float),
     Optional('--label'): bool,
+    Optional('--llm'): Or(None, str),
     Optional('--ls'): Or(None, str),
     Optional('--model'): Or(None, str),
     Optional('--msa'): Or(None, str),
