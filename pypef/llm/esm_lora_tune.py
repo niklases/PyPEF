@@ -164,7 +164,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     for epoch in pbar_epochs:
         try:
-            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
+            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}') #  noqa: F821
         except UnboundLocalError:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
         model.train()

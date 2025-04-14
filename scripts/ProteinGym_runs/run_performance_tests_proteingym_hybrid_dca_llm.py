@@ -97,7 +97,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             variants = variant_fitness_data['mutant'].to_numpy()
             variants_orig = variants
             fitnesses = variant_fitness_data['DMS_score'].to_numpy()
-            if len(fitnesses) <= 50: # and len(fitnesses) >= 500:  # TODO: RESET TO 50
+            if len(fitnesses) <= 50:
                 print('Number of available variants <= 50, skipping dataset...')
                 continue
             variants_split = []
@@ -502,7 +502,7 @@ if __name__ == '__main__':
 
     compute_performances(
         mut_data=combined_mut_data, 
-        start_i=2, 
+        start_i=start_i, 
         already_tested_is=already_tested_is
     )
 
