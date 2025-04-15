@@ -405,6 +405,15 @@ class DCALLMHybridModel:
                 train=True,
                 device=self.device
             )
+            y_llm_ttrain = self.llm_inference_function(
+                xs=self.x_llm_ttrain,
+                model=self.llm_base_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
+                train=True,
+                device=self.device
+            )
         elif self.llm_key == 'esm1v':
             y_llm_ttest = self.llm_inference_function(
                 xs=x_llm_ttest_b,
@@ -426,9 +435,6 @@ class DCALLMHybridModel:
               'error, try reducing the batch size or sticking to CPU device...')
         
         # void function, training model in place
-        # x_sequence_batches, score_batches, loss_fn, model, optimizer,  
-        # input_ids, attention_mask, structure_input_ids,
-        # n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50
         if self.llm_key == 'prosst':
             self.llm_train_function(
                 x_llm_ttrain_b, 
@@ -443,13 +449,20 @@ class DCALLMHybridModel:
                 device=self.device,
                 #seed=self.seed
             )
-            y_llm_lora_ttest = self.llm_inference_function(
-                x_sequences=self.x_llm_ttest,
+            y_llm_lora_ttrain = self.llm_inference_function(
+                xs=self.x_llm_ttrain,
                 model=self.llm_model,
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                train=True,
+                device=self.device
+            )
+            y_llm_lora_ttest = self.llm_inference_function(
+                xs=self.x_llm_ttest,
+                model=self.llm_model,
+                input_ids=self.input_ids,
+                attention_mask=self.llm_attention_mask,
+                structure_input_ids=self.structure_input_ids,
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
