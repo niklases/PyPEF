@@ -53,7 +53,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
         if torch.backends.mps.is_available()
         else "cpu"
     )
-    print(f"Using {device} device")
+    print(f"Using {device.upper()} device")
     get_vram()
     MAX_WT_SEQUENCE_LENGTH = 1000
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
@@ -123,7 +123,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print(f'N max. (multiple) amino acid substitutions: {max_muts}')
             ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             
-            print(len(sequences))
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
             x_dca = gremlin.collect_encoded_sequences(sequences)
@@ -176,82 +175,83 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         train_size=train_size, 
                         random_state=42
                     )
-                    (
-                        x_dca_train, 
-                        x_llm_train_prosst,
-                        x_llm_train_esm, 
-                        y_train,
-                    ) = (
-                        reduce_by_batch_modulo(x_dca_train),  
-                        reduce_by_batch_modulo(x_llm_train_prosst),
-                        reduce_by_batch_modulo(x_llm_train_esm), 
-                        reduce_by_batch_modulo(y_train),
-                    )
-                    llm_dict_prosst = {
-                        'prosst': {
-                            'llm_base_model': prosst_base_model,
-                            'llm_model': prosst_lora_model_2,
-                            'llm_optimizer': prosst_optimizer,
-                            'llm_train_function': prosst_train,
-                            'llm_inference_function': get_logits_from_full_seqs,
-                            'llm_loss_function': corr_loss,
-                            'x_llm_train' : x_llm_train_prosst,
-                            'llm_attention_mask':  prosst_attention_mask,
-                            'input_ids': input_ids,
-                            'structure_input_ids': structure_input_ids
-                        }
-                    }
-                    llm_dict_esm = {
-                        'esm1v': {
-                            'llm_base_model': esm_base_model,
-                            'llm_model': esm_lora_model_2,
-                            'llm_optimizer': esm_optimizer,
-                            'llm_train_function': esm_train,
-                            'llm_inference_function': esm_infer,
-                            'llm_loss_function': corr_loss,
-                            'x_llm_train' : x_llm_train_esm,
-                            'llm_attention_mask':  esm_attention_mask
-                        }
-                    }
-                    print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
-                    if len(y_test) <= 50:
-                        print(f'Only {len(fitnesses)} in total, splitting the data in N_Train = {len(y_train)} '
-                              f'and N_Test = {len(y_test)} results in N_Test <= 50 variants - '
-                              f'not getting performance for N_Train = {len(y_train)}...')
-                        for k in [np.nan, np.nan, np.nan]:
-                            hybrid_perfs.append(k)
-                        ns_y_test.append(np.nan)
-                        continue
-                    get_vram()
-                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
-                        print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
-                        try:
-                            hm = DCALLMHybridModel(
-                                x_train_dca=np.array(x_dca_train), 
-                                y_train=y_train,
-                                llm_model_input=method,
-                                x_wt=x_wt
-                            )
-                            y_test_pred = hm.hybrid_prediction(
-                                x_dca=np.array(x_dca_test), 
-                                x_llm=[
-                                    None, 
-                                    np.asarray(x_llm_test_esm), 
-                                    np.asarray(x_llm_test_prosst)
-                                ][i_m]
-                            )
-                            print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
-                            hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
-                        except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
-                            # or UnboundLocalError in prosst_lora_tune.py, line 167
-                            hybrid_perfs.append(np.nan)
-                    ns_y_test.append(len(y_test_pred))
                 except ValueError as e:
                     print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
                           f'in N_Train = {train_size} and N_Test (N_Total - N_Train) [Excepted error: {e}].')
                     for k in [np.nan, np.nan, np.nan]:
                         hybrid_perfs.append(k)
                     ns_y_test.append(np.nan)
+                    continue
+                (
+                    x_dca_train, 
+                    x_llm_train_prosst,
+                    x_llm_train_esm, 
+                    y_train,
+                ) = (
+                    reduce_by_batch_modulo(x_dca_train),  
+                    reduce_by_batch_modulo(x_llm_train_prosst),
+                    reduce_by_batch_modulo(x_llm_train_esm), 
+                    reduce_by_batch_modulo(y_train),
+                )
+                llm_dict_prosst = {
+                    'prosst': {
+                        'llm_base_model': prosst_base_model,
+                        'llm_model': prosst_lora_model_2,
+                        'llm_optimizer': prosst_optimizer,
+                        'llm_train_function': prosst_train,
+                        'llm_inference_function': get_logits_from_full_seqs,
+                        'llm_loss_function': corr_loss,
+                        'x_llm_train' : x_llm_train_prosst,
+                        'llm_attention_mask':  prosst_attention_mask,
+                        'input_ids': input_ids,
+                        'structure_input_ids': structure_input_ids
+                    }
+                }
+                llm_dict_esm = {
+                    'esm1v': {
+                        'llm_base_model': esm_base_model,
+                        'llm_model': esm_lora_model_2,
+                        'llm_optimizer': esm_optimizer,
+                        'llm_train_function': esm_train,
+                        'llm_inference_function': esm_infer,
+                        'llm_loss_function': corr_loss,
+                        'x_llm_train' : x_llm_train_esm,
+                        'llm_attention_mask':  esm_attention_mask
+                    }
+                }
+                print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
+                if len(y_test) <= 50:
+                    print(f'Only {len(fitnesses)} in total, splitting the data in N_Train = {len(y_train)} '
+                          f'and N_Test = {len(y_test)} results in N_Test <= 50 variants - '
+                          f'not getting performance for N_Train = {len(y_train)}...')
+                    for k in [np.nan, np.nan, np.nan]:
+                        hybrid_perfs.append(k)
+                    ns_y_test.append(np.nan)
+                    continue
+                get_vram()
+                for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
+                    print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
+                    try:
+                        hm = DCALLMHybridModel(
+                            x_train_dca=np.array(x_dca_train), 
+                            y_train=y_train,
+                            llm_model_input=method,
+                            x_wt=x_wt
+                        )
+                        y_test_pred = hm.hybrid_prediction(
+                            x_dca=np.array(x_dca_test), 
+                            x_llm=[
+                                None, 
+                                np.asarray(x_llm_test_esm), 
+                                np.asarray(x_llm_test_prosst)
+                            ][i_m]
+                        )
+                        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
+                        hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
+                    except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
+                        # or UnboundLocalError in prosst_lora_tune.py, line 167
+                        hybrid_perfs.append(np.nan)
+                ns_y_test.append(len(y_test_pred))
                 del prosst_lora_model_2
                 del esm_lora_model_2
                 torch.cuda.empty_cache()

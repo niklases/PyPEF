@@ -65,18 +65,19 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
     return a[:reduce]
 
 
-# TODO: Implementation of other regression techniques (CVRegression models)
+# TODO: Implementation of other regression techniques (CVRegression models) [Likely not worth]
 # TODO: Differential evolution of multiple Zero Shot predictors
-#       (and supervised model predictions thereof) and y_true
+#       (and supervised model predictions thereof) and y_true [DONE]
+# TODO: Add constrastive learning option (on PGym data)?
 class DCALLMHybridModel:
     def __init__(
             self,
-            x_train_dca: np.ndarray,               # DCA-encoded sequences
-            y_train: np.ndarray,                   # true labels
+            x_train_dca: np.ndarray,
+            y_train: np.ndarray,
             llm_model_input: dict | None = None,
-            x_wt: np.ndarray | None = None,        # Wild type encoding
-            alphas: np.ndarray | None = None,      # Ridge regression grid for the parameter 'alpha'
-            parameter_range: list[tuple] | None = None,   # Parameter range of 'beta_1' and 'beta_2' with lower bound <= x <= upper bound,
+            x_wt: np.ndarray | None = None,
+            alphas: np.ndarray | None = None,
+            parameter_range: list[tuple] | None = None,
             batch_size: int | None = None,
             device: str | None = None,
             seed: int | None = None
@@ -332,10 +333,10 @@ class DCALLMHybridModel:
                 (train_size_fit * len(self.y_train)) - 
                 ((train_size_fit * len(self.y_train)) % self.batch_size)
             )
-            train_test_size = int(
-                (len(self.y_train) - train_size_fit) - 
-                ((len(self.y_train) - train_size_fit) % self.batch_size)
-            )
+            #train_test_size = int(
+            #    (len(self.y_train) - train_size_fit) - 
+            #    ((len(self.y_train) - train_size_fit) % self.batch_size)
+            #)
             (
                 self.x_dca_ttrain, self.x_dca_ttest, 
                 self.x_llm_ttrain, self.x_llm_ttest,
@@ -347,15 +348,13 @@ class DCALLMHybridModel:
                 train_size=train_size_fit,
                 random_state=self.seed
             )
-            # Reducing by batch size modulo for X, attention masks, and y
+            # Reducing by batch size modulo for X and y
             self.x_dca_ttrain = self.x_dca_ttrain[:train_size_fit]
             self.x_llm_ttrain = self.x_llm_ttrain[:train_size_fit]
-            #self.attn_llm_ttrain = self.attn_llm_ttrain[:train_size_fit]
             self.y_ttrain = self.y_ttrain[:train_size_fit]
-            self.x_dca_ttest = self.x_dca_ttest[:train_test_size]   
-            self.x_llm_ttest = self.x_llm_ttest[:train_test_size]
-            #self.attn_llm_ttest = self.attn_llm_ttest[:train_test_size]
-            self.y_ttest = self.y_ttest[:train_test_size]
+            #self.x_dca_ttest = self.x_dca_ttest[:train_test_size]   
+            #self.x_llm_ttest = self.x_llm_ttest[:train_test_size]
+            #self.y_ttest = self.y_ttest[:train_test_size]
 
         else:
             (
@@ -393,7 +392,7 @@ class DCALLMHybridModel:
             #get_batches(self.attn_llm_ttrain, batch_size=self.batch_size, dtype=int), 
             get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float)
         )
-        x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
+
         #x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=self.batch_size, dtype=int)
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
@@ -415,6 +414,7 @@ class DCALLMHybridModel:
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
+            x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=1, dtype=int)
             y_llm_ttest = self.llm_inference_function(
                 xs=x_llm_ttest_b,
                 model=self.llm_model,
@@ -585,7 +585,6 @@ class DCALLMHybridModel:
                     self.llm_attention_mask, 
                     self.structure_input_ids,
                     train=False,
-                    #desc='Infering base model', 
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
                     x_llm, 
@@ -594,30 +593,20 @@ class DCALLMHybridModel:
                     self.llm_attention_mask, 
                     self.structure_input_ids,
                     train=False,
-                    #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                x_llm_b = get_batches(x_llm, batch_size=self.batch_size, dtype=int)
+                x_llm_b = get_batches(x_llm, batch_size=1, dtype=int)
                 y_llm = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
                     self.llm_base_model, 
-                    #desc='Infering base model', 
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
                     self.llm_model, 
-                    #desc='Infering LoRA-tuned model', 
                     device=self.device).detach().cpu().numpy()
             
-
-            y_dca, y_ridge, y_llm, y_llm_lora = (
-                reduce_by_batch_modulo(y_dca, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_ridge, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_llm, batch_size=self.batch_size), 
-                reduce_by_batch_modulo(y_llm_lora, batch_size=self.batch_size)
-            )
             return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
     def split_performance(

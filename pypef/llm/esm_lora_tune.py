@@ -141,7 +141,7 @@ def esm_infer(xs, attention_mask, model, desc: None | str = None, device: str | 
         device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
     attention_masks = torch.Tensor(np.full(shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     print(f'Infering ESM model for predictions using {device.upper()} device...')
-    for i , (xs_b, am_b) in enumerate(tqdm(zip(xs, attention_masks), total=len(xs), desc=desc)):
+    for i , (xs_b, am_b) in enumerate(tqdm(zip(xs, attention_masks), total=len(xs), desc="Infering ESM model. Sequence")):
         xs_b = xs_b.to(torch.int64)
         with torch.no_grad():
             y_preds = get_y_pred_scores(xs_b, am_b, model, device)
