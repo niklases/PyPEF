@@ -499,13 +499,11 @@ if __name__ == '__main__':
             start_i = 0
             already_tested_is = []
 
-
     compute_performances(
         mut_data=combined_mut_data, 
         start_i=start_i, 
         already_tested_is=already_tested_is
     )
-
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
