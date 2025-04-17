@@ -609,69 +609,6 @@ class DCALLMHybridModel:
             
             return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
 
-    def split_performance(
-            self,
-            train_size: float = 0.8,
-            n_runs: int = 10,
-            seed: int = 42,
-            save_model: bool = False
-    ) -> dict:
-        """
-        TODO: Update
-        Estimates performance of the model.
-
-        Parameters
-        ----------
-        train_size : int or float (default=0.8)
-            Number of samples in the training dataset
-            or fraction of full dataset used for training.
-        n_runs : int (default=10)
-            Number of different splits to perform.
-        seed : int (default=42)
-            Seed for random generator.
-        save_model : bool (default=False)
-            If True, model is saved using pickle, else not.
-
-        Returns
-        -------
-        data : dict
-            Contains information about hybrid model parameters
-            and performance results.
-        """
-        data = {}
-        np.random.seed(seed)
-
-        for r, random_state in enumerate(np.random.randint(100, size=n_runs)):
-            x_train, x_test, y_train, y_test = train_test_split(
-                self.X, self.y, train_size=train_size, random_state=random_state)
-            beta_1, beta_2, reg = self.settings(x_train, y_train)
-            if beta_2 == 0.0:
-                alpha = np.nan
-            else:
-                if save_model:
-                    pickle.dumps(reg)
-                alpha = reg.alpha
-            data.update(
-                {f'{len(y_train)}_{r}':
-                    {
-                        'no_run': r,
-                        'n_y_train': len(y_train),
-                        'n_y_test': len(y_test),
-                        'rnd_state': random_state,
-                        'spearman_rho': self.spearmanr(
-                            y_test, self.hybrid_prediction(
-                                x_test, reg, beta_1, beta_2
-                            )
-                        ),
-                        'beta_1': beta_1,
-                        'beta_2': beta_2,
-                        'alpha': alpha
-                    }
-                }
-            )
-
-        return data
-
     def ls_ts_performance(self):
         beta_1, beta_2, reg = self.settings(
             x_train=self.x_train,
@@ -744,49 +681,13 @@ class DCALLMHybridModel:
             test_spearman_r = None
         return beta_1, beta_2, reg, self._spearmanr_dca, test_spearman_r
 
-    def get_train_sizes(self) -> np.ndarray:
-        """
-        Generates a list of train sizes to perform low-n with.
-
-        Returns
-        -------
-        Numpy array of train sizes up to 80% (i.e. 0.8 * N_variants).
-        """
-        eighty_percent = int(len(self.y) * 0.8)
-
-        train_sizes = np.sort(np.concatenate([
-            np.arange(15, 50, 5), np.arange(50, 100, 10),
-            np.arange(100, 150, 20), [160, 200, 250, 300, eighty_percent],
-            np.arange(400, 1100, 100)
-        ]))
-
-        idx_max = np.where(train_sizes >= eighty_percent)[0][0] + 1
-        return train_sizes[:idx_max]
-
-    def run(
-            self,
-            train_sizes: list = None,
-            n_runs: int = 10
-    ) -> dict:
-        """
-
-        Returns
-        ----------
-        data: dict
-            Performances of the split with size of the
-            training set = train_size and size of the
-            test set = N_variants - train_size.
-        """
-        data = {}
-        for t, train_size in enumerate(train_sizes):
-            print(f'{t + 1}/{len(train_sizes)}:{train_size}')
-            data.update(self.split_performance(train_size=train_size, n_runs=n_runs))
-        return data
 
 
-"""
-Below: Some helper functions that call or are dependent on the DCALLMHybridModel class.
-"""
+""" 
+###########################################################################################
+# Below: Some helper functions that call or are dependent on the DCALLMHybridModel class. #
+###########################################################################################
+""" 
 
 
 def check_model_type(model: dict | DCALLMHybridModel | PLMC | GREMLIN):
@@ -940,11 +841,11 @@ def plmc_or_gremlin_encoding(
     elif model_type == 'GREMLIN':
         if verbose:
             print(f"Following positions are frequent gap positions in the MSA "
-                        f"and cannot be considered for effective modeling, i.e., "
-                        f"substitutions at these positions are removed as these would be "
-                        f"predicted with wild-type fitness:\n{[int(gap) + 1 for gap in model.gaps]}.\n"
-                        f"Effective positions (N={len(model.v_idx)}) are:\n"
-                        f"{[int(v_pos) + 1 for v_pos in model.v_idx]}")
+                  f"and cannot be considered for effective modeling, i.e., "
+                  f"substitutions at these positions are removed as these would be "
+                  f"predicted with wild-type fitness:\n{[int(gap) + 1 for gap in model.gaps]}.\n"
+                  f"Effective positions (N={len(model.v_idx)}) are:\n"
+                  f"{[int(v_pos) + 1 for v_pos in model.v_idx]}")
         xs, x_wt, variants, sequences, ys_true = gremlin_encoding(
             model, variants, sequences, ys_true,
             shift_pos=1, substitution_sep=substitution_sep
@@ -987,7 +888,7 @@ def plmc_encoding(plmc: PLMC, variants, sequences, ys_true, threads=1, verbose=F
     wt_name = target_seq[0] + str(index[0]) + target_seq[0]
     if verbose:
         print(f"Using to-self-substitution '{wt_name}' as wild type reference. "
-                    f"Encoding variant sequences. This might take some time...")
+              f"Encoding variant sequences. This might take some time...")
     x_wt = get_encoded_sequence(wt_name, plmc)
     if threads > 1:
         # Hyperthreading, NaNs are already being removed by the called function
@@ -1123,6 +1024,22 @@ def generate_model_and_save_pkl(
     save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
 
 
+def llm_embedder(llm_dict, seqs):
+    #try:
+    np.shape(seqs)
+    #except np.shape error:
+    if list(llm_dict.keys())[0] == 'esm1v':
+        x_llm_seqs = esm_tokenize_sequences(
+            seqs, llm_dict['esm1v']['llm_tokenizer'], max_length=len(seqs[0])
+        )
+    elif list(llm_dict.keys())[0] == 'prosst':
+        x_llm_seqs = prosst_tokenize_sequences(
+            seqs, llm_dict['prosst']['llm_tokenizer'], max_length=len(seqs[0])
+        )
+    else:
+        raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
+    return x_llm_seqs
+
 
 def performance_ls_ts(
         ls_fasta: str | None,
@@ -1188,24 +1105,17 @@ def performance_ls_ts(
                     f"substitutions at gap positions).\nInitial test set "
                     f"variants: {len(test_sequences)}. Remaining: {len(test_variants)} "
                     f"(after removing substitutions at gap positions)."
-                    )
-        print('LLM:', llm)
+        )
         if llm == 'esm':
             llm_dict = esm_setup(train_sequences)
-            print('XX', llm_dict)
-            x_llm_test = esm_tokenize_sequences(
-                test_sequences, llm_dict['esm1v']['llm_tokenizer'], max_length=len(test_sequences[0])
-            )
+            x_llm_test = llm_embedder(llm_dict, test_sequences)
         elif llm == 'prosst':
             llm_dict = prosst_setup(wt_seq, pdb_file, sequences=train_sequences)
-            x_llm_test = prosst_tokenize_sequences(
-                test_sequences, llm_dict['prosst']['llm_tokenizer'], max_length=len(test_sequences[0])
-            )
+            x_llm_test = llm_embedder(llm_dict, test_sequences)
         else:
             llm_dict = None
             x_llm_test = None
             llm = ''
-
 
         hybrid_model = DCALLMHybridModel(
             x_train_dca=np.array(x_train),
@@ -1245,13 +1155,11 @@ def performance_ls_ts(
         )
 
         print(f"Initial test set variants: {len(test_sequences)}. "
-                    f"Remaining: {len(test_variants)} (after removing "
-                    f"substitutions at gap positions).")
+              f"Remaining: {len(test_variants)} (after removing "
+              f"substitutions at gap positions).")
 
         y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
-
         save_model_to_dict_pickle(model, model_type, None, None, spearmanr(y_test, y_test_pred)[0], None)
-
         model_type = f'{model_type}_no_ML'
 
     else:
@@ -1332,18 +1240,9 @@ def predict_ps(  # also predicting "pmult" dict directories
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
-        print(f'No hybrid model provided - falling back to a statistical DCA model.')
+        print(f'Found {model_type} model file. No hybrid model provided - falling back to a statistical DCA model...')
     elif model_type == 'Hybrid':
-        beta_1, beta_2, reg = model.beta_1, model.beta_2, model.regressor
-        if reg is None:
-            alpha_ = 'None'
-        else:
-            alpha_ = f'{reg.alpha:.3f}'
-        print(
-            f'Individual model weights and regressor hyperparameters:\n'
-            f'Hybrid model individual model contributions: Beta1 (DCA): {beta_1:.3f}, '
-            f'Beta2 (ML): {beta_2:.3f} (regressor: Ridge(alpha={alpha_})).'
-        )
+        print(f'Found hybrid model...')
 
     pmult = [
         'Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split',
@@ -1365,13 +1264,16 @@ def predict_ps(  # also predicting "pmult" dict directories
                             variants, sequences, None, model, threads=threads, verbose=False,
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
-                    else:  # Hybrid model input requires params from plmc or GREMLIN model
-                        ##encoding_model, encoding_model_type = get_model_and_type(params_file)
+                    else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
                         x_test, _test_variants, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
-                        ys_pred = model.hybrid_prediction(x_test, reg, beta_1, beta_2)
+                        if model.llm_model_input is None:
+                            ys_pred = model.hybrid_prediction(x_test)
+                        else:
+                            x_llm_test = llm_embedder(model.llm_model_input, sequences)
+                            ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
                     for k, y in enumerate(ys_pred):
                         all_y_v_pred.append((ys_pred[k], variants[k]))
                 if negative:  # sort by fitness value
@@ -1395,13 +1297,17 @@ def predict_ps(  # also predicting "pmult" dict directories
                 variants, sequences, None, params_file,
                 threads=threads, verbose=False, substitution_sep=separator)
             ys_pred = get_delta_e_statistical_model(xs, x_wt)
-        else:  # Hybrid model input requires params from plmc or GREMLIN model
+        else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
             xs, variants, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
                 threads=threads, verbose=True, substitution_sep=separator
             )
-            ys_pred = model.hybrid_prediction(xs, reg, beta_1, beta_2)
-        assert len(xs) == len(variants)
+            if model.llm_model_input is None:
+                ys_pred = model.hybrid_prediction(xs)
+            else:
+                xs_llm = llm_embedder(model.llm_model_input, sequences)
+                ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
+        assert len(xs) == len(variants) == len(xs_llm) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(
@@ -1436,14 +1342,18 @@ def predict_directed_evolution(
         if not list(xs):
             return 'skip'
         y_pred = get_delta_e_statistical_model(xs, x_wt)
-    else:  # model_type == 'Hybrid': Hybrid model input requires params from PLMC or GREMLIN model
+    else:  # model_type == 'Hybrid': Hybrid model input requires params from PLMC or GREMLIN model plus optional LLM input
         xs, variant, *_ = plmc_or_gremlin_encoding(
             variant, sequence, None, encoder, verbose=False, use_global_model=True
         )
         if not list(xs):
             return 'skip'
+        if model.llm_model_input is None:
+            x_llm = None
+        else:
+            x_llm = llm_embedder(model.llm_model_input, sequence)
         try:
-            y_pred = model.hybrid_prediction(np.atleast_2d(xs), model.regressor, model.beta_1, model.beta_2)[0]
+            y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm))[0]
         except ValueError:
             raise SystemError(
                 "Probably a different model was used for encoding than for modeling; "
