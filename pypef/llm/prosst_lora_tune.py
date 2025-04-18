@@ -10,16 +10,16 @@
 from sys import path
 import os
 path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+import warnings
 
 import torch
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
-
 from transformers import AutoModelForMaskedLM, AutoTokenizer
-
-
 from peft import LoraConfig, get_peft_model
+from Bio import SeqIO, BiopythonParserWarning
+warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.llm.esm_lora_tune import corr_loss, get_batches
 from pypef.llm.prosst_structure.quantizer import PdbQuantizer
@@ -187,6 +187,24 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
 
 
 def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
+    if wt_seq is None:
+        raise SystemError(
+            "Running ProSST requires a wild-type sequence "
+            "FASTA file input for embedding sequences! "
+            "Specify a FASTA file with the --wt flag."
+        )
+    if pdb_file is None:
+        raise SystemError(
+            "Running ProSST requires a PDB file input "
+            "for embedding sequences! Specify a PDB file "
+            "with the --pdb flag."
+        )
+
+    pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
+    assert wt_seq == pdb_seq, (
+        f"Wild-type sequence is not matching PDB-extracted sequence:"
+        f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
+    )
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
@@ -201,7 +219,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
             'llm_train_function': prosst_train,
             'llm_inference_function': get_logits_from_full_seqs,
             'llm_loss_function': corr_loss,
-            'x_llm_train' : x_llm_train_prosst,
+            'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
             'input_ids': input_ids,

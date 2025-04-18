@@ -37,8 +37,6 @@ patch_sklearn(verbose=False)
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
-from Bio import SeqIO, BiopythonParserWarning
-warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.utils.variant_data import (
     get_sequences_from_file, get_seqs_from_var_name,
@@ -97,7 +95,7 @@ class DCALLMHybridModel:
                     self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
                     self.llm_inference_function = llm_model_input['esm1v']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
-                    self.x_train_llm = llm_model_input['esm1v']['x_llm_train']
+                    self.x_train_llm = llm_model_input['esm1v']['x_llm']
                     self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
                 elif len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'prosst':
                     self.llm_key = 'prosst'
@@ -107,7 +105,7 @@ class DCALLMHybridModel:
                     self.llm_train_function = llm_model_input['prosst']['llm_train_function']
                     self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
-                    self.x_train_llm = llm_model_input['prosst']['x_llm_train']
+                    self.x_train_llm = llm_model_input['prosst']['x_llm']
                     self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
                     self.input_ids = llm_model_input['prosst']['input_ids']
                     self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
@@ -844,7 +842,8 @@ def plmc_or_gremlin_encoding(
         else:
             model, model_type = global_model, global_model_type
     else:
-        model, model_type = get_model_and_type(params_file, substitution_sep)
+        model, model_type = get_model_and_type(
+            params_file, substitution_sep)
     if model_type == 'PLMC':
         xs, x_wt, variants, sequences, ys_true = plmc_encoding(
             model, variants, sequences, ys_true, threads, verbose
@@ -867,20 +866,25 @@ def plmc_or_gremlin_encoding(
         )
     else:
         raise SystemError(
-            f"Found a {model_type.lower()} model as input. Please train a new "
-            f"hybrid model on the provided LS/TS datasets."
+            f"Found a {model_type.lower()} model as input. Please "
+            f"train a new hybrid model on the provided LS/TS datasets."
         )
     assert len(xs) == len(variants) == len(sequences) == len(ys_true)
     return xs, variants, sequences, ys_true, x_wt, model, model_type
 
 
-def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, shift_pos=1, substitution_sep='/'):
+def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true, 
+                     shift_pos=1, substitution_sep='/'):
     """
     Gets X and x_wt for DCA prediction: delta_Hamiltonian respectively
     delta_E = np.subtract(X, x_wt), with X = encoded sequences of variants.
     Also removes variants, sequences, and y_trues at MSA gap positions.
     """
-    variants, sequences, ys_true = np.atleast_1d(variants), np.atleast_1d(sequences), np.atleast_1d(ys_true)
+    variants, sequences, ys_true = (
+        np.atleast_1d(variants), 
+        np.atleast_1d(sequences), 
+        np.atleast_1d(ys_true)
+    )
     variants, sequences, ys_true = remove_gap_pos(
         gremlin.gaps, variants, sequences, ys_true,
         shift_pos=shift_pos, substitution_sep=substitution_sep
@@ -993,7 +997,8 @@ def generate_model_and_save_pkl(
     """
     wt_seq = get_wt_sequence(wt)
     variants_splitted = split_variants(variants, substitution_sep)
-    variants, ys_true, sequences = get_seqs_from_var_name(wt_seq, variants_splitted, ys_true)
+    variants, ys_true, sequences = get_seqs_from_var_name(
+        wt_seq, variants_splitted, ys_true)
 
     xs, variants, sequences, ys_true, x_wt, _model, model_type = plmc_or_gremlin_encoding(
         variants, sequences, ys_true, params_file, substitution_sep, threads)
@@ -1043,9 +1048,10 @@ def generate_model_and_save_pkl(
 
 
 def llm_embedder(llm_dict, seqs):
-    #try:
-    np.shape(seqs)
-    #except np.shape error:
+    try:
+        np.shape(seqs)
+    except ValueError:
+        raise SystemError("Unequal input sequence length detected!")
     if list(llm_dict.keys())[0] == 'esm1v':
         x_llm_seqs, _attention_mask = esm_tokenize_sequences(
             seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], max_length=len(seqs[0])
@@ -1069,7 +1075,8 @@ def performance_ls_ts(
         pdb_file: str | None = None,
         wt_seq: str | None = None,
         substitution_sep: str = '/',
-        label=False
+        label=False,
+        device: str| None = None
 ):
     """
     Description
@@ -1137,23 +1144,6 @@ def performance_ls_ts(
             llm_dict = esm_setup(train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)
         elif llm == 'prosst':
-            if pdb_file is None:
-                raise SystemError(
-                    "Running ProSST requires a PDB file input "
-                    "for embedding sequences! Specify a PDB file "
-                    "with the --pdb flag."
-                )
-            if wt_seq is None:
-                raise SystemError(
-                    "Running ProSST requires a wild-type sequence "
-                    "FASTA file input for embedding sequences! "
-                    "Specify a FASTA file with the --wt flag."
-                )
-            pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
-            assert wt_seq == pdb_seq, (
-                f"Wild-type sequence is not matching PDB-extracted sequence:"
-                f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
-            )
             llm_dict = prosst_setup(
                 wt_seq, pdb_file, sequences=train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)
@@ -1173,6 +1163,7 @@ def performance_ls_ts(
         save_model_to_dict_pickle(hybrid_model, model_name)
 
     elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
+        # # no LS provided --> statistical modeling / no ML
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
         if model_type != 'Hybrid':  # same as below in next elif
@@ -1193,33 +1184,60 @@ def performance_ls_ts(
                 substitution_sep, threads, False
             )
             if model.llm_model_input is not None:
-                if list(model.llm_model_input.keys())[0] == 'esm1v':
-                    pass
+                print(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
+                x_llm_test = llm_embedder(llm_dict, test_sequences)
+                model.hybrid_prediction(x_test, x_llm_test)
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
 
     elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
-        print(f'No learning set provided, falling back to statistical DCA model: '
-              f'no adjustments of individual hybrid model parameters (beta_1 and beta_2).')
+        print(f"No learning set provided, falling back to statistical DCA model: "
+              f"no adjustments of individual hybrid model parameters (\"beta's\").")
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
-        x_test, test_variants, test_sequences, y_test, x_wt, model, model_type = plmc_or_gremlin_encoding(
-            test_variants, test_sequences, y_test, params_file, substitution_sep, threads
+        (
+            x_test, test_variants, test_sequences, 
+            y_test, x_wt, model, model_type
+        ) = plmc_or_gremlin_encoding(
+            test_variants, test_sequences, y_test, 
+            params_file, substitution_sep, threads
         )
-
         print(f"Initial test set variants: {len(test_sequences)}. "
               f"Remaining: {len(test_variants)} (after removing "
               f"substitutions at gap positions).")
-
         y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
-        save_model_to_dict_pickle(model, model_type, None, None, spearmanr(y_test, y_test_pred)[0], None)
+        if llm == 'esm':
+            llm_dict = esm_setup(test_sequences)
+            x_llm_test = llm_embedder(llm_dict, test_sequences)
+            y_test_pred_llm = llm_dict['esm1v']['llm_inference_function'](
+                xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
+                attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
+                model=llm_dict['esm1v']['llm_base_model'], 
+                device=device
+            ).cpu()
+            plot_y_true_vs_y_pred(
+                np.array(y_test), np.array(y_test_pred_llm), np.array(test_variants), 
+                label=label, hybrid=True, name=f'ESM1v_no_ML'
+            )
+        elif llm == 'prosst':
+            llm_dict = prosst_setup(
+                wt_seq, pdb_file, sequences=test_sequences)
+            x_llm_test = llm_embedder(llm_dict, test_sequences)
+            y_test_pred_llm = llm_dict['prosst']['llm_inference_function'](
+                xs=x_llm_test, 
+                model=llm_dict['prosst']['llm_base_model'], 
+                input_ids=llm_dict['prosst']['input_ids'], 
+                attention_mask=llm_dict['prosst']['llm_attention_mask'], 
+                structure_input_ids=llm_dict['prosst']['structure_input_ids'],
+                device=device
+            ).cpu()
+            plot_y_true_vs_y_pred(
+                np.array(y_test), np.array(y_test_pred_llm), np.array(test_variants), 
+                label=label, hybrid=True, name=f'ProSST_no_ML'
+            )
+        save_model_to_dict_pickle(model, model_type)
         model_type = f'{model_type}_no_ML'
-
     else:
-        raise SystemError('No Test Set given for performance estimation.')
-
-    spearman_rho = spearmanr(y_test, y_test_pred)
-    print(f'Spearman Rho = {spearman_rho[0]:.3f}')
-
+        raise SystemError('No test set given for performance estimation.')
     plot_y_true_vs_y_pred(
         np.array(y_test), np.array(y_test_pred), np.array(test_variants), 
         label=label, hybrid=True, name=model_type

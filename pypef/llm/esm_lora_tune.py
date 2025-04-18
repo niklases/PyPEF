@@ -221,7 +221,7 @@ def esm_setup(sequences, device: str | None = None):
             'llm_train_function': esm_train,
             'llm_inference_function': esm_infer,
             'llm_loss_function': corr_loss,
-            'x_llm_train' : x_esm,
+            'x_llm' : x_esm,
             'llm_attention_mask':  esm_attention_mask,
             'llm_tokenizer': esm_tokenizer
         }
