@@ -194,6 +194,23 @@
         },
 
         {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "-m", "GREMLIN", 
+                "--pmult", "--drecomb", 
+                "--params", "GREMLIN"
+            ]
+        },
+
+        {
             "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb II",
             "type": "debugpy",
             "request": "launch",
@@ -211,7 +228,7 @@
         },
 
         {
-            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb",
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb III: ESM",
             "type": "debugpy",
             "request": "launch",
             "env": {"PYTHONPATH": "${workspaceFolder}"},
@@ -221,7 +238,24 @@
             "cwd": "${workspaceFolder}/datasets/AVGFP/",
             "args": [
                 "hybrid", 
-                "-m", "GREMLIN", 
+                "-m", "HYBRIDgremlinesm", 
+                "--pmult", "--drecomb", 
+                "--params", "GREMLIN"
+            ]
+        },
+
+        {
+            "name": "Python: PyPEF hybrid/only-PS-zero-shot GREMLIN-DCA avGFP drecomb IV: ProSST",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "-m", "HYBRIDgremlinprosst", 
                 "--pmult", "--drecomb", 
                 "--params", "GREMLIN"
             ]

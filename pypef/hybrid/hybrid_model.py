@@ -117,6 +117,7 @@ class DCALLMHybridModel:
         else:
             print("No LLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
+            self.llm_model_input = llm_model_input  # = None
             self.llm_attention_mask = None
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
@@ -545,7 +546,7 @@ class DCALLMHybridModel:
     def hybrid_prediction(
             self,
             x_dca: np.ndarray,
-            x_llm: None | np.ndarray
+            x_llm: None | np.ndarray = None
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -735,7 +736,7 @@ def get_model_path(model: str):
         else:
             raise SystemError(
                 "Did not find specified model file in current "
-                "working directory  or /Pickles subdirectory. "
+                "working directory or /Pickles subdirectory. "
                 "Make sure to train/save a model first (e.g., "
                 "for saving a GREMLIN model, type \"pypef "
                 "param_inference --msa TARGET_MSA.a2m\" or, for"
@@ -798,6 +799,7 @@ def save_model_to_dict_pickle(
         model_type = 'MODEL'
     
     pkl_path = os.path.abspath(f'Pickles/{model_type}')
+    # TODO: For LLM model saves try: model.state_dict()
     pickle.dump(
         {
             'model': model,
@@ -1326,7 +1328,7 @@ def predict_ps(  # also predicting "pmult" dict directories
                 all_y_v_pred = []
                 files = [f for f in listdir(path) if isfile(join(path, f)) if f.endswith('.fasta')]
                 for i, file in enumerate(files):  # collect and predict for each file in the directory
-                    print(f'Encoding files ({i + 1}/{len(files)}) for prediction...\n')
+                    print(f'Encoding files ({i + 1}/{len(files)}) for prediction...')
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
                     if model_type != 'Hybrid':
@@ -1359,7 +1361,7 @@ def predict_ps(  # also predicting "pmult" dict directories
             else:  # check next task to do, e.g., predicting triple substituted variants, e.g. trecomb
                 continue
 
-    elif prediction_set is not None:
+    elif prediction_set is not None:  # Predicting single FASTA file sequences
         sequences, variants, _ = get_sequences_from_file(prediction_set)
         # NaNs are already being removed by the called function
         if model_type != 'Hybrid':  # statistical DCA model
