@@ -416,3 +416,5 @@ scripts/ESM_finetuning/_Description_DMS_substitutions_data.csv
 scripts/ESM_finetuning/mut_performance_violin.png
 datasets/ANEH/SSM_landscape.png
 datasets/ANEH/SSM_landscape.csv
+datasets/AVGFP/model_saves/*
+datasets/AVGFP/Pickles/*

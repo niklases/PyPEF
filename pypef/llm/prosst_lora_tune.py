@@ -202,7 +202,8 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
             'llm_inference_function': get_logits_from_full_seqs,
             'llm_loss_function': corr_loss,
             'x_llm_train' : x_llm_train_prosst,
-            'llm_attention_mask':  prosst_attention_mask,
+            'llm_attention_mask': prosst_attention_mask,
+            'llm_vocab': prosst_vocab,
             'input_ids': input_ids,
             'structure_input_ids': structure_input_ids,
             'llm_tokenizer': prosst_tokenizer

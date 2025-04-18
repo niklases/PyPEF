@@ -54,6 +54,8 @@ def run_pypef_hybrid_modeling(arguments):
             params_file=arguments['--params'],
             model_pickle_file=arguments['--model'],
             llm=arguments['--llm'],
+            pdb_file=arguments['--pdb'],
+            wt_seq=get_wt_sequence(arguments['--wt']),
             substitution_sep=arguments['--mutation_sep'],
             label=arguments['--label']
         )

@@ -144,7 +144,7 @@ Usage:
         [--ts TEST_SET] [--ps PREDICTION_SET]
         [--model MODEL] [--params PARAM_FILE]
         [--ls LEARNING_SET] [--label] 
-        [--llm LLM]
+        [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
         [--threads THREADS]
     pypef hybrid --model MODEL --params PARAM_FILE
         [--ts TEST_SET] [--label]
@@ -227,6 +227,7 @@ Options:
   --opt_iter N_ITER                 Number of iterations for GREMLIN-based optimization of local fields
                                     and couplings [default: 100].
   --params PARAM_FILE               Input PLMC couplings parameter file.
+  --pdb PDB_FILE                    Input protein structure file in PDB format used for ProSST LLM modeling.
   -u --pmult                        Predict for all prediction files in folder for recombinants
                                     or for diverse variants [default: False].
   -p --ps PREDICTION_SET            Prediction set for performing predictions using a trained Model.
@@ -346,6 +347,7 @@ schema = Schema({
     Optional('--offset'): Use(int),
     Optional('--opt_iter'): Use(int),
     Optional('--params'): Or(None, str),
+    Optional('--pdb'): Or(None, str),    
     Optional('--pmult'): bool,
     Optional('--ps'): Or(None, str),
     Optional('--qdiverse'): bool,

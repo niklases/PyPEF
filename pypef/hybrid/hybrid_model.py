@@ -37,6 +37,8 @@ patch_sklearn(verbose=False)
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
+from Bio import SeqIO, BiopythonParserWarning
+warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.utils.variant_data import (
     get_sequences_from_file, get_seqs_from_var_name,
@@ -327,16 +329,28 @@ class DCALLMHybridModel:
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
+        print("Getting subsplits for supervised (re-)training of models "
+              "and for adjustment of hybrid component contribution "
+              "weights (\"beta's\")..."
+        )
+        train_size_fit = int(train_size_fit * len(self.y_train))
+        train_size_beta_adjustment = len(self.y_train) - train_size_fit
+        print(f"Splitting training data of size {len(self.y_train)} "
+              f"into {train_size_fit} variants for model tuning and "
+              f"{train_size_beta_adjustment} variants for hybrid model "
+              f"beta adjustment...")
         if len(self.parameter_range) == 4:
             # Reduce sizes by batch modulo
-            train_size_fit = int(
-                (train_size_fit * len(self.y_train)) - 
-                ((train_size_fit * len(self.y_train)) % self.batch_size)
-            )
-            #train_test_size = int(
-            #    (len(self.y_train) - train_size_fit) - 
-            #    ((len(self.y_train) - train_size_fit) % self.batch_size)
-            #)
+            n_drop = train_size_fit % self.batch_size
+            if n_drop > 0:
+                train_size_fit = train_size_fit - n_drop
+                train_size_beta_adjustment = len(self.y_train) - train_size_fit
+                print(f"Shifting {n_drop} variants from training set to "
+                      f"beta adjustment set to match batch requirements "
+                      f"of batch size {self.batch_size} for LLM retraining "
+                      f"resulting in {train_size_fit} variants for model "
+                      f"tuning and {train_size_beta_adjustment} variants "
+                      f"for hybrid model beta adjustment...")
             (
                 self.x_dca_ttrain, self.x_dca_ttest, 
                 self.x_llm_ttrain, self.x_llm_ttest,
@@ -348,14 +362,6 @@ class DCALLMHybridModel:
                 train_size=train_size_fit,
                 random_state=self.seed
             )
-            # Reducing by batch size modulo for X and y
-            self.x_dca_ttrain = self.x_dca_ttrain[:train_size_fit]
-            self.x_llm_ttrain = self.x_llm_ttrain[:train_size_fit]
-            self.y_ttrain = self.y_ttrain[:train_size_fit]
-            #self.x_dca_ttest = self.x_dca_ttest[:train_test_size]   
-            #self.x_llm_ttest = self.x_llm_ttest[:train_test_size]
-            #self.y_ttest = self.y_ttest[:train_test_size]
-
         else:
             (
                 self.x_dca_ttrain, self.x_dca_ttest, 
@@ -526,12 +532,15 @@ class DCALLMHybridModel:
         if len(self.parameter_range) == 4:
             self.train_llm()
             self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
-               self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest, self.y_llm_ttest, self.y_llm_lora_ttest
+               self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest, 
+               self.y_llm_ttest, self.y_llm_lora_ttest
             )
             return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
         
         else:
-            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest)
+            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, 
+                self.y_dca_ttest, self.y_dca_ridge_ttest
+            )
             return self.beta1, self.beta2, self.ridge_opt
 
 
@@ -607,7 +616,10 @@ class DCALLMHybridModel:
                     self.llm_model, 
                     device=self.device).detach().cpu().numpy()
             
-            return self.beta1 * y_dca + self.beta2 * y_ridge + self.beta3 * y_llm + self.beta4 * y_llm_lora
+            return (
+                self.beta1 * y_dca + self.beta2 * y_ridge + 
+                self.beta3 * y_llm + self.beta4 * y_llm_lora
+            )
 
     def ls_ts_performance(self):
         beta_1, beta_2, reg = self.settings(
@@ -724,15 +736,20 @@ def get_model_path(model: str):
             model_path = f'Pickles/{model}'
         else:
             raise SystemError(
-                "Did not find specified model file in current working directory "
-                " or /Pickles subdirectory. Make sure to train/save a model first "
-                "(e.g., for saving a GREMLIN model, type \"pypef param_inference --msa TARGET_MSA.a2m\" "
-                "or, for saving a plmc model, type \"pypef param_inference --params TARGET_PLMC.params\")."
+                "Did not find specified model file in current "
+                "working directory  or /Pickles subdirectory. "
+                "Make sure to train/save a model first (e.g., "
+                "for saving a GREMLIN model, type \"pypef "
+                "param_inference --msa TARGET_MSA.a2m\" or, for"
+                "saving a plmc model, type \"pypef param_inference"
+                " --params TARGET_PLMC.params\")."
             )
         return model_path
     except TypeError:
-        raise SystemError("No provided model. "
-                          "Specify a model for DCA-based encoding.")
+        raise SystemError(
+            "No provided model. Specify a " \
+            "model for DCA-based encoding."
+        )
 
 
 def get_model_and_type(
@@ -772,11 +789,7 @@ def get_model_and_type(
 
 def save_model_to_dict_pickle(
         model: DCALLMHybridModel | PLMC | GREMLIN,
-        model_type: str | None = None,
-        beta_1: float | None = None,
-        beta_2: float | None = None,
-        spearman_r: float | None = None,
-        regressor: sklearn.base.BaseEstimator = None
+        model_type: str | None = None
 ):
     try:
         os.mkdir('Pickles')
@@ -790,11 +803,7 @@ def save_model_to_dict_pickle(
     pickle.dump(
         {
             'model': model,
-            'model_type': model_type,
-            'beta_1': beta_1,
-            'beta_2': beta_2,
-            'spearman_rho': spearman_r,
-            'regressor': regressor
+            'model_type': model_type
         },
         open(f'Pickles/{model_type}', 'wb')
     )
@@ -816,19 +825,21 @@ def plmc_or_gremlin_encoding(
         use_global_model=False
 ):
     """
-    Decides based on the params file input type which DCA encoding to be performed, i.e.,
-    GREMLIN or PLMC.
-    If use_global_model==True, to avoid each time pickle model file getting loaded, which
-    is quite inefficient when performing directed evolution, i.e., encoding of single
-    sequences, a global model is stored at the first evolution step and used in the
-    subsequent steps.
+    Decides based on the params file input type which DCA encoding 
+    to be performed, i.e., GREMLIN or PLMC.
+    If use_global_model==True, to avoid each time pickle model 
+    file getting loaded, which is quite inefficient when performing 
+    directed evolution, i.e., encoding of single sequences, a 
+    global model is stored at the first evolution step and used 
+    in the subsequent steps.
     """
     global global_model, global_model_type
     if ys_true is None:
         ys_true = np.zeros(np.shape(sequences))
     if use_global_model:
         if global_model is None:
-            global_model, global_model_type = get_model_and_type(params_file, substitution_sep)
+            global_model, global_model_type = get_model_and_type(
+                params_file, substitution_sep)
             model, model_type = global_model, global_model_type
         else:
             model, model_type = global_model, global_model_type
@@ -840,12 +851,16 @@ def plmc_or_gremlin_encoding(
         )
     elif model_type == 'GREMLIN':
         if verbose:
-            print(f"Following positions are frequent gap positions in the MSA "
-                  f"and cannot be considered for effective modeling, i.e., "
-                  f"substitutions at these positions are removed as these would be "
-                  f"predicted with wild-type fitness:\n{[int(gap) + 1 for gap in model.gaps]}.\n"
-                  f"Effective positions (N={len(model.v_idx)}) are:\n"
-                  f"{[int(v_pos) + 1 for v_pos in model.v_idx]}")
+            print(
+                f"Following positions are frequent gap positions "
+                f"in the MSA and cannot be considered for effective "
+                f"modeling, i.e., substitutions at these positions "
+                f"are removed as these would be predicted with "
+                f"wild-type fitness:"
+                f"\n{[int(gap) + 1 for gap in model.gaps]}.\n"
+                f"Effective positions (N={len(model.v_idx)}) are:\n"
+                f"{[int(v_pos) + 1 for v_pos in model.v_idx]}"
+            )
         xs, x_wt, variants, sequences, ys_true = gremlin_encoding(
             model, variants, sequences, ys_true,
             shift_pos=1, substitution_sep=substitution_sep
@@ -920,11 +935,14 @@ def remove_gap_pos(
     Returns
     -----------
     variants_v
-        Variants with substitutions at valid sequence positions, i.e., at non-gap positions
+        Variants with substitutions at valid sequence positions, 
+        i.e., at non-gap positions
     sequences_v
-        Sequences of variants with substitutions at valid sequence positions, i.e., at non-gap positions
+        Sequences of variants with substitutions at valid sequence positions, 
+        i.e., at non-gap positions
     fitnesses_v
-        Fitness values of variants with substitutions at valid sequence positions, i.e., at non-gap positions
+        Fitness values of variants with substitutions at valid sequence positions, 
+        i.e., at non-gap positions
     """
     variants_v, sequences_v, fitnesses_v = [], [], []
     valid = []
@@ -1029,12 +1047,12 @@ def llm_embedder(llm_dict, seqs):
     np.shape(seqs)
     #except np.shape error:
     if list(llm_dict.keys())[0] == 'esm1v':
-        x_llm_seqs = esm_tokenize_sequences(
-            seqs, llm_dict['esm1v']['llm_tokenizer'], max_length=len(seqs[0])
+        x_llm_seqs, _attention_mask = esm_tokenize_sequences(
+            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], max_length=len(seqs[0])
         )
     elif list(llm_dict.keys())[0] == 'prosst':
         x_llm_seqs = prosst_tokenize_sequences(
-            seqs, llm_dict['prosst']['llm_tokenizer'], max_length=len(seqs[0])
+            seqs, vocab=llm_dict['prosst']['llm_vocab']
         )
     else:
         raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
@@ -1048,8 +1066,8 @@ def performance_ls_ts(
         params_file: str,
         model_pickle_file: str | None = None,
         llm: str | None = None,
-        wt_seq: str | None = None,
         pdb_file: str | None = None,
+        wt_seq: str | None = None,
         substitution_sep: str = '/',
         label=False
 ):
@@ -1091,32 +1109,58 @@ def performance_ls_ts(
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
     if ls_fasta is not None and ts_fasta is not None:
-        train_sequences, train_variants, y_train = get_sequences_from_file(ls_fasta)
-        x_train, train_variants, train_sequences, y_train, x_wt, _, model_type = plmc_or_gremlin_encoding(
-            train_variants, train_sequences, y_train, params_file, substitution_sep, threads
+        train_sequences, train_variants, y_train = get_sequences_from_file(
+            ls_fasta)
+        (
+            x_train, train_variants, train_sequences, 
+            y_train, x_wt, _, model_type 
+        ) = plmc_or_gremlin_encoding(
+            train_variants, train_sequences, y_train, 
+            params_file, substitution_sep, threads
         )
 
-        x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
-            test_variants, test_sequences, y_test, params_file, substitution_sep, threads, verbose=False
+        (
+            x_test, test_variants, test_sequences, y_test, *_
+        ) = plmc_or_gremlin_encoding(
+            test_variants, test_sequences, y_test, params_file, 
+            substitution_sep, threads, verbose=False
         )
 
         print(f"\nInitial training set variants: {len(train_sequences)}. "
                     f"Remaining: {len(train_variants)} (after removing "
                     f"substitutions at gap positions).\nInitial test set "
-                    f"variants: {len(test_sequences)}. Remaining: {len(test_variants)} "
-                    f"(after removing substitutions at gap positions)."
+                    f"variants: {len(test_sequences)}. Remaining: " 
+                    f"{len(test_variants)} (after removing substitutions "
+                    f"at gap positions)."
         )
         if llm == 'esm':
             llm_dict = esm_setup(train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)
         elif llm == 'prosst':
-            llm_dict = prosst_setup(wt_seq, pdb_file, sequences=train_sequences)
+            if pdb_file is None:
+                raise SystemError(
+                    "Running ProSST requires a PDB file input "
+                    "for embedding sequences! Specify a PDB file "
+                    "with the --pdb flag."
+                )
+            if wt_seq is None:
+                raise SystemError(
+                    "Running ProSST requires a wild-type sequence "
+                    "FASTA file input for embedding sequences! "
+                    "Specify a FASTA file with the --wt flag."
+                )
+            pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
+            assert wt_seq == pdb_seq, (
+                f"Wild-type sequence is not matching PDB-extracted sequence:"
+                f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
+            )
+            llm_dict = prosst_setup(
+                wt_seq, pdb_file, sequences=train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)
         else:
             llm_dict = None
             x_llm_test = None
             llm = ''
-
         hybrid_model = DCALLMHybridModel(
             x_train_dca=np.array(x_train),
             y_train=np.array(y_train),
@@ -1132,11 +1176,19 @@ def performance_ls_ts(
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
         if model_type != 'Hybrid':  # same as below in next elif
-            x_test, test_variants, test_sequences, y_test, x_wt, *_ = plmc_or_gremlin_encoding(
-                test_variants, test_sequences, y_test, model_pickle_file, substitution_sep, threads, False)
+            (
+                x_test, test_variants, test_sequences, 
+                y_test, x_wt, *_
+            ) = plmc_or_gremlin_encoding(
+                test_variants, test_sequences, y_test, model_pickle_file, 
+                substitution_sep, threads, False
+            )
             y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model
-            x_test, test_variants, test_sequences, y_test, *_ = plmc_or_gremlin_encoding(
+            (
+                x_test, test_variants, test_sequences, 
+                y_test, *_
+            ) = plmc_or_gremlin_encoding(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
             )
