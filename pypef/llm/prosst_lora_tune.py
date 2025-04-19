@@ -30,7 +30,7 @@ pypef_path = __path__[0]
 def prosst_tokenize_sequences(sequences, vocab):
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
-    for sequence in sequences:
+    for sequence in tqdm(sequences, desc='Tokenizing sequences for PRoSST modeling'):
         x_sequence = []
         for aa in sequence:
             x_sequence.append(vocab[aa])
@@ -70,7 +70,12 @@ def get_logits_from_full_seqs(
                     ss_input_ids=structure_input_ids
             )
     logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
-    for i_s, sequence in enumerate(tqdm(xs, disable=not verbose, desc='Getting ProSST sequence logits')):
+    for i_s, sequence in enumerate(
+        tqdm(
+            xs, disable=not verbose, 
+            desc='ProSST inference: getting sequence logits'
+        )
+    ):
         for i_aa, x_aa in enumerate(sequence):
             if i_aa == 0:
                 seq_log_probs = logits[i_aa, x_aa].reshape(1)

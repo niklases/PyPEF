@@ -54,13 +54,16 @@ def get_esm_models():
 
 
 def esm_tokenize_sequences(sequences, tokenizer, max_length):
-    encoded_sequences, attention_masks = tokenizer(
-        sequences, 
-        padding='max_length', 
-        truncation=True, 
-        max_length=max_length
-    ).values()
-    return encoded_sequences, attention_masks[0]
+    encoded_sequences = []
+    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling...'):
+        encoded_sequence, attention_mask = tokenizer(
+            seq, 
+            padding='max_length', 
+            truncation=True, 
+            max_length=max_length
+        ).values()
+        encoded_sequences.append(encoded_sequence)
+    return encoded_sequences, attention_mask
 
 
 def get_y_pred_scores(encoded_sequences, attention_masks, 
@@ -159,7 +162,7 @@ def esm_infer(xs, attention_mask, model, device: str | None = None):
     print(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(
         zip(xs, attention_masks), total=len(xs), 
-        desc="Infering ESM model - processing sequences"
+        desc="ESM inference - processing sequences"
     )):
         xs_b = xs_b.to(torch.int64)
         with torch.no_grad():

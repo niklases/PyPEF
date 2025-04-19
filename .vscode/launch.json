@@ -141,6 +141,27 @@
             ]
         },
 
+        {
+            "name": "Python: PyPEF hybrid LS-TS GREMLIN-DCA-ProSST avGFP",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                //"-m", "GREMLIN",   // optional, not required  
+                "--ls", "LS.fasl",
+                "--ts", "TS.fasl", 
+                "--params", "GREMLIN",
+                "--llm", "prosst",
+                "--wt", "P42212_F64L.fasta",
+                "--pdb", "GFP_AEQVI.pdb"
+            ]
+        },
+
         { // Test on test set
             "name": "Python: PyPEF hybrid/only-TS-zero-shot GREMLIN-DCA avGFP",
             "type": "debugpy",

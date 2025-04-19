@@ -48,8 +48,8 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup
-from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
+from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models
+from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup, prosst_tokenize_sequences
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
 # will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
@@ -112,12 +112,14 @@ class DCALLMHybridModel:
                 else:
                     raise SystemError("LLM input model dictionary not supported. Currently supported "
                                       "models are 'esm1v' or 'prosst'")
+                self.llm_model_input = llm_model_input
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         else:
             print("No LLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
-            self.llm_model_input = llm_model_input  # = None
+            self.llm_key = None
+            self.llm_model_input = None
             self.llm_attention_mask = None
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
@@ -432,11 +434,15 @@ class DCALLMHybridModel:
                 attention_mask=self.llm_attention_mask,
                 device=self.device
             )
-        print('1:::spearmanr(self.y_ttrain, y_llm_ttrain) UNTRAINED:', spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu()), len(self.y_ttrain))
-        print('1:::spearmanr(self.y_ttest, y_llm_ttest) UNTRAINED:', spearmanr(self.y_ttest, y_llm_ttest.detach().cpu()), len(self.y_ttest))
-
-        print('Refining/training the model (gradient calculation adds a computational '
-              'graph that requires quite some memory)... if you are facing an (out of memory) '
+        print(
+            f"{self.llm_key.upper()} unsupervised performance: "
+            f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
+            f" (N={len(self.y_ttrain)}), "
+            f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
+            f" (N={len(self.y_ttest)})"
+        )
+        print('Refining/training the model... gradient calculation adds a computational '
+              'graph that requires quite some memory - if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
         # void function, training model in place
@@ -495,8 +501,13 @@ class DCALLMHybridModel:
                 attention_mask=self.llm_attention_mask,
                 device=self.device
             )
-        print('2:::spearmanr(self.y_ttrain, y_llm_lora_ttrain) TRAINED:', spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu()), len(self.y_ttrain))
-        print('2:::spearmanr(self.y_ttest, y_llm_lora_ttest): TRAINED', spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu()), len(self.y_ttest))
+        print(
+            f"{self.llm_key.upper()} supervised tuned performance: "
+            f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
+            f" (N={len(self.y_ttrain)}), "
+            f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f}"
+            f" (N={len(self.y_ttest)})"
+        )
 
         self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
         self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
@@ -760,16 +771,20 @@ def get_model_and_type(
     and to load the model from the identified plmc pickle file 
     or from the loaded pickle dictionary.
     """
+    file_path = get_model_path(params_file)
+    print(f"Unpickling file {os.path.abspath(file_path)}...")
     if type(params_file) == pypef.dca.gremlin_inference.GREMLIN:
+        print("Found GREMLIN model...")
         return params_file, 'GREMLIN'
     if type(params_file) == pypef.dca.plmc_encoding.PLMC:
+        print("Found PLMC model...")
         return params_file, 'PLMC'
-    file_path = get_model_path(params_file)
     try:
         with open(file_path, 'rb') as read_pkl_file:
             model = pickle.load(read_pkl_file)
             model_type = check_model_type(model)
     except pickle.UnpicklingError:
+        print("Unpickling error... assuming PLMC parameters found...")
         model_type = 'PLMC_Params'
 
     if model_type == 'PLMC_Params':
@@ -782,6 +797,21 @@ def get_model_and_type(
 
     else:  # --> elif model_type in ['PLMC', 'GREMLIN', 'Hybrid']:
         model = model['model']
+    if model_type == 'Hybrid':
+        if model.llm_key == 'esm1v':
+            print("Found hybrid model with ESM1v LLM model...")
+            base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
+        elif model.llm_key == 'prosst':
+            print("Found hybrid model with ProSST LLM model...")
+            base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
+        else:
+            print("Found hybrid model without LLM model...")
+        base_model.load_state_dict(model.llm_base_model)
+        lora_model.load_state_dict(model.llm_model)
+        model.llm_model = lora_model
+        model.llm_base_model = base_model
+        model.llm_model.eval()
+        model.llm_base_model.eval()
 
     return model, model_type
 
@@ -799,7 +829,17 @@ def save_model_to_dict_pickle(
         model_type = 'MODEL'
     
     pkl_path = os.path.abspath(f'Pickles/{model_type}')
-    # TODO: For LLM model saves try: model.state_dict()
+    # For Hybrid LLM models save as model.state_dict()
+    if model_type.startswith('HYBRID'):
+        if model.llm_key is not None:
+            print(f"Storing LLM model {model.llm_key.upper()} "
+                  f"of hybrid model as state dictionaries...")
+            model.llm_model = model.llm_model.to('cpu')
+            model.llm_model = model.llm_model.state_dict()
+            model.llm_base_model = model.llm_base_model.to('cpu')
+            model.llm_base_model = model.llm_base_model.state_dict()
+            model.llm_model_input[model.llm_key]['llm_base_model'] = None
+            model.llm_model_input[model.llm_key]['llm_model'] = None
     pickle.dump(
         {
             'model': model,
@@ -1046,7 +1086,8 @@ def generate_model_and_save_pkl(
     except FileExistsError:
         pass
     model_name = f'HYBRID{model_type.lower()}'
-    save_model_to_dict_pickle(hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
+    save_model_to_dict_pickle(
+        hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
 
 
 def llm_embedder(llm_dict, seqs):
@@ -1056,7 +1097,8 @@ def llm_embedder(llm_dict, seqs):
         raise SystemError("Unequal input sequence length detected!")
     if list(llm_dict.keys())[0] == 'esm1v':
         x_llm_seqs, _attention_mask = esm_tokenize_sequences(
-            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], max_length=len(seqs[0])
+            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
+            max_length=len(seqs[0])
         )
     elif list(llm_dict.keys())[0] == 'prosst':
         x_llm_seqs = prosst_tokenize_sequences(
@@ -1308,13 +1350,11 @@ def predict_ps(  # also predicting "pmult" dict directories
         model_pickle_file = params_file
         print(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
     else:
-        print(f'Loading model from saved model (Pickle file {os.path.abspath(model_pickle_file)})...')
+        print(f'Loading model from saved model (Pickle file {model_pickle_file})...')
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
         print(f'Found {model_type} model file. No hybrid model provided - falling back to a statistical DCA model...')
-    elif model_type == 'Hybrid':
-        print(f'Found hybrid model...')
 
     pmult = [
         'Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split',
@@ -1341,9 +1381,10 @@ def predict_ps(  # also predicting "pmult" dict directories
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
-                        if model.llm_model_input is None:
+                        if model.llm_key is None:
                             ys_pred = model.hybrid_prediction(x_test)
                         else:
+                            sequences = [str(seq) for seq in sequences]
                             x_llm_test = llm_embedder(model.llm_model_input, sequences)
                             ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
                     for k, y in enumerate(ys_pred):
@@ -1367,14 +1408,15 @@ def predict_ps(  # also predicting "pmult" dict directories
         if model_type != 'Hybrid':  # statistical DCA model
             xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
-                threads=threads, verbose=False, substitution_sep=separator)
+                threads=threads, verbose=False, substitution_sep=separator
+            )
             ys_pred = get_delta_e_statistical_model(xs, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
             xs, variants, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
                 threads=threads, verbose=True, substitution_sep=separator
             )
-            if model.llm_model_input is None:
+            if model.llm_key is None:
                 ys_pred = model.hybrid_prediction(xs)
             else:
                 xs_llm = llm_embedder(model.llm_model_input, sequences)
