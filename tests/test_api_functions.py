@@ -113,7 +113,7 @@ def test_hybrid_model_dca_esm():
             'llm_train_function': esm_train,
             'llm_inference_function': esm_infer,
             'llm_loss_function': corr_loss,
-            'x_llm_train' : x_train_esm,
+            'x_llm' : x_train_esm,
             'llm_attention_mask':  attention_mask_esm
         }
     }
