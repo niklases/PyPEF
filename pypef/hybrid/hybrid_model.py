@@ -593,7 +593,7 @@ class DCALLMHybridModel:
                       'Using only DCA for hybridprediction.. This can lead '
                       'to unwanted prediction behavior if the hybrid model '
                       'is trained including an LLM...')
-            return self.beta1 * y_dca + self.beta2
+            return self.beta1 * y_dca + self.beta2 * y_ridge
         
         else:
             if self.llm_key == 'prosst':
