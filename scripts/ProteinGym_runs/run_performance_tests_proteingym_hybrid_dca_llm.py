@@ -3,6 +3,7 @@ import os
 import copy
 import gc
 import time
+import warnings
 import json
 import pandas as pd
 import numpy as np
@@ -12,6 +13,8 @@ from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import seaborn as sns
 from adjustText import adjust_text
+from Bio import SeqIO, BiopythonParserWarning
+warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -122,6 +125,19 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             max_muts = max(n_muts)
             print(f'N max. (multiple) amino acid substitutions: {max_muts}')
             ratio_input_vars_at_gaps = count_gap_variants / len(variants)
+            pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
+            try:
+                assert wt_seq == pdb_seq
+            except AssertionError:
+                print(
+                    f"Wild-type sequence is not matching PDB-extracted sequence:"
+                    f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}\nSkipping dataset..."
+                )
+                with open(out_results_csv, 'a') as fh:
+                    fh.write(
+                        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},PDBseq neq WTseq\n'
+                    )
+                    continue
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
@@ -521,7 +537,11 @@ if __name__ == '__main__':
             zip(content, sort_keys), key=lambda x: x[1]))]
         fh2.write(header)
         for line in content_sorted:
-            if not line.split(',')[1].startswith('OOM') and not line.split(',')[1].startswith('X'):
+            if (
+                not line.split(',')[1].startswith('OOM') 
+                and not line.split(',')[1].startswith('X') 
+                and not line.split(',')[4].startswith('PDBseq neq WTseq')
+            ):
                 fh2.write(line)
     
     plot_csv_data(csv=clean_out_results_csv, plot_name='mut_performance')
