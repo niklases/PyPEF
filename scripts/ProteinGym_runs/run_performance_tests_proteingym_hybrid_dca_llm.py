@@ -201,7 +201,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         'llm_train_function': prosst_train,
                         'llm_inference_function': get_logits_from_full_seqs,
                         'llm_loss_function': corr_loss,
-                        'x_llm_train' : x_llm_train_prosst,
+                        'x_llm' : x_llm_train_prosst,
                         'llm_attention_mask':  prosst_attention_mask,
                         'input_ids': input_ids,
                         'structure_input_ids': structure_input_ids
@@ -215,7 +215,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         'llm_train_function': esm_train,
                         'llm_inference_function': esm_infer,
                         'llm_loss_function': corr_loss,
-                        'x_llm_train' : x_llm_train_esm,
+                        'x_llm' : x_llm_train_esm,
                         'llm_attention_mask':  esm_attention_mask
                     }
                 }
