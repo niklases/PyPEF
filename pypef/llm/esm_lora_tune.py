@@ -55,7 +55,7 @@ def get_esm_models():
 
 def esm_tokenize_sequences(sequences, tokenizer, max_length):
     encoded_sequences = []
-    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling...'):
+    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling'):
         encoded_sequence, attention_mask = tokenizer(
             seq, 
             padding='max_length', 
