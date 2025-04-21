@@ -30,7 +30,7 @@ pypef_path = __path__[0]
 def prosst_tokenize_sequences(sequences, vocab):
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
-    for sequence in tqdm(sequences, desc='Tokenizing sequences for PRoSST modeling'):
+    for sequence in tqdm(sequences, desc='Tokenizing sequences for ProSST modeling'):
         x_sequence = []
         for aa in sequence:
             x_sequence.append(vocab[aa])
@@ -80,11 +80,16 @@ def get_logits_from_full_seqs(
             if i_aa == 0:
                 seq_log_probs = logits[i_aa, x_aa].reshape(1)
             else:
-                seq_log_probs = torch.cat((seq_log_probs, logits[i_aa, x_aa].reshape(1)), 0)
+                seq_log_probs = torch.cat(
+                    (seq_log_probs, logits[i_aa, x_aa].reshape(1)), 0)
         if i_s == 0:
             log_probs = torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
         else:
-            log_probs = torch.cat((log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
+            log_probs = torch.cat((
+                log_probs, 
+                torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
+                ), 0
+            )
     return log_probs
 
 
@@ -104,8 +109,13 @@ def prosst_train(
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
-        device = ("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
-    print(f'ProSST training using {device.upper()} device (N_Train={len(torch.flatten(score_batches))})...')
+        device = (
+            "cuda" if torch.cuda.is_available() 
+            else "mps" if torch.backends.mps.is_available() 
+            else "cpu"
+        )
+    print(f"ProSST training using {device.upper()} device "
+          f"(N_Train={len(torch.flatten(score_batches))})...")
     x_sequence_batches = x_sequence_batches.to(device)
     score_batches = score_batches.to(device)
     pbar_epochs = tqdm(range(1, n_epochs + 1))
@@ -119,9 +129,13 @@ def prosst_train(
             pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs}')
         model.train()
         y_preds_detached = []
-        pbar_batches = tqdm(zip(x_sequence_batches, score_batches), total=len(x_sequence_batches), leave=False)
+        pbar_batches = tqdm(zip(x_sequence_batches, score_batches), 
+                            total=len(x_sequence_batches), leave=False)
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
-            y_preds_b = get_logits_from_full_seqs(seqs_b, model, input_ids, attention_mask, structure_input_ids, train=True, verbose=False)
+            y_preds_b = get_logits_from_full_seqs(
+                seqs_b, model, input_ids, attention_mask, structure_input_ids, 
+                train=True, verbose=False
+            )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b)
             loss.backward()
@@ -132,7 +146,8 @@ def prosst_train(
                 f"[batch: {batch+1}/{len(x_sequence_batches)} | "
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}]  "
             )
-        epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(), np.array(y_preds_detached).flatten())[0]
+        epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(), 
+                                     np.array(y_preds_detached).flatten())[0]
         if epoch_spearman_2 == np.nan:
             raise SystemError(
                 f"No correlation between Y_true and Y_pred could be computed...\n"
@@ -143,7 +158,10 @@ def prosst_train(
             did_not_improve_counter = 0
             best_model_epoch = epoch
             best_model_perf = epoch_spearman_2
-            best_model = f"model_saves/Epoch{epoch}-Ntrain{len(score_batches.cpu().numpy().flatten())}-SpearCorr{epoch_spearman_2:.3f}.pt"
+            best_model = (
+                f"model_saves/Epoch{epoch}-Ntrain{len(score_batches.cpu().numpy().flatten())}"
+                f"-SpearCorr{epoch_spearman_2:.3f}.pt"
+            )
             checkpoint(model, best_model)
             epoch_spearman_1 = epoch_spearman_2
             #print(f"Saved current best model as {best_model}")
@@ -167,13 +185,16 @@ def prosst_train(
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 
         model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
-    print(f'Train-->Train Performance (N={len(score_batches.cpu().flatten())}):', spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu()))
+    print(f'Train-->Train Performance (N={len(score_batches.cpu().flatten())}):', 
+          spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu()))
     return y_preds_train.cpu()
 
 
 def get_prosst_models():
-    prosst_base_model = AutoModelForMaskedLM.from_pretrained("AI4Protein/ProSST-2048", trust_remote_code=True)
-    tokenizer = AutoTokenizer.from_pretrained("AI4Protein/ProSST-2048", trust_remote_code=True)
+    prosst_base_model = AutoModelForMaskedLM.from_pretrained(
+        "AI4Protein/ProSST-2048", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        "AI4Protein/ProSST-2048", trust_remote_code=True)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
     # TODO: Check: LoRa or base model parameters better for ProSST fine-tuning and learning rate?
@@ -187,7 +208,8 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
     tokenized_res = tokenizer([wt_seq], return_tensors='pt')
     input_ids = tokenized_res['input_ids']
     attention_mask = tokenized_res['attention_mask']
-    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], dtype=torch.long).unsqueeze(0)
+    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2], 
+                                       dtype=torch.long).unsqueeze(0)
     return input_ids, attention_mask, structure_input_ids
 
 
@@ -214,8 +236,10 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
     prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
-    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(pdb_file, prosst_tokenizer, wt_seq)
-    x_llm_train_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
+    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
+        pdb_file, prosst_tokenizer, wt_seq)
+    x_llm_train_prosst = prosst_tokenize_sequences(
+        sequences=sequences, vocab=prosst_vocab)
     llm_dict_prosst = {
         'prosst': {
             'llm_base_model': prosst_base_model,

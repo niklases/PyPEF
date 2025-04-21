@@ -251,7 +251,7 @@ class DirectedEvolution:
                 predictions = predict_directed_evolution(
                     encoder=self.dca_encoder,
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
-                    sequence=new_sequence,
+                    variant_sequence=new_sequence,
                     hybrid_model_data_pkl=self.model
                 )
             if predictions != 'skip':

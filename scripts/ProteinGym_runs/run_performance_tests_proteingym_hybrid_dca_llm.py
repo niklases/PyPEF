@@ -203,8 +203,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         random_state=42
                     )
                 except ValueError as e:
-                    print(f'Only {len(fitnesses)} variant-fitness pairs in total, cannot split the data '
-                          f'in N_Train = {train_size} and N_Test (N_Total - N_Train) [Excepted error: {e}].')
+                    print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
+                          f"cannot split the data in N_Train = {train_size} and N_Test "
+                          f"(N_Total - N_Train) [Excepted error: {e}].")
                     for k in [np.nan, np.nan, np.nan]:
                         hybrid_perfs.append(k)
                     ns_y_test.append(np.nan)
@@ -248,9 +249,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 }
                 print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                 if len(y_test) <= 50:
-                    print(f'Only {len(fitnesses)} in total, splitting the data in N_Train = {len(y_train)} '
-                          f'and N_Test = {len(y_test)} results in N_Test <= 50 variants - '
-                          f'not getting performance for N_Train = {len(y_train)}...')
+                    print(f"Only {len(fitnesses)} in total, splitting the data "
+                          f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
+                          f"results in N_Test <= 50 variants - not getting "
+                          f"performance for N_Train = {len(y_train)}...")
                     for k in [np.nan, np.nan, np.nan]:
                         hybrid_perfs.append(k)
                     ns_y_test.append(np.nan)

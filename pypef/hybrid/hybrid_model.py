@@ -79,6 +79,7 @@ class DCALLMHybridModel:
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             batch_size: int | None = None,
+            llm_train: bool = True,
             device: str | None = None,
             seed: int | None = None
     ):
@@ -135,6 +136,7 @@ class DCALLMHybridModel:
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
+        self.llm_train = llm_train
         (
             self.ridge_opt, 
             self.beta1, 
@@ -408,7 +410,7 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                train=True,
+                train=False,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
@@ -417,7 +419,7 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                train=True,
+                train=False,
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
@@ -1206,7 +1208,11 @@ def performance_ls_ts(
         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)}')
         save_model_to_dict_pickle(hybrid_model, model_name)
 
-    elif ts_fasta is not None and model_pickle_file is not None and params_file is not None:
+    elif (
+        ts_fasta is not None and 
+        model_pickle_file is not None 
+        and params_file is not None
+        ):
         # # no LS provided --> statistical modeling / no ML
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
@@ -1233,8 +1239,9 @@ def performance_ls_ts(
                 model.hybrid_prediction(x_test, x_llm_test)
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
-
-    elif ts_fasta is not None and model_pickle_file is None:  # no LS provided --> statistical modeling / no ML
+    
+    # no LS provided --> statistical modeling / no ML
+    elif ts_fasta is not None and model_pickle_file is None:  
         print(f"No learning set provided, falling back to statistical DCA model: "
               f"no adjustments of individual hybrid model parameters (\"beta's\").")
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
@@ -1354,7 +1361,8 @@ def predict_ps(  # also predicting "pmult" dict directories
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
-        print(f'Found {model_type} model file. No hybrid model provided - falling back to a statistical DCA model...')
+        print(f'Found {model_type} model file. No hybrid model provided - '
+              f'falling back to a statistical DCA model...')
 
     pmult = [
         'Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split',
@@ -1377,14 +1385,14 @@ def predict_ps(  # also predicting "pmult" dict directories
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
                     else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
-                        x_test, _test_variants, *_ = plmc_or_gremlin_encoding(
+                        x_test, _test_variants, test_sequences, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
                         if model.llm_key is None:
                             ys_pred = model.hybrid_prediction(x_test)
                         else:
-                            sequences = [str(seq) for seq in sequences]
+                            sequences = [str(seq) for seq in test_sequences]
                             x_llm_test = llm_embedder(model.llm_model_input, sequences)
                             ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
                     for k, y in enumerate(ys_pred):
@@ -1404,6 +1412,7 @@ def predict_ps(  # also predicting "pmult" dict directories
 
     elif prediction_set is not None:  # Predicting single FASTA file sequences
         sequences, variants, _ = get_sequences_from_file(prediction_set)
+        print(len(sequences), len(variants))
         # NaNs are already being removed by the called function
         if model_type != 'Hybrid':  # statistical DCA model
             xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
@@ -1412,13 +1421,16 @@ def predict_ps(  # also predicting "pmult" dict directories
             )
             ys_pred = get_delta_e_statistical_model(xs, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
-            xs, variants, *_ = plmc_or_gremlin_encoding(
+            print(len(variants))
+            xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
                 threads=threads, verbose=True, substitution_sep=separator
             )
+            print('xs len', len(xs), len(variants))
             if model.llm_key is None:
                 ys_pred = model.hybrid_prediction(xs)
             else:
+                sequences = [str(seq) for seq in sequences]
                 xs_llm = llm_embedder(model.llm_model_input, sequences)
                 ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
         assert len(xs) == len(variants) == len(xs_llm) == len(ys_pred)
@@ -1434,7 +1446,7 @@ def predict_ps(  # also predicting "pmult" dict directories
 def predict_directed_evolution(
         encoder: str,
         variant: str,
-        sequence: str,
+        variant_sequence: str,
         hybrid_model_data_pkl: str
 ) -> Union[str, list]:
     """
@@ -1452,27 +1464,36 @@ def predict_directed_evolution(
 
     if model_type != 'Hybrid':  # statistical DCA model
         xs, variant, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
-            variant, sequence, None, encoder, verbose=False, use_global_model=True)
+            variant, variant_sequence, None, encoder, 
+            verbose=False, use_global_model=True)
         if not list(xs):
             return 'skip'
         y_pred = get_delta_e_statistical_model(xs, x_wt)
-    else:  # model_type == 'Hybrid': Hybrid model input requires params from PLMC or GREMLIN model plus optional LLM input
-        xs, variant, *_ = plmc_or_gremlin_encoding(
-            variant, sequence, None, encoder, verbose=False, use_global_model=True
+    else:  # model_type == 'Hybrid': Hybrid model input requires params 
+        #from PLMC or GREMLIN model plus optional LLM input
+        print(variant, variant_sequence)
+        xs, variant, variant_sequence, *_ = plmc_or_gremlin_encoding(
+            variant, variant_sequence, None, encoder, 
+            verbose=False, use_global_model=True
         )
+        print(variant_sequence)
         if not list(xs):
             return 'skip'
         if model.llm_model_input is None:
             x_llm = None
         else:
-            x_llm = llm_embedder(model.llm_model_input, sequence)
+            x_llm = llm_embedder(model.llm_model_input, variant_sequence)
         try:
+            print(np.shape(xs), np.shape(x_llm),  np.atleast_2d(x_llm))
+            #exit()
             y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm))[0]
-        except ValueError:
-            raise SystemError(
-                "Probably a different model was used for encoding than for modeling; "
-                "e.g. using a HYBRIDgremlin model in combination with parameters taken from a PLMC file."
-            )
+        except ValueError as e:
+            raise e  # TODO: Check sequences / mutations
+        #    raise SystemError(
+        #        "Probably a different model was used for encoding than "
+        #        "for modeling; e.g. using a HYBRIDgremlin model in "
+        #        "combination with parameters taken from a PLMC file."
+        #    )
     y_pred = float(y_pred)
 
     return [(y_pred, variant[0][1:])]
