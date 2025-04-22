@@ -1471,12 +1471,10 @@ def predict_directed_evolution(
         y_pred = get_delta_e_statistical_model(xs, x_wt)
     else:  # model_type == 'Hybrid': Hybrid model input requires params 
         #from PLMC or GREMLIN model plus optional LLM input
-        print(variant, variant_sequence)
         xs, variant, variant_sequence, *_ = plmc_or_gremlin_encoding(
             variant, variant_sequence, None, encoder, 
             verbose=False, use_global_model=True
         )
-        print(variant_sequence)
         if not list(xs):
             return 'skip'
         if model.llm_model_input is None:
@@ -1484,8 +1482,6 @@ def predict_directed_evolution(
         else:
             x_llm = llm_embedder(model.llm_model_input, variant_sequence)
         try:
-            print(np.shape(xs), np.shape(x_llm),  np.atleast_2d(x_llm))
-            #exit()
             y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm))[0]
         except ValueError as e:
             raise e  # TODO: Check sequences / mutations

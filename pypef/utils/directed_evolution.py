@@ -123,6 +123,7 @@ class DirectedEvolution:
         self.negative = negative
         self.de_step_counter = 0  # DE steps
         self.traj_counter = 0  # Trajectory counter
+        logger.info(f"Directed evolution acceptance \"temperature\": {self.temp}")
 
     def mutate_sequence(
             self,
@@ -216,6 +217,7 @@ class DirectedEvolution:
         y_traj.append(self.y_wt)
         s_traj.append(self.s_wt)
         accepted = 0
+        wt_prediction = None
         logger.info(f"Step 0: WT --> {self.y_wt:.3f}")
         for iteration in range(self.num_iterations):  # num_iterations
             self.de_step_counter = iteration
@@ -248,20 +250,30 @@ class DirectedEvolution:
                 )
 
             else:  # hybrid modeling and prediction
+                if wt_prediction is None:
+                    while wt_prediction is None or wt_prediction == 'skip':
+                        wt_prediction = predict_directed_evolution(
+                            encoder=self.dca_encoder,
+                            variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + 
+                                self.s_wt[int(new_variant[:-1]) - 1],  # WT, e.g. F17F
+                            variant_sequence=self.s_wt,
+                            hybrid_model_data_pkl=self.model
+                        )
                 predictions = predict_directed_evolution(
                     encoder=self.dca_encoder,
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
                     variant_sequence=new_sequence,
                     hybrid_model_data_pkl=self.model
                 )
+            print(wt_prediction)
             if predictions != 'skip':
                 logger.info(f"Step {self.de_step_counter + 1}: "
-                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions[0][0]:.3f}")
+                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions[0][0] - wt_prediction[0][0]:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
                 continue
-            new_y, new_var = predictions[0][0], predictions[0][1]  # new_var == new_variant nonetheless
+            new_y, new_var = predictions[0][0] - wt_prediction[0][0], predictions[0][1]  # new_var == new_variant nonetheless
             # probability function for trial sequence
             # The lower the fitness (y) of the new variant, the higher are the chances to get excluded
             with warnings.catch_warnings():  # catching Overflow warning
@@ -275,10 +287,13 @@ class DirectedEvolution:
             p = min(1, boltz)
             rand_var = random.random()  # random float between 0 and 1
             if rand_var < p:  # Metropolis-Hastings update selection criterion, else do nothing (do not accept variant)
+                logger.info(f'Accepted variant {new_var} [current evolutionary trajectory: {v_traj}]')
                 v_traj.append(new_var)       # update the variant naming trajectory
                 y_traj.append(new_y)         # update the fitness trajectory records
                 s_traj.append(new_sequence)  # update the sequence trajectory records
                 accepted += 1
+            else: 
+                logger.info(f'Rejected variant {new_var} [current evolutionary trajectory: {v_traj}]')
 
         self.assert_trajectory_sequences(v_traj, s_traj)
 
