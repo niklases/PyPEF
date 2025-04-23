@@ -1210,7 +1210,7 @@ def performance_ls_ts(
         )
         model_name = f'HYBRID{model_type.lower()}{llm.lower()}'
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
-        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)}')
+        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
         save_model_to_dict_pickle(hybrid_model, model_name)
 
     elif (

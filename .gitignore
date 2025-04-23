@@ -420,3 +420,4 @@ datasets/AVGFP/model_saves/*
 datasets/AVGFP/Pickles/*
 datasets/AVGFP/DCA_Hybrid_Model_Performance_ESM1v_no_ML.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_ProSST_no_ML.png
+datasets/AVGFP/HYBRIDgremlinesm_DE_trajectories.png

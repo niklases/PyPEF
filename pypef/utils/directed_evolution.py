@@ -240,22 +240,24 @@ class DirectedEvolution:
                 if wt_prediction is None or wt_prediction == 'skip':
                     wt_prediction = 'skip'
                     while wt_prediction == 'skip':
+                        rand_pos = random.randint(0, len(self.s_wt))
+                        wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
                         wt_prediction = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                             path=self.path,
                             model=self.model,
                             encoding=self.encoding,
-                            variants=np.atleast_1d(self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + 
-                                self.s_wt[int(new_variant[:-1]) - 1]),
+                            variants=np.atleast_1d(wt_mut),
                             sequences=np.atleast_1d(self.s_wt),
                             no_fft=self.no_fft,
                             couplings_file=self.dca_encoder
                         )
-                        logger.info(
-                            f"Step {self.de_step_counter}: "
-                            f"{self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + self.s_wt[int(new_variant[:-1]) - 1]} --> "
-                            f"{wt_prediction[0][0]} WT relative fitness: {wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
-                        )
-                y_traj[0] = wt_prediction[0][0]
+                if self.de_step_counter == 0:
+                    logger.info(
+                        f"Step {self.de_step_counter}: "
+                        f"WT ({wt_mut}) --> {wt_prediction[0][0]:.3f} WT relative fitness: "
+                        f"{wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
+                    )
+                    y_traj[0] = wt_prediction[0][0]
                 predictions = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                     path=self.path,
                     model=self.model,
@@ -270,6 +272,8 @@ class DirectedEvolution:
                 if wt_prediction is None or wt_prediction == 'skip':
                     wt_prediction = 'skip'
                     while wt_prediction == 'skip':
+                        rand_pos = random.randint(0, len(self.s_wt))
+                        wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
                         wt_prediction = predict_directed_evolution(
                             encoder=self.dca_encoder,
                             variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + 
@@ -277,25 +281,24 @@ class DirectedEvolution:
                             variant_sequence=self.s_wt,
                             hybrid_model_data_pkl=self.model
                         )
-                        logger.info(
-                            f"Step {self.de_step_counter}: "
-                            f"WT ({self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + self.s_wt[int(new_variant[:-1]) - 1]}) --> "
-                            f"{wt_prediction[0][0]} WT relative fitness: {wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
-                        )
+                if self.de_step_counter == 0:
+                    logger.info(
+                        f"Step {self.de_step_counter}: "
+                        f"WT ({wt_mut}) --> {wt_prediction[0][0]:.3f} WT relative fitness: "
+                        f"{wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
+                    )
+                    # add_epsilon = 0.01 * abs(wt_prediction[0][0]) # Adding 1% to prediction for hybrid modeling!
                     y_traj[0] = wt_prediction[0][0] - wt_prediction[0][0]
-                    #add_epsilon = 0.01 * abs(wt_prediction[0][0]) # Adding 1% to prediction for hybrid modeling!
-                y_traj[0] = wt_prediction[0][0] - wt_prediction[0][0]
                 predictions = predict_directed_evolution(
                     encoder=self.dca_encoder,
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
                     variant_sequence=new_sequence,
                     hybrid_model_data_pkl=self.model
                 )
-                print('PREDICTIONS:', predictions)
             if predictions != 'skip':
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> "
-                            f"{predictions[0][0]} WT relative fitness: {predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
+                            f"{predictions[0][0]:.3f} WT relative fitness: {predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
@@ -319,9 +322,9 @@ class DirectedEvolution:
                 y_traj.append(new_y)         # update the fitness trajectory records
                 s_traj.append(new_sequence)  # update the sequence trajectory records
                 accepted += 1
-                logger.info(f'Accepted variant {new_var} [current evolutionary trajectory: {v_traj}]')
+                logger.info(f'Accepted variant {new_var} (current evolutionary trajectory: {v_traj})')
             else: 
-                logger.info(f'Rejected variant {new_var} [current evolutionary trajectory: {v_traj}]')
+                logger.info(f'Rejected variant {new_var} (current evolutionary trajectory: {v_traj})')
 
         self.assert_trajectory_sequences(v_traj, s_traj)
 
