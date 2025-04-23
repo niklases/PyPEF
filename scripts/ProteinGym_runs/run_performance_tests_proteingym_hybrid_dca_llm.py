@@ -453,7 +453,7 @@ def plot_csv_data(csv, plot_name):
     plt.legend()
     plt.tight_layout()
     plt.ylim(0.0, 1.0)
-    plt.ylabel(r'|Spearman $\rho$|')
+    plt.ylabel(r'Spearman $\rho$')
     adjust_text(train_test_size_texts, expand=(1.2, 2))
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
     print('Saved file as ' + os.path.join(os.path.dirname(__file__),  f'{plot_name}.png') + '.')
@@ -482,55 +482,32 @@ def plot_csv_data(csv, plot_name):
                  'tab:green','limegreen', 'mediumseagreen', 'turquoise',
                  'tab:red', 'indianred', 'red', 'darkred']
     )
-    plt.ylim(-0.09, 1.09)
-    plt.ylabel(r'|Spearmanr $\rho$|')
+    plt.ylabel(r'Spearmanr $\rho$')
     sns.swarmplot(df_, color='black')
-    print(df.columns)
-    dset_ns_y_test = [
-        df['N_Y_test'].to_list(), 
-        df['N_Y_test_100'].to_list(), 
-        df['N_Y_test_200'].to_list(), 
-        df['N_Y_test_1000'].to_list(),
-        df['N_Y_test'].to_list(),
-        df['N_Y_test_100'].to_list(), 
-        df['N_Y_test_200'].to_list(), 
-        df['N_Y_test_1000'].to_list(),
-        df['N_Y_test'].to_list(),
-        df['N_Y_test_100'].to_list(), 
-        df['N_Y_test_200'].to_list(), 
-        df['N_Y_test_1000'].to_list()
+    dset_perfs = [
+        dset_dca_perfs,
+        dset_hybrid_perfs_dca_100,
+        dset_hybrid_perfs_dca_200,
+        dset_hybrid_perfs_dca_1000,
+        dset_esm_perfs,
+        dset_hybrid_perfs_dca_esm_100,
+        dset_hybrid_perfs_dca_esm_200,
+        dset_hybrid_perfs_dca_esm_1000,
+        dset_prosst_perfs,
+        dset_hybrid_perfs_dca_prosst_100,
+        dset_hybrid_perfs_dca_prosst_200,
+        dset_hybrid_perfs_dca_prosst_1000
     ]
-    for n in range(0, len(dset_ns_y_test)):
+    for n in range(0, len(dset_perfs)):
         plt.text(
             n + 0.15, -0.075, 
-            [
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_dca_perfs):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_100):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_200):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_1000):.2f}',
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_esm_perfs):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_100):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_200):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_esm_1000):.2f}',
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_prosst_perfs):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_100):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_200):.2f}', 
-                r'$\overline{|\rho|}=$' + f'{np.nanmean(dset_hybrid_perfs_dca_prosst_1000):.2f}'
-            ][n]
+            r'$\overline{\rho}=$' + f'{np.nanmean(dset_perfs[n]):.2f}\n' 
+            + r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(dset_perfs)[n]))}'
         )
-        plt.text(
-            n + 0.15, -0.05, 
-            r'$\overline{N_{Y_\mathrm{test}}}=$' + f'{int(np.nanmean(np.array(dset_ns_y_test)[n]))}'
-        )
-        plt.text(
-            n + 0.15, -0.025,
-            r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(dset_ns_y_test)[n]))}'
-        )
-    print(f'\n{np.shape(dset_ns_y_test)[1]} datasets tested with N_Test\'s at N_Train\'s =\n'
-          f'   0     100   200  1000   0     100   200  1000   0     100   200  1000\n'
-          f'{np.nan_to_num(dset_ns_y_test).T.astype("int")}\n')
     plot.set_xticks(range(len(plot.get_xticklabels())))
     plot.set_xticklabels(plot.get_xticklabels(), rotation=45, horizontalalignment='right')
+    plt.ylim(-0.09, 1.09)
+    plt.margins(0.05)
     plt.tight_layout()
     plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png'), dpi=300)
     print('Saved file as ' + os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png') + '.')
@@ -585,11 +562,11 @@ if __name__ == '__main__':
             start_i = 0
             already_tested_is = []
 
-    compute_performances(
-        mut_data=combined_mut_data, 
-        start_i=start_i, 
-        already_tested_is=already_tested_is
-    )
+    #compute_performances(
+    #    mut_data=combined_mut_data, 
+    #    start_i=start_i, 
+    #    already_tested_is=already_tested_is
+    #)
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
