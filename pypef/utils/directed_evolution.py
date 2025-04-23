@@ -240,13 +240,14 @@ class DirectedEvolution:
                 if wt_prediction is None or wt_prediction == 'skip':
                     wt_prediction = 'skip'
                     while wt_prediction == 'skip':
-                        rand_pos = random.randint(0, len(self.s_wt))
+                        rand_pos = random.randint(0, len(self.s_wt) - 1)
                         wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
+                        print(f"Trying to get WT fitness: {wt_mut}...")
                         wt_prediction = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                             path=self.path,
                             model=self.model,
                             encoding=self.encoding,
-                            variants=np.atleast_1d(wt_mut),
+                            variants=np.atleast_1d(wt_mut),   # WT, e.g. F17F
                             sequences=np.atleast_1d(self.s_wt),
                             no_fft=self.no_fft,
                             couplings_file=self.dca_encoder
@@ -272,14 +273,14 @@ class DirectedEvolution:
                 if wt_prediction is None or wt_prediction == 'skip':
                     wt_prediction = 'skip'
                     while wt_prediction == 'skip':
-                        rand_pos = random.randint(0, len(self.s_wt))
+                        rand_pos = random.randint(0, len(self.s_wt) - 1)
                         wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
+                        print(f"Trying to get WT fitness: {wt_mut}...")
                         wt_prediction = predict_directed_evolution(
                             encoder=self.dca_encoder,
-                            variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant[:-1] + 
-                                self.s_wt[int(new_variant[:-1]) - 1],  # WT, e.g. F17F
+                            variant=wt_mut,  # WT, e.g. F17F
                             variant_sequence=self.s_wt,
-                            hybrid_model_data_pkl=self.model
+                            hybrid_model_data_pkl=self.model  # TODO: Add global model
                         )
                 if self.de_step_counter == 0:
                     logger.info(
