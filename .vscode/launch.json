@@ -121,6 +121,24 @@
         },
 
         {
+            "name": "Python: PyPEF ML avGFP DirectEvo: GREMLIN",
+            "type": "debugpy",
+            "request": "launch",
+            "env": {"PYTHONPATH": "${workspaceFolder}"},
+            "program": "${workspaceFolder}/pypef/main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "cwd": "${workspaceFolder}/datasets/AVGFP/",
+            "args": [
+                "hybrid", 
+                "directevo",
+                "--wt", "P42212_F64L.fasta",
+                "--params", "GREMLIN",
+                "--temp", "0.3"
+            ]
+        },
+
+        {
             "name": "Python: PyPEF hybrid LS-TS GREMLIN-DCA avGFP",
             "type": "debugpy",
             "request": "launch",
@@ -346,7 +364,8 @@
                 "directevo",
                 "-m", "HYBRIDgremlinesm", 
                 "--wt", "P42212_F64L.fasta",
-                "--params", "GREMLIN"
+                "--params", "GREMLIN",
+                "--temp", "0.1"
             ]
         },
 

@@ -112,7 +112,7 @@ Creation of prediction sets from CSV data (using single-substituted variant data
 Encoding a CSV file (for further performance studies such as "low N" or
 "mutational extrapolation" engineering tasks:
         pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
-            [--params PARAM_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
+            [--params PARAM_FILE] [--model MODEL] [--nofft]
             [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
 
 Converting a STO alignment file to A2M format:
@@ -132,7 +132,7 @@ Usage:
     pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
         [--opt_iter N_ITER]
     pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
-        [--params PARAM_FILE] [--y_wt WT_FITNESS] [--model MODEL] [--nofft]
+        [--params PARAM_FILE] [--model MODEL] [--nofft]
         [--threads THREADS]
         [--sep CSV_COLUMN_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef reformat_csv --input CSV_FILE
@@ -153,7 +153,7 @@ Usage:
         [--threads THREADS]
     pypef hybrid directevo --wt WT_FASTA --params PARAM_FILE
         [--model MODEL]
-        [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER]
+        [--input CSV_FILE] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
     pypef hybrid train_and_save --input CSV_FILE --params PARAM_FILE --wt WT_FASTA
@@ -177,7 +177,7 @@ Usage:
         [--ddiverse] [--tdiverse] [--qdiverse]
         [--regressor TYPE] [--nofft] [--negative] [--params PARAM_FILE] [--threads THREADS]
     pypef ml --encoding ENCODING_TECHNIQUE directevo --model MODEL --wt WT_FASTA
-        [--input CSV_FILE] [--y_wt WT_FITNESS] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
+        [--input CSV_FILE] [--numiter NUM_ITER] [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--nofft] [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD] [--params PARAM_FILE]
     pypef ml low_n --input ENCODED_CSV_FILE
         [--regressor TYPE]
@@ -270,7 +270,6 @@ Options:
   --version                         Show version [default: False].
   -w --wt WT_FASTA                  Input wild-type sequence file (in FASTA format).
   --wt_pos WT_POSITION              Row position of encoded wild-type in encoding CSV file (0-indexed) [default: 0].
-  -y --y_wt WT_FITNESS              Fitness value (y) of wild-type [default: 1.0].
   encode                            Encoding [default: False].
   hybrid                            Hybrid modeling based on DCA-derived sequence encoding [default: False].
   ml                                Pure machine learning modeling based on encoded sequences [default: False].
@@ -372,7 +371,6 @@ schema = Schema({
     Optional('--ts'): Or(None, str),
     Optional('--wt'): Or(None, str),
     Optional('--wt_pos'): Use(int),
-    Optional('--y_wt'): Or(None, Use(float)),
     Optional('aaidx'): bool,
     Optional('param_inference'): bool,
     Optional('hybrid'): bool,

@@ -204,7 +204,6 @@ def run_pypef_utils(arguments):
         except ValueError:
             raise ValueError("Define flags 'numiter' and 'numtraj' as integer and 'temp' as float.")
         s_wt = get_wt_sequence(arguments['--wt'])
-        y_wt = arguments['--y_wt']
         negative = arguments['--negative']
         # Metropolis-Hastings-driven directed evolution on single mutant position csv data
         usecsv = arguments['--usecsv']
@@ -216,9 +215,7 @@ def run_pypef_utils(arguments):
             drop_wt = []
             for i in range(len(df)):
                 if df.iloc[i, 0] == 'WT':
-                    logger.info('Using fitness value (y_WT) for wild-type (WT) as specified in CSV.')
                     drop_wt.append(i)
-                    y_wt = df.iloc[i, 1]
             df = df.drop(drop_wt).reset_index(drop=True)
             single_variants, single_values, higher_variants, higher_values = \
                 get_variants(df, amino_acids, s_wt)
@@ -236,7 +233,6 @@ def run_pypef_utils(arguments):
             ml_or_hybrid=ml_or_hybrid,
             encoding=arguments['--encoding'],
             s_wt=s_wt,
-            y_wt=y_wt,
             single_vars=single_vars,
             num_iterations=num_iterations,
             num_trajectories=num_trajectories,

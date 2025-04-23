@@ -559,7 +559,8 @@ class DCALLMHybridModel:
     def hybrid_prediction(
             self,
             x_dca: np.ndarray,
-            x_llm: None | np.ndarray = None
+            x_llm: None | np.ndarray = None,
+            verbose: bool = True
     ) -> np.ndarray:
         """
         Use the regressor 'reg' and the parameters 'beta_1'
@@ -606,6 +607,7 @@ class DCALLMHybridModel:
                     self.llm_attention_mask, 
                     self.structure_input_ids,
                     train=False,
+                    verbose=verbose,
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
                     x_llm, 
@@ -614,6 +616,7 @@ class DCALLMHybridModel:
                     self.llm_attention_mask, 
                     self.structure_input_ids,
                     train=False,
+                    verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
                 x_llm_b = get_batches(x_llm, batch_size=1, dtype=int)
@@ -621,11 +624,13 @@ class DCALLMHybridModel:
                     x_llm_b, 
                     self.llm_attention_mask,
                     self.llm_base_model, 
+                    verbose=verbose,
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
                     self.llm_model, 
+                    verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             
             return (
@@ -1092,7 +1097,7 @@ def generate_model_and_save_pkl(
         hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
 
 
-def llm_embedder(llm_dict, seqs):
+def llm_embedder(llm_dict, seqs, verbose=True):
     try:
         np.shape(seqs)
     except ValueError:
@@ -1100,11 +1105,11 @@ def llm_embedder(llm_dict, seqs):
     if list(llm_dict.keys())[0] == 'esm1v':
         x_llm_seqs, _attention_mask = esm_tokenize_sequences(
             seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
-            max_length=len(seqs[0])
+            max_length=len(seqs[0]), verbose=verbose
         )
     elif list(llm_dict.keys())[0] == 'prosst':
         x_llm_seqs = prosst_tokenize_sequences(
-            seqs, vocab=llm_dict['prosst']['llm_vocab']
+            seqs, vocab=llm_dict['prosst']['llm_vocab'], verbose=verbose
         )
     else:
         raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
@@ -1480,9 +1485,9 @@ def predict_directed_evolution(
         if model.llm_model_input is None:
             x_llm = None
         else:
-            x_llm = llm_embedder(model.llm_model_input, variant_sequence)
+            x_llm = llm_embedder(model.llm_model_input, variant_sequence, verbose=False)
         try:
-            y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm))[0]
+            y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm), verbose=False)[0]
         except ValueError as e:
             raise e  # TODO: Check sequences / mutations
         #    raise SystemError(

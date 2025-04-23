@@ -53,9 +53,9 @@ def get_esm_models():
     return base_model, lora_model, tokenizer, optimizer
 
 
-def esm_tokenize_sequences(sequences, tokenizer, max_length):
+def esm_tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
     encoded_sequences = []
-    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling'):
+    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling', disable=not verbose):
         encoded_sequence, attention_mask = tokenizer(
             seq, 
             padding='max_length', 
@@ -160,15 +160,16 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
-def esm_infer(xs, attention_mask, model, device: str | None = None):
+def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=True):
     if device is None:
         device = get_device()
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    print(f'Infering ESM model for predictions using {device.upper()} device...')
+    if verbose:
+        print(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(
         zip(xs, attention_masks), total=len(xs), 
-        desc="ESM inference - processing sequences"
+        desc="ESM inference - processing sequences", disable=not verbose
     )):
         xs_b = xs_b.to(torch.int64)
         with torch.no_grad():

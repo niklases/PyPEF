@@ -27,10 +27,10 @@ from pypef import __path__
 pypef_path = __path__[0]
 
 
-def prosst_tokenize_sequences(sequences, vocab):
+def prosst_tokenize_sequences(sequences, vocab, verbose=True):
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
-    for sequence in tqdm(sequences, desc='Tokenizing sequences for ProSST modeling'):
+    for sequence in tqdm(sequences, desc='Tokenizing sequences for ProSST modeling', disable=not verbose):
         x_sequence = []
         for aa in sequence:
             x_sequence.append(vocab[aa])
