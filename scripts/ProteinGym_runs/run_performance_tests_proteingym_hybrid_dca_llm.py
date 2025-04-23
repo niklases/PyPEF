@@ -4,7 +4,9 @@ import copy
 import gc
 import time
 import warnings
+import psutil
 import json
+from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import torch
@@ -60,6 +62,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     get_vram()
     MAX_WT_SEQUENCE_LENGTH = 1000
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
+    print(f"Loading LLM models into {device} device...")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
@@ -89,7 +92,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             #    print('Continuing (TODO: requires cut of PDB input struture residues)...')
             #    continue
             # Getting % usage of virtual_memory (3rd field)
-            import psutil;print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
+            print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
                   f'GB ({psutil.virtual_memory()[2]} %)')
             variant_fitness_data = pd.read_csv(csv_path, sep=',')
             print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
@@ -142,7 +145,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
-            x_dca = gremlin.collect_encoded_sequences(sequences)
+            sequences_batched = get_batches(sequences, batch_size=1000, 
+                                            dtype=str, keep_remaining=True, verbose=True)
+            x_dca = []
+            for seq_b in tqdm(sequences_batched, desc="Getting GREMLIN sequence encodings"):
+                for x in gremlin.collect_encoded_sequences(seq_b):
+                    x_dca.append(x)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 

@@ -428,10 +428,9 @@ class GREMLIN:
         seqs_int = self.seq2int(seqs)
 
         try:
-            if seqs_int.shape[-1] != len(v_idx):
-                #logger.info(f'The input sequence length ({seqs_int.shape[-1]}) does not match the common gap-trimmed MSA sequence length ({len(v_idx)})!')
-                seqs_int = seqs_int[..., v_idx]
-                #logger.info(f'Updated shape: ({seqs_int.shape[-1]}) matches common MSA sequence length ({len(v_idx)}) now')
+            if seqs_int.shape[-1] != len(v_idx):  # The input sequence length ({seqs_int.shape[-1]}) 
+                # does not match the common gap-trimmed MSA sequence length (len(v_idx)
+                seqs_int = seqs_int[..., v_idx]  # Shape matches common MSA sequence length (len(v_idx)) now
         except IndexError:
             raise SystemError(
                 "The loaded GREMLIN parameter model does not match the input model "
