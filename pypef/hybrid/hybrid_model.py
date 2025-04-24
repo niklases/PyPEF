@@ -1417,7 +1417,6 @@ def predict_ps(  # also predicting "pmult" dict directories
 
     elif prediction_set is not None:  # Predicting single FASTA file sequences
         sequences, variants, _ = get_sequences_from_file(prediction_set)
-        print(len(sequences), len(variants))
         # NaNs are already being removed by the called function
         if model_type != 'Hybrid':  # statistical DCA model
             xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
@@ -1426,12 +1425,10 @@ def predict_ps(  # also predicting "pmult" dict directories
             )
             ys_pred = get_delta_e_statistical_model(xs, x_wt)
         else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
-            print(len(variants))
             xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
                 threads=threads, verbose=True, substitution_sep=separator
             )
-            print('xs len', len(xs), len(variants))
             if model.llm_key is None:
                 ys_pred = model.hybrid_prediction(xs)
             else:
@@ -1448,11 +1445,15 @@ def predict_ps(  # also predicting "pmult" dict directories
         )
 
 
+global_hybrid_model = None
+global_hybrid_model_type = None
+
+
 def predict_directed_evolution(
         encoder: str,
         variant: str,
         variant_sequence: str,
-        hybrid_model_data_pkl: str
+        hybrid_model_data_pkl: None | str
 ) -> Union[str, list]:
     """
     Perform directed in silico evolution and predict the fitness of a
@@ -1462,8 +1463,14 @@ def predict_directed_evolution(
     cannot be encoded (based on the PLMC params file), returns 'skip'. Else,
     returning the predicted fitness value and the variant name.
     """
+    global global_hybrid_model, global_hybrid_model_type
     if hybrid_model_data_pkl is not None:
-        model, model_type = get_model_and_type(hybrid_model_data_pkl)
+        if global_hybrid_model is None:
+            global_hybrid_model, global_hybrid_model_type = get_model_and_type(
+                hybrid_model_data_pkl)
+            model, model_type = global_hybrid_model, global_hybrid_model_type
+        else:
+            model, model_type = global_hybrid_model, global_hybrid_model_type
     else:
         model_type = 'StatisticalModel'  # any name != 'Hybrid'
 
@@ -1475,7 +1482,7 @@ def predict_directed_evolution(
             return 'skip'
         y_pred = get_delta_e_statistical_model(xs, x_wt)
     else:  # model_type == 'Hybrid': Hybrid model input requires params 
-        #from PLMC or GREMLIN model plus optional LLM input
+        # from PLMC or GREMLIN model plus optional LLM input
         xs, variant, variant_sequence, *_ = plmc_or_gremlin_encoding(
             variant, variant_sequence, None, encoder, 
             verbose=False, use_global_model=True
@@ -1485,9 +1492,13 @@ def predict_directed_evolution(
         if model.llm_model_input is None:
             x_llm = None
         else:
-            x_llm = llm_embedder(model.llm_model_input, variant_sequence, verbose=False)
+            x_llm = llm_embedder(model.llm_model_input, 
+                                 variant_sequence, verbose=False)
         try:
-            y_pred = model.hybrid_prediction(np.atleast_2d(xs), np.atleast_2d(x_llm), verbose=False)[0]
+            y_pred = model.hybrid_prediction(
+                np.atleast_2d(xs), 
+                np.atleast_2d(x_llm), verbose=False
+            )[0]
         except ValueError as e:
             raise e  # TODO: Check sequences / mutations
         #    raise SystemError(

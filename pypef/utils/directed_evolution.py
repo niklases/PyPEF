@@ -299,7 +299,8 @@ class DirectedEvolution:
             if predictions != 'skip':
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> "
-                            f"{predictions[0][0]:.3f} WT relative fitness: {predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
+                            f"{predictions[0][0]:.3f} WT relative fitness: "
+                            f"{predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
                 logger.info(f"Step {self.de_step_counter + 1}: "
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
