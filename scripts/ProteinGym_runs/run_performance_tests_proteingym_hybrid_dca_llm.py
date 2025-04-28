@@ -115,18 +115,23 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 wt_seq, variants_split, fitnesses, shift_pos=msa_start - 1)
             # Only model sequences with length of max. 800 amino acids to avoid out of memory errors 
             print('Sequence length:', len(wt_seq))
-            if len(wt_seq) > MAX_WT_SEQUENCE_LENGTH:
-                print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents '
-                      f'a potential out-of-memory risk (when running on GPU, set '
-                      f'threshold to length ~400 dependent on available VRAM); '
-                      f'skipping dataset...')
-                continue
             count_gap_variants = 0
             n_muts = []
             for variant in variants_split:
                 n_muts.append(len(variant))
             max_muts = max(n_muts)
             print(f'N max. (multiple) amino acid substitutions: {max_muts}')
+            if len(wt_seq) > MAX_WT_SEQUENCE_LENGTH:
+                print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents '
+                      f'a potential out-of-memory risk (when running on GPU, set '
+                      f'threshold to length ~400 dependent on available VRAM); '
+                      f'skipping dataset...')
+                with open(out_results_csv, 'a') as fh:
+                    fh.write(
+                        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                        f'{max_muts},Sequence too long ({len(wt_seq)} > {MAX_WT_SEQUENCE_LENGTH})\n'
+                    )
+                continue
             ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
             try:
@@ -588,6 +593,7 @@ if __name__ == '__main__':
                 not line.split(',')[1].startswith('OOM') 
                 and not line.split(',')[1].startswith('X') 
                 and not line.split(',')[4].startswith('PDBseq neq WTseq')
+                and not line.split(',')[4].startswith('Sequence too long')
             ):
                 fh2.write(line)
     
