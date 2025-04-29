@@ -1,17 +1,10 @@
-
 # GUI created with PyQT/PySide
-# PySide vs PyQT: https://www.pythonguis.com/faq/pyqt-vs-pyside/?gad_source=1&gclid=CjwKCAjwpbi4BhByEiwAMC8Jnfe7sYOqHjs5eOg_tYMD0iX3UDBduwykrF8qE5Y0IG66abhS6YXHvRoCg-kQAvD_BwE
-# (If using PyQT, see: https://www.gnu.org/licenses/license-list.en.html#GPLCompatibleLicenses)
-
 import re
 import sys
 import os
 import subprocess
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
-# Up to now needs (pip) installed PyPEF version
-# https://stackoverflow.com/questions/67297494/redirect-console-output-to-pyqt5-gui-in-real-time
-# sudo apt-get install -y libxcb-cursor-dev
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 
@@ -67,7 +60,7 @@ class MainWindow(QtWidgets.QWidget):
         self.n_cores = 1 
         self.regression_model = 'PLS'
         self.c = 0
-        self.setMinimumSize(QSize(200, 100))
+        self.setMinimumSize(QSize(1000, 400))
         self.setWindowTitle("PyPEF GUI")
         self.setStyleSheet("background-color: rgb(40, 44, 52);")
 
@@ -77,17 +70,15 @@ class MainWindow(QtWidgets.QWidget):
         self.ncores_text = QtWidgets.QLabel("Single-/multiprocessing")
         self.regression_model_text =  QtWidgets.QLabel("Regression model")
         self.utils_text = QtWidgets.QLabel("Utilities")
-        self.dca_text = QtWidgets.QLabel("DCA (Unsupervised)")
-        self.hybrid_text = QtWidgets.QLabel("Hybrid")
-        self.hybrid_text_train_test = QtWidgets.QLabel("Train - Test")
-        self.hybrid_text_predict = QtWidgets.QLabel("Predict")
-        self.hybrid_text = QtWidgets.QLabel("Hybrid (DCA-Supervised)")
-        self.supervised_text = QtWidgets.QLabel("Supervised")
+        self.dca_text = QtWidgets.QLabel("DCA (unsupervised)")
+        self.hybrid_text = QtWidgets.QLabel("Hybrid (supervised DCA)")
+        self.hybrid_dca_llm_text = QtWidgets.QLabel("Hybrid (supervised DCA+LLM)")
+        self.supervised_text = QtWidgets.QLabel("Purely supervised")
 
         for txt in [
             self.version_text, self.ncores_text, self.regression_model_text, 
             self.utils_text, self.dca_text, self.hybrid_text, self.supervised_text,
-            self.hybrid_text_train_test, self.hybrid_text_predict, self.hybrid_text
+            self.hybrid_text, self.hybrid_dca_llm_text
         ]:
             txt.setStyleSheet(text_style)
 
@@ -155,7 +146,7 @@ class MainWindow(QtWidgets.QWidget):
         self.button_dca_predict_dca.clicked.connect(self.pypef_dca_predict)
         self.button_dca_predict_dca.setStyleSheet(button_style)
 
-        # Hybrid
+        # Hybrid DCA
         self.button_hybrid_train_dca = QtWidgets.QPushButton("Training (DCA)")
         self.button_hybrid_train_dca.setMinimumWidth(80)
         self.button_hybrid_train_dca.setToolTip(
@@ -167,15 +158,8 @@ class MainWindow(QtWidgets.QWidget):
         self.button_hybrid_train_test_dca = QtWidgets.QPushButton("Train-Test (DCA)")
         self.button_hybrid_train_test_dca.setMinimumWidth(80)
         self.button_hybrid_train_test_dca.setToolTip(
-            "Optimize the GREMLIN model by supervised training on variant-fitness labels"
-        )
-        self.button_hybrid_train_test_dca.clicked.connect(self.pypef_dca_hybrid_train_test)
-        self.button_hybrid_train_test_dca.setStyleSheet(button_style)
-
-        self.button_hybrid_train_test_dca = QtWidgets.QPushButton("Train-Test (DCA)")
-        self.button_hybrid_train_test_dca.setMinimumWidth(80)
-        self.button_hybrid_train_test_dca.setToolTip(
-            "Optimize the GREMLIN model by supervised training on variant-fitness labels and testing the model on a test set"
+            "Optimize the GREMLIN model by supervised training on variant-fitness labels and "
+            "testing the model on a test set"
         )
         self.button_hybrid_train_test_dca.clicked.connect(self.pypef_dca_hybrid_train_test)
         self.button_hybrid_train_test_dca.setStyleSheet(button_style)
@@ -188,8 +172,27 @@ class MainWindow(QtWidgets.QWidget):
         self.button_hybrid_test_dca.clicked.connect(self.pypef_dca_hybrid_test)
         self.button_hybrid_test_dca.setStyleSheet(button_style)
 
-        # Supervised
-        self.button_supervised_train_test_dca = QtWidgets.QPushButton("Train-Test (DCA)")
+        # Hybrid DCA+LLM ##################################################################### TODO
+        self.button_hybrid_train_test_dca_llm = QtWidgets.QPushButton("Train-Test (DCA+LLM)")
+        self.button_hybrid_train_test_dca_llm.setMinimumWidth(80)
+        self.button_hybrid_train_test_dca_llm.setToolTip(
+            "Optimize the GREMLIN model and tune the LLM by supervised training on variant-fitness "
+            "labels and testing the model on a test set"
+        )
+        #self.button_hybrid_train_test_dca_llm.clicked.connect(None)  # TODO
+        self.button_hybrid_train_test_dca_llm.setStyleSheet(button_style)
+
+        self.button_hybrid_test_dca_llm = QtWidgets.QPushButton("Test (DCA+LLM)")
+        self.button_hybrid_test_dca_llm.setMinimumWidth(80)
+        self.button_hybrid_test_dca_llm.setToolTip(
+            "Test the trained hybrid DCA+LLM model on a test set"
+        )
+        #self.button_hybrid_test_dca_llm.clicked.connect(None)  # TODO
+        self.button_hybrid_test_dca_llm.setStyleSheet(button_style)
+        ###################################################################################### TODO
+
+        # Pure Supervised
+        self.button_supervised_train_test_dca = QtWidgets.QPushButton("Train-Test (DCA encoding)")
         self.button_supervised_train_test_dca.setMinimumWidth(80)
         self.button_supervised_train_test_dca.setToolTip(
             "Purely supervised DCA (GREMLIN or PLMC) model training on variant-fitness labels"
@@ -197,13 +200,14 @@ class MainWindow(QtWidgets.QWidget):
         self.button_supervised_train_test_dca.clicked.connect(self.pypef_dca_supervised_train_test)
         self.button_supervised_train_test_dca.setStyleSheet(button_style)
 
-        self.button_supervised_train_test_onehot = QtWidgets.QPushButton("Train-Test (One-hot)")
+        self.button_supervised_train_test_onehot = QtWidgets.QPushButton("Train-Test (One-hot encoding)")
         self.button_supervised_train_test_onehot.setMinimumWidth(80)
         self.button_supervised_train_test_onehot.setToolTip(
             "Purely supervised one-hot model training on variant-fitness labels"
         )
         self.button_supervised_train_test_onehot.clicked.connect(self.pypef_onehot_supervised_train_test)
         self.button_supervised_train_test_onehot.setStyleSheet(button_style)
+
 
         # Layout widgets ####################################################################
         # int fromRow, int fromColumn, int rowSpan, int columnSpan
@@ -226,11 +230,15 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.button_hybrid_train_test_dca, 5, 2, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca, 6, 2, 1, 1)
 
-        layout.addWidget(self.regression_model_text, 1, 3, 1, 1)
-        layout.addWidget(self.box_regression_model, 2, 3, 1, 1)
-        layout.addWidget(self.supervised_text, 3, 3, 1, 1)
-        layout.addWidget(self.button_supervised_train_test_dca, 4, 3, 1, 1)
-        layout.addWidget(self.button_supervised_train_test_onehot, 5, 3, 1, 1)
+        layout.addWidget(self.hybrid_dca_llm_text, 3, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_train_test_dca_llm, 4, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_test_dca_llm, 5, 3, 1, 1)
+
+        layout.addWidget(self.regression_model_text, 1, 4, 1, 1)
+        layout.addWidget(self.box_regression_model, 2, 4, 1, 1)
+        layout.addWidget(self.supervised_text, 3, 4, 1, 1)
+        layout.addWidget(self.button_supervised_train_test_dca, 4, 4, 1, 1)
+        layout.addWidget(self.button_supervised_train_test_onehot, 5, 4, 1, 1)
 
         layout.addWidget(self.textedit_out, 8, 0, 1, -1)
 
