@@ -307,6 +307,17 @@ echo
 $pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
 echo
 
+# 0.4.0 features: hybrid DCA-LLM modeling
+$pypef hybrid --ts TS.fasl --params GREMLIN --llm esm
+echo
+$pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
+echo
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+
+
 rm 37_ANEH_variants_plmc_dca_encoded.csv
 echo
 rm 37_ANEH_variants_gremlin_dca_encoded.csv

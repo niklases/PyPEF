@@ -569,7 +569,7 @@ if __name__ == '__main__':
 
     compute_performances(
         mut_data=combined_mut_data, 
-        start_i=start_i, 
+        start_i=0, 
         already_tested_is=already_tested_is
     )
 

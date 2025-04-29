@@ -432,6 +432,20 @@ pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
 ExitOnExitCode
 Write-Host
 
+# 0.4.0 features: hybrid DCA-LLM modeling
+pypef hybrid --ts TS.fasl --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+
 Remove-Item 37_ANEH_variants_plmc_dca_encoded.csv
 ExitOnExitCode
 Write-Host
