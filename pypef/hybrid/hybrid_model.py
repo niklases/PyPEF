@@ -68,7 +68,7 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
 # TODO: Implementation of other regression techniques (CVRegression models) [Likely not worth]
 # TODO: Differential evolution of multiple Zero Shot predictors
 #       (and supervised model predictions thereof) and y_true [DONE]
-# TODO: Add constrastive learning option (on PGym data)?
+# TODO: Add meta-learning (e.g., MAML) learning option (on PGym data)?
 class DCALLMHybridModel:
     def __init__(
             self,
@@ -1191,10 +1191,10 @@ def performance_ls_ts(
                     f"{len(test_variants)} (after removing substitutions "
                     f"at gap positions)."
         )
-        if llm == 'esm':
+        if llm.lower().startswith('esm'):
             llm_dict = esm_setup(train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)
-        elif llm == 'prosst':
+        elif llm.lower() == 'prosst':
             llm_dict = prosst_setup(
                 wt_seq, pdb_file, sequences=train_sequences)
             x_llm_test = llm_embedder(llm_dict, test_sequences)

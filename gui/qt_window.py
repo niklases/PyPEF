@@ -58,9 +58,10 @@ class MainWindow(QtWidgets.QWidget):
         else:
             self.pypef_root = pypef_root
         self.n_cores = 1 
+        self.llm = 'esm'
         self.regression_model = 'PLS'
         self.c = 0
-        self.setMinimumSize(QSize(1000, 400))
+        self.setMinimumSize(QSize(1010, 400))
         self.setWindowTitle("PyPEF GUI")
         self.setStyleSheet("background-color: rgb(40, 44, 52);")
 
@@ -68,6 +69,7 @@ class MainWindow(QtWidgets.QWidget):
         layout = QtWidgets.QGridLayout(self)
         self.version_text = QtWidgets.QLabel(f"PyPEF v. {version}", alignment=QtCore.Qt.AlignRight)
         self.ncores_text = QtWidgets.QLabel("Single-/multiprocessing")
+        self.llm_text = QtWidgets.QLabel("LLM")
         self.regression_model_text =  QtWidgets.QLabel("Regression model")
         self.utils_text = QtWidgets.QLabel("Utilities")
         self.dca_text = QtWidgets.QLabel("DCA (unsupervised)")
@@ -99,6 +101,11 @@ class MainWindow(QtWidgets.QWidget):
         self.box_regression_model.addItems(self.regression_models)
         self.box_regression_model.currentIndexChanged.connect(self.selection_regression_model)
         self.box_regression_model.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
+
+        self.box_llm = QtWidgets.QComboBox()
+        self.box_llm.addItems(['ESM1v', 'ProSST'])
+        self.box_llm.currentIndexChanged.connect(self.selection_llm_model)
+        self.box_llm.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
         # Buttons ###########################################################################
         # Utilities
         self.button_help = QtWidgets.QPushButton("Help")  
@@ -172,6 +179,15 @@ class MainWindow(QtWidgets.QWidget):
         self.button_hybrid_test_dca.clicked.connect(self.pypef_dca_hybrid_test)
         self.button_hybrid_test_dca.setStyleSheet(button_style)
 
+        # Hybrid DCA prediction
+        self.button_hybrid_prediction_dca = QtWidgets.QPushButton("Predict (DCA)")
+        self.button_hybrid_prediction_dca.setMinimumWidth(80)
+        self.button_hybrid_prediction_dca.setToolTip(
+            "Predict FASTA dataset using the hybrid DCA model"
+        )
+        self.button_hybrid_prediction_dca.clicked.connect(self.pypef_dca_hybrid_predict)
+        self.button_hybrid_prediction_dca.setStyleSheet(button_style)
+
         # Hybrid DCA+LLM ##################################################################### TODO
         self.button_hybrid_train_test_dca_llm = QtWidgets.QPushButton("Train-Test (DCA+LLM)")
         self.button_hybrid_train_test_dca_llm.setMinimumWidth(80)
@@ -179,7 +195,7 @@ class MainWindow(QtWidgets.QWidget):
             "Optimize the GREMLIN model and tune the LLM by supervised training on variant-fitness "
             "labels and testing the model on a test set"
         )
-        #self.button_hybrid_train_test_dca_llm.clicked.connect(None)  # TODO
+        self.button_hybrid_train_test_dca_llm.clicked.connect(self.pypef_dca_llm_hybrid_train_test)
         self.button_hybrid_train_test_dca_llm.setStyleSheet(button_style)
 
         self.button_hybrid_test_dca_llm = QtWidgets.QPushButton("Test (DCA+LLM)")
@@ -189,7 +205,7 @@ class MainWindow(QtWidgets.QWidget):
         )
         #self.button_hybrid_test_dca_llm.clicked.connect(None)  # TODO
         self.button_hybrid_test_dca_llm.setStyleSheet(button_style)
-        ###################################################################################### TODO
+        ###################################################################################### TODO END
 
         # Pure Supervised
         self.button_supervised_train_test_dca = QtWidgets.QPushButton("Train-Test (DCA encoding)")
@@ -229,7 +245,10 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.button_hybrid_train_dca, 4, 2, 1, 1)
         layout.addWidget(self.button_hybrid_train_test_dca, 5, 2, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca, 6, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_prediction_dca, 7, 2, 1, 1)
 
+        layout.addWidget(self.llm_text, 1, 3, 1, 1)
+        layout.addWidget(self.box_llm, 2, 3, 1, 1)
         layout.addWidget(self.hybrid_dca_llm_text, 3, 3, 1, 1)
         layout.addWidget(self.button_hybrid_train_test_dca_llm, 4, 3, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca_llm, 5, 3, 1, 1)
@@ -263,17 +282,21 @@ class MainWindow(QtWidgets.QWidget):
         self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
         self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
         self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(True))
+        ###### TODO
+        self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
+        ###### TODO END
         self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
         self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
         self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
         self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
 
-
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
          self.c += 1
          self.textedit_out.append(text.strip())
-
     
     def selection_ncores(self, i):
         if i == 0:
@@ -281,10 +304,11 @@ class MainWindow(QtWidgets.QWidget):
         elif i == 1:
             self.n_cores = os.cpu_count()
 
-
     def selection_regression_model(self, i):
         self.regression_model = [r.lower() for r in self.regression_models][i]
 
+    def selection_llm_model(self, i):
+        self.llm = ['esm', 'prosst'][i]
 
     @QtCore.Slot()
     def pypef_help(self):
@@ -364,7 +388,38 @@ class MainWindow(QtWidgets.QWidget):
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select DCA parameter Pickle file")[0]
         if test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
-            self.exec_pypef(f'hybrid --ts {test_file} -m {model_file} --params {params_pkl_file}')
+    
+
+    @QtCore.Slot()
+    def pypef_dca_hybrid_predict(self):
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Prediction Set File in FASTA format")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Hybrid Model file in Pickle format")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select DCA parameter Pickle file")[0]
+        if prediction_file and params_pkl_file:
+            self.version_text.setText("Predicting using the hybrid (DCA-supervised) model...")
+            self.exec_pypef(f'hybrid --ps {prediction_file} -m {model_file} --params {params_pkl_file}')
+
+##### TODO #################################################################################################### TODO
+    @QtCore.Slot()
+    def pypef_dca_llm_hybrid_train_test(self):
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Training Set File in \"FASL\" format")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select Test Set File in \"FASL\" format")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select DCA parameter Pickle file")[0]
+        if self.llm == 'prosst':
+            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select WT FASTA File")[0]
+            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select PDB protein structure File")[0]
+            if training_file and test_file and params_pkl_file and wt_fasta_file and pdb_file:
+                self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
+                self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} --params {params_pkl_file} --llm {self.llm} '
+                                f'--wt {wt_fasta_file} --pdb {pdb_file}')
+        else:
+            if training_file and test_file and params_pkl_file:
+                self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
+                self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} --params {params_pkl_file} --llm {self.llm}')
+
+                
+
+##### TODO END ################################################################################################# TODO END
 
 
     @QtCore.Slot()
@@ -389,6 +444,7 @@ class MainWindow(QtWidgets.QWidget):
     
 
     def exec_pypef(self, cmd):
+        print(cmd)  # TODO remove
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))
         self.process.finished.connect(self.process_finished)
         if self.c > 0:
