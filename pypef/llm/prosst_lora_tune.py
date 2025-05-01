@@ -3,9 +3,11 @@
 
 # Using (training, testing/infering) ProSST model(s) published under 
 # GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
-# https://github.com/ai4protein/ProSST
-#import warnings
-#warnings.filterwarnings('error')
+# Code repository: https://github.com/ai4protein/ProSST
+# Mingchen Li, Pan Tan, Xinzhu Ma, Bozitao Zhong, Huiqun Yu, Ziyi Zhou, Wanli Ouyang, Bingxin Zhou, Liang Hong, Yang Tan
+# ProSST: Protein Language Modeling with Quantized Structure and Disentangled Attention
+# bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672 
+
 
 from sys import path
 import os

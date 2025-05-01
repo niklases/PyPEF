@@ -5,9 +5,14 @@
 # MIT License
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # https://github.com/facebookresearch/esm
+# ESM1v model publication:
+# Joshua Meier, Roshan Rao, Robert Verkuil, Jason Liu, Tom Sercu, Alexander Rives
+# Language models enable zero-shot prediction of the effects of mutations on protein function
+# bioRxiv 2021.07.09.450648; doi: https://doi.org/10.1101/2021.07.09.450648 
 
 # Inspired by ConFit
 # https://github.com/luo-group/ConFit
+
 
 from __future__ import annotations
 
