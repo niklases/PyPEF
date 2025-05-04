@@ -21,8 +21,11 @@ with Ray, see https://docs.ray.io/en/latest/index.html.
 import matplotlib
 matplotlib.use('Agg')
 import os
-import ray
 import warnings
+
+from pypef.main import USE_RAY
+if USE_RAY:
+    import ray
 
 from pypef.utils.variant_data import get_sequences_from_file
 from pypef.ml.regression import (
@@ -34,7 +37,19 @@ warnings.filterwarnings(action='ignore', category=RuntimeWarning, module='sklear
 warnings.filterwarnings(action='ignore', category=UserWarning, module='sklearn')
 
 
-@ray.remote
+class ConditionalDecorator(object):
+    def __init__(self, dec, condition):
+        self.decorator = dec
+        self.condition = condition
+
+    def __call__(self, func):
+        if not self.condition:
+            # Return the function unchanged, not decorated
+            return func
+        return self.decorator(func)
+
+
+@ConditionalDecorator(ray.remote, USE_RAY)
 def parallel(
         d,
         core,

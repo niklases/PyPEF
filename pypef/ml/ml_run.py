@@ -15,9 +15,13 @@
 import os
 from os import listdir
 from os.path import isfile, join
-import ray
+
 import logging
 logger = logging.getLogger('pypef.ml.ml_run')
+
+from pypef.main import USE_RAY
+if USE_RAY:
+    import ray
 
 from pypef.ml.parallelization import aaindex_performance_parallel
 from pypef.ml.regression import (
@@ -35,7 +39,7 @@ def run_pypef_pure_ml(arguments):
     """
     threads = abs(arguments['--threads']) if arguments['--threads'] is not None else 1
     threads = threads + 1 if threads == 0 else threads
-    if threads > 1:
+    if threads > 1 and USE_RAY:
         ray.init()
     if arguments['--show']:
         if arguments['MODELS'] != str(5):

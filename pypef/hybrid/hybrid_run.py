@@ -14,7 +14,10 @@
 
 import logging
 logger = logging.getLogger('pypef.dca.dca_run')
-import ray
+
+from pypef.main import USE_RAY
+if USE_RAY:
+    import ray
 
 from pypef.utils.variant_data import read_csv, get_wt_sequence
 from pypef.dca.plmc_encoding import save_plmc_dca_encoding_model
@@ -34,7 +37,7 @@ def run_pypef_hybrid_modeling(arguments):
         model_type = 'undefined'
     if model_type in ['GREMLIN', 'DCAHybridModel'] and threads > 1:
         logger.info(f'No (Ray) parallelization for {model_type} model...')
-    elif model_type not in ['GREMLIN', 'DCAHybridModel'] and threads > 1:
+    elif model_type not in ['GREMLIN', 'DCAHybridModel'] and threads > 1 and USE_RAY:
         ray.init()
         logger.info(f'Using {threads} threads for running...')
     if model_type == 'DCAHybridModel':

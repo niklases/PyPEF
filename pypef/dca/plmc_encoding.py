@@ -46,11 +46,15 @@ import logging
 logger = logging.getLogger('pypef.dca.encoding')
 
 import numpy as np
-import ray
 from tqdm import tqdm
 import pickle
 
+from pypef.main import USE_RAY
+if USE_RAY:
+    import ray
+
 from pypef.utils.variant_data import amino_acids
+from pypef.ml.parallelization import ConditionalDecorator
 
 _SLICE = np.s_[:]
 
@@ -741,7 +745,7 @@ def get_encoded_sequence(
     return encoded_seq
 
 
-@ray.remote
+@ConditionalDecorator(ray.remote, USE_RAY)
 def _get_data_parallel(
         variants: list,
         sequences: list,
