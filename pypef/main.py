@@ -286,8 +286,6 @@ Options:
                                     A2M format [default: False].
 """
 
-USE_RAY = False
-
 from sys import argv, version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:

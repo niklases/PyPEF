@@ -19,7 +19,7 @@ from os.path import isfile, join
 import logging
 logger = logging.getLogger('pypef.ml.ml_run')
 
-from pypef.main import USE_RAY
+from pypef.settings import USE_RAY
 if USE_RAY:
     import ray
 

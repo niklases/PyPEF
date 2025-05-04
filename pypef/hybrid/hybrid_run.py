@@ -15,7 +15,7 @@
 import logging
 logger = logging.getLogger('pypef.dca.dca_run')
 
-from pypef.main import USE_RAY
+from pypef.settings import USE_RAY
 if USE_RAY:
     import ray
 

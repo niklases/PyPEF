@@ -49,12 +49,12 @@ import numpy as np
 from tqdm import tqdm
 import pickle
 
-from pypef.main import USE_RAY
+from pypef.settings import USE_RAY
 if USE_RAY:
     import ray
 
 from pypef.utils.variant_data import amino_acids
-from pypef.ml.parallelization import ConditionalDecorator
+from pypef.utils.helpers import ray_conditional_decorator
 
 _SLICE = np.s_[:]
 
@@ -745,7 +745,7 @@ def get_encoded_sequence(
     return encoded_seq
 
 
-@ConditionalDecorator(ray.remote, USE_RAY)
+@ray_conditional_decorator
 def _get_data_parallel(
         variants: list,
         sequences: list,
