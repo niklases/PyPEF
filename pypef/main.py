@@ -414,13 +414,13 @@ def validate(args):
         exit(e)
 
 
-def run_main():
+def run_main(argv=None):
     """
     Entry point for pip-installed version.
     Arguments are created from Docstring using docopt that 
     creates an argument dict.
     """
-    arguments = docopt(__doc__, version=__version__)
+    arguments = docopt(__doc__, argv=argv, version=__version__)
     start_time = time.time()
     logger.debug(f'main.py __name__: {__name__}, version: {__version__}')
     logger.debug(str(argv)[1:-1].replace("\'", "").replace(",", ""))

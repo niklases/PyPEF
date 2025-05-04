@@ -1193,13 +1193,14 @@ def performance_ls_ts(
                     f"{len(test_variants)} (after removing substitutions "
                     f"at gap positions)."
         )
-        if llm.lower().startswith('esm'):
-            llm_dict = esm_setup(train_sequences)
-            x_llm_test = llm_embedder(llm_dict, test_sequences)
-        elif llm.lower() == 'prosst':
-            llm_dict = prosst_setup(
-                wt_seq, pdb_file, sequences=train_sequences)
-            x_llm_test = llm_embedder(llm_dict, test_sequences)
+        if llm is not None:
+            if llm.lower().startswith('esm'):
+                llm_dict = esm_setup(train_sequences)
+                x_llm_test = llm_embedder(llm_dict, test_sequences)
+            elif llm.lower() == 'prosst':
+                llm_dict = prosst_setup(
+                    wt_seq, pdb_file, sequences=train_sequences)
+                x_llm_test = llm_embedder(llm_dict, test_sequences)
         else:
             llm_dict = None
             x_llm_test = None

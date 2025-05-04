@@ -6,6 +6,10 @@ import subprocess
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+from pypef.main import run_main
+
+
+EXEC_API_OR_CLI = ['api', 'cli'][0]
 
 
 def capture(command):
@@ -322,6 +326,7 @@ class MainWindow(QtWidgets.QWidget):
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select variant CSV File")[0]
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
+            #self.exec_pypef_cli(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
             self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
 
 
@@ -441,15 +446,25 @@ class MainWindow(QtWidgets.QWidget):
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
             self.exec_pypef(f'ml --encoding onehot --ls {training_file} --ts {test_file} '
                             f'--threads {self.n_cores} --regressor {self.regression_model}')
-    
 
     def exec_pypef(self, cmd):
+        if EXEC_API_OR_CLI == 'api':
+            return self.exec_pypef_api(cmd)
+        elif EXEC_API_OR_CLI == 'cli':
+            return self.exec_pypef(cmd)
+        else:
+            raise SystemError("Choose between 'api' or 'cli'!")
+
+    def exec_pypef_cli(self, cmd):
         print(cmd)  # TODO remove
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))
         self.process.finished.connect(self.process_finished)
         if self.c > 0:
             self.textedit_out.append("=" * 104 + "\n")
 
+    def exec_pypef_api(self, cmd):
+        run_main(argv=cmd)
+        pass
 
     def process_finished(self):
         self.version_text.setText("Finished...") 
