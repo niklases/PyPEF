@@ -48,7 +48,7 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models
+from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models, get_device
 from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup, prosst_tokenize_sequences
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
@@ -131,7 +131,10 @@ class DCALLMHybridModel:
         self.x_train_dca = x_train_dca
         self.y_train = y_train
         self.x_wild_type = x_wt
+        if device is None:
+            device = get_device()
         self.device = device
+        print(f'Using device {device.upper()} for hybrid modeling...')
         self.seed = seed
         if batch_size is None:
             batch_size = 5
@@ -554,7 +557,6 @@ class DCALLMHybridModel:
                 self.y_dca_ttest, self.y_dca_ridge_ttest
             )
             return self.beta1, self.beta2, self.ridge_opt
-
 
     def hybrid_prediction(
             self,

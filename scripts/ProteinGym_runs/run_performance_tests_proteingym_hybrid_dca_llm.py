@@ -437,7 +437,7 @@ def plot_csv_data(csv, plot_name):
     plt.grid(zorder=-1)
     plt.xticks(
         range(len(tested_dsets)), 
-        ['(' + str(n) + name  + ') ' for (n, name) in zip(tested_dsets, df['Dataset'].to_list())], 
+        ['(' + str(n) + ') ' + name  for (n, name) in zip(tested_dsets, df['Dataset'].to_list())], 
         rotation=45, ha='right'
     )
     plt.margins(0.01)
