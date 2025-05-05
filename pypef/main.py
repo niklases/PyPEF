@@ -286,7 +286,7 @@ Options:
                                     A2M format [default: False].
 """
 
-from sys import argv, version_info
+from sys import version_info
 from pypef import __version__
 if version_info[0] < 3 or version_info[1] < 9:
     raise SystemError(f"The current version of PyPEF (v {__version__}) requires at "

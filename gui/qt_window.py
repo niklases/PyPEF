@@ -9,7 +9,7 @@ from PySide6.QtCore import QSize
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 #sys.path.append(pypef_root)
 from pypef import __version__
-from pypef.main import run_main
+from pypef.main import __doc__, run_main
 
 
 EXEC_API_OR_CLI = ['api', 'cli'][0]
@@ -332,7 +332,12 @@ class MainWindow(QtWidgets.QWidget):
     @QtCore.Slot()
     def pypef_help(self):
         self.version_text.setText("Getting help...")
-        self.exec_pypef(f'mklsts --help')
+        self.textedit_out.append(__doc__)
+        self.process.finished.connect(self.process_finished)
+        self.c += 1
+        if self.c > 0:
+            self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
+        self.version_text.setText("Finished...")
 
 
     @QtCore.Slot()
@@ -437,8 +442,6 @@ class MainWindow(QtWidgets.QWidget):
                 self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
                 self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} --params {params_pkl_file} --llm {self.llm}')
 
-                
-
 ##### TODO END ################################################################################################# TODO END
 
 
@@ -478,24 +481,27 @@ class MainWindow(QtWidgets.QWidget):
             self.textedit_out.append("=" * 104 + "\n")
 
     def exec_pypef_api(self, cmd):
-        self.textedit_out.append(f'Executing command:{cmd}')
+        print(cmd)  # TODO remove
+        self.textedit_out.append(f'Executing command:\n\t{cmd}')
+        self.c += 1
         try:
             with Capturing() as captured_output:
                 run_main(argv=cmd)
-            print(captured_output)
+                print(captured_output)
             for cap_out_text in captured_output:
                 self.textedit_out.append(cap_out_text)
         except Exception as e: # anything
-            self.textedit_out.append(f"Provided wrong inputs! Error: {e}")
+            self.textedit_out.append(f"Provided wrong inputs! Error:\n\t{e}")
         finally:
             self.process.finished.connect(self.process_finished)
             if self.c > 0:
-                self.textedit_out.append("=" * 104 + "\n")
+                self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
+        self.version_text.setText("Finished...")
 
 
     def process_finished(self):
         self.version_text.setText("Finished...") 
-        #self.process = None
+        self.process = None
 
 
 if __name__ == "__main__":
