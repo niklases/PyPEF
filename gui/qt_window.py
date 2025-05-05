@@ -1,15 +1,30 @@
 # GUI created with PyQT/PySide
-import re
+#import re
 import sys
+from io import StringIO 
 import os
 import subprocess
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+#sys.path.append(pypef_root)
+from pypef import __version__
 from pypef.main import run_main
 
 
 EXEC_API_OR_CLI = ['api', 'cli'][0]
+
+
+class Capturing(list):
+    """https://stackoverflow.com/questions/16571150/how-to-capture-stdout-output-from-a-python-function-call"""
+    def __enter__(self):
+        self._stdout = sys.stdout
+        sys.stdout = self._stringio = StringIO()
+        return self
+    def __exit__(self, *args):
+        self.extend(self._stringio.getvalue().splitlines())
+        del self._stringio    # free up some memory
+        sys.stdout = self._stdout
 
 
 def capture(command):
@@ -22,8 +37,8 @@ def capture(command):
     return out, err, proc.returncode
 
 
-out, err, exitcode = capture([f'python', f'{pypef_root}/run.py', '--version'])
-version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", str(out))[0]
+#out, err, exitcode = capture([f'python', f'{pypef_root}/run.py', '--version'])
+#version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", str(out))[0]
 
 button_style = """
 QPushButton {
@@ -71,7 +86,7 @@ class MainWindow(QtWidgets.QWidget):
 
         # Texts #############################################################################
         layout = QtWidgets.QGridLayout(self)
-        self.version_text = QtWidgets.QLabel(f"PyPEF v. {version}", alignment=QtCore.Qt.AlignRight)
+        self.version_text = QtWidgets.QLabel(f"PyPEF v. {__version__}", alignment=QtCore.Qt.AlignRight)
         self.ncores_text = QtWidgets.QLabel("Single-/multiprocessing")
         self.llm_text = QtWidgets.QLabel("LLM")
         self.regression_model_text =  QtWidgets.QLabel("Regression model")
@@ -266,8 +281,8 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.textedit_out, 8, 0, 1, -1)
 
         self.process = QtCore.QProcess(self)
-        self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
+        #self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+        #self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
         self.process.started.connect(lambda: self.button_help.setEnabled(False))
         self.process.finished.connect(lambda: self.button_help.setEnabled(True))
         self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
@@ -463,8 +478,20 @@ class MainWindow(QtWidgets.QWidget):
             self.textedit_out.append("=" * 104 + "\n")
 
     def exec_pypef_api(self, cmd):
-        run_main(argv=cmd)
-        pass
+        self.textedit_out.append(f'Executing command:{cmd}')
+        try:
+            with Capturing() as captured_output:
+                run_main(argv=cmd)
+            print(captured_output)
+            for cap_out_text in captured_output:
+                self.textedit_out.append(cap_out_text)
+        except Exception as e: # anything
+            self.textedit_out.append(f"Provided wrong inputs! Error: {e}")
+        finally:
+            self.process.finished.connect(self.process_finished)
+            if self.c > 0:
+                self.textedit_out.append("=" * 104 + "\n")
+
 
     def process_finished(self):
         self.version_text.setText("Finished...") 
