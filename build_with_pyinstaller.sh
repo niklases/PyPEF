@@ -2,7 +2,6 @@
 pip install -e .
 pyinstaller \
   --console \
-  --collect-all pypef \
   --collect-data torch \
   --collect-data biotite \
   --collect-all biotite \

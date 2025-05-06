@@ -9,8 +9,14 @@ from PySide6.QtCore import QSize
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 #sys.path.append(pypef_root)
 from pypef import __version__
-from pypef.main import __doc__, run_main
+from pypef.main import __doc__, run_main, logger
 
+import logging
+
+
+#logging.getLogger("pypef").setLevel(logging.INFO)
+#logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.INFO)
 
 EXEC_API_OR_CLI = ['api', 'cli'][0]
 
@@ -280,42 +286,51 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addWidget(self.textedit_out, 8, 0, 1, -1)
 
-        self.process = QtCore.QProcess(self)
+        #self.process = QtCore.QProcess(self)
         #self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
         #self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
-        self.process.started.connect(lambda: self.button_help.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_help.setEnabled(True))
-        self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_predict_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_predict_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(True))
-        ###### TODO
-        self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
-        ###### TODO END
-        self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_help.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_help.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_dca_test_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_dca_test_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_dca_predict_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_dca_predict_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_hybrid_train_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_hybrid_train_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_hybrid_prediction_dca.setEnabled(True))
+        ####### TODO
+        #self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
+        ####### TODO END
+        #self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
+        #self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
+        #self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
+    
+    def start_process(self, button):
+        self.c += 1
+        button.setEnabled(False)
+    
+    def end_process(self, button):
+        button.setEnabled(True)
+        self.version_text.setText("Finished...")
+        self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
 
-    def on_readyReadStandardOutput(self):
-         text = self.process.readAllStandardOutput().data().decode()
-         self.c += 1
-         self.textedit_out.append(text.strip())
+    #def on_readyReadStandardOutput(self):
+    #     text = self.process.readAllStandardOutput().data().decode()
+    #     self.c += 1
+    #     self.textedit_out.append(text.strip())
     
     def selection_ncores(self, i):
         if i == 0:
@@ -331,23 +346,23 @@ class MainWindow(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def pypef_help(self):
+        button = self.button_help
+        self.start_process(button=button)
         self.version_text.setText("Getting help...")
         self.textedit_out.append(__doc__)
-        self.process.finished.connect(self.process_finished)
-        self.c += 1
-        if self.c > 0:
-            self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
-        self.version_text.setText("Finished...")
-
+        self.end_process(button=button)
 
     @QtCore.Slot()
     def pypef_mklsts(self):
+        button = self.button_mklsts
+        self.start_process(button=button)
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select WT FASTA File")[0]
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(self, "Select variant CSV File")[0]
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
             #self.exec_pypef_cli(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
             self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
+        self.end_process(button=button)
 
 
     @QtCore.Slot()
@@ -474,30 +489,20 @@ class MainWindow(QtWidgets.QWidget):
             raise SystemError("Choose between 'api' or 'cli'!")
 
     def exec_pypef_cli(self, cmd):
-        print(cmd)  # TODO remove
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))
         self.process.finished.connect(self.process_finished)
         if self.c > 0:
             self.textedit_out.append("=" * 104 + "\n")
 
     def exec_pypef_api(self, cmd):
-        print(cmd)  # TODO remove
         self.textedit_out.append(f'Executing command:\n\t{cmd}')
-        self.c += 1
         try:
             with Capturing() as captured_output:
                 run_main(argv=cmd)
-                print(captured_output)
             for cap_out_text in captured_output:
                 self.textedit_out.append(cap_out_text)
         except Exception as e: # anything
             self.textedit_out.append(f"Provided wrong inputs! Error:\n\t{e}")
-        finally:
-            self.process.finished.connect(self.process_finished)
-            if self.c > 0:
-                self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
-        self.version_text.setText("Finished...")
-
 
     def process_finished(self):
         self.version_text.setText("Finished...") 
