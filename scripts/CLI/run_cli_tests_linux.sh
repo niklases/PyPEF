@@ -18,7 +18,7 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-conda env remove -n pypef                                                                                                #
+yes | conda env remove -n pypef || true                                                                                  #
 conda create -n pypef python=3.12 -y                                                                                     #
 eval "$(conda shell.bash hook)"                                                                                          #
 conda activate pypef                                                                                                     #
@@ -26,6 +26,7 @@ cd '../'                                                                        
 path=$( echo ${PWD%/*} )                                                                                                 #
 cd 'CLI'                                                                                                                 #
 python -m pip install -r "$path/requirements.txt"                                                                        #
+pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128                                             # TODO: REMOVE
 export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
 pypef="python3 $path/pypef/main.py"                                                                                      #
 ##########################################################################################################################

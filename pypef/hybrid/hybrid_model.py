@@ -26,7 +26,7 @@ from typing import Union
 import logging
 import warnings
 
-import pypef.dca.plmc_encoding
+
 logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 import numpy as np
@@ -38,11 +38,12 @@ from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 
+from pypef.settings import USE_RAY
 from pypef.utils.variant_data import (
     get_sequences_from_file, get_seqs_from_var_name,
     remove_nan_encoded_positions, get_wt_sequence, split_variants
 )
-
+import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out
 from pypef.utils.plot import plot_y_true_vs_y_pred
@@ -960,7 +961,7 @@ def plmc_encoding(plmc: PLMC, variants, sequences, ys_true, threads=1, verbose=F
         print(f"Using to-self-substitution '{wt_name}' as wild type reference. "
               f"Encoding variant sequences. This might take some time...")
     x_wt = get_encoded_sequence(wt_name, plmc)
-    if threads > 1:
+    if threads > 1 and USE_RAY:
         # Hyperthreading, NaNs are already being removed by the called function
         variants, sequences, xs, ys_true = get_dca_data_parallel(
             variants, sequences, ys_true, plmc, threads, verbose=verbose)

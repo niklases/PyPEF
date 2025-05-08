@@ -8,10 +8,11 @@ adjustText
 scikit-learn
 scikit-learn-intelex
 biopython
+biotite
 schema
 ray[default]
 pathos
 peft
 torch
 torch-geometric
-biotite
+

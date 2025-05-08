@@ -409,7 +409,10 @@ class CouplingsModel:
             Length of list must correspond to model length (self.l)
         """
         if len(mapping) != self.l:
-            raise ValueError(f"Mapping length inconsistent with model length: {len(mapping)} != {self.l}")
+            raise ValueError(f"Mapping length inconsistent with model length: "
+                             f"{len(mapping)} != {self.l}\n"
+                             f"Potentially the loaded PLMC parameter file is not "
+                             f"a binary parameter file produced with PLMC.")
 
         self._index_list = np.array(mapping)
         self.index_map = {b: a for a, b in enumerate(self.index_list)}

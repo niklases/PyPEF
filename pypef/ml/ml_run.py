@@ -61,7 +61,7 @@ def run_pypef_pure_ml(arguments):
                 except ValueError:
                     t_save = 5
                 # Parallelization of AAindex iteration if threads is not None (but int)
-                if threads > 1 and arguments['--encoding'] == 'aaidx':
+                if threads > 1 and arguments['--encoding'] == 'aaidx' and USE_RAY:
                     logger.info(f'Using {threads} threads for parallel computing. Running...')
                     encoding_performance_list = aaindex_performance_parallel(
                         train_set=arguments['--ls'],
