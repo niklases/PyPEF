@@ -25,7 +25,7 @@ function ExitOnExitCode { if ($LastExitCode) {
 
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-ECHO Y | conda env remove -n pypef                                                                                       #
+Write-Output Y | conda env remove -n pypef                                                                                       #
 conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
 $path=Get-Location                                                                                                       #
@@ -331,13 +331,13 @@ Write-Host
 pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv
+Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv
 ExitOnExitCode
 Write-Host
 pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
-mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv
+Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv
 ExitOnExitCode
 Write-Host
 

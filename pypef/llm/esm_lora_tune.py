@@ -27,6 +27,8 @@ from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 from transformers import EsmForMaskedLM, EsmTokenizer
 
+from pypef.utils.helpers import get_device
+
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 
