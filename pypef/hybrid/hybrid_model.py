@@ -46,10 +46,11 @@ from pypef.utils.variant_data import (
 import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out
+from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models, get_device
+from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models
 from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup, prosst_tokenize_sequences
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 

@@ -23,10 +23,9 @@ from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
-from pypef.llm.esm_lora_tune import corr_loss, get_batches
+from pypef.llm.esm_lora_tune import corr_loss
 from pypef.llm.prosst_structure.quantizer import PdbQuantizer
-from pypef import __path__
-pypef_path = __path__[0]
+from pypef.utils.helpers import get_device
 
 
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):
@@ -51,9 +50,7 @@ def get_logits_from_full_seqs(
         device: str | None = None
 ):
     if device is None:
-        device =  ("cuda" if torch.cuda.is_available()
-                   else "mps" if torch.backends.mps.is_available()
-                   else "cpu")
+        device = get_device()
     model = model.to(device)
     input_ids = input_ids.to(device)
     attention_mask = attention_mask.to(device)
@@ -111,11 +108,7 @@ def prosst_train(
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
-        device = (
-            "cuda" if torch.cuda.is_available() 
-            else "mps" if torch.backends.mps.is_available() 
-            else "cpu"
-        )
+        device = get_device()
     print(f"ProSST training using {device.upper()} device "
           f"(N_Train={len(torch.flatten(score_batches))})...")
     x_sequence_batches = x_sequence_batches.to(device)

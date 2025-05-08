@@ -25,13 +25,14 @@ function ExitOnExitCode { if ($LastExitCode) {
 
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-conda env remove -n pypef                                                                                                #
+ECHO Y | conda env remove -n pypef                                                                                       #
 conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
 $path=Get-Location                                                                                                       #
 $path=Split-Path -Path $path -Parent                                                                                     #
 $path=Split-Path -Path $path -Parent                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
+pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128                                             # TODO: REMOVE
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
 ##########################################################################################################################
@@ -274,40 +275,40 @@ pypef ml -e dca -m MLgremlin --params GREMLIN --pmult --drecomb --trecomb --qare
 ExitOnExitCode
 Write-Host
 
-pypef ml -e aaidx directevo -m FAUJ880104 -w Sequence_WT_ANEH.fasta --y_wt -1.5 --negative
+pypef ml -e aaidx directevo -m FAUJ880104 -w Sequence_WT_ANEH.fasta --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta --y_wt -1.5 --negative
+pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta --y_wt -1.5 --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta --y_wt -1.5 --negative --params GREMLIN
+pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
-pypef ml -e aaidx directevo -m FAUJ880104 -w Sequence_WT_ANEH.fasta -y -1.5 --numiter 10 --numtraj 8 --negative
+pypef ml -e aaidx directevo -m FAUJ880104 -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta -y -1.5 --numiter 10 --numtraj 8 --negative
+pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta -y -1.5 --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta -y -1.5 --numiter 10 --numtraj 8 --negative --params GREMLIN
+pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
-pypef ml -e aaidx directevo -m FAUJ880104 -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta -y -1.5 --temp 0.1 --usecsv --csvaa --negative
+pypef ml -e aaidx directevo -m FAUJ880104 -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e onehot directevo -m ONEHOT -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta -y -1.5 --temp 0.1 --usecsv --csvaa --negative
+pypef ml -e onehot directevo -m ONEHOT -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta -y -1.5 --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta -y -1.5 --temp 0.1 --usecsv --csvaa --negative --params GREMLIN
+pypef ml -e dca directevo -m MLgremlin -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 
@@ -317,7 +318,7 @@ Write-Host
 pypef ml --show
 ExitOnExitCode
 Write-Host
-pypef ml -e aaidx directevo -m WEBA780101 -w Sequence_WT_ANEH.fasta -y -1.5 --negative --nofft
+pypef ml -e aaidx directevo -m WEBA780101 -w Sequence_WT_ANEH.fasta  --negative --nofft
 ExitOnExitCode
 Write-Host
 
@@ -409,13 +410,13 @@ pypef hybrid -m HYBRIDplmc --params ANEH_72.6.params --pmult --drecomb --threads
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --y_wt -1.5 --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta -y -1.5 --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta -y -1.5 --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
 

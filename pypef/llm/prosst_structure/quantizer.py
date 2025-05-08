@@ -32,6 +32,7 @@ from pathos.threading import ThreadPool
 
 from pypef.llm.prosst_structure.encoder.gvp import AutoGraphEncoder
 from pypef.llm.prosst_structure.scatter import scatter_mean, scatter_sum, scatter_max
+from pypef.utils.helpers import get_device
 
 
 def iter_threading_map(func, data, workers: int = 2):
@@ -540,7 +541,7 @@ class PdbQuantizer:
             self.cluster_model = cluster_model
 
         if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
+            self.device = get_device()
         else:
             self.device = device
 

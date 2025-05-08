@@ -29,3 +29,17 @@ def get_device():
         else "mps" if torch.backends.mps.is_available() 
         else "cpu"
     )
+
+
+def get_vram(verbose: bool = True):
+    if not torch.cuda.is_available():
+        print("No CUDA/GPU device available for VRAM checking.")
+        return "No CUDA/GPU device available for VRAM checking."
+    free = torch.cuda.mem_get_info()[0] / 1024 ** 3
+    total = torch.cuda.mem_get_info()[1] / 1024 ** 3
+    total_cubes = 24
+    free_cubes = int(total_cubes * free / total)
+    if verbose:
+        print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
+            total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
+    return free, total

@@ -31,34 +31,16 @@ from pypef.llm.prosst_lora_tune import (
     prosst_tokenize_sequences, prosst_train
 )
 from pypef.utils.variant_data import get_seqs_from_var_name
+from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
     DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
 )
 
 
-def get_vram(verbose: bool = True):
-    if not torch.cuda.is_available():
-        print("No CUDA/GPU device available for VRAM checking...")
-        return
-    free = torch.cuda.mem_get_info()[0] / 1024 ** 3
-    total = torch.cuda.mem_get_info()[1] / 1024 ** 3
-    total_cubes = 24
-    free_cubes = int(total_cubes * free / total)
-    if verbose:
-        print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
-            total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
-    return free, total
-
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "mps"
-        if torch.backends.mps.is_available()
-        else "cpu"
-    )
+    device = get_device()
     print(f"Using {device.upper()} device")
     get_vram()
     MAX_WT_SEQUENCE_LENGTH = 1000

@@ -30,24 +30,6 @@ from transformers import EsmForMaskedLM, EsmTokenizer
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 
-def get_vram(verbose: bool = True):
-    free = torch.cuda.mem_get_info()[0] / 1024 ** 3
-    total = torch.cuda.mem_get_info()[1] / 1024 ** 3
-    total_cubes = 24
-    free_cubes = int(total_cubes * free / total)
-    if verbose:
-        print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
-            total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
-    return free, total
-
-
-def get_device():
-    return (
-        "cuda" if torch.cuda.is_available() 
-        else "mps" if torch.backends.mps.is_available() 
-        else "cpu"
-    )
-
 
 def get_esm_models():
     base_model = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')

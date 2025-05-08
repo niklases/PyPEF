@@ -288,9 +288,9 @@ Options:
 
 from sys import version_info
 from pypef import __version__
-if version_info[0] < 3 or version_info[1] < 9:
+if version_info[0] < 3 or version_info[1] < 10:
     raise SystemError(f"The current version of PyPEF (v {__version__}) requires at "
-                      f"least Python 3.9 or higher versions of Python.")
+                      f"least Python 3.10 or higher versions of Python.")
 
 import time
 from datetime import timedelta
