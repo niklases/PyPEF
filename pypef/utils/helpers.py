@@ -42,4 +42,4 @@ def get_vram(verbose: bool = True):
     if verbose:
         print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
             total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
-    return free, total
+    return f"Total VRAM: {total:.2f}GB"

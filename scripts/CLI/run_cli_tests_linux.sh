@@ -26,7 +26,7 @@ cd '../'                                                                        
 path=$( echo ${PWD%/*} )                                                                                                 #
 cd 'CLI'                                                                                                                 #
 python -m pip install -r "$path/requirements.txt"                                                                        #
-pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128                                             # TODO: REMOVE
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # TODO: REMOVE
 export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
 pypef="python3 $path/pypef/main.py"                                                                                      #
 ##########################################################################################################################

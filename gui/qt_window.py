@@ -132,7 +132,7 @@ class MainWindow(QtWidgets.QWidget):
             "font-family:Consolas;font-size:12px;font-weight:normal;color:white;"
             "background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);"
         )
-        self.device_text_out.setFixedHeight(60)
+        self.device_text_out.setFixedHeight(40)
         self.device_text_out.append(f"Device: {get_device().upper()}")
         self.device_text_out.append(get_vram())
 

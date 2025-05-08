@@ -25,14 +25,14 @@ function ExitOnExitCode { if ($LastExitCode) {
 
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-Write-Output Y | conda env remove -n pypef                                                                                       #
+Write-Output Y | conda env remove -n pypef                                                                               #
 conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
 $path=Get-Location                                                                                                       #
 $path=Split-Path -Path $path -Parent                                                                                     #
 $path=Split-Path -Path $path -Parent                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
-pip install torch --index-url https://download.pytorch.org/whl/nightly/cu128                                             # TODO: REMOVE
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # TODO: REMOVE
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
 ##########################################################################################################################
