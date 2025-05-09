@@ -1,27 +1,26 @@
-# GUI created with PyQT/PySide
-#import re
+
+# GUI created with PyQT/PySide6
+
 import sys
 from io import StringIO 
 import os
-import subprocess
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize
 pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-#sys.path.append(pypef_root)
+sys.path.append(pypef_root)
 from pypef import __version__
 from pypef.main import __doc__, run_main, logger, formatter
 from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_gpu_info
 
 import logging
-
-
-#logging.getLogger("pypef").setLevel(logging.INFO)
-#logging.basicConfig(level=logging.INFO)
-#logging.basicConfig(stream=sys.stdout)
 logger.setLevel(logging.INFO)
 
 
-EXEC_API_OR_CLI = ['api', 'cli'][0]
+EXEC_API_OR_CLI = ['cli', 'api'][0]
+
+
+print(sys.executable)
+print(EXEC_API_OR_CLI)
 
 
 class Capturing(list):
@@ -51,19 +50,6 @@ class QTextEditLogger(logging.Handler):
         msg = self.format(record)
         self.widget.appendPlainText(msg)
 
-
-def capture(command):
-    proc = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    out, err = proc.communicate()
-    return out, err, proc.returncode
-
-
-#out, err, exitcode = capture([f'python', f'{pypef_root}/run.py', '--version'])
-#version = re.findall(r"[-+]?(?:\d*\.*\d.*\d+)", str(out))[0]
 
 button_style = """
 QPushButton {
@@ -248,13 +234,13 @@ class MainWindow(QtWidgets.QWidget):
         self.button_hybrid_test_dca.setStyleSheet(button_style)
 
         # Hybrid DCA prediction
-        self.button_hybrid_prediction_dca = QtWidgets.QPushButton("Predict (DCA)")
-        self.button_hybrid_prediction_dca.setMinimumWidth(80)
-        self.button_hybrid_prediction_dca.setToolTip(
+        self.button_hybrid_predict_dca = QtWidgets.QPushButton("Predict (DCA)")
+        self.button_hybrid_predict_dca.setMinimumWidth(80)
+        self.button_hybrid_predict_dca.setToolTip(
             "Predict FASTA dataset using the hybrid DCA model"
         )
-        self.button_hybrid_prediction_dca.clicked.connect(self.pypef_dca_hybrid_predict)
-        self.button_hybrid_prediction_dca.setStyleSheet(button_style)
+        self.button_hybrid_predict_dca.clicked.connect(self.pypef_dca_hybrid_predict)
+        self.button_hybrid_predict_dca.setStyleSheet(button_style)
 
         # Hybrid DCA+LLM ##################################################################### TODO
         self.button_hybrid_train_dca_llm = QtWidgets.QPushButton("Train (DCA+LLM)")
@@ -382,7 +368,7 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.button_hybrid_train_dca, 4, 2, 1, 1)
         layout.addWidget(self.button_hybrid_train_test_dca, 5, 2, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca, 6, 2, 1, 1)
-        layout.addWidget(self.button_hybrid_prediction_dca, 7, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_predict_dca, 7, 2, 1, 1)
 
         layout.addWidget(self.llm_text, 1, 3, 1, 1)
         layout.addWidget(self.box_llm, 2, 3, 1, 1)
@@ -407,7 +393,56 @@ class MainWindow(QtWidgets.QWidget):
         layout.addWidget(self.textedit_out, 12, 0, 1, 2)
 
         layout.addWidget(self.logTextBox.widget, 12, 2, 1, 4)
-    
+
+        self.process = QtCore.QProcess(self)
+        self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+        self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
+        self.process.started.connect(lambda: self.button_help.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_help.setEnabled(True))
+        self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_test_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_dca_predict_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_dca_predict_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_predict_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_predict_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(True))
+        self.process.started.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_test_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_test_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_predict_dca.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_predict_dca.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_onehot.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_onehot.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_test_onehot.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_test_onehot.setEnabled(True))
+        self.process.started.connect(lambda: self.button_supervised_predict_onehot.setEnabled(False))
+        self.process.finished.connect(lambda: self.button_supervised_predict_onehot.setEnabled(True))
+
+
     def start_process(self, button):
         self.logTextBox.widget.clear()
         self.c += 1
@@ -419,26 +454,11 @@ class MainWindow(QtWidgets.QWidget):
         self.version_text.setText("Finished...")
         self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
 
-    def runLongTask(self):
-        # Step 2: Create a QThread object
-        self.thread = QtCore.QThread()
-        # Step 3: Create a worker object
-        self.worker = Worker()
-        # Step 4: Move worker to the thread
-        self.worker.moveToThread(self.thread)
-        # Step 5: Connect signals and slots
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
-        self.worker.progress.connect(self.reportProgress)
-        # Step 6: Start the thread
-        self.thread.start()
-
-    #def on_readyReadStandardOutput(self):
-    #     text = self.process.readAllStandardOutput().data().decode()
-    #     self.c += 1
-    #     self.textedit_out.append(text.strip())
+    def on_readyReadStandardOutput(self):
+         text = self.process.readAllStandardOutput().data().decode()
+         self.c += 1
+         #self.textedit_out.append(text.strip())
+         self.logTextBox.widget.appendPlainText(text.strip())
     
     def selection_ncores(self, i):
         if i == 0:
@@ -456,7 +476,7 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_help(self):
         button = self.button_help
         self.start_process(button=button)
-        self.textedit_out.append(f'Executing command:\n\t--help')
+        self.textedit_out.append(f'Executing command:\n    --help')
         self.version_text.setText("Getting help...")
         self.logTextBox.widget.appendPlainText(__doc__)
         self.end_process(button=button)
@@ -754,17 +774,16 @@ class MainWindow(QtWidgets.QWidget):
         if EXEC_API_OR_CLI == 'api':
             return self.exec_pypef_api(cmd)
         elif EXEC_API_OR_CLI == 'cli':
-            return self.exec_pypef(cmd)
+            return self.exec_pypef_cli(cmd)
         else:
             raise SystemError("Choose between 'api' or 'cli'!")
 
-    def exec_pypef_cli(self, cmd):
+    def exec_pypef_cli(self, cmd: str):
+        self.textedit_out.append(f'Executing command:\n    {cmd}')
         self.process.start(f'python', ['-u', f'{self.pypef_root}/run.py'] + cmd.split(' '))
         self.process.finished.connect(self.process_finished)
-        if self.c > 0:
-            self.textedit_out.append("=" * 104 + "\n")
 
-    def exec_pypef_api(self, cmd):
+    def exec_pypef_api(self, cmd: str):
         self.textedit_out.append(f'Executing command:\n\t{cmd}')
         try:
             with Capturing() as captured_output:

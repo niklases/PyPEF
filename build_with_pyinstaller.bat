@@ -4,6 +4,7 @@ pip install -U pyinstaller
 pip install -e .
 pyinstaller^
   --console^
+  --noconfirm^
   --collect-data torch^
   --collect-data biotite^
   --collect-all biotite^
@@ -16,5 +17,4 @@ pyinstaller^
   --add-binary=c:\Users\nikla\miniconda3\envs\py312\Library\bin\tbbbind_2_5.dll:.^
   --add-binary=c:\Users\nikla\miniconda3\envs\py312\Library\bin\tbbmalloc.dll:.^
   --add-binary=c:\Users\nikla\miniconda3\envs\py312\Library\bin\tbbmalloc_proxy.dll:.^
-  --noconfirm^
-  gui\qt_window.py
+  gui\PyPEFGUIQtWindow.py

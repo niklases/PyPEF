@@ -54,7 +54,7 @@ def get_torch_version():
 def get_gpu_info():
     if shutil.which("nvidia-smi"):
         output = subprocess.check_output("nvidia-smi").decode("utf-8").split("\n")
-        output = "GPU: " + output[8].split('|')[1][6:-4].strip()
+        output = "GPU: " + output[8].split('|')[1][6:-6].strip()
     else:
         output = "No nvidia-smi (and hence GPU) found."
     return output

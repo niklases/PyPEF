@@ -97,7 +97,7 @@ def checkpoint(model, filename):
 
 
 def load_model(model, filename):
-    print(f'Loading best model: {os.path.abspath(filename)}...')
+    logger.info(f'Loading best model: {os.path.abspath(filename)}...')
     model.load_state_dict(torch.load(filename, weights_only=True))
 
 
@@ -109,7 +109,7 @@ def prosst_train(
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
-    print(f"ProSST training using {device.upper()} device "
+    logger.info(f"ProSST training using {device.upper()} device "
           f"(N_Train={len(torch.flatten(score_batches))})...")
     x_sequence_batches = x_sequence_batches.to(device)
     score_batches = score_batches.to(device)
@@ -159,11 +159,11 @@ def prosst_train(
             )
             checkpoint(model, best_model)
             epoch_spearman_1 = epoch_spearman_2
-            #print(f"Saved current best model as {best_model}")
+            #logger.info(f"Saved current best model as {best_model}")
         else:
             did_not_improve_counter += 1
             if did_not_improve_counter >= early_stop:
-                print(f'\nEarly stop at epoch {epoch}...')
+                logger.info(f'\nEarly stop at epoch {epoch}...')
                 break
         loss_total = loss_fn(
             torch.flatten(score_batches).to('cpu'), 
@@ -173,14 +173,14 @@ def prosst_train(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
             f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
     try:
-        print(f"Loading best model as {best_model}...")
+        logger.info(f"Loading best model as {best_model}...")
     except UnboundLocalError:
         raise RuntimeError
     load_model(model, best_model)
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 
         model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
-    print(f'Train-->Train Performance (N={len(score_batches.cpu().flatten())}):', 
+    logger.info(f'Train-->Train Performance (N={len(score_batches.cpu().flatten())}):', 
           spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu()))
     return y_preds_train.cpu()
 

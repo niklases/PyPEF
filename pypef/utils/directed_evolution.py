@@ -242,7 +242,7 @@ class DirectedEvolution:
                     while wt_prediction == 'skip':
                         rand_pos = random.randint(0, len(self.s_wt) - 1)
                         wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
-                        print(f"Trying to get WT fitness: {wt_mut}...")
+                        logger.info(f"Trying to get WT fitness: {wt_mut}...")
                         wt_prediction = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                             path=self.path,
                             model=self.model,
@@ -275,7 +275,7 @@ class DirectedEvolution:
                     while wt_prediction == 'skip':
                         rand_pos = random.randint(0, len(self.s_wt) - 1)
                         wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
-                        print(f"Trying to get WT fitness: {wt_mut}...")
+                        logger.info(f"Trying to get WT fitness: {wt_mut}...")
                         wt_prediction = predict_directed_evolution(
                             encoder=self.dca_encoder,
                             variant=wt_mut,  # WT, e.g. F17F

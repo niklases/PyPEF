@@ -89,7 +89,7 @@ class DCALLMHybridModel:
             if type(llm_model_input) is not dict:
                 raise SystemError(f"Model input must be in form of a dictionary.")
             else:
-                print("Using LLM as second model next to DCA for hybrid modeling...")
+                logger.info("Using LLM as second model next to DCA for hybrid modeling...")
                 if len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'esm1v':
                     self.llm_key = 'esm1v'
                     self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
@@ -119,7 +119,7 @@ class DCALLMHybridModel:
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         else:
-            print("No LLM inputs were defined for hybrid modelling. "
+            logger.info("No LLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
             self.llm_key = None
             self.llm_model_input = None
@@ -136,7 +136,7 @@ class DCALLMHybridModel:
         if device is None:
             device = get_device()
         self.device = device
-        print(f'Using device {device.upper()} for hybrid modeling...')
+        logger.info(f'Using device {device.upper()} for hybrid modeling...')
         self.seed = seed
         if batch_size is None:
             batch_size = 5
@@ -337,13 +337,13 @@ class DCALLMHybridModel:
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
-        print("Getting subsplits for supervised (re-)training of models "
+        logger.info("Getting subsplits for supervised (re-)training of models "
               "and for adjustment of hybrid component contribution "
               "weights (\"beta's\")..."
         )
         train_size_fit = int(train_size_fit * len(self.y_train))
         train_size_beta_adjustment = len(self.y_train) - train_size_fit
-        print(f"Splitting training data of size {len(self.y_train)} "
+        logger.info(f"Splitting training data of size {len(self.y_train)} "
               f"into {train_size_fit} variants for model tuning and "
               f"{train_size_beta_adjustment} variants for hybrid model "
               f"beta adjustment...")
@@ -353,7 +353,7 @@ class DCALLMHybridModel:
             if n_drop > 0:
                 train_size_fit = train_size_fit - n_drop
                 train_size_beta_adjustment = len(self.y_train) - train_size_fit
-                print(f"Shifting {n_drop} variants from training set to "
+                logger.info(f"Shifting {n_drop} variants from training set to "
                       f"beta adjustment set to match batch requirements "
                       f"of batch size {self.batch_size} for LLM retraining "
                       f"resulting in {train_size_fit} variants for model "
@@ -441,14 +441,14 @@ class DCALLMHybridModel:
                 attention_mask=self.llm_attention_mask,
                 device=self.device
             )
-        print(
+        logger.info(
             f"{self.llm_key.upper()} unsupervised performance: "
             f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
             f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttest)})"
         )
-        print('Refining/training the model... gradient calculation adds a computational '
+        logger.info('Refining/training the model... gradient calculation adds a computational '
               'graph that requires quite some memory - if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
@@ -508,7 +508,7 @@ class DCALLMHybridModel:
                 attention_mask=self.llm_attention_mask,
                 device=self.device
             )
-        print(
+        logger.info(
             f"{self.llm_key.upper()} supervised tuned performance: "
             f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
@@ -595,7 +595,7 @@ class DCALLMHybridModel:
 
         if x_llm is None:
             if self.llm_attention_mask is not None:
-                print('No LLM input for hybrid prediction but the model '
+                logger.info('No LLM input for hybrid prediction but the model '
                       'has been trained using an LLM model input.. '
                       'Using only DCA for hybridprediction.. This can lead '
                       'to unwanted prediction behavior if the hybrid model '
@@ -723,19 +723,19 @@ def get_model_and_type(
     or from the loaded pickle dictionary.
     """
     file_path = get_model_path(params_file)
-    print(f"Unpickling file {os.path.abspath(file_path)}...")
+    logger.info(f"Unpickling file {os.path.abspath(file_path)}...")
     if type(params_file) == pypef.dca.gremlin_inference.GREMLIN:
-        print("Found GREMLIN model...")
+        logger.info("Found GREMLIN model...")
         return params_file, 'GREMLIN'
     if type(params_file) == pypef.dca.plmc_encoding.PLMC:
-        print("Found PLMC model...")
+        logger.info("Found PLMC model...")
         return params_file, 'PLMC'
     try:
         with open(file_path, 'rb') as read_pkl_file:
             model = pickle.load(read_pkl_file)
             model_type = check_model_type(model)
     except pickle.UnpicklingError:
-        print("Unpickling error... assuming PLMC parameters found...")
+        logger.info("Unpickling error... assuming PLMC parameters found...")
         model_type = 'PLMC_Params'
 
     if model_type == 'PLMC_Params':
@@ -750,15 +750,15 @@ def get_model_and_type(
         model = model['model']
     if model_type == 'Hybrid':
         if model.llm_key == 'esm1v':
-            print("Found hybrid model with ESM1v LLM model...")
+            logger.info("Found hybrid model with ESM1v LLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
             model_type += '_ESM1v'
         elif model.llm_key == 'prosst':
-            print("Found hybrid model with ProSST LLM model...")
+            logger.info("Found hybrid model with ProSST LLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
             model_type += '_ProSST'
         else:
-            print("Found hybrid model without LLM model...")
+            logger.info("Found hybrid model without LLM model...")
         base_model.load_state_dict(model.llm_base_model)
         lora_model.load_state_dict(model.llm_model)
         model.llm_model = lora_model
@@ -781,11 +781,10 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     # For Hybrid LLM models save as model.state_dict()
     if model_type.lower().startswith('hybrid'):
         if model.llm_key is not None:
-            print(f"Storing LLM model {model.llm_key.upper()} "
+            logger.info(f"Storing LLM model {model.llm_key.upper()} "
                   f"of hybrid model as state dictionaries...")
             model.llm_model = model.llm_model.to('cpu')
             model.llm_model = model.llm_model.state_dict()
@@ -793,14 +792,16 @@ def save_model_to_dict_pickle(
             model.llm_base_model = model.llm_base_model.state_dict()
             model.llm_model_input[model.llm_key]['llm_base_model'] = None
             model.llm_model_input[model.llm_key]['llm_model'] = None
+            model_type += model.llm_key.upper()
+    pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     pickle.dump(
         {
             'model': model,
             'model_type': model_type
         },
-        open(f'Pickles/{model_type.upper()}', 'wb')
+        open(pkl_path, 'wb')
     )
-    print(f'Saved model as Pickle file ({pkl_path})...')
+    logger.info(f'Saved model as Pickle file ({pkl_path})...')
 
 
 global_model = None
@@ -845,7 +846,7 @@ def plmc_or_gremlin_encoding(
         )
     elif model_type == 'GREMLIN':
         if verbose:
-            print(
+            logger.info(
                 f"Following positions are frequent gap positions "
                 f"in the MSA and cannot be considered for effective "
                 f"modeling, i.e., substitutions at these positions "
@@ -901,7 +902,7 @@ def plmc_encoding(plmc: PLMC, variants, sequences, ys_true, threads=1, verbose=F
     target_seq, index = plmc.get_target_seq_and_index()
     wt_name = target_seq[0] + str(index[0]) + target_seq[0]
     if verbose:
-        print(f"Using to-self-substitution '{wt_name}' as wild type reference. "
+        logger.info(f"Using to-self-substitution '{wt_name}' as wild type reference. "
               f"Encoding variant sequences. This might take some time...")
     x_wt = get_encoded_sequence(wt_name, plmc)
     if threads > 1 and USE_RAY:
@@ -1044,7 +1045,7 @@ def performance_ls_ts(
             substitution_sep, threads, verbose=False
         )
 
-        print(f"\nInitial training set variants: {len(train_sequences)}. "
+        logger.info(f"\nInitial training set variants: {len(train_sequences)}. "
                     f"Remaining: {len(train_variants)} (after removing "
                     f"substitutions at gap positions).\nInitial test set "
                     f"variants: {len(test_sequences)}. Remaining: " 
@@ -1070,8 +1071,8 @@ def performance_ls_ts(
             x_wt=x_wt
         )
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
-        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
-        save_model_to_dict_pickle(hybrid_model, model_type)
+        logger.info(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
+        save_model_to_dict_pickle(hybrid_model, f'HYBRID{model_type}')
 
     elif (
         ts_fasta is not None and 
@@ -1079,7 +1080,7 @@ def performance_ls_ts(
         and params_file is not None
         ):
         # # no LS provided --> statistical modeling / no ML
-        print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
+        logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
         if not model_type.startswith('Hybrid'):  # same as below in next elif
             (
@@ -1099,7 +1100,7 @@ def performance_ls_ts(
                 substitution_sep, threads, False
             )
             if model.llm_model_input is not None:
-                print(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
+                logger.info(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
                 x_llm_test = llm_embedder(llm_dict, test_sequences)
                 model.hybrid_prediction(x_test, x_llm_test)
             else:
@@ -1107,7 +1108,7 @@ def performance_ls_ts(
     
     # no LS provided --> statistical modeling / no ML
     elif ts_fasta is not None and model_pickle_file is None:  
-        print(f"No learning set provided, falling back to statistical DCA model: "
+        logger.info(f"No learning set provided, falling back to statistical DCA model: "
               f"no adjustments of individual hybrid model parameters (\"beta's\").")
         test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
         (
@@ -1117,7 +1118,7 @@ def performance_ls_ts(
             test_variants, test_sequences, y_test, 
             params_file, substitution_sep, threads
         )
-        print(f"Initial test set variants: {len(test_sequences)}. "
+        logger.info(f"Initial test set variants: {len(test_sequences)}. "
               f"Remaining: {len(test_variants)} (after removing "
               f"substitutions at gap positions).")
         y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
@@ -1154,9 +1155,13 @@ def performance_ls_ts(
         model_type = f'{model_type}_no_ML'
     else:
         raise SystemError('No test set given for performance estimation.')
+    if llm is None:
+        llm = ''
+    else:
+        llm = f"_{llm.upper()}"
     plot_y_true_vs_y_pred(
         np.array(y_test), np.array(y_test_pred), np.array(test_variants), 
-        label=label, hybrid=True, name=model_type
+        label=label, hybrid=True, name=f'{model_type}{llm}'
     )
 
 
@@ -1220,13 +1225,13 @@ def predict_ps(  # also predicting "pmult" dict directories
     """
     if model_pickle_file is None:
         model_pickle_file = params_file
-        print(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
+        logger.info(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
     else:
-        print(f'Loading model from saved model (Pickle file {model_pickle_file})...')
+        logger.info(f'Loading model from saved model (Pickle file {model_pickle_file})...')
     model, model_type = get_model_and_type(model_pickle_file)
 
     if model_type == 'PLMC' or model_type == 'GREMLIN':
-        print(f'Found {model_type} model file. No hybrid model provided - '
+        logger.info(f'Found {model_type} model file. No hybrid model provided - '
               f'falling back to a statistical DCA model...')
 
     pmult = [
@@ -1237,11 +1242,11 @@ def predict_ps(  # also predicting "pmult" dict directories
     if True in prediction_dict.values():
         for ps, path in zip(prediction_dict.values(), pmult):
             if ps:  # if True, run prediction in this directory, e.g. for drecomb
-                print(f'Running predictions for variant-sequence files in directory {path}...')
+                logger.info(f'Running predictions for variant-sequence files in directory {path}...')
                 all_y_v_pred = []
                 files = [f for f in listdir(path) if isfile(join(path, f)) if f.endswith('.fasta')]
                 for i, file in enumerate(files):  # collect and predict for each file in the directory
-                    print(f'Encoding files ({i + 1}/{len(files)}) for prediction...')
+                    logger.info(f'Encoding files ({i + 1}/{len(files)}) for prediction...')
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
                     if not model_type.startswith('Hybrid'):

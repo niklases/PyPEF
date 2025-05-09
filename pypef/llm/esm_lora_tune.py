@@ -101,7 +101,7 @@ def get_batches(a, dtype, batch_size=5,
             a = a[:-remaining]
             a_remaining = a[-remaining:]
         else:
-            print(f"Batch size greater than or equal to total array length: "
+            logger.info(f"Batch size greater than or equal to total array length: "
                   f"returning full array (of shape: {np.shape(a)})...")
             if keep_remaining:
                 return list(a)
@@ -113,10 +113,10 @@ def get_batches(a, dtype, batch_size=5,
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
     new_shape = np.shape(a)
     if verbose:
-        print(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
+        logger.info(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
     if keep_remaining: # Returning a list
         a = list(a)
-        print('Adding dropped back to batches as last batch...')
+        logger.info('Adding dropped back to batches as last batch...')
         a.append(a_remaining)
         return a
     if keep_numpy:
@@ -129,7 +129,7 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
         device = get_device()
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    print(f'Infering ESM model for testing using {device.upper()} device...')
+    logger.info(f'Infering ESM model for testing using {device.upper()} device...')
     model = model.to(device)
     xs, attention_masks, scores = (
         torch.Tensor(xs).to(device), attention_masks.to(device), 
@@ -153,7 +153,7 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
         pbar_epochs.set_description(
             f"Testing: Batch {i + 1}/{len(xs)} | Batch loss: {batch_loss:.4f} (SpearCorr: "
             f"{batch_scorr:.4f})| Total loss: {total_loss:.4f} (SpearCorr: {total_scorr:.4f})")
-    print(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
+    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
@@ -163,7 +163,7 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=True
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     if verbose:
-        print(f'Infering ESM model for predictions using {device.upper()} device...')
+        logger.info(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(
         zip(xs, attention_masks), total=len(xs), 
         desc="ESM inference - processing sequences", disable=not verbose
@@ -184,7 +184,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
-    print(f'Training ESM model using {device.upper()} device '
+    logger.info(f'Training ESM model using {device.upper()} device '
           f'(N_Train={len(torch.flatten(scores))})...')
     model = model.to(device)
     attention_masks = torch.Tensor(np.full(
