@@ -274,7 +274,7 @@ class DirectedEvolution:
                     wt_prediction = 'skip'
                     while wt_prediction == 'skip':
                         rand_pos = random.randint(0, len(self.s_wt) - 1)
-                        wt_mut = self.s_wt[rand_pos] + str(rand_pos) + self.s_wt[rand_pos]
+                        wt_mut = self.s_wt[rand_pos] + str(rand_pos + 1) + self.s_wt[rand_pos]
                         logger.info(f"Trying to get WT fitness: {wt_mut}...")
                         wt_prediction = predict_directed_evolution(
                             encoder=self.dca_encoder,

@@ -1101,8 +1101,8 @@ def performance_ls_ts(
             )
             if model.llm_model_input is not None:
                 logger.info(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
-                x_llm_test = llm_embedder(llm_dict, test_sequences)
-                model.hybrid_prediction(x_test, x_llm_test)
+                x_llm_test = llm_embedder(model.llm_model_input, test_sequences)
+                y_test_pred = model.hybrid_prediction(x_test, x_llm_test)
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
     
@@ -1364,9 +1364,9 @@ def predict_directed_evolution(
                 np.atleast_2d(xs), 
                 np.atleast_2d(x_llm), verbose=False
             )[0]
-        except ValueError:
+        except ValueError as e:
             raise SystemError(
-                "Probably a different model was used for encoding than "
+                f"Error: {e}\nProbably a different model was used for encoding than "
                 "for modeling; e.g. using a HYBRIDgremlin model in "
                 "combination with parameters taken from a PLMC file."
             )

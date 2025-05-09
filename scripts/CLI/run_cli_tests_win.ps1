@@ -404,10 +404,10 @@ pypef hybrid -m HYBRIDplmc --params ANEH_72.6.params --pmult --drecomb --threads
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params --wt Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params 
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m HYBRIDplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
@@ -427,19 +427,30 @@ pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
 ExitOnExitCode
 Write-Host
 
+
 # 0.4.0 features: hybrid DCA-LLM modeling
 pypef hybrid --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt Sequence_WT_ANEH.fasta --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host
 pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
+pypef mkps -i 37_ANEH_variants.csv --wt Sequence_WT_ANEH.fasta
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid directevo -m HYBRIDGREMLINESM -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
+ExitOnExitCode
+Write-Host
+
 
 Remove-Item 37_ANEH_variants_plmc_dca_encoded.csv
 ExitOnExitCode
@@ -658,6 +669,9 @@ ExitOnExitCode
 Write-Host
 
 pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+ExitOnExitCode
+Write-Host
+pypef hybrid directevo -m HYBRIgremlin -w P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params

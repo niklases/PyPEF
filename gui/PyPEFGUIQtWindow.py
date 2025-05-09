@@ -1,3 +1,5 @@
+# Niklas Siedhoff
+# PyPEF - Pythonic Protein Engineering Framework
 
 # GUI created with PyQT/PySide6
 
