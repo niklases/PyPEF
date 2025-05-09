@@ -32,7 +32,6 @@ from pypef.utils.helpers import get_device
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 
-
 def get_esm_models():
     base_model = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
     tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')

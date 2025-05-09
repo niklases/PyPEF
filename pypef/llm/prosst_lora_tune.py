@@ -18,6 +18,7 @@ import torch
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
+import logging
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
@@ -26,6 +27,8 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 from pypef.llm.esm_lora_tune import corr_loss
 from pypef.llm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
+
+logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
 
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):
