@@ -299,10 +299,7 @@ def run_pypef_utils(arguments):
             assert len(xs) == len(variants) == len(ys_true)
 
             if variants[0][0] != variants[0][-1]:  # WT is required for DCA-based hybrid modeling
-                if arguments['--y_wt'] is not None:
-                    y_wt = arguments['--y_wt']
-                else:
-                    y_wt = 1
+                y_wt = 1
                 # better using re then: wt = variants[0][0] + str(variants[0][1:-1] + variants[0][0])
                 wt = variants[0][0] + re.findall(r"\d+", variants[0])[0] + variants[0][0]
                 variants = list(variants)
