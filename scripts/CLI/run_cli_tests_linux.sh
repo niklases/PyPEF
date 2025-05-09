@@ -271,15 +271,11 @@ echo
 $pypef ml extrapolation -i 37_ANEH_variants_gremlin_dca_encoded.csv --conc
 echo
 
-$pypef hybrid train_and_save -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta --params ANEH_72.6.params --fit_size 0.66 --threads $threads
-echo
 $pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params --threads $threads
 echo
 $pypef hybrid -m HYBRIDplmc -t TS.fasl --params ANEH_72.6.params --threads $threads
 echo
 
-$pypef hybrid train_and_save -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta --params GREMLIN --fit_size 0.66
-echo
 $pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 echo
 $pypef hybrid -m HYBRIDgremlin -t TS.fasl --params GREMLIN
@@ -407,9 +403,6 @@ echo
 $pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 echo
 $pypef save_msa_info --msa uref100_avgfp_jhmmer_119.a2m -w P42212_F64L.fasta --opt_iter 100
-# train and save only for hybrid
-$pypef hybrid train_and_save -i avGFP.csv --params GREMLIN --wt P42212_F64L.fasta
-echo
 # Encode CSV
 $pypef encode -e dca -i avGFP.csv --wt P42212_F64L.fasta --params GREMLIN
 echo
@@ -456,8 +449,6 @@ echo
 $pypef encode -i avGFP.csv -e aaidx -m GEIM800103 -w P42212_F64L.fasta 
 echo
 
-$pypef hybrid train_and_save -i avGFP.csv --params uref100_avgfp_jhmmer_119_plmc_42.6.params --fit_size 0.66 -w P42212_F64L.fasta --threads $threads
-echo
 $pypef hybrid -l LS.fasl -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
 $pypef hybrid -m HYBRIDplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads

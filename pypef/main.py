@@ -156,10 +156,6 @@ Usage:
         [--input CSV_FILE] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
-    pypef hybrid train_and_save --input CSV_FILE --params PARAM_FILE --wt WT_FASTA
-        [--fit_size REL_LEARN_FIT_SIZE] [--test_size REL_TEST_SIZE]
-        [--threads THREADS] [--sep CSV_COLUMN_SEPARATOR]
-        [--fitness_key FITNESS_KEY] [--rnd_state RND_STATE]
     pypef hybrid low_n --input ENCODED_CSV_FILE
     pypef hybrid extrapolation --input ENCODED_CSV_FILE
         [--conc]
@@ -239,8 +235,6 @@ Options:
                                     MLP CV R.: mlp, Ridge CV R.: ridge (or l2),
                                     LassoLars CV R.: lassolars (or l1) [default: pls].
   --rnd_splits RND_SPLITS           Number of random splits for Low N testing [default: 5].
-  --rnd_state RND_STATE             Sets the random state for reproduction, only implemented
-                                    for hybrid train_and_save [default: 42].
   -s --save NUMBER                  Number of models to be saved as pickle files [default: 5].
   --sep CSV_COLUMN_SEPARATOR        CSV Column separator [default: ;].
   --show                            Show achieved model performances from Model_Results.txt.
@@ -385,8 +379,7 @@ schema = Schema({
     Optional('reformat_csv'): bool,
     Optional('save_msa_info'): bool,
     Optional('shift_pos'): bool,
-    Optional('sto2a2m'): bool,
-    Optional('train_and_save'): bool,
+    Optional('sto2a2m'): bool
 })
 
 

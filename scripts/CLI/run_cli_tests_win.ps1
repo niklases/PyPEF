@@ -380,9 +380,6 @@ pypef ml extrapolation -i 37_ANEH_variants_gremlin_dca_encoded.csv --conc
 ExitOnExitCode
 Write-Host
 
-pypef hybrid train_and_save -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta --params ANEH_72.6.params --fit_size 0.66 --threads $threads
-ExitOnExitCode
-Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
@@ -390,9 +387,6 @@ pypef hybrid -m HYBRIDplmc -t TS.fasl --params ANEH_72.6.params --threads $threa
 ExitOnExitCode
 Write-Host
 
-pypef hybrid train_and_save -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta --params GREMLIN --fit_size 0.66
-ExitOnExitCode
-Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host
@@ -564,10 +558,9 @@ pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host
 pypef save_msa_info --msa uref100_avgfp_jhmmer_119.a2m -w P42212_F64L.fasta --opt_iter 100
-# train and save only for hybrid
-pypef hybrid train_and_save -i avGFP.csv --params GREMLIN --wt P42212_F64L.fasta
 ExitOnExitCode
 Write-Host
+
 # Encode CSV
 pypef encode -e dca -i avGFP.csv --wt P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
@@ -632,9 +625,6 @@ pypef encode -i avGFP.csv -e aaidx -m GEIM800103 -w P42212_F64L.fasta
 ExitOnExitCode
 Write-Host
 
-pypef hybrid train_and_save -i avGFP.csv --params uref100_avgfp_jhmmer_119_plmc_42.6.params --fit_size 0.66 -w P42212_F64L.fasta --threads $threads
-ExitOnExitCode
-Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host

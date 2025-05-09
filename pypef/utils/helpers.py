@@ -1,4 +1,6 @@
 
+import shutil
+import subprocess
 import torch
 
 from pypef.settings import USE_RAY
@@ -31,7 +33,7 @@ def get_device():
     )
 
 
-def get_vram(verbose: bool = True):
+def get_vram(verbose: bool=True):
     if not torch.cuda.is_available():
         print("No CUDA/GPU device available for VRAM checking.")
         return "No CUDA/GPU device available for VRAM checking."
@@ -43,3 +45,17 @@ def get_vram(verbose: bool = True):
         print(f'VRAM: {total - free:.2f}/{total:.2f}GB\t VRAM:[' + (
             total_cubes - free_cubes) * '▮' + free_cubes * '▯' + ']')
     return f"Total VRAM: {total:.2f}GB"
+
+
+def get_torch_version():
+    return torch.__version__
+
+
+def get_gpu_info():
+    if shutil.which("nvidia-smi"):
+        output = subprocess.check_output("nvidia-smi").decode("utf-8").split("\n")
+        output = "GPU: " + output[8].split('|')[1][6:-4].strip()
+    else:
+        output = "No nvidia-smi (and hence GPU) found."
+    return output
+

@@ -654,66 +654,6 @@ class DCALLMHybridModel:
         self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
         return spearman_r, reg, beta_1, beta_2
 
-    def train_and_test(
-            self,
-            train_percent_fit: float = 0.66,
-            random_state: int = 42
-    ):
-        """
-        Description
-        ----------
-        Trains the hybrid model on a relative number of all variants
-        and returns the individual model contribution weights beta_1 (DCA)
-        and beta_2 (ML) as well as the hyperparameter-tuned regression model,
-        e.g. to save all the hybrid model parameters for later loading as
-        Pickle file.
-
-        Parameters
-        ----------
-        train_percent_fit: float (default = 0.66)
-            Relative number of variants used for model fitting (not
-            hyperparameter validation. Default of 0.66 and overall train
-            size of 0.8 means the total size for least squares fitting
-            is 0.8 * 0.66 = 0.528, thus for hyperparameter validation
-            the size is 0.8 * 0.33 = 0.264 and for testing the size is
-            1 - 0.528 - 0.264 = 0.208.
-        random_state: int (default = 42)
-            Random state for splitting (and reproduction of results).
-
-        Returns
-        ----------
-        beta_1: float
-            DCA model contribution to hybrid model predictions.
-        beta_2: float
-            ML model contribution to hybrid model predictions.
-        reg: object
-            sklearn Estimator class, e.g. sklearn.linear_model.Ridge
-            fitted and with optimized hyperparameters (e.g. alpha).
-        self._spearmanr_dca: float
-            To determine, if spearmanr_dca (i.e. DCA correlation) and measured
-            fitness values is positive (>= 0) or negative (< 0).
-        test_spearman_r : float
-            Achieved performance in terms of Spearman's rank correlation
-            between measured and predicted test set variant fitness values.
-        """
-        beta_1, beta_2, reg = self.settings(
-            x_train=self.x_train,
-            y_train=self.y_train,
-            train_size_fit=train_percent_fit,
-            random_state=random_state
-        )
-
-        if len(self.y_test) > 0:
-            test_spearman_r = self.spearmanr(
-                self.y_test,
-                self.hybrid_prediction(
-                    self.x_test, reg, beta_1, beta_2
-                )
-            )
-        else:
-            test_spearman_r = None
-        return beta_1, beta_2, reg, self._spearmanr_dca, test_spearman_r
-
 
 
 """ 
@@ -812,9 +752,11 @@ def get_model_and_type(
         if model.llm_key == 'esm1v':
             print("Found hybrid model with ESM1v LLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
+            model_type += '_ESM1v'
         elif model.llm_key == 'prosst':
             print("Found hybrid model with ProSST LLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
+            model_type += '_ProSST'
         else:
             print("Found hybrid model without LLM model...")
         base_model.load_state_dict(model.llm_base_model)
@@ -839,9 +781,9 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    pkl_path = os.path.abspath(f'Pickles/{model_type}')
+    pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     # For Hybrid LLM models save as model.state_dict()
-    if model_type.startswith('HYBRID'):
+    if model_type.lower().startswith('hybrid'):
         if model.llm_key is not None:
             print(f"Storing LLM model {model.llm_key.upper()} "
                   f"of hybrid model as state dictionaries...")
@@ -856,7 +798,7 @@ def save_model_to_dict_pickle(
             'model': model,
             'model_type': model_type
         },
-        open(f'Pickles/{model_type}', 'wb')
+        open(f'Pickles/{model_type.upper()}', 'wb')
     )
     print(f'Saved model as Pickle file ({pkl_path})...')
 
@@ -1015,92 +957,6 @@ def remove_gap_pos(
     return variants_v, sequences_v, fitnesses_v
 
 
-def generate_model_and_save_pkl(
-        variants,
-        ys_true,
-        params_file,
-        wt,
-        train_percent_fit: float = 0.66,  # percent of all data: 0.8 * 0.66
-        test_percent: float = 0.2,
-        random_state: int = 42,
-        substitution_sep = '/',
-        threads=1
-):
-    """
-    Description
-    -----------
-    Save (Ridge) regression model (trained and with tuned alpha parameter)
-    with betas (beta_1 and beta_2) as dictionary-structured pickle file.
-
-    Parameters
-    ----------
-    test_percent: float
-        Percent of DataFrame data used for testing. The remaining data is
-        used for training (fitting and validation).
-    train_percent_fit: float
-        Percent of DataFrame data to train on.
-        The remaining data is used for validation.
-    random_state: int
-        Random seed for splitting in train and test data for reproducing results.
-
-    Returns
-    ----------
-    ()
-        Just saving model parameters as pickle file.
-    """
-    wt_seq = get_wt_sequence(wt)
-    variants_splitted = split_variants(variants, substitution_sep)
-    variants, ys_true, sequences = get_seqs_from_var_name(
-        wt_seq, variants_splitted, ys_true)
-
-    xs, variants, sequences, ys_true, x_wt, _model, model_type = plmc_or_gremlin_encoding(
-        variants, sequences, ys_true, params_file, substitution_sep, threads)
-
-    print(
-        f'Train size (fitting): {train_percent_fit * 100:.1f} % of training data '
-        f'({((1 - test_percent) * train_percent_fit) * 100:.1f} % of all data)\n'
-        f'Train size validation: {(1 - train_percent_fit) * 100:.1f} % of training data '
-        f'({((1 - test_percent) * (1 - train_percent_fit)) * 100:.1f} % of all data)\n'
-        f'Test size: {test_percent * 100:.1f} % ({test_percent * 100:.1f} % of all data)\n'
-        f'Using random state: {random_state}...\n'
-    )
-
-    x_train, x_test, y_train, y_test = train_test_split(
-        xs, ys_true, test_size=test_percent, random_state=random_state
-    )
-
-    hybrid_model = DCALLMHybridModel(
-        x_train=x_train,
-        y_train=y_train,
-        x_test=x_test,
-        y_test=y_test,
-        x_wt=x_wt
-    )
-
-    beta_1, beta_2, reg, spearman_dca, test_spearman_r = hybrid_model.train_and_test(
-        train_percent_fit=train_percent_fit,
-        random_state=random_state
-    )
-    if reg is None:
-        alpha_ = 'None'
-    else:
-        alpha_ = f'{reg.alpha:.3f}'
-    print(
-        f'Individual model weights and regressor hyperparameters:\n'
-        f'Hybrid model individual model contributions:\nBeta1 (DCA): '
-        f'{beta_1:.3f}, Beta2 (ML): {beta_2:.3f} ('
-        f'regressor: Ridge(alpha={alpha_}))\n'
-        f'Test performance: Spearman\'s rho = {test_spearman_r:.3f}'
-    )
-    try:
-        os.mkdir('Pickles')
-    except FileExistsError:
-        pass
-    model_name = f'HYBRID{model_type.lower()}'
-    save_model_to_dict_pickle(
-        hybrid_model, model_name, beta_1, beta_2, test_spearman_r, reg)
-
-
 def llm_embedder(llm_dict, seqs, verbose=True):
     try:
         np.shape(seqs)
@@ -1213,10 +1069,9 @@ def performance_ls_ts(
             llm_model_input=llm_dict,
             x_wt=x_wt
         )
-        model_name = f'HYBRID{model_type.lower()}{llm.lower()}'
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
-        save_model_to_dict_pickle(hybrid_model, model_name)
+        save_model_to_dict_pickle(hybrid_model, model_type)
 
     elif (
         ts_fasta is not None and 
@@ -1226,7 +1081,7 @@ def performance_ls_ts(
         # # no LS provided --> statistical modeling / no ML
         print(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
-        if model_type != 'Hybrid':  # same as below in next elif
+        if not model_type.startswith('Hybrid'):  # same as below in next elif
             (
                 x_test, test_variants, test_sequences, 
                 y_test, x_wt, *_
@@ -1389,7 +1244,7 @@ def predict_ps(  # also predicting "pmult" dict directories
                     print(f'Encoding files ({i + 1}/{len(files)}) for prediction...')
                     file_path = os.path.join(path, file)
                     sequences, variants, _ = get_sequences_from_file(file_path)
-                    if model_type != 'Hybrid':
+                    if not model_type.startswith('Hybrid'):
                         x_test, _, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, model, threads=threads, verbose=False,
                             substitution_sep=separator)
@@ -1413,7 +1268,7 @@ def predict_ps(  # also predicting "pmult" dict directories
                     all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=True)
                 predictions_out(
                     predictions=all_y_v_pred,
-                    model='Hybrid',
+                    model=model_type,
                     prediction_set=f'Top{path}',
                     path=path
                 )
@@ -1423,7 +1278,7 @@ def predict_ps(  # also predicting "pmult" dict directories
     elif prediction_set is not None:  # Predicting single FASTA file sequences
         sequences, variants, _ = get_sequences_from_file(prediction_set)
         # NaNs are already being removed by the called function
-        if model_type != 'Hybrid':  # statistical DCA model
+        if not model_type.startswith('Hybrid'):  # statistical DCA model
             xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                 variants, sequences, None, params_file,
                 threads=threads, verbose=False, substitution_sep=separator
@@ -1445,7 +1300,7 @@ def predict_ps(  # also predicting "pmult" dict directories
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(
             predictions=y_v_pred,
-            model='Hybrid',
+            model=model_type,
             prediction_set=f'Top{prediction_set}'
         )
 
@@ -1479,7 +1334,7 @@ def predict_directed_evolution(
     else:
         model_type = 'StatisticalModel'  # any name != 'Hybrid'
 
-    if model_type != 'Hybrid':  # statistical DCA model
+    if not model_type.startswith('Hybrid'):  # statistical DCA model
         xs, variant, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
             variant, variant_sequence, None, encoder, 
             verbose=False, use_global_model=True)
@@ -1504,13 +1359,12 @@ def predict_directed_evolution(
                 np.atleast_2d(xs), 
                 np.atleast_2d(x_llm), verbose=False
             )[0]
-        except ValueError as e:
-            raise e  # TODO: Check sequences / mutations
-        #    raise SystemError(
-        #        "Probably a different model was used for encoding than "
-        #        "for modeling; e.g. using a HYBRIDgremlin model in "
-        #        "combination with parameters taken from a PLMC file."
-        #    )
+        except ValueError:
+            raise SystemError(
+                "Probably a different model was used for encoding than "
+                "for modeling; e.g. using a HYBRIDgremlin model in "
+                "combination with parameters taken from a PLMC file."
+            )
     y_pred = float(y_pred)
 
     return [(y_pred, variant[0][1:])]
