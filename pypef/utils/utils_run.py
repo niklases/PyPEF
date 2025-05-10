@@ -49,25 +49,28 @@ def run_pypef_utils(arguments):
     if arguments['mklsts']:
         wt_sequence = get_wt_sequence(arguments['--wt'])
         t_drop = float(arguments['--drop'])
+        ls_proportion = arguments['--ls_proportion']
 
         logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
-        df = drop_rows(arguments['--input'], amino_acids, t_drop, arguments['--sep'], arguments['--mutation_sep'])
+        logger.info(f'Training set proportion (--ls_proportion): {ls_proportion}.')
+        df = drop_rows(arguments['--input'], amino_acids, t_drop, 
+                       arguments['--sep'], arguments['--mutation_sep'])
         no_rnd = arguments['--numrnd']
 
         single_variants, single_values, higher_variants, higher_values = get_variants(
             df, amino_acids, wt_sequence, arguments['--mutation_sep']
         )
-        logger.info(f'Number of single variants: {len(single_variants)}.')
         if len(single_variants) == 0:
-            logger.info('Found NO single substitution variants for possible recombination!')
+            logger.info('Found no single substitution variants for possible recombination!')
         sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts(
-            single_variants, single_values, higher_variants, higher_values)
+            single_variants, single_values, 
+            higher_variants, higher_values, 
+            ls_proportion
+        )
         logger.info('Tip: You can edit your LS and TS datasets just by '
                     'cutting/pasting between the LS and TS fasta datasets.')
 
-        logger.info('Creating LS dataset...')
         make_fasta_ls_ts('LS.fasl', wt_sequence, sub_ls, val_ls)
-        logger.info('Creating TS dataset...')
         make_fasta_ls_ts('TS.fasl', wt_sequence, sub_ts, val_ts)
 
         try:
@@ -80,7 +83,8 @@ def run_pypef_utils(arguments):
             while random_set_counter <= no_rnd:
                 sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts_randomly(
                     single_variants, single_values,
-                    higher_variants, higher_values
+                    higher_variants, higher_values,
+                    ls_proportion
                 )
                 make_fasta_ls_ts('LS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ls, val_ls)
                 make_fasta_ls_ts('TS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ts, val_ts)

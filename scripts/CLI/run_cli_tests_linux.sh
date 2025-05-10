@@ -237,11 +237,11 @@ $pypef encode -i 37_ANEH_variants.csv -e onehot -w Sequence_WT_ANEH.fasta
 echo
 $pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params ANEH_72.6.params --threads $threads
 echo
-mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv
+mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv || true
 echo
 $pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params GREMLIN
 echo
-mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv
+mv 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv || true
 echo
 
 $pypef ml low_n -i 37_ANEH_variants_aaidx_encoded.csv
@@ -307,13 +307,18 @@ echo
 # 0.4.0 features: hybrid DCA-LLM modeling
 $pypef hybrid --ts TS.fasl --params GREMLIN --llm esm
 echo
-$pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+$pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt Sequence_WT_ANEH.fasta --pdb GFP_AEQVI.pdb
 echo
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
 echo
-$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+$pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --llm esm
 echo
-
+$pypef mkps -i 37_ANEH_variants.csv --wt Sequence_WT_ANEH.fasta
+echo
+$pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --llm esm
+echo
+$pypef hybrid directevo -m HYBRIDGREMLINESM -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
+echo
 
 rm 37_ANEH_variants_plmc_dca_encoded.csv
 echo

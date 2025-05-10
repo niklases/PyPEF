@@ -33,9 +33,10 @@ def get_device():
     )
 
 
-def get_vram(verbose: bool=True):
+def get_vram(verbose: bool = True):
     if not torch.cuda.is_available():
-        print("No CUDA/GPU device available for VRAM checking.")
+        if verbose:
+            print("No CUDA/GPU device available for VRAM checking.")
         return "No CUDA/GPU device available for VRAM checking."
     free = torch.cuda.mem_get_info()[0] / 1024 ** 3
     total = torch.cuda.mem_get_info()[1] / 1024 ** 3
@@ -58,4 +59,3 @@ def get_gpu_info():
     else:
         output = "No nvidia-smi (and hence GPU) found."
     return output
-

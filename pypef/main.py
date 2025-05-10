@@ -122,7 +122,8 @@ Converting a STO alignment file to A2M format:
 
 Usage:
     pypef mklsts --wt WT_FASTA --input CSV_FILE
-        [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--numrnd NUMBER]
+        [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]
+        [--numrnd NUMBER] [--ls_proportion LS_PROPORTION]
     pypef mkps --wt WT_FASTA [--input CSV_FILE]
         [--drop THRESHOLD] [--ssm] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
@@ -204,6 +205,8 @@ Options:
                                     (line trimming) [default: 0.5].
   --label                           Label the plot instances [default: False].
   -l --ls LEARNING_SET              Input learning set in .fasta format.
+  --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training + 
+                                    testing) [default: 0.8].
   --llm LLM                         LLM model to use for hybrid modeling next to DCA (options are 'ESM1v' and 'ProSST').
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
@@ -328,6 +331,7 @@ schema = Schema({
     Optional('--label'): bool,
     Optional('--llm'): Or(None, str),
     Optional('--ls'): Or(None, str),
+    Optional('--ls_proportion'): Or(None, Use(float)),
     Optional('--model'): Or(None, str),
     Optional('--msa'): Or(None, str),
     Optional('--mutation_sep'): Or(None, str),
