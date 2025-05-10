@@ -422,3 +422,14 @@ datasets/AVGFP/DCA_Hybrid_Model_Performance_ESM1v_no_ML.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_ProSST_no_ML.png
 datasets/AVGFP/HYBRIDgremlinesm_DE_trajectories.png
 datasets/AVGFP/HYBRIDgremlinprosst_DE_trajectories.png
+datasets/ANEH/ML_Model_Performance_CHAM830106_PLS_LOOCV.png
+datasets/ANEH/ML_Model_Performance_CHOP780206_PLS_LOOCV.png
+datasets/ANEH/ML_Model_Performance_ZHOH040102_PLS.png
+datasets/ANEH/CV_performance/CHAM830106_PLS_LOOCV_5-fold-CV.png
+datasets/ANEH/CV_performance/CHAM830106_PLS_LOOCV_CV_Results.txt
+datasets/ANEH/CV_performance/CHOP780206_PLS_LOOCV_5-fold-CV.png
+datasets/ANEH/CV_performance/CHOP780206_PLS_LOOCV_CV_Results.txt
+datasets/ANEH/CV_performance/ZHOH040102_PLS_5-fold-CV.png
+datasets/ANEH/CV_performance/ZHOH040102_PLS_CV_Results.txt
+datasets/ANEH/Pickles/CHOP780206
+datasets/ANEH/Pickles/ZHOH040102

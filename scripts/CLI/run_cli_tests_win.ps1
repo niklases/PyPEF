@@ -334,10 +334,10 @@ Write-Host
 Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv 2>$null
 ExitOnExitCode
 Write-Host
-pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params GREMLIN 2>$null
+pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
-Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv
+Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv  2>$null
 ExitOnExitCode
 Write-Host
 
