@@ -404,7 +404,7 @@ pypef hybrid -m HYBRIDplmc --params ANEH_72.6.params --pmult --drecomb --threads
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params --wt Sequence_WT_ANEH.fasta
+pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params 

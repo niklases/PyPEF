@@ -755,6 +755,7 @@ def get_model_and_type(
             model_type += '_ProSST'
         else:
             logger.info("Found hybrid model without LLM model...")
+            return model, model_type
         base_model.load_state_dict(model.llm_base_model)
         lora_model.load_state_dict(model.llm_model)
         model.llm_model = lora_model
@@ -1296,7 +1297,7 @@ def predict_ps(  # also predicting "pmult" dict directories
                 sequences = [str(seq) for seq in sequences]
                 xs_llm = llm_embedder(model.llm_model_input, sequences)
                 ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
-        assert len(xs) == len(variants) == len(xs_llm) == len(ys_pred)
+        assert len(xs) == len(variants) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(
