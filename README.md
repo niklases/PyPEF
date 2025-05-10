@@ -43,7 +43,9 @@ For detailed information, please refer to the above-mentioned publications and r
 The workflow procedure is explained in the [Jupyter notebook](scripts/CLI/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
 Tutorial section below).
 
-<img src=".github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
+<p align="center">
+  <img src=".github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
+</p>
 
 <a name="installation"></a>
 ## Quick Installation
@@ -81,7 +83,9 @@ mkdir -p ./gui/ && wget https://raw.githubusercontent.com/niklases/PyPEF/refs/he
 chmod a+x ./gui_setup.sh && ./gui_setup.sh
 ```
 
-<img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
+<p align="center">
+  <img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
+</p>
 
 <a name="requirements"></a>
 ## Requirements
@@ -469,10 +473,10 @@ This list is by no means complete, see ProteinGym [repository](https://github.co
 The performance of the GREMLIN model used is shown in the following for predicting single substitution effects (blue), including Hybrid model performances with N_Train = {100, 200, 1000}.
 Hybrid GREMLIN-LLM low-N-tuned models achieved increased performances compared to the pure DCA-tuned hybrid model (script available at [scripts/run_performance_tests_proteingym_hybrid_dca_llm.py](scripts/run_performance_tests_proteingym_hybrid_dca_llm.py))
 <p align="center">
-    <img src=".github/imgs/mut_performance_violin.png" alt="drawing" width="250"/>
+    <img src=".github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>
 </p>
 <p align="center">
-    <img src=".github/imgs/mut_performance.png" alt="drawing" width="500"/>
+    <img src=".github/imgs/mut_performance.png" alt="drawing" width="1000"/>
 </p>
 
 <a name="api-usage"></a>
