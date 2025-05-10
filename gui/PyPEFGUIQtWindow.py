@@ -100,6 +100,7 @@ class MainWindow(QtWidgets.QWidget):
         self.llm = 'esm'
         self.regression_model = 'PLS'
         self.c = 0
+        self.ls_proportion = 0.8
         self.setMinimumSize(QSize(1400, 400))
         self.setWindowTitle("PyPEF GUI")
         self.setStyleSheet("background-color: rgb(40, 44, 52);")
@@ -108,7 +109,7 @@ class MainWindow(QtWidgets.QWidget):
         self.win2 = SecondWindow()
 
         # Texts #############################################################################
-        layout = QtWidgets.QGridLayout(self)
+        layout = QtWidgets.QGridLayout(self)  # MAIN LAYOUT: QGridLayout
         self.version_text = QtWidgets.QLabel(f"PyPEF v. {__version__}", alignment=QtCore.Qt.AlignRight)
         self.ncores_text = QtWidgets.QLabel("Single-/multiprocessing")
         self.llm_text = QtWidgets.QLabel("LLM")
@@ -118,6 +119,7 @@ class MainWindow(QtWidgets.QWidget):
         self.hybrid_text = QtWidgets.QLabel("Hybrid (supervised DCA)")
         self.hybrid_dca_llm_text = QtWidgets.QLabel("Hybrid (supervised DCA+LLM)")
         self.supervised_text = QtWidgets.QLabel("Purely supervised")
+        self.slider_text = QtWidgets.QLabel("Train set proportion: 0.8")
 
         for txt in [
             self.version_text, self.ncores_text, self.regression_model_text, 
@@ -146,6 +148,17 @@ class MainWindow(QtWidgets.QWidget):
         self.logTextBox.setFormatter(formatter)
         logger.addHandler(self.logTextBox)
 
+        # Horizontal slider #################################################################
+        self.slider = QtWidgets.QSlider(self)
+        self.slider.setGeometry(QtCore.QRect(190, 100, 200, 16))
+        self.slider.setOrientation(QtCore.Qt.Horizontal)
+        self.slider.setMinimum(0)
+        self.slider.setMaximum(100)
+        self.slider.setValue(80)
+        self.slider.setTickPosition(QtWidgets.QSlider.TickPosition.TicksBelow)
+        self.slider.move(10, 105)
+        self.slider.valueChanged.connect(self.selection_ls_proportion)
+
         # Boxes #############################################################################
         self.box_multicore = QtWidgets.QComboBox()
         self.box_multicore.addItems(['Single core', 'Multi core'])
@@ -170,9 +183,14 @@ class MainWindow(QtWidgets.QWidget):
         self.button_help.setStyleSheet(button_style)
 
         self.button_mklsts = QtWidgets.QPushButton("Create LS and TS (MKLSTS)")       
-        self.button_mklsts.setToolTip("Create files for training and testing from variant-fitness CSV data")
+        self.button_mklsts.setToolTip("Create \"FASL\" files for training and testing from variant-fitness CSV data")
         self.button_mklsts.clicked.connect(self.pypef_mklsts)
         self.button_mklsts.setStyleSheet(button_style)
+
+        self.button_mkps = QtWidgets.QPushButton("Create PS (MKPS)")       
+        self.button_mkps.setToolTip("Create FASTA files for prediction from variant-fitness CSV data")
+        self.button_mkps.clicked.connect(self.pypef_mkps)
+        self.button_mkps.setStyleSheet(button_style)
         
         # DCA
         self.button_dca_inference_gremlin = QtWidgets.QPushButton("MSA optimization (GREMLIN)")
@@ -351,14 +369,19 @@ class MainWindow(QtWidgets.QWidget):
         # int fromRow, int fromColumn, int rowSpan, int columnSpan
 
         layout.addWidget(self.device_text_out, 0, 0, 1, 2)
-
         layout.addWidget(self.version_text, 0, 5, 1, 1)
-        layout.addWidget(self.ncores_text, 1, 0, 1, 1)
-        layout.addWidget(self.box_multicore, 2, 0, 1, 1)
+
+        layout.addWidget(self.slider_text, 1, 0, 1, 1)
+        #layout.addWidget(self.slider, 2, 0, 1, 1)
+        
+
+        layout.addWidget(self.ncores_text, 1, 1, 1, 1)
+        layout.addWidget(self.box_multicore, 2, 1, 1, 1)
 
         layout.addWidget(self.utils_text, 3, 0, 1, 1)
         layout.addWidget(self.button_help, 4, 0, 1, 1)
         layout.addWidget(self.button_mklsts, 5, 0, 1, 1)
+        layout.addWidget(self.button_mkps, 6, 0, 1, 1)
 
         layout.addWidget(self.dca_text, 3, 1, 1, 1)
         layout.addWidget(self.button_dca_inference_gremlin, 4, 1, 1, 1)
@@ -458,7 +481,6 @@ class MainWindow(QtWidgets.QWidget):
 
     def on_readyReadStandardOutput(self):
          text = self.process.readAllStandardOutput().data().decode()
-         self.c += 1
          #self.textedit_out.append(text.strip())
          self.logTextBox.widget.appendPlainText(text.strip())
     
@@ -474,6 +496,10 @@ class MainWindow(QtWidgets.QWidget):
     def selection_llm_model(self, i):
         self.llm = ['esm', 'prosst'][i]
 
+    def selection_ls_proportion(self, value):
+        self.ls_proportion = value / 100
+        self.slider_text.setText(f"Train set proportion: {self.ls_proportion}")
+
     @QtCore.Slot()
     def pypef_help(self):
         button = self.button_help
@@ -487,14 +513,26 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_mklsts(self):
         button = self.button_mklsts
         self.start_process(button=button)
-        
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(
             self.win2, "Select WT FASTA File", filter="FASTA file (*.fasta *.fa)")[0]
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(
             self.win2, "Select variant CSV File", filter="CSV file (*.csv)")[0]
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
-            self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file}')
+            self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} --ls_proportion {self.ls_proportion}')
+        self.end_process(button=button)
+
+    @QtCore.Slot()
+    def pypef_mkps(self):
+        button = self.button_mkps
+        self.start_process(button=button)
+        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(
+            self.win2, "Select WT FASTA File", filter="FASTA file (*.fasta *.fa)")[0]
+        csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(
+            self.win2, "Select variant CSV File", filter="CSV file (*.csv)")[0]
+        if wt_fasta_file and csv_variant_file:
+            self.version_text.setText("Running MKLSTS...")
+            self.exec_pypef(f'mkps --wt {wt_fasta_file} --input {csv_variant_file}')
         self.end_process(button=button)
 
     @QtCore.Slot()
@@ -591,7 +629,6 @@ class MainWindow(QtWidgets.QWidget):
             self.exec_pypef(f'hybrid -m {model_file} --ps {prediction_file} --params {params_pkl_file}')
         self.end_process(button=button)  
 
-##### TODO #################################################################################################### TODO
     @QtCore.Slot()
     def pypef_dca_llm_hybrid_train(self):
         button = self.button_hybrid_train_dca_llm
@@ -671,8 +708,6 @@ class MainWindow(QtWidgets.QWidget):
                 self.exec_pypef(f'hybrid -m {model_file} --ps {prediction_file} --params {params_pkl_file} --llm {self.llm}')
         self.end_process(button=button) 
 
-##### TODO END ################################################################################################# TODO END
-
     @QtCore.Slot()
     def pypef_dca_supervised_train(self):
         button = self.button_supervised_train_dca
@@ -684,7 +719,6 @@ class MainWindow(QtWidgets.QWidget):
             self.exec_pypef(f'ml --encoding dca --ls {training_file} --ts {training_file} --params {params_pkl_file} '
                             f'--threads {self.n_cores} --regressor {self.regression_model}')
         self.end_process(button=button)
-
 
     @QtCore.Slot()
     def pypef_dca_supervised_train_test(self):
@@ -797,7 +831,6 @@ class MainWindow(QtWidgets.QWidget):
 
     def process_finished(self):
         self.version_text.setText("Finished...") 
-        self.process = None
 
 
 if __name__ == "__main__":

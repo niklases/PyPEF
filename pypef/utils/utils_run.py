@@ -173,7 +173,7 @@ def run_pypef_utils(arguments):
             arguments['--qirecomb'], arguments['--ddiverse'], arguments['--tdiverse'],
             arguments['--qdiverse'], arguments['--ssm']
         ]:
-            logger.info(f'\nMaking prediction set fasta file from {csv_file}...\n')
+            logger.info(f'Making prediction set fasta file from {csv_file}...\n')
             make_fasta_ps(
                 filename=f'{get_basename(csv_file)}_prediction_set.fasta',
                 wt=wt_sequence,
