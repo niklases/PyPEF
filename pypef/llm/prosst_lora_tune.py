@@ -8,17 +8,16 @@
 # ProSST: Protein Language Modeling with Quantized Structure and Disentangled Attention
 # bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672 
 
+import logging
+logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
-from sys import path
 import os
-path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 import warnings
 
 import torch
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
-import logging
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
@@ -27,8 +26,6 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 from pypef.llm.esm_lora_tune import corr_loss
 from pypef.llm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
-
-logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
 
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):

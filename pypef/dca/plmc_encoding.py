@@ -39,12 +39,11 @@ References:
     https://doi.org/10.1103/PhysRevE.87.012707
 """
 
-
-import os
-from collections.abc import Iterable
 import logging
 logger = logging.getLogger('pypef.dca.encoding')
 
+import os
+from collections.abc import Iterable
 import numpy as np
 from tqdm import tqdm
 import pickle

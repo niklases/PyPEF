@@ -12,11 +12,11 @@
 # Journal of Chemical Information and Modeling, 2021, 61, 3463-3476
 # https://doi.org/10.1021/acs.jcim.1c00099
 
-import os
 
 import logging
 logger = logging.getLogger('pypef.utils.utils_run')
 
+import os
 import numpy as np
 import re
 
@@ -25,7 +25,6 @@ from pypef.utils.variant_data import (
     get_basename, read_csv_and_shift_pos_ints,
     get_seqs_from_var_name, get_wt_sequence
 )
-
 from pypef.utils.learning_test_sets import (
     csv_input, drop_rows, get_variants, make_sub_ls_ts,
     make_sub_ls_ts_randomly, make_fasta_ls_ts

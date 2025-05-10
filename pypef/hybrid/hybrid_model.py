@@ -18,16 +18,15 @@
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger('pypef.hybrid.hybrid_model')
+
 import os
 import pickle
 from os import listdir
 from os.path import isfile, join
 from typing import Union
-import logging
 import warnings
-
-
-logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 import numpy as np
 import sklearn.base
@@ -39,10 +38,7 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 
 from pypef.settings import USE_RAY
-from pypef.utils.variant_data import (
-    get_sequences_from_file, get_seqs_from_var_name,
-    remove_nan_encoded_positions, get_wt_sequence, split_variants
-)
+from pypef.utils.variant_data import get_sequences_from_file, remove_nan_encoded_positions
 import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out

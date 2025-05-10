@@ -206,7 +206,7 @@ Options:
   --label                           Label the plot instances [default: False].
   -l --ls LEARNING_SET              Input learning set in .fasta format.
   --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training + 
-                                    testing) [default: 0.8].
+                                    testing); float, e.g., 0.8.
   --llm LLM                         LLM model to use for hybrid modeling next to DCA (options are 'ESM1v' and 'ProSST').
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.

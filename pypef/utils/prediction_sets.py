@@ -34,7 +34,6 @@ VARIANT_SEQUENCE_2
 import logging
 logger = logging.getLogger('pypef.utils.prediction_sets')
 
-
 import os
 import numpy as np
 from tqdm import tqdm

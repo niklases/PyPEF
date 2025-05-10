@@ -16,11 +16,14 @@
 
 from __future__ import annotations
 
+import logging
+logger = logging.getLogger('pypef.llm.esm_lora_tune')
+
 import torch
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
-import logging
+
 
 from peft import LoraConfig, get_peft_model
 from transformers import logging as hf_logging
@@ -28,8 +31,6 @@ hf_logging.set_verbosity_error()
 from transformers import EsmForMaskedLM, EsmTokenizer
 
 from pypef.utils.helpers import get_device
-
-logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 
 def get_esm_models():
