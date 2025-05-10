@@ -433,3 +433,15 @@ datasets/ANEH/CV_performance/ZHOH040102_PLS_5-fold-CV.png
 datasets/ANEH/CV_performance/ZHOH040102_PLS_CV_Results.txt
 datasets/ANEH/Pickles/CHOP780206
 datasets/ANEH/Pickles/ZHOH040102
+datasets/ANEH/DCA_Hybrid_Model_Performance_ESM1v_no_ML.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_ESM.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_no_ML_ESM.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_Hybrid_ESM1v_ESM.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_PLMC_.png
+datasets/ANEH/HYBRIDGREMLINESM1V_DE_trajectories.png
+datasets/ANEH/Predictions_Hybrid_ESM1v_Top37_ANEH_variants_prediction_set.txt
+datasets/ANEH/Pickles/HYBRIDGREMLINESM1V
+datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_.png
+datasets/AVGFP/SSM_landscape.csv
+datasets/AVGFP/SSM_landscape.png

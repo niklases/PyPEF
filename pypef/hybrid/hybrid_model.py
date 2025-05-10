@@ -1351,16 +1351,17 @@ def predict_directed_evolution(
         )
         if not list(xs):
             return 'skip'
-        if model.llm_model_input is None:
-            x_llm = None
-        else:
-            x_llm = llm_embedder(model.llm_model_input, 
-                                 variant_sequence, verbose=False)
         try:
-            y_pred = model.hybrid_prediction(
-                np.atleast_2d(xs), 
-                np.atleast_2d(x_llm), verbose=False
-            )[0]
+            if model.llm_model_input is None:
+                y_pred = model.hybrid_prediction(xs)
+            else:
+                x_llm = llm_embedder(model.llm_model_input, 
+                                     variant_sequence, verbose=False)
+
+                y_pred = model.hybrid_prediction(
+                    np.atleast_2d(xs), 
+                    np.atleast_2d(x_llm), verbose=False
+                )[0]
         except ValueError as e:
             raise SystemError(
                 f"Error: {e}\nProbably a different model was used for encoding than "

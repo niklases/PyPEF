@@ -186,7 +186,6 @@ Write-Host
 pypef ml --show
 ExitOnExitCode
 Write-Host
-
 pypef param_inference --msa ANEH_jhmmer.a2m --opt_iter 100
 ExitOnExitCode
 Write-Host
@@ -331,13 +330,13 @@ Write-Host
 pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv 2>$null
+Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_plmc_dca_encoded.csv -erroraction 'silentlycontinue'
 ExitOnExitCode
 Write-Host
 pypef encode -i 37_ANEH_variants.csv -e dca -w Sequence_WT_ANEH.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
-Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv  2>$null
+Move-Item 37_ANEH_variants_dca_encoded.csv 37_ANEH_variants_gremlin_dca_encoded.csv  -erroraction 'silentlycontinue'
 ExitOnExitCode
 Write-Host
 
@@ -427,27 +426,20 @@ pypef hybrid extrapolation -i 37_ANEH_variants_dca_encoded.csv --conc
 ExitOnExitCode
 Write-Host
 
-
 # 0.4.0 features: hybrid DCA-LLM modeling
-pypef hybrid --ts TS.fasl --params GREMLIN --llm esm
-ExitOnExitCode
-Write-Host
-pypef hybrid --ts TS.fasl --params GREMLIN --llm prosst --wt Sequence_WT_ANEH.fasta --pdb GFP_AEQVI.pdb
-ExitOnExitCode
-Write-Host
 pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --llm esm
+pypef hybrid -m HYBRIDGREMLINESM1V --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
 pypef mkps -i 37_ANEH_variants.csv --wt Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --llm esm
+pypef hybrid -m HYBRIDGREMLINESM1V --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDGREMLINESM -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
+pypef hybrid directevo -m HYBRIDGREMLINESM1V -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 
@@ -678,6 +670,31 @@ pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --numiter 10 --numtraj
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m HYBRIDplmc -i avGFP.csv -w P42212_F64L.fasta --temp 0.1 --usecsv --csvaa --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+ExitOnExitCode
+Write-Host
+
+# 0.4.0 features: hybrid DCA-LLM modeling
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINESM1V --ts TS.fasl --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm esm --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+
+
+pypef hybrid directevo -m HYBRIgremlinesm -w P42212_F64L.fasta --params GREMLIN --llm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid directevo -m HYBRIgremlinprosst -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
 
 pypef hybrid low_n -i avGFP_dca_encoded.csv
 ExitOnExitCode
