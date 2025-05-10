@@ -81,6 +81,7 @@ mkdir -p ./gui/ && wget https://raw.githubusercontent.com/niklases/PyPEF/refs/he
 chmod a+x ./gui_setup.sh && ./gui_setup.sh
 ```
 
+<img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
 
 <a name="requirements"></a>
 ## Requirements
