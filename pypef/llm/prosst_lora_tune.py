@@ -184,8 +184,8 @@ def prosst_train(
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 
         model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
-    logger.info(f"Train-->Train Performance (N={len(score_batches.cpu().flatten())}): "
-                f"{spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu())[0]:.3f}")
+    #logger.info(f"Train-->Train Performance (N={len(score_batches.cpu().flatten())}): "
+    #            f"{spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu())[0]:.3f}")
     return y_preds_train.cpu()
 
 

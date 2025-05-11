@@ -141,19 +141,15 @@ Usage:
     pypef shift_pos --input CSV_FILE --offset OFFSET
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-    pypef hybrid 
+    pypef hybrid --model MODEL --params PARAM_FILE
         [--ts TEST_SET] [--ps PREDICTION_SET]
-        [--model MODEL] [--params PARAM_FILE]
         [--ls LEARNING_SET] [--label] 
         [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
-        [--threads THREADS]
-    pypef hybrid --model MODEL --params PARAM_FILE
-        [--ts TEST_SET] [--label]
-        [--ps PREDICTION_SET] [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
-                                        [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
+        [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
+                                          [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS]
     pypef hybrid directevo --wt WT_FASTA --params PARAM_FILE
-        [--model MODEL]
+        [--model MODEL] [--llm LLM] [--pdb PDB_FILE]
         [--input CSV_FILE] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]

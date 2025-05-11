@@ -691,11 +691,24 @@ pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm prosst -
 ExitOnExitCode
 Write-Host
 
-
-pypef hybrid directevo -m HYBRIgremlinesm -w P42212_F64L.fasta --params GREMLIN --llm esm
+pypef hybrid directevo -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIgremlinprosst -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb
+pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+
+# Takes long.. better delete 7 out of the 8 recomb txt files
+#pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm --pmult --drecomb
+#ExitOnExitCode
+#Write-Host
+#pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb --pmult --drecomb
+#ExitOnExitCode
+#Write-Host
+pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm -p avGFP_prediction_set.fasta
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
 ExitOnExitCode
 Write-Host
 

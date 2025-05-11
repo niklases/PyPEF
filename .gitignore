@@ -445,3 +445,8 @@ datasets/ANEH/Pickles/HYBRIDGREMLINESM1V
 datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_.png
 datasets/AVGFP/SSM_landscape.csv
 datasets/AVGFP/SSM_landscape.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_PROSST.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ProSST_PROSST.png
+datasets/AVGFP/HYBRIDGREMLINESM1V_DE_trajectories.png
+datasets/AVGFP/Recomb_Double_Split/Predictions_Hybrid_ESM1v_TopRecomb_Double_Split.txt
+datasets/AVGFP/Recomb_Double_Split/Predictions_Hybrid_ProSST_TopRecomb_Double_Split.txt
