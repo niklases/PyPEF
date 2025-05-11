@@ -419,63 +419,68 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addWidget(self.logTextBox.widget, 12, 2, 1, 4)
 
-        self.process = QtCore.QProcess(self)
-        self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
-        self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
-        self.process.started.connect(lambda: self.button_help.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_help.setEnabled(True))
-        self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_dca_predict_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_dca_predict_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_predict_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_predict_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(True))
-        self.process.started.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_test_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_test_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_predict_dca.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_predict_dca.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_onehot.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_onehot.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_test_onehot.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_test_onehot.setEnabled(True))
-        self.process.started.connect(lambda: self.button_supervised_predict_onehot.setEnabled(False))
-        self.process.finished.connect(lambda: self.button_supervised_predict_onehot.setEnabled(True))
+        if EXEC_API_OR_CLI == 'cli':
+            self.process = QtCore.QProcess(self)
+            self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
+            self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
+            self.process.started.connect(lambda: self.button_help.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_help.setEnabled(True))
+            self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_mklsts.setEnabled(True))
+            self.process.started.connect(lambda: self.button_mkps.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_mkps.setEnabled(True))
+            self.process.started.connect(lambda: self.button_dca_inference_gremlin.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_dca_inference_gremlin.setEnabled(True))
+            self.process.started.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_dca_inference_gremlin_msa_info.setEnabled(True))
+            self.process.started.connect(lambda: self.button_dca_test_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_dca_test_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_dca_predict_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_dca_predict_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_train_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_train_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_train_test_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_test_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_test_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_predict_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_predict_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_train_dca_llm.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_train_test_dca_llm.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_test_dca_llm.setEnabled(True))
+            self.process.started.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_hybrid_predict_dca_llm.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_train_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_train_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_train_test_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_train_test_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_test_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_test_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_predict_dca.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_predict_dca.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_train_onehot.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_train_onehot.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_train_test_onehot.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_test_onehot.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_test_onehot.setEnabled(True))
+            self.process.started.connect(lambda: self.button_supervised_predict_onehot.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_supervised_predict_onehot.setEnabled(True))
 
 
     def start_process(self, button):
         self.logTextBox.widget.clear()
         self.c += 1
         self.logTextBox.widget.appendPlainText("Job: " + str(self.c) + " " + "=" * 104)
-        button.setEnabled(False)
+        if EXEC_API_OR_CLI == 'api':
+            button.setEnabled(False)
     
     def end_process(self, button):
-        button.setEnabled(True)
+        if EXEC_API_OR_CLI == 'api':
+            button.setEnabled(True)
         self.version_text.setText("Finished...")
         self.textedit_out.append("=" * 104 + " Job: " + str(self.c) + "\n")
 
@@ -513,13 +518,14 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_mklsts(self):
         button = self.button_mklsts
         self.start_process(button=button)
-        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(
-            self.win2, "Select WT FASTA File", filter="FASTA file (*.fasta *.fa)")[0]
+        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File", 
+                                                              filter="FASTA file (*.fasta *.fa)")[0]
         csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(
             self.win2, "Select variant CSV File", filter="CSV file (*.csv)")[0]
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
-            self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} --ls_proportion {self.ls_proportion}')
+            self.exec_pypef(f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} '
+                            f'--ls_proportion {self.ls_proportion}')
         self.end_process(button=button)
 
     @QtCore.Slot()
@@ -528,8 +534,8 @@ class MainWindow(QtWidgets.QWidget):
         self.start_process(button=button)
         wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(
             self.win2, "Select WT FASTA File", filter="FASTA file (*.fasta *.fa)")[0]
-        csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(
-            self.win2, "Select variant CSV File", filter="CSV file (*.csv)")[0]
+        csv_variant_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select variant CSV File", 
+                                                                 filter="CSV file (*.csv)")[0]
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
             self.exec_pypef(f'mkps --wt {wt_fasta_file} --input {csv_variant_file}')
@@ -539,9 +545,11 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_gremlin(self):
         button = self.button_dca_inference_gremlin
         self.start_process(button=button)
-        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
+        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File", 
+                                                              filter="FASTA file (*.fasta *.fa)")[0]
         msa_file = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Select Multiple Sequence Alignment (MSA) file (in FASTA or A2M format)")[0]
+            self.win2, "Select Multiple Sequence Alignment (MSA) file (in FASTA or A2M format)",
+            filter="MSA file (*.fasta *.a2m)")[0]
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.exec_pypef(f'param_inference --wt {wt_fasta_file} --msa {msa_file}')  # --opt_iter 100
@@ -551,9 +559,11 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_gremlin_msa_info(self):
         button = self.button_dca_inference_gremlin_msa_info
         self.start_process(button=button)
-        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
+        wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File",
+                                                              filter="FASTA file (*.fasta *.fa)")[0]
         msa_file = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Select Multiple Sequence Alignment (MSA) file (in FASTA or A2M format)")[0]
+            self, "Select Multiple Sequence Alignment (MSA) file (in FASTA or A2M format)",
+            filter="MSA file (*.fasta *.a2m)")[0]
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.exec_pypef(f'save_msa_info --wt {wt_fasta_file} --msa {msa_file}')
@@ -563,8 +573,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_test(self):
         button = self.button_dca_test_dca
         self.start_process(button=button)
-        test_set_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Parameter Pickle file")[0]
+        test_set_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                                filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if test_set_file and params_pkl_file:
             self.version_text.setText("Testing DCA performance on provided test set...")
             self.exec_pypef(f'hybrid --ts {test_set_file} -m {params_pkl_file} --params {params_pkl_file}')
@@ -574,8 +586,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_predict(self):
         button = self.button_dca_predict_dca
         self.start_process(button=button)
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
+                                                                filter="FASTA file (*.fasta *.fa)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if prediction_file and params_pkl_file:
             self.version_text.setText("Predicting using the DCA model on provided prediction set...")
             self.exec_pypef(f'hybrid --ps {prediction_file} -m {params_pkl_file} --params {params_pkl_file}')
@@ -585,8 +599,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_hybrid_train(self):
         button = self.button_hybrid_train_dca
         self.start_process(button=button)
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                                filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if training_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training...")
             self.exec_pypef(f'hybrid --ls {training_file} --ts {training_file} -m {params_pkl_file} --params {params_pkl_file}')
@@ -596,22 +612,28 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_hybrid_train_test(self):
         button = self.button_hybrid_train_test_dca
         self.start_process(button=button)
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        model_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA model Pickle file")[0]  # TODO: Check if needed
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        #model_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA model Pickle file")[0]  # TODO: Check if needed
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if training_file and test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
-            self.exec_pypef(f'hybrid -m {model_pkl_file} --ls {training_file} --ts {test_file} --params {params_pkl_file}')
+            self.exec_pypef(f'hybrid -m {params_pkl_file} --ls {training_file} --ts {test_file} --params {params_pkl_file}')
         self.end_process(button=button)
 
     @QtCore.Slot()
     def pypef_dca_hybrid_test(self):
         button = self.button_hybrid_test_dca
         self.start_process(button=button)        
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        model_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        model_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format",
+                                                               filter="Pickle file (HYBRID*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.exec_pypef(f'hybrid -m {model_pkl_file} --ts {test_file} --params {params_pkl_file}')
@@ -621,9 +643,12 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_hybrid_predict(self):
         button = self.button_hybrid_prediction_dca
         self.start_process(button=button)    
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
+                                                                filter="FASTA file (*.fasta *.fa)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format",
+                                                           filter="Pickle file (HYBRID*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if prediction_file and params_pkl_file:
             self.version_text.setText("Predicting using the hybrid (DCA-supervised) model...")
             self.exec_pypef(f'hybrid -m {model_file} --ps {prediction_file} --params {params_pkl_file}')
@@ -633,11 +658,15 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_llm_hybrid_train(self):
         button = self.button_hybrid_train_dca_llm
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if self.llm == 'prosst':
-            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
-            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File")[0]
+            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File",
+                                                                  filter="FASTA file (*.fasta *.fa)")[0]
+            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File",
+                                                             filter="PDB file (*.pdb)")[0]
             if training_file and params_pkl_file and wt_fasta_file and pdb_file:
                 self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
                 self.exec_pypef(f'hybrid --ls {training_file} --ts {training_file} --params {params_pkl_file} --llm {self.llm} '
@@ -652,12 +681,17 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_llm_hybrid_train_test(self):
         button = self.button_hybrid_train_test_dca_llm
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if self.llm == 'prosst':
-            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
-            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File")[0]
+            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File",
+                                                                  filter="FASTA file (*.fasta *.fa)")[0]
+            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File",
+                                                             filter="PDB file (*.pdb)")[0]
             if training_file and test_file and params_pkl_file and wt_fasta_file and pdb_file:
                 self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
                 self.exec_pypef(f'hybrid --ls {training_file} --ts {test_file} --params {params_pkl_file} --llm {self.llm} '
@@ -672,12 +706,17 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_llm_hybrid_test(self):
         button = self.button_hybrid_test_dca_llm
         self.start_process(button=button)  
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format",
+                                                           filter="Pickle file (HYBRID*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if self.llm == 'prosst':
-            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
-            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File")[0]
+            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File",
+                                                                  filter="FASTA file (*.fasta *.fa)")[0]
+            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File",
+                                                             filter="PDB file (*.pdb)")[0]
             if test_file and params_pkl_file and wt_fasta_file and pdb_file and model_file:
                 self.version_text.setText("Hybrid (DCA+LLM-supervised) model testing...")
                 self.exec_pypef(f'hybrid -m {model_file} --ts {test_file} --params {params_pkl_file} --llm {self.llm} '
@@ -692,12 +731,17 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_llm_hybrid_predict(self):
         button = self.button_hybrid_predict_dca_llm
         self.start_process(button=button)  
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in FASTA format")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in FASTA format",
+                                                                filter="FASL file (*.fasl)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format",
+                                                           filter="Pickle file (HYBRID*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if self.llm == 'prosst':
-            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File")[0]
-            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File")[0]
+            wt_fasta_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select WT FASTA File",
+                                                                  filter="FASTA file (*.fasta *.fa)")[0]
+            pdb_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select PDB protein structure File",
+                                                             filter="PDB file (*.pdb)")[0]
             if prediction_file and params_pkl_file and wt_fasta_file and pdb_file and model_file:
                 self.version_text.setText("Hybrid (DCA+LLM-supervised) model training...")
                 self.exec_pypef(f'hybrid -m {model_file} --ps {prediction_file} --params {params_pkl_file} --llm {self.llm} '
@@ -712,8 +756,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_supervised_train(self):
         button = self.button_supervised_train_dca
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if training_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
             self.exec_pypef(f'ml --encoding dca --ls {training_file} --ts {training_file} --params {params_pkl_file} '
@@ -724,9 +770,12 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_supervised_train_test(self):
         button = self.button_supervised_train_test_dca
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if training_file and test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
             self.exec_pypef(f'ml --encoding dca --ls {training_file} --ts {test_file} --params {params_pkl_file} '
@@ -737,9 +786,12 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_supervised_test(self):
         button = self.button_supervised_test_dca
         self.start_process(button=button)  
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA Model file in Pickle format",
+                                                           filter="Pickle file (PLMC* GREMLIN*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if test_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.exec_pypef(f'ml -m {model_file} --encoding dca --ts {test_file} --params {params_pkl_file} '
@@ -750,9 +802,12 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_supervised_predict(self):
         button = self.button_supervised_predict_dca
         self.start_process(button=button)  
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
+                                                                filter="FASTA file (*.fasta *.fa)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA Model file in Pickle format",
+                                                           filter="Pickle file (PLMC* GREMLIN*)")[0]
+        params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
+                                                                filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if prediction_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.exec_pypef(f'ml -m {model_file} --encoding dca --ps {prediction_file} --params {params_pkl_file} '
@@ -763,7 +818,8 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_onehot_supervised_train(self):
         button = self.button_supervised_train_onehot
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                              filter="FASL file (*.fasl)")[0]
         if training_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training...")
             self.exec_pypef(f'ml --encoding onehot --ls {training_file} --ts {training_file} '
@@ -774,8 +830,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_onehot_supervised_train_test(self):
         button = self.button_supervised_train_test_onehot
         self.start_process(button=button)  
-        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format")[0]
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
+        training_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Training Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
         if training_file and test_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training and testing...")
             self.exec_pypef(f'ml --encoding onehot --ls {training_file} --ts {test_file} '
@@ -786,8 +844,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_onehot_supervised_test(self):
         button = self.button_supervised_train_test_onehot
         self.start_process(button=button)  
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Onehot Model file in Pickle format",
+                                                           filter="Pickle file (ONEHOT*)")[0]
+        test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                          filter="FASL file (*.fasl)")[0]
         if test_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.exec_pypef(f'ml -m {model_file} --encoding onehot --ts {test_file} '
@@ -798,8 +858,10 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_onehot_supervised_predict(self):
         button = self.button_supervised_predict_onehot
         self.start_process(button=button)  
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format")[0]
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Onehot Model file in Pickle format",
+                                                           filter="Pickle file (ONEHOT*)")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
+                                                                filter="FASL file (*.fasl)")[0]
         if prediction_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.exec_pypef(f'ml -m {model_file} --encoding onehot --ps {prediction_file} '

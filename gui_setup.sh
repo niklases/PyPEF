@@ -23,7 +23,7 @@ if __name__ == '__main__':
 
 printf "#!/bin/bash\n
 SCRIPT_DIR=\$( cd -- \"\$( dirname -- \"\${BASH_SOURCE[0]}\" )\" &> /dev/null && pwd )\n
-python "\${SCRIPT_DIR}/gui/qt_window.py"\n
+python "\${SCRIPT_DIR}/gui/PyPEFGUIQtWindow.py"\n
 " > run_pypef_gui.sh
 
 echo "Finished installation..."

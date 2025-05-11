@@ -69,7 +69,7 @@ powershell -Command "%python_exe% -m pip install -U pypef pyside6"
 (
     echo @echo off
     echo:
-    echo start /min cmd /c powershell -Command ^"%prefix%%python_exe% %%~dp0gui\qt_window.py^"
+    echo start /min cmd /c powershell -Command ^"%prefix%%python_exe% %%~dp0gui\PyPEFGUIQtWindow.py^"
  ) > run_pypef_gui.bat
 
 echo Finished installation...
