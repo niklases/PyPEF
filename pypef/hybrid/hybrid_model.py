@@ -1152,7 +1152,7 @@ def performance_ls_ts(
         model_type = f'{model_type}_no_ML'
     else:
         raise SystemError('No test set given for performance estimation.')
-    if llm is None:
+    if llm is None or llm == '':
         llm = ''
     else:
         llm = f"_{llm.upper()}"

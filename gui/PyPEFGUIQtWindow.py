@@ -22,7 +22,7 @@ EXEC_API_OR_CLI = ['cli', 'api'][0]
 
 
 print(sys.executable)
-print(EXEC_API_OR_CLI)
+print('Backend:', EXEC_API_OR_CLI)
 
 
 class Capturing(list):
@@ -228,7 +228,7 @@ class MainWindow(QtWidgets.QWidget):
         self.button_dca_predict_dca.setStyleSheet(button_style)
 
         # Hybrid DCA
-        self.button_hybrid_train_dca = QtWidgets.QPushButton("Training (DCA)")
+        self.button_hybrid_train_dca = QtWidgets.QPushButton("Train (DCA)")
         self.button_hybrid_train_dca.setMinimumWidth(80)
         self.button_hybrid_train_dca.setToolTip(
             "Optimize the GREMLIN model by supervised training on variant-fitness labels"
@@ -361,7 +361,7 @@ class MainWindow(QtWidgets.QWidget):
         self.button_supervised_predict_onehot.setToolTip(
             "Purely supervised one-hot model test"
         )
-        self.button_supervised_predict_onehot.clicked.connect(self.pypef_onehot_supervised_test)
+        self.button_supervised_predict_onehot.clicked.connect(self.pypef_onehot_supervised_predict)
         self.button_supervised_predict_onehot.setStyleSheet(button_style)
 
 
@@ -641,7 +641,7 @@ class MainWindow(QtWidgets.QWidget):
 
     @QtCore.Slot()
     def pypef_dca_hybrid_predict(self):
-        button = self.button_hybrid_prediction_dca
+        button = self.button_hybrid_predict_dca
         self.start_process(button=button)    
         prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
                                                                 filter="FASTA file (*.fasta *.fa)")[0]
@@ -731,8 +731,8 @@ class MainWindow(QtWidgets.QWidget):
     def pypef_dca_llm_hybrid_predict(self):
         button = self.button_hybrid_predict_dca_llm
         self.start_process(button=button)  
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in FASTA format",
-                                                                filter="FASL file (*.fasl)")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
+                                                                filter="FASTA file (*.fasta *.fa)")[0]
         model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Hybrid Model file in Pickle format",
                                                            filter="Pickle file (HYBRID*)")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
@@ -788,14 +788,14 @@ class MainWindow(QtWidgets.QWidget):
         self.start_process(button=button)  
         test_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
                                                           filter="FASL file (*.fasl)")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA Model file in Pickle format",
-                                                           filter="Pickle file (PLMC* GREMLIN*)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select ML Model file in Pickle format",
+                                                           filter="Pickle file (ML*)")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
                                                                 filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if test_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.exec_pypef(f'ml -m {model_file} --encoding dca --ts {test_file} --params {params_pkl_file} '
-                            f'--threads {self.n_cores} --regressor {self.regression_model}')
+                            f'--threads {self.n_cores}')
         self.end_process(button=button)
 
     @QtCore.Slot()
@@ -804,14 +804,14 @@ class MainWindow(QtWidgets.QWidget):
         self.start_process(button=button)  
         prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
                                                                 filter="FASTA file (*.fasta *.fa)")[0]
-        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA Model file in Pickle format",
-                                                           filter="Pickle file (PLMC* GREMLIN*)")[0]
+        model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select ML Model file in Pickle format",
+                                                           filter="Pickle file (ML*)")[0]
         params_pkl_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select DCA parameter Pickle file",
                                                                 filter="Pickle file (*.params GREMLIN PLMC)")[0]
         if prediction_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.exec_pypef(f'ml -m {model_file} --encoding dca --ps {prediction_file} --params {params_pkl_file} '
-                            f'--threads {self.n_cores} --regressor {self.regression_model}')
+                            f'--threads {self.n_cores}')
         self.end_process(button=button)
 
     @QtCore.Slot()
@@ -851,7 +851,7 @@ class MainWindow(QtWidgets.QWidget):
         if test_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.exec_pypef(f'ml -m {model_file} --encoding onehot --ts {test_file} '
-                            f'--threads {self.n_cores} --regressor {self.regression_model}')
+                            f'--threads {self.n_cores}')
         self.end_process(button=button)
 
     @QtCore.Slot()
@@ -860,12 +860,12 @@ class MainWindow(QtWidgets.QWidget):
         self.start_process(button=button)  
         model_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Onehot Model file in Pickle format",
                                                            filter="Pickle file (ONEHOT*)")[0]
-        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Test Set File in \"FASL\" format",
-                                                                filter="FASL file (*.fasl)")[0]
+        prediction_file = QtWidgets.QFileDialog.getOpenFileName(self.win2, "Select Prediction Set File in FASTA format",
+                                                                filter="FASTA file (*.fasta *.fa)")[0]
         if prediction_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.exec_pypef(f'ml -m {model_file} --encoding onehot --ps {prediction_file} '
-                            f'--threads {self.n_cores} --regressor {self.regression_model}')
+                            f'--threads {self.n_cores}')
         self.end_process(button=button)
 
     def exec_pypef(self, cmd):
