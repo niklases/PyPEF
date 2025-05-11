@@ -348,7 +348,7 @@ def convert_graph(graph):
     return graph
 
 
-def predict_sturcture(model, cluster_models, dataloader, device):
+def predict_structure(model, cluster_models, dataloader, device):
     epoch_iterator = dataloader
     struc_label_dict = {}
     cluster_model_dict = {}
@@ -362,10 +362,10 @@ def predict_sturcture(model, cluster_models, dataloader, device):
             'algorithm': 'lloyd', 'copy_x': True, 'init': 'k-means++', 'n_init': 'auto', 
             'max_iter': 1, 'n_clusters': 2048, 'random_state': 0, 'tol': 0.0001, 'verbose': 0
         }
-        kmeans__model = KMeans().set_params(**kmeans_)
-        kmeans__model.fit(cluster_centers)
-        kmeans__model.cluster_centers_ = cluster_centers
-        cluster_model_dict[cluster_model_name] = kmeans__model
+        kmeans_model = KMeans().set_params(**kmeans_)
+        kmeans_model.fit(cluster_centers)
+        kmeans_model.cluster_centers_ = cluster_centers
+        cluster_model_dict[cluster_model_name] = kmeans_model
 
     with torch.no_grad():
         for batch in epoch_iterator:
@@ -373,12 +373,12 @@ def predict_sturcture(model, cluster_models, dataloader, device):
             h_V = (batch.node_s, batch.node_v)
             h_E = (batch.edge_s, batch.edge_v)
 
-            node_emebddings = model.get_embedding(h_V, batch.edge_index, h_E)
-            graph_emebddings = scatter_mean(node_emebddings, batch.batch, dim=0).cpu()
-            norm_graph_emebddings = F.normalize(graph_emebddings, p=2, dim=1)
+            node_embeddings = model.get_embedding(h_V, batch.edge_index, h_E)
+            graph_embeddings = scatter_mean(node_embeddings, batch.batch, dim=0).cpu()
+            norm_graph_embeddings = F.normalize(graph_embeddings, p=2, dim=1)
             for name, cluster_model in cluster_model_dict.items():
                 batch_structure_labels = cluster_model.predict(
-                    norm_graph_emebddings
+                    norm_graph_embeddings
                 ).tolist()
                 struc_label_dict[name].extend(batch_structure_labels)
 
@@ -573,7 +573,7 @@ class PdbQuantizer:
             self.max_distance,
             #threads=self.threads,
         )
-        sturctures = predict_sturcture(
+        sturctures = predict_structure(
             self.model, self.cluster_models, data_loader, self.device
         )
         for _, structure_labels in sturctures.items():

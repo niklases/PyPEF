@@ -663,7 +663,7 @@ Write-Host
 pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIgremlin -w P42212_F64L.fasta --params GREMLIN
+pypef hybrid directevo -m HYBRIDgremlin -w P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params
@@ -674,6 +674,9 @@ ExitOnExitCode
 Write-Host
 
 # 0.4.0 features: hybrid DCA-LLM modeling
+pypef mklsts -i avGFP.csv -w P42212_F64L.fasta --ls_proportion 0.02
+ExitOnExitCode
+Write-Host
 pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
 ExitOnExitCode
 Write-Host
@@ -684,7 +687,7 @@ Write-Host
 pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm esm --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host
 

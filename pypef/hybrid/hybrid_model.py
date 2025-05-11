@@ -31,8 +31,8 @@ import warnings
 import numpy as np
 import sklearn.base
 from scipy.stats import spearmanr
-from sklearnex import patch_sklearn
-patch_sklearn(verbose=False)
+#from sklearnex import patch_sklearn
+#patch_sklearn(verbose=False)
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution

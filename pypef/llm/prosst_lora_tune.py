@@ -116,6 +116,7 @@ def prosst_train(
     pbar_epochs = tqdm(range(1, n_epochs + 1))
     epoch_spearman_1 = 0.0
     did_not_improve_counter = 0
+    best_model = None
     best_model_epoch = np.nan
     best_model_perf = np.nan
     os.makedirs('model_saves', exist_ok=True)
@@ -150,6 +151,9 @@ def prosst_train(
                 f"Y_pred: {np.array(y_preds_detached)}"
             )
         if epoch_spearman_2 > epoch_spearman_1:
+            if best_model is not None:
+                if os.path.isfile(best_model):
+                    os.remove(best_model)
             did_not_improve_counter = 0
             best_model_epoch = epoch
             best_model_perf = epoch_spearman_2
@@ -180,8 +184,8 @@ def prosst_train(
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 
         model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
-    logger.info(f'Train-->Train Performance (N={len(score_batches.cpu().flatten())}):', 
-          spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu()))
+    logger.info(f"Train-->Train Performance (N={len(score_batches.cpu().flatten())}): "
+                f"{spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu())[0]:.3f}")
     return y_preds_train.cpu()
 
 
