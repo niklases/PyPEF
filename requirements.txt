@@ -10,7 +10,7 @@ scikit-learn
 biopython
 biotite
 schema
-ray[default]
+#ray[default]
 pathos
 peft
 torch
