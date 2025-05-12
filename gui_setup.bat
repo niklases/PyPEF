@@ -21,10 +21,6 @@ if not "%py_ver:~0,6%"=="Python" (
         echo Found Python version 3.10.
         set "true=1"
     )
-    if  "%py_ver:~7,4%"=="3.9." (
-        echo Found Python version 3.9.
-        set "true=1"
-    )
 )
 
 if "%true%"=="0" (

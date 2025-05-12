@@ -1,4 +1,6 @@
 #!/bin/bash
+pip install -r requirements.txt
+pip install -U pyinstaller pyside6
 pip install -e .
 pyinstaller \
   --console \

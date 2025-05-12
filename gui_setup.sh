@@ -6,7 +6,7 @@ set -e
 
 py_ver="$(python --version)"
 
-if [[ $py_ver == *"3.12."* ]] || [[ $py_ver == *"3.11."* ]] || [[ $py_ver == *"3.10."* ]] || [[ $py_ver == *"3.9."* ]]; then
+if [[ $py_ver == *"3.12."* ]] || [[ $py_ver == *"3.11."* ]] || [[ $py_ver == *"3.10."* ]]; then
     echo "Identified Python version should be suitable for installing and running PyPEF..."
 else
     echo >&2 "The identified Python version ($py_ver) does not match the required Python versions... you should activate/install a suitable version first, e.g. Python 3.12."; exit 1
