@@ -37,6 +37,8 @@ from pypef.hybrid.hybrid_model import (
 )
 
 
+JUST_PLOT_RESULTS = True
+
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
@@ -475,7 +477,7 @@ def plot_csv_data(csv, plot_name):
     for n in range(0, len(dset_perfs)):
         plt.text(
             n + 0.15, -0.075, 
-            r'$\overline{\rho}=$' + f'{np.nanmean(dset_perfs[n]):.2f}\n' 
+            r'$\overline{\rho}=$' + f'{np.nanmean(dset_perfs[n]):.3f}\n' 
             + r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(dset_perfs)[n]))}'
         )
     plot.set_xticks(range(len(plot.get_xticklabels())))
@@ -536,11 +538,12 @@ if __name__ == '__main__':
             start_i = 0
             already_tested_is = []
 
-    compute_performances(
-        mut_data=combined_mut_data, 
-        start_i=start_i, 
-        already_tested_is=already_tested_is
-    )
+    if not JUST_PLOT_RESULTS:
+        compute_performances(
+            mut_data=combined_mut_data, 
+            start_i=start_i, 
+            already_tested_is=already_tested_is
+        )
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
