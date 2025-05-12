@@ -280,7 +280,7 @@ class DirectedEvolution:
                             encoder=self.dca_encoder,
                             variant=wt_mut,  # WT, e.g. F17F
                             variant_sequence=self.s_wt,
-                            hybrid_model_data_pkl=self.model  # TODO: Add global model
+                            hybrid_model_data_pkl=self.model
                         )
                 if self.de_step_counter == 0:
                     logger.info(

@@ -32,13 +32,15 @@ $path=Get-Location                                                              
 $path=Split-Path -Path $path -Parent                                                                                     #
 $path=Split-Path -Path $path -Parent                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
-pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # TODO: REMOVE
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
 #pypef = pypef                                                                                                           #
 ##########################################################################################################################
+# threads are only used for some parallelization of AAindex and DCA-based sequence encoding                              # 
+# if pypef/settings.py defines USE_RAY = True                                                                            #
 $threads = 12                                                                                                            #
 ##########################################################################################################################
 
@@ -229,7 +231,7 @@ Write-Host
 pypef ml -e onehot -m ONEHOT -t TS.fasl
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLplmc -t TS.fasl --params ANEH_72.6.params --threads $threads 
+pypef ml -e dca -m MLPLMC -t TS.fasl --params ANEH_72.6.params --threads $threads 
 ExitOnExitCode
 Write-Host
 pypef ml -e aaidx -m FAUJ880104 -t TS.fasl --label
@@ -238,7 +240,7 @@ Write-Host
 pypef ml -e onehot -m ONEHOT -t TS.fasl --label
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLplmc -t TS.fasl --label --params ANEH_72.6.params --threads $threads
+pypef ml -e dca -m MLPLMC -t TS.fasl --label --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
 
@@ -251,10 +253,10 @@ Write-Host
 pypef ml -e onehot -m ONEHOT -p 37_ANEH_variants_prediction_set.fasta
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLplmc -p 37_ANEH_variants_prediction_set.fasta --params ANEH_72.6.params --threads $threads
+pypef ml -e dca -m MLPLMC -p 37_ANEH_variants_prediction_set.fasta --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLgremlin -p 37_ANEH_variants_prediction_set.fasta --params GREMLIN
+pypef ml -e dca -m MLGREMLIN -p 37_ANEH_variants_prediction_set.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
 
@@ -267,10 +269,10 @@ Write-Host
 pypef ml -e onehot -m ONEHOT --pmult --drecomb --trecomb --qarecomb --qirecomb --ddiverse
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLplmc --params ANEH_72.6.params --pmult --drecomb --trecomb --qarecomb --qirecomb --ddiverse --threads $threads
+pypef ml -e dca -m MLPLMC --params ANEH_72.6.params --pmult --drecomb --trecomb --qarecomb --qirecomb --ddiverse --threads $threads
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLgremlin --params GREMLIN --pmult --drecomb --trecomb --qarecomb --qirecomb --ddiverse
+pypef ml -e dca -m MLGREMLIN --params GREMLIN --pmult --drecomb --trecomb --qarecomb --qirecomb --ddiverse
 ExitOnExitCode
 Write-Host
 
@@ -280,10 +282,10 @@ Write-Host
 pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLPLMC -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
+pypef ml -e dca directevo -m MLGREMLIN -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 pypef ml -e aaidx directevo -m FAUJ880104 -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative
@@ -292,10 +294,10 @@ Write-Host
 pypef ml -e onehot directevo -m ONEHOT -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLPLMC -w Sequence_WT_ANEH.fasta --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params GREMLIN
+pypef ml -e dca directevo -m MLGREMLIN -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 pypef ml -e aaidx directevo -m FAUJ880104 -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative
@@ -304,10 +306,10 @@ Write-Host
 pypef ml -e onehot directevo -m ONEHOT -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
+pypef ml -e dca directevo -m MLPLMC -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLgremlin -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params GREMLIN
+pypef ml -e dca directevo -m MLGREMLIN -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 
@@ -382,34 +384,34 @@ Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDplmc -t TS.fasl --params ANEH_72.6.params --threads $threads
+pypef hybrid -m HYBRIDPLMC -t TS.fasl --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
 
 pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDgremlin -t TS.fasl --params GREMLIN
+pypef hybrid -m HYBRIDGREMLIN -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host
 
 pypef mkps -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDplmc -p 37_ANEH_variants_prediction_set.fasta --params ANEH_72.6.params --threads $threads
+pypef hybrid -m HYBRIDPLMC -p 37_ANEH_variants_prediction_set.fasta --params ANEH_72.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDplmc --params ANEH_72.6.params --pmult --drecomb --threads $threads
+pypef hybrid -m HYBRIDPLMC --params ANEH_72.6.params --pmult --drecomb --threads $threads
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDPLMC -w Sequence_WT_ANEH.fasta --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params 
+pypef hybrid directevo -m HYBRIDPLMC -w Sequence_WT_ANEH.fasta  --numiter 10 --numtraj 8 --negative --params ANEH_72.6.params 
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
+pypef hybrid directevo -m HYBRIDPLMC -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta  --temp 0.1 --usecsv --csvaa --negative --params ANEH_72.6.params
 ExitOnExitCode
 Write-Host
 
@@ -504,7 +506,7 @@ Write-Host
 pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
 Write-Host
-# Transforming .params file to DCAEncoding and using DCAEncoding Pickle; output file: Pickles/MLplmc.
+# Transforming .params file to DCAEncoding and using DCAEncoding Pickle; output file: Pickles/MLPLMC.
 # That means using uref100_avgfp_jhmmer_119_plmc_42.6.params or PLMC as params file is identical.
 pypef param_inference --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
@@ -513,10 +515,10 @@ pypef ml -e dca -l LS.fasl -t TS.fasl --regressor pls --params PLMC --threads $t
 ExitOnExitCode
 Write-Host
 # ml only TS
-pypef ml -e dca -m MLplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
+pypef ml -e dca -m MLPLMC -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLgremlin -t TS.fasl --params GREMLIN --threads $threads
+pypef ml -e dca -m MLGREMLIN -t TS.fasl --params GREMLIN --threads $threads
 ExitOnExitCode
 Write-Host
 
@@ -584,10 +586,10 @@ ExitOnExitCode
 Write-Host
 
 # Direct Evo
-pypef ml -e dca directevo -m MLgremlin --wt P42212_F64L.fasta --params GREMLIN
+pypef ml -e dca directevo -m MLGREMLIN --wt P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
-pypef ml -e dca directevo -m MLplmc --wt P42212_F64L.fasta --params PLMC
+pypef ml -e dca directevo -m MLPLMC --wt P42212_F64L.fasta --params PLMC
 ExitOnExitCode
 Write-Host
 pypef hybrid directevo -m GREMLIN --wt P42212_F64L.fasta --params GREMLIN
@@ -606,7 +608,7 @@ Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host 
-pypef hybrid -m HYBRIDgremlin -t TS.fasl --params GREMLIN
+pypef hybrid -m HYBRIDGREMLIN -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host 
 
@@ -631,7 +633,7 @@ Write-Host
 pypef hybrid -l LS.fasl -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
+pypef hybrid -m HYBRIDPLMC -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
 
@@ -639,37 +641,37 @@ Write-Host
 pypef hybrid -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
-pypef ml -e dca -m MLplmc -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --label --threads $threads
+pypef ml -e dca -m MLPLMC -t TS.fasl --params uref100_avgfp_jhmmer_119_plmc_42.6.params --label --threads $threads
 ExitOnExitCode
 Write-Host
 
 pypef mkps -i avGFP.csv -w P42212_F64L.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDplmc -p avGFP_prediction_set.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
+pypef hybrid -m HYBRIDPLMC -p avGFP_prediction_set.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
 pypef mkps -i avGFP.csv -w P42212_F64L.fasta --drecomb
 ExitOnExitCode
 Write-Host
 # many single variants for recombination, takes too long
-#pypef hybrid -m HYBRIDplmc --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
+#pypef hybrid -m HYBRIDPLMC --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
 #ExitOnExitCode
 #Write-Host
-pypef hybrid -m HYBRIDgremlin --params GREMLIN --pmult --drecomb
+pypef hybrid -m HYBRIDGREMLIN --params GREMLIN --pmult --drecomb
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+pypef hybrid directevo -m HYBRIDPLMC -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDgremlin -w P42212_F64L.fasta --params GREMLIN
+pypef hybrid directevo -m HYBRIDGREMLIN -w P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+pypef hybrid directevo -m HYBRIDPLMC -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDplmc -i avGFP.csv -w P42212_F64L.fasta --temp 0.1 --usecsv --csvaa --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+pypef hybrid directevo -m HYBRIDPLMC -i avGFP.csv -w P42212_F64L.fasta --temp 0.1 --usecsv --csvaa --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 ExitOnExitCode
 Write-Host
 

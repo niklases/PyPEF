@@ -237,7 +237,7 @@ class GREMLIN:
     def get_eff_msa_weights(self, msa):
         """Compute effective weight for each sequence"""
         # pairwise identity
-        pdistance_msa = pdist(msa, "hamming")  # TODO: to PyTorch?!
+        pdistance_msa = pdist(msa, "hamming")  # TODO: to PyTorch?
         msa_sm = 1.0 - squareform(pdistance_msa)
         # weight for each sequence
         msa_w = (msa_sm >= self.eff_cutoff).astype(float)

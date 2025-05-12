@@ -148,6 +148,9 @@ class MainWindow(QtWidgets.QWidget):
         self.logTextBox.setFormatter(formatter)
         logger.addHandler(self.logTextBox)
 
+        self.logTextBox.widget.appendPlainText(
+            f"Current working directory: {str(os.getcwd())}")
+
         # Horizontal slider #################################################################
         self.slider = QtWidgets.QSlider(self)
         self.slider.setGeometry(QtCore.QRect(190, 100, 200, 16))
@@ -177,6 +180,12 @@ class MainWindow(QtWidgets.QWidget):
         self.box_llm.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
         # Buttons ###########################################################################
         # Utilities
+
+        self.button_work_dir = QtWidgets.QPushButton("Set Working Directory")
+        self.button_work_dir.setToolTip("Set working directory for storing output files")
+        self.button_work_dir.clicked.connect(self.set_work_dir)
+        self.button_work_dir.setStyleSheet(button_style)        
+
         self.button_help = QtWidgets.QPushButton("Help")  
         self.button_help.setToolTip("Print help text")
         self.button_help.clicked.connect(self.pypef_help)
@@ -373,7 +382,8 @@ class MainWindow(QtWidgets.QWidget):
 
         layout.addWidget(self.slider_text, 1, 0, 1, 1)
         #layout.addWidget(self.slider, 2, 0, 1, 1)
-        
+
+        layout.addWidget(self.button_work_dir, 0, 2, 1, 1)
 
         layout.addWidget(self.ncores_text, 1, 1, 1, 1)
         layout.addWidget(self.box_multicore, 2, 1, 1, 1)
@@ -423,6 +433,8 @@ class MainWindow(QtWidgets.QWidget):
             self.process = QtCore.QProcess(self)
             self.process.setProcessChannelMode(QtCore.QProcess.MergedChannels)
             self.process.readyReadStandardOutput.connect(self.on_readyReadStandardOutput)
+            self.process.started.connect(lambda: self.button_work_dir.setEnabled(False))
+            self.process.finished.connect(lambda: self.button_work_dir.setEnabled(True))            
             self.process.started.connect(lambda: self.button_help.setEnabled(False))
             self.process.finished.connect(lambda: self.button_help.setEnabled(True))
             self.process.started.connect(lambda: self.button_mklsts.setEnabled(False))
@@ -474,6 +486,7 @@ class MainWindow(QtWidgets.QWidget):
     def start_process(self, button):
         self.logTextBox.widget.clear()
         self.c += 1
+        self.logTextBox.widget.appendPlainText(f"Current working directory: {str(os.getcwd())}")
         self.logTextBox.widget.appendPlainText("Job: " + str(self.c) + " " + "=" * 104)
         if EXEC_API_OR_CLI == 'api':
             button.setEnabled(False)
@@ -504,6 +517,16 @@ class MainWindow(QtWidgets.QWidget):
     def selection_ls_proportion(self, value):
         self.ls_proportion = value / 100
         self.slider_text.setText(f"Train set proportion: {self.ls_proportion}")
+
+    @QtCore.Slot()
+    def set_work_dir(self):
+        self.working_directory = QtWidgets.QFileDialog.getExistingDirectory(
+            self.win2, 'Select Folder')
+        os.chdir(self.working_directory)
+        self.logTextBox.widget.clear()
+        self.logTextBox.widget.appendPlainText(
+            f"Changed current working directory to: {str(os.getcwd())}"
+        )
 
     @QtCore.Slot()
     def pypef_help(self):

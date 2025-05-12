@@ -956,7 +956,7 @@ def save_model(
             )
             name = get_basename(idx)
             if model_type in ['PLMC', 'GREMLIN'] and encoding not in ['aaidx', 'onehot']:
-                name = 'ML' + model_type.lower()
+                name = 'ML' + model_type.upper()
             f_name = os.path.abspath(os.path.join(path, 'Pickles', name))
             file = open(f_name, 'wb')
             pickle.dump(regressor_, file)

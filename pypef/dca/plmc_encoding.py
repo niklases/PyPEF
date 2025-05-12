@@ -711,11 +711,7 @@ def save_plmc_dca_encoding_model(params_file, substitution_sep='/'):
         pass
     pickle.dump({
         'model': plmc,
-        'model_type': 'PLMCpureDCA',
-        'beta_1': None,
-        'beta_2': None,
-        'spearman_rho': None,
-        'regressor': None
+        'model_type': 'PLMCpureDCA'
     },
         open(f'Pickles/PLMC', 'wb')
     )

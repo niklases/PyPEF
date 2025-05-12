@@ -63,10 +63,7 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
     return a[:reduce]
 
 
-# TODO: Implementation of other regression techniques (CVRegression models) [Likely not worth]
-# TODO: Differential evolution of multiple Zero Shot predictors
-#       (and supervised model predictions thereof) and y_true [DONE]
-# TODO: Add meta-learning (e.g., MAML) learning option (on PGym data)?
+# TODO: Add meta-learning model (e.g., learn2learn MAML learning option on PGym dataset)?
 class DCALLMHybridModel:
     def __init__(
             self,
@@ -686,6 +683,8 @@ def get_model_path(model: str):
     Checks if model Pickle files exits in CWD 
     and then in ./Pickles directory.
     """
+    # Not capitalizing model names here as PLMC params file names are not capitalized
+    # model = os.path.splitext(model)[0].upper() + os.path.splitext(model)[1]
     try:
         if isfile(model):
             model_path = model
@@ -693,13 +692,12 @@ def get_model_path(model: str):
             model_path = f'Pickles/{model}'
         else:
             raise SystemError(
-                "Did not find specified model file in current "
-                "working directory or /Pickles subdirectory. "
-                "Make sure to train/save a model first (e.g., "
-                "for saving a GREMLIN model, type \"pypef "
-                "param_inference --msa TARGET_MSA.a2m\" or, for"
-                "saving a plmc model, type \"pypef param_inference"
-                " --params TARGET_PLMC.params\")."
+                f"Did not find specified model file ({model}) in current "
+                "working directory or /Pickles subdirectory. Make sure "
+                "to train/save a model first (e.g., for saving a GREMLIN "
+                "model, type \"pypef param_inference --msa TARGET_MSA.a2m\" "
+                "or, for saving a plmc model, type \"pypef param_inference "
+                "--params TARGET_PLMC.params\")."
             )
         return model_path
     except TypeError:

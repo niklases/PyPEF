@@ -196,7 +196,6 @@ def get_prosst_models():
         "AI4Protein/ProSST-2048", trust_remote_code=True)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
-    # TODO: Check: LoRa or base model parameters better for ProSST fine-tuning and learning rate?
     optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.01)  
     return prosst_base_model, prosst_lora_model, tokenizer, optimizer
 
