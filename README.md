@@ -38,13 +38,11 @@ Written by Niklas Siedhoff and Alexander-Maurice Illig.
     <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
 </p>
 
-Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic effects. Here we present an engineering framework termed PyPEF for assisting the unsupervised optimization, supervised training, and testing of protein fitness models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning approaches.
-As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the identified variants as CSV (or FASTA-Like ("FASL") datasets following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), Ridge, Lasso, Elastic net, support vector machines (SVR), random forest (RF), and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. In addition, one-hot and [direct coupling analysis (DCA)](https://en.wikipedia.org/wiki/Direct_coupling_analysis)-based feature generation are implemented as sequence encoding techniques, which often outperform AAindex-based encoding techniques, while one-hot encodings fail for positional extrapolation, whereas DCA offers positional extrapolation capabilities. Furthermore, hybrid, combined models mixed with LLM models show even better overall performance on the [ProteinGym](https://proteingym.org/) datasets tested. Finally, the selected or best identified encoding technique and regression model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant variant sequences that subsequently are to be designed and validated in the wet-lab.
+Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic mutation effects. Here we present an engineering framework termed PyPEF for assisting the unsupervised optimization, supervised training, and testing of protein fitness models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning approaches.
+As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the variants as CSV files (or FASTA-Like ("FASL") data files following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), Ridge, Lasso, Elastic net, support vector machines (SVR), random forest (RF), and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. In addition, one-hot and [direct coupling analysis (DCA)](https://en.wikipedia.org/wiki/Direct_coupling_analysis)-based feature generation are implemented as sequence encoding techniques, which often outperform AAindex-based encoding techniques. While one-hot encodings fail for positional extrapolation, DCA-based sequence encoding offers positional extrapolation capabilities and is hence better suited for most generalization tasks. In addition, a hybrid, combined model of the unsupervised and supervised DCA model provides even better performance and robust predictions, even when training with only a few data points (e.g. 50-100 variant fitness labels). Furthermore, a mixed hybrid DCA model combined with LLM models  predictions show even increased overall performance across the [ProteinGym](https://proteingym.org/) datasets tested. 
 
-For detailed information, please refer to the above-mentioned publications and related Supporting Information.
+Finally, the selected (un-) trained (pure or hybrid) model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant variant sequences that subsequently are to be designed and validated in the wet-lab.
 
-The workflow procedure is explained in the [Jupyter notebook](scripts/CLI/Workflow_PyPEF.ipynb) (.ipynb) protocol (see
-Tutorial section below).
 
 <p align="center">
   <img src=".github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
@@ -54,8 +52,10 @@ Tutorial section below).
 ## Quick Installation
 A quick installation of the PyPEF command line framework using PyPI for Linux and Windows and Python >= 3.10 can be performed with:
 
-```
+```bash
 pip install -U pypef
+# optionally, for GPU support (see requirements section below):
+# pip install torch --index-url https://download.pytorch.org/whl/cu128
 ```
 
 After successful installation, PyPEF should work by calling `pypef` in the shell:
@@ -108,7 +108,12 @@ chmod a+x ./gui_setup.sh && ./gui_setup.sh
     - docopt
     - adjustText
 
-and optionally ray[default] and scikit-learn-intelex. As PyTorch is used, LLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)).  If errors occur with third-party packages, you can check the required Python version dependencies (if available); also, as a rule of thumb, it is often helpful to use the second most recent Python version instead of the latest, since development for the latest version is often ongoing:
+and optionally ray[default] and scikit-learn-intelex. LLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
+Usually, running the command presented at https://pytorch.org/get-started/locally/ using the latest CUDA version is working for setting up the GPU, e.g.:
+```
+pip install torch --index-url https://download.pytorch.org/whl/cu128
+```
+If errors occur with third-party packages, you can check the required Python version dependencies (if available); also, as a rule of thumb, it is often helpful to use the second most recent Python version instead of the latest, since development for the latest version is often ongoing:
 
 [![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
 [![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)
@@ -227,6 +232,8 @@ As standard input files, PyPEF requires the target protein wild-type sequence in
 
 <a name="tutorial"></a>
 ## Tutorial
+
+A basic example workflow procedure (tutorial) is explained in the [Jupyter notebook](scripts/CLI/Workflow_PyPEF.ipynb) (.ipynb) protocol.
 Before starting running the tutorial, it is a good idea to set up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/download#downloads) ([Anaconda3-2023.03-1-Linux-x86_64.sh installer download](https://repo.anaconda.com/archive/Anaconda3-2023.03-1-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
