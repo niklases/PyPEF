@@ -27,7 +27,7 @@ setup(
     name='pypef',
     version=__version__.split('-')[0],
     author='Niklas Siedhoff & Alexander-Maurice Illig',
-    author_email='n.siedhoff@biotec.rwth-aachen.de',
+    author_email='niklas.siedhoff@rwth-aachen.de',
     license='CC BY-NC-SA 4.0',
     description='A command-line interface (CLI) tool for performing data-driven protein engineering '
                 'by building machine learning (ML)-trained regression models from sequence variant '
