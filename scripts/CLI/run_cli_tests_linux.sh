@@ -16,17 +16,18 @@ export PS4='+(Line ${LINENO}): '  # echo script line numbers
 ### $ ./run_cli_tests_linux.sh                      # printing STDOUT and STDERR to terminal
 ### $ ./run_cli_tests_linux.sh &> test_cli_run.log  # writing STDOUT and STDERR to log file
 
+
+cd '../'
+path=$( echo ${PWD%/*} )
+cd 'CLI'  
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
 yes | conda env remove -n pypef || true                                                                                  #
 conda create -n pypef python=3.12 -y                                                                                     #
 eval "$(conda shell.bash hook)"                                                                                          #
 conda activate pypef                                                                                                     #
-cd '../'                                                                                                                 #
-path=$( echo ${PWD%/*} )                                                                                                 #
-cd 'CLI'                                                                                                                 #
 python -m pip install -r "$path/requirements.txt"                                                                        #
-pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
+#pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128               # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
 export PYTHONPATH=${PYTHONPATH}:$path                                                                                    #
 pypef="python3 $path/pypef/main.py"                                                                                      #
 ##########################################################################################################################

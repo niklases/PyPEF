@@ -16,7 +16,12 @@ with open(directory_readme, 'r') as readme:
 long_description = long_description.replace(".github/imgs/", "https://github.com/niklases/PyPEF/raw/main/.github/imgs/")
 
 with open("requirements.txt", "r", encoding="utf-8") as install_requirements:
-    requirements = install_requirements.read()
+    requirements = install_requirements.readlines()
+
+cleaned_requirements = ""
+for requirement in requirements:
+    if not requirement.startswith(('#', '--')):
+        cleaned_requirements += requirement
 
 setup(
     name='pypef',
@@ -36,7 +41,7 @@ setup(
     packages=find_packages(include=['pypef', 'pypef.*']),
     package_data={'pypef': ['ml/AAindex/*', 'ml/AAindex/Refined_cluster_indices_r0.93_r0.97/*']},
     include_package_data=True,
-    install_requires=[requirements],
+    install_requires=[cleaned_requirements],
     python_requires='>= 3.10, < 3.13',
     keywords='Pythonic Protein Engineering Framework',
     classifiers=[

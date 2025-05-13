@@ -23,16 +23,17 @@ function ExitOnExitCode { if ($LastExitCode) {
 ### RUN ME IN POWERSHELL WITH
 ### $ .\run_cli_tests_win.ps1                      # printing STDOUT and STDERR to terminal
 
+
+$path=Get-Location                                                                                                       #
+$path=Split-Path -Path $path -Parent                                                                                     #
+$path=Split-Path -Path $path -Parent                                                                                     #
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
 Write-Output Y | conda env remove -n pypef                                                                               #
 conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
-$path=Get-Location                                                                                                       #
-$path=Split-Path -Path $path -Parent                                                                                     #
-$path=Split-Path -Path $path -Parent                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
-pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128                # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
+#pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128               # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
 ##########################################################################################################################
