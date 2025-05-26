@@ -67,6 +67,22 @@ pypef --help
 The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter notebook tutorial can be found below in the Tutorial section.
 A quick file setup and run test can be performed running files in [scripts/Setup](scripts/Setup) containing a Batch script for Windows and a Bash script for Linux (the latter requires conda, i.e. Miniconda3 or Anaconda3, already being installed).
 
+### Setup and Run Docker Image 
+
+Build the image using the stored [Dockerfile](./Dockerfile)
+```bash
+docker build -t pypef . # --progress=plain --no-cache
+```
+
+A chained container command using the built Docker image can be run with e.g.:
+```
+docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP pypef /bin/bash -c \
+    "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 &&  \
+     python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
+
+```
+
+
 <a name="gui-installation"></a>
 ### GUI Installation
 
