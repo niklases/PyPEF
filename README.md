@@ -1,6 +1,5 @@
 ## Table of Contents
 [PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
-- [PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
   - [Quick Installation](#quick-installation)
     - [Setup and Run Docker Image](#setup-and-run-docker-image)
     - [GUI Installation](#gui-installation)
