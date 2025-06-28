@@ -8,8 +8,8 @@ from io import StringIO
 import os
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QSize, Signal, QThread
-pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-sys.path.append(pypef_root)
+#pypef_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+#sys.path.append(pypef_root)
 from pypef import __version__
 from pypef.main import __doc__, run_main, logger, formatter
 from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_gpu_info
@@ -18,7 +18,7 @@ import logging
 logger.setLevel(logging.INFO)
 
 
-EXEC_API_OR_CLI = ['cli', 'api'][0]
+EXEC_API_OR_CLI = ['cli', 'api'][1]
 
 
 print(sys.executable)
@@ -939,9 +939,13 @@ class MainWindow(QtWidgets.QWidget):
         self.version_text.setText("Finished...")
 
 
-if __name__ == "__main__":
+def run_app():
     app = QtWidgets.QApplication([])
     widget = MainWindow()
     widget.resize(800, 600)
     widget.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    run_app()

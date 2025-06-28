@@ -180,16 +180,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 continue 
 
             ns_y_test = [len(variants)]
-            temp_perfs = []
+            ds = DatasetSplitter(csv_file=csv_path, n_cv=5)
             for train_indices, test_indices in zip(
                 ds.random_splits_train_indices_combined, ds.random_splits_test_indices_combined
             ):
                 try:
-                    ds = DatasetSplitter(csv_file=csv_path, n_cv=5)
-                    x_dca_train, x_dca_test = x_dca[train_indices], x_dca[test_indices]
-                    x_llm_train_prosst, x_llm_test_prosst = x_prosst[train_indices], x_prosst[test_indices]
-                    x_llm_train_esm, x_llm_test_esm = x_esm[train_indices], x_esm[test_indices]
-                    y_train, y_test = fitnesses[train_indices], fitnesses[test_indices]
+                    x_dca_train, x_dca_test = np.asarray(x_dca)[train_indices], np.asarray(x_dca)[test_indices]
+                    x_llm_train_prosst, x_llm_test_prosst = np.asarray(x_prosst)[train_indices], np.asarray(x_prosst)[test_indices]
+                    x_llm_train_esm, x_llm_test_esm = np.asarray(x_esm)[train_indices], np.asarray(x_esm)[test_indices]
+                    y_train, y_test = np.asarray(fitnesses)[train_indices], np.asarray(fitnesses)[test_indices]
                     prosst_lora_model_2 = copy.deepcopy(prosst_lora_model)
                     prosst_optimizer = torch.optim.Adam(prosst_lora_model_2.parameters(), lr=0.0001)
                     esm_lora_model_2 = copy.deepcopy(esm_lora_model)
@@ -244,7 +243,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     }
                 }
                 print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
-                if len(y_test) <= 50:
+                if len(y_test) <= 20: # TODO: 50
                     print(f"Only {len(fitnesses)} in total, splitting the data "
                           f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                           f"results in N_Test <= 50 variants - not getting "
@@ -539,7 +538,7 @@ if __name__ == '__main__':
     if not JUST_PLOT_RESULTS:
         compute_performances(
             mut_data=combined_mut_data, 
-            start_i=start_i, 
+            start_i=11, 
             already_tested_is=already_tested_is
         )
 
