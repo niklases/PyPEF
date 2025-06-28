@@ -10,7 +10,7 @@ import json
 
 
 
-def download_proteingym_data(version: str = '1.1'):
+def download_proteingym_data(version: str = '1.3'):
     url = f'https://marks.hms.harvard.edu/proteingym/ProteinGym_v{version}/DMS_substitutions.csv'
     print(f'Getting {url}...')
     urllib.request.urlretrieve(url, os.path.join(os.path.dirname(__file__), '_Description_DMS_substitutions_data.csv'))

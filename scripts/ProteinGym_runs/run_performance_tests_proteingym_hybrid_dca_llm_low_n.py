@@ -37,7 +37,7 @@ from pypef.hybrid.hybrid_model import (
 )
 
 
-JUST_PLOT_RESULTS = True
+JUST_PLOT_RESULTS = False
 
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
