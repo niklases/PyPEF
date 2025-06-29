@@ -14,7 +14,7 @@ jobs:
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -35,7 +35,12 @@ jobs:
         flake8 ./pypef --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Export Pythonpath and run PyPEF API and CLI version test with pytest
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest tests/
+        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/
+    - name: Test pip install
+      run: |
+        pip install .
+        echo $(which pypef)
+        python -m pytest tests/test_api_functions.py
 
   windows:
     name: windows
@@ -65,3 +70,9 @@ jobs:
       shell: pwsh
       run: |
         $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\
+    - name: Test pip install
+      shell: pwsh
+      run: |
+        pip install .
+        echo (Get-Command pypef).Source
+        python -m pytest .\tests\test_api_functions.py
