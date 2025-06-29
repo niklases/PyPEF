@@ -118,7 +118,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         f'{max_muts},Sequence too long ({len(wt_seq)} > {MAX_WT_SEQUENCE_LENGTH})\n'
                     )
                 continue
-            ratio_input_vars_at_gaps = count_gap_variants / len(variants)
+            _ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
             try:
                 assert wt_seq == pdb_seq  # pdb_seq.startswith(wt_seq)
@@ -181,117 +181,127 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             ns_y_test = [len(variants)]
             ds = DatasetSplitter(csv_file=csv_path, n_cv=5)
-            for train_indices, test_indices in zip(
-                ds.random_splits_train_indices_combined, ds.random_splits_test_indices_combined
-            ):
-                try:
-                    x_dca_train, x_dca_test = np.asarray(x_dca)[train_indices], np.asarray(x_dca)[test_indices]
-                    x_llm_train_prosst, x_llm_test_prosst = np.asarray(x_prosst)[train_indices], np.asarray(x_prosst)[test_indices]
-                    x_llm_train_esm, x_llm_test_esm = np.asarray(x_esm)[train_indices], np.asarray(x_esm)[test_indices]
-                    y_train, y_test = np.asarray(fitnesses)[train_indices], np.asarray(fitnesses)[test_indices]
-                    prosst_lora_model_2 = copy.deepcopy(prosst_lora_model)
-                    prosst_optimizer = torch.optim.Adam(prosst_lora_model_2.parameters(), lr=0.0001)
-                    esm_lora_model_2 = copy.deepcopy(esm_lora_model)
-                    esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
-                    train_size, test_size = len(train_indices), len(test_indices)
-                    print('\nTRAIN SIZE:', train_size, 'TEST SIZE:', test_size, 
-                          '\n-------------------------------------------\n')
-                    get_vram()
-                except ValueError as e:
-                    print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
-                          f"cannot split the data in N_Train = {train_size} and N_Test "
-                          f"(N_Total - N_Train) [Excepted error: {e}].")
-                    for k in [np.nan, np.nan, np.nan]:
-                        hybrid_perfs.append(k)
-                    ns_y_test.append(np.nan)
-                    continue
-                (
-                    x_dca_train, 
-                    x_llm_train_prosst,
-                    x_llm_train_esm, 
-                    y_train,
-                ) = (
-                    reduce_by_batch_modulo(x_dca_train),  
-                    reduce_by_batch_modulo(x_llm_train_prosst),
-                    reduce_by_batch_modulo(x_llm_train_esm), 
-                    reduce_by_batch_modulo(y_train),
-                )
-                llm_dict_prosst = {
-                    'prosst': {
-                        'llm_base_model': prosst_base_model,
-                        'llm_model': prosst_lora_model_2,
-                        'llm_optimizer': prosst_optimizer,
-                        'llm_train_function': prosst_train,
-                        'llm_inference_function': get_logits_from_full_seqs,
-                        'llm_loss_function': corr_loss,
-                        'x_llm' : x_llm_train_prosst,
-                        'llm_attention_mask':  prosst_attention_mask,
-                        'input_ids': input_ids,
-                        'structure_input_ids': structure_input_ids
-                    }
-                }
-                llm_dict_esm = {
-                    'esm1v': {
-                        'llm_base_model': esm_base_model,
-                        'llm_model': esm_lora_model_2,
-                        'llm_optimizer': esm_optimizer,
-                        'llm_train_function': esm_train,
-                        'llm_inference_function': esm_infer,
-                        'llm_loss_function': corr_loss,
-                        'x_llm' : x_llm_train_esm,
-                        'llm_attention_mask':  esm_attention_mask
-                    }
-                }
-                print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
-                if len(y_test) <= 20: # TODO: 50
-                    print(f"Only {len(fitnesses)} in total, splitting the data "
-                          f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
-                          f"results in N_Test <= 50 variants - not getting "
-                          f"performance for N_Train = {len(y_train)}...")
-                    for k in [np.nan, np.nan, np.nan]:
-                        hybrid_perfs.append(k)
-                    ns_y_test.append(np.nan)
-                    continue
-                get_vram()
-                for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
-                    print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
+            temp_results = {}
+            for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
+                category = ["Random", "Modulo", "Continuous"][i_category]
+                temp_results.update({category: {}})
+                for i_split, (train_i, test_i) in enumerate(zip(
+                    train_indices, test_indices
+                )):
+                    temp_results[category].update({f'Split {i_split}': {}})
                     try:
-                        hm = DCALLMHybridModel(
-                            x_train_dca=np.array(x_dca_train), 
-                            y_train=y_train,
-                            llm_model_input=method,
-                            x_wt=x_wt
-                        )
-                        y_test_pred = hm.hybrid_prediction(
-                            x_dca=np.array(x_dca_test), 
-                            x_llm=[
-                                None, 
-                                np.asarray(x_llm_test_esm), 
-                                np.asarray(x_llm_test_prosst)
-                            ][i_m]
-                        )
-                        print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
-                        hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
-                    except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
-                        # or UnboundLocalError in prosst_lora_tune.py, line 167
-                        hybrid_perfs.append(np.nan)
-                ns_y_test.append(len(y_test_pred))
-                del prosst_lora_model_2
-                del esm_lora_model_2
-                torch.cuda.empty_cache()
-                gc.collect()
+                        x_dca_train, x_dca_test = np.asarray(x_dca)[train_i], np.asarray(x_dca)[test_i]
+                        x_llm_train_prosst, x_llm_test_prosst = np.asarray(x_prosst)[train_i], np.asarray(x_prosst)[test_i]
+                        x_llm_train_esm, x_llm_test_esm = np.asarray(x_esm)[train_i], np.asarray(x_esm)[test_i]
+                        y_train, y_test = np.asarray(fitnesses)[train_i], np.asarray(fitnesses)[test_i]
+                        prosst_lora_model_2 = copy.deepcopy(prosst_lora_model)
+                        prosst_optimizer = torch.optim.Adam(prosst_lora_model_2.parameters(), lr=0.0001)
+                        esm_lora_model_2 = copy.deepcopy(esm_lora_model)
+                        esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
+                        train_size, test_size = len(train_i), len(test_i)
+                        print('\nTRAIN SIZE:', train_size, 'TEST SIZE:', test_size, 
+                              '\n-------------------------------------------\n')
+                        get_vram()
+                    except ValueError as e:
+                        print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
+                              f"cannot split the data in N_Train = {train_size} and N_Test "
+                              f"(N_Total - N_Train) [Excepted error: {e}].")
+                        for k in [np.nan, np.nan, np.nan]:
+                            hybrid_perfs.append(k)
+                        ns_y_test.append(np.nan)
+                        continue
+                    (
+                        x_dca_train, 
+                        x_llm_train_prosst,
+                        x_llm_train_esm, 
+                        y_train,
+                    ) = (
+                        reduce_by_batch_modulo(x_dca_train),  
+                        reduce_by_batch_modulo(x_llm_train_prosst),
+                        reduce_by_batch_modulo(x_llm_train_esm), 
+                        reduce_by_batch_modulo(y_train),
+                    )
+                    llm_dict_prosst = {
+                        'prosst': {
+                            'llm_base_model': prosst_base_model,
+                            'llm_model': prosst_lora_model_2,
+                            'llm_optimizer': prosst_optimizer,
+                            'llm_train_function': prosst_train,
+                            'llm_inference_function': get_logits_from_full_seqs,
+                            'llm_loss_function': corr_loss,
+                            'x_llm' : x_llm_train_prosst,
+                            'llm_attention_mask':  prosst_attention_mask,
+                            'input_ids': input_ids,
+                            'structure_input_ids': structure_input_ids
+                        }
+                    }
+                    llm_dict_esm = {
+                        'esm1v': {
+                            'llm_base_model': esm_base_model,
+                            'llm_model': esm_lora_model_2,
+                            'llm_optimizer': esm_optimizer,
+                            'llm_train_function': esm_train,
+                            'llm_inference_function': esm_infer,
+                            'llm_loss_function': corr_loss,
+                            'x_llm' : x_llm_train_esm,
+                            'llm_attention_mask':  esm_attention_mask
+                        }
+                    }
+                    print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
+                    if len(y_test) <= 20: # TODO: 50
+                        print(f"Only {len(fitnesses)} in total, splitting the data "
+                              f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
+                              f"results in N_Test <= 50 variants - not getting "
+                              f"performance for N_Train = {len(y_train)}...")
+                        for k in [np.nan, np.nan, np.nan]:
+                            hybrid_perfs.append(k)
+                        ns_y_test.append(np.nan)
+                        continue
+                    get_vram()
+                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
+                        m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m]
+                        print('\n~~~ ' + m_str + ' ~~~')
+                        try:
+                            hm = DCALLMHybridModel(
+                                x_train_dca=np.array(x_dca_train), 
+                                y_train=y_train,
+                                llm_model_input=method,
+                                x_wt=x_wt
+                            )
+                            y_test_pred = hm.hybrid_prediction(
+                                x_dca=np.array(x_dca_test), 
+                                x_llm=[
+                                    None, 
+                                    np.asarray(x_llm_test_esm), 
+                                    np.asarray(x_llm_test_prosst)
+                                ][i_m]
+                            )
+                            print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
+                            temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})
+                        except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
+                            # or UnboundLocalError in prosst_lora_tune.py, line 167
+                            temp_results[category][f'Split {i_split}'].update({m_str: np.nan})
+                        for it in temp_results.items():
+                            print(it)
+                    ns_y_test.append(len(y_test_pred))
+                    del prosst_lora_model_2
+                    del esm_lora_model_2
+                    torch.cuda.empty_cache()
+                    gc.collect()
 
             dt = time.time() - start_time
-            dset_hybrid_perfs_i = ''
-            for hp in hybrid_perfs:
-                dset_hybrid_perfs_i += f'{hp},'
-            dset_ns_y_test_i = ''
-            for ns_y_t in ns_y_test:
-                dset_ns_y_test_i += f'{ns_y_t},'
-            with open(out_results_csv, 'a') as fh:
-                fh.write(
-                    f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
-                    f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n')
+            for it in temp_results.items():
+                print(it)
+            #dset_hybrid_perfs_i = ''
+            #for hp in hybrid_perfs:
+            #    dset_hybrid_perfs_i += f'{hp},'
+            #dset_ns_y_test_i = ''
+            #for ns_y_t in ns_y_test:
+            #    dset_ns_y_test_i += f'{ns_y_t},'
+            #with open(out_results_csv, 'a') as fh:
+            #    fh.write(
+            #        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
+            #        f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n')
                 
 
 def plot_csv_data(csv, plot_name):

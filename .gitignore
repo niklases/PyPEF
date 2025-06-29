@@ -40,6 +40,7 @@ scripts/ProteinGym_runs/single_point_mut_performance_violin.png
 scripts/ProteinGym_runs/multi_point_mut_performance_violin.png
 scripts/ProteinGym_runs/single_point_mut_performance.png
 scripts/ProteinGym_runs/multi_point_mut_performance.png
+scripts/ProteinGym_runs/model_saves/*
 
 scripts/ESM_finetuning/DMS_msa_files/
 scripts/ESM_finetuning/DMS_ProteinGym_substitutions/

@@ -79,7 +79,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
   # docker pull niklases/pypef:VERSION_TAG, e.g.
   docker pull niklases/pypef:0.4.2
   ```
-  a chained container command using the built Docker image can be run with e.g.:
+  a chained container command using the pulled Docker image can be run with e.g.:
   ```bash
   docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP niklases/pypef:0.4.2 /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
