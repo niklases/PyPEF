@@ -140,32 +140,45 @@ class DatasetSplitter:
 
         
     def plot_distributions(self):
-        _fig, axs = plt.subplots(nrows=3, ncols=self.n_cv, figsize=((self.max_pos - self.min_pos) * 0.1 * self.n_cv, 30))
+        fig, axs = plt.subplots(
+            nrows=4, ncols=self.n_cv, 
+            figsize=((self.max_pos - self.min_pos) * 0.1 * self.n_cv, 30), 
+            constrained_layout=True
+        )
+        poses, counts = self._get_distribution(sorted(list(self.df.index)))
+        for i in range(self.n_cv):
+            if i == self.n_cv // 2:
+                axs[0, i].set_title("All data")
+                axs[0, i].plot(poses, counts, color='black')
+                axs[0, i].set_ylim(0, 20)
+                axs[0, i].set_ylabel(f"# Amino acids")
+            else:
+                fig.delaxes(axs[0, i])
         for i_category, (train_indices, test_indices) in enumerate(self.get_all_split_indices()):
             category = ["Random", "Modulo", "Continuous"][i_category]
             for i_split in range(self.n_cv):
                 pos_train, counts_train = self._get_distribution(train_indices[i_split])
                 pos_test, counts_test = self._get_distribution(test_indices[i_split])
-                axs[i_category, i_split].plot(pos_train, counts_train)
-                axs[i_category, i_split].plot(pos_test, counts_test, color='black')
+                axs[i_category + 1, i_split].plot(pos_train, counts_train)
+                axs[i_category + 1, i_split].plot(pos_test, counts_test)
 
-                xticks = list(axs[i_category, i_split].get_xticks())
+                xticks = list(axs[i_category + 1, i_split].get_xticks())
                 if self.min_pos != 1 and not self.min_pos in xticks:
                     xticks.append(self.min_pos) 
                     xticks.append(self.max_pos)
                 xticks = sorted(xticks)
-                axs[i_category, i_split].set_xticks(xticks)
+                axs[i_category + 1, i_split].set_xticks(xticks)
                 if i_category == 0:
-                    axs[i_category, i_split].set_title(f"Split {i_split + 1}")
+                    axs[i_category + 1, i_split].set_title(f"Split {i_split + 1}")
                 if i_category == 2:
-                    axs[i_category, i_split].set_xlabel(f"Residue position")
+                    axs[i_category + 1, i_split].set_xlabel(f"Residue position")
                 if i_split == 0:
-                    axs[i_category, i_split].set_ylabel(f"# Amino acids")
+                    axs[i_category + 1, i_split].set_ylabel(f"# Amino acids")
                 if i_split == self.n_cv // 2:
-                    axs[i_category, i_split].set_title(category)
-                axs[i_category, i_split].set_ylim(0, 20)
-                
-        plt.tight_layout()
+                    axs[i_category + 1, i_split].set_title(category)
+                axs[i_category + 1, i_split].set_ylim(0, 20)
+        axs[0, self.n_cv // 2].set_xticks(xticks)
+        #plt.tight_layout()
         fig_path = path.abspath(path.splitext(path.basename(self.csv_file))[0] + '_pos_aa_distr.png')
         plt.savefig(fig_path, dpi=300)
         print(f"Saved figure as {fig_path}")

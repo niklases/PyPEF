@@ -181,6 +181,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             ns_y_test = [len(variants)]
             ds = DatasetSplitter(csv_file=csv_path, n_cv=5)
+            ds.plot_distributions()
             temp_results = {}
             for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
                 category = ["Random", "Modulo", "Continuous"][i_category]
