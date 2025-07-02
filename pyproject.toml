@@ -27,7 +27,7 @@ dependencies = [
     "numpy",
     "pandas",
     "tqdm",
-    "docopt",
+    "docopt-ng",
     "matplotlib",
     "scipy",
     "adjustText",

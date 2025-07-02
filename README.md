@@ -137,7 +137,7 @@ chmod a+x ./gui_setup.sh && ./gui_setup.sh
     - biopython
     - biotite
     - schema
-    - docopt
+    - docopt-ng
     - adjustText
 
 and optionally ray[default] and scikit-learn-intelex. LLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
