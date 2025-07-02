@@ -138,19 +138,21 @@ class DatasetSplitter:
             [self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined]
         ]
 
-        
     def plot_distributions(self):
         fig, axs = plt.subplots(
-            nrows=4, ncols=self.n_cv, 
-            figsize=((self.max_pos - self.min_pos) * 0.1 * self.n_cv, 30), 
+            nrows=4, ncols=self.n_cv,  
             constrained_layout=True
         )
+        fig.set_figwidth(30)
+        fig.set_figheight(10)
+        
         poses, counts = self._get_distribution(sorted(list(self.df.index)))
         for i in range(self.n_cv):
             if i == self.n_cv // 2:
                 axs[0, i].set_title("All data")
                 axs[0, i].plot(poses, counts, color='black')
                 axs[0, i].set_ylim(0, 20)
+                axs[0, i].set_xlim(self.min_pos - 4, self.max_pos + 4)
                 axs[0, i].set_ylabel(f"# Amino acids")
             else:
                 fig.delaxes(axs[0, i])
@@ -163,10 +165,14 @@ class DatasetSplitter:
                 axs[i_category + 1, i_split].plot(pos_test, counts_test)
 
                 xticks = list(axs[i_category + 1, i_split].get_xticks())
-                if self.min_pos != 1 and not self.min_pos in xticks:
-                    xticks.append(self.min_pos) 
-                    xticks.append(self.max_pos)
+                xticks = xticks[1:-1]
+                if 0 in xticks:
+                    xticks.remove(0)
+                xticks.append(self.min_pos) 
+                xticks.append(self.max_pos)
                 xticks = sorted(xticks)
+                if (xticks[-1] - xticks[-2]) < 0.5 * (xticks[2] - xticks[1]):
+                    xticks.pop()
                 axs[i_category + 1, i_split].set_xticks(xticks)
                 if i_category == 0:
                     axs[i_category + 1, i_split].set_title(f"Split {i_split + 1}")
@@ -177,11 +183,12 @@ class DatasetSplitter:
                 if i_split == self.n_cv // 2:
                     axs[i_category + 1, i_split].set_title(category)
                 axs[i_category + 1, i_split].set_ylim(0, 20)
+                axs[i_category + 1, i_split].set_xlim(self.min_pos - 4, self.max_pos + 4)
         axs[0, self.n_cv // 2].set_xticks(xticks)
-        #plt.tight_layout()
         fig_path = path.abspath(path.splitext(path.basename(self.csv_file))[0] + '_pos_aa_distr.png')
         plt.savefig(fig_path, dpi=300)
         print(f"Saved figure as {fig_path}")
+        plt.close(fig)
 
 
 if __name__ == '__main__':
