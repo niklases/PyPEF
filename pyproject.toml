@@ -52,8 +52,10 @@ Homepage = "https://github.com/niklases/PyPEF"
 
 [project.scripts]
 pypef = "pypef.main:run_main"
-pypef-gui = "pypef.gui.PyPEFGUIQtWindow:run_app"
+pypef-gui-cli = "pypef.gui.PyPEFGUIQtWindow:run_app"
 
+[project.gui-scripts]
+pypef-gui = "pypef.gui.PyPEFGUIQtWindow:run_app"
 
 [tool.setuptools.packages.find]
 where = ["."]

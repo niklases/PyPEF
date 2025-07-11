@@ -65,6 +65,18 @@ After successful installation, PyPEF should work by calling `pypef` in the shell
 pypef --help
 ```
 
+After installation, a rudimentary graphical user interface (GUI) can be invoked using the command
+
+```bash
+pypef-gui       # loading takes some seconds
+# command for extra debug/tqdm progress terminal window:
+#pypef-gui-cli  
+```
+
+<p align="center">
+  <img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
+</p>
+
 The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter notebook tutorial can be found below in the Tutorial section.
 A quick file setup and run test can be performed running files in [scripts/Setup](scripts/Setup) containing a Batch script for Windows and a Bash script for Linux (the latter requires conda, i.e. Miniconda3 or Anaconda3, already being installed).
 
@@ -97,30 +109,6 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
        python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
   ```
-
-
-<a name="gui-installation"></a>
-### GUI Installation
-
-A rudimentary graphical user interface (GUI) can be installed using the gui_setup.bat and gui_setup.sh scripts for Windows and Linux, respectively (which install PyPEF from PyPI and download and finally run `./gui/PyPEFGUIQtWindow.py`). Run these commands in a directory without any whitespaces:
-
-Windows (PowerShell)
-```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui_setup.bat -OutFile gui_setup.bat
-Invoke-WebRequest https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui/PyPEFGUIQtWindow.py -OutFile ( New-Item -Path ".\gui\PyPEFGUIQtWindow.py" -Force )
-.\gui_setup.bat
-```
-
-Linux
-```bash
-wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui_setup.sh -O gui_setup.sh
-mkdir -p ./gui/ && wget https://raw.githubusercontent.com/niklases/PyPEF/refs/heads/main/gui/PyPEFGUIQtWindow.py -O ./gui/PyPEFGUIQtWindow.py
-chmod a+x ./gui_setup.sh && ./gui_setup.sh
-```
-
-<p align="center">
-  <img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
-</p>
 
 <a name="requirements"></a>
 ## Requirements
