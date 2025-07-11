@@ -1,3 +1,5 @@
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
 
 import shutil
 import subprocess

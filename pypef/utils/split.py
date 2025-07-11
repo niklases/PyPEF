@@ -1,3 +1,5 @@
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
 
 
 import pandas as pd
@@ -5,6 +7,9 @@ from os import PathLike, path
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.model_selection import KFold
+
+import logging
+logger = logging.getLogger('pypef.utils.split')
 
 
 class DatasetSplitter:
@@ -109,15 +114,15 @@ class DatasetSplitter:
         """
         random_shape_train = [np.shape(k) for k in self.random_splits_train_indices_combined]
         random_shape_test = [np.shape(k) for k in self.random_splits_test_indices_combined]
-        print(f'Random train --> test split shapes: {random_shape_train} --> {random_shape_test}')
+        logger.info(f'Random train --> test split shapes: {random_shape_train} --> {random_shape_test}')
         
         modulo_shape_train = [np.shape(k) for k in self.modulo_splits_train_indices_combined]
         modulo_shape_test = [np.shape(k) for k in self.modulo_splits_test_indices_combined]
-        print(f'Modulo train --> test split shapes: {modulo_shape_train} --> {modulo_shape_test}')
+        logger.info(f'Modulo train --> test split shapes: {modulo_shape_train} --> {modulo_shape_test}')
         
         cont_shape_train = [np.shape(k) for k in self.cont_splits_train_indices_combined]
         cont_shape_test = [np.shape(k) for k in self.cont_splits_test_indices_combined]
-        print(f'Continuous train --> test split shapes: {cont_shape_train} --> {cont_shape_test}')
+        logger.info(f'Continuous train --> test split shapes: {cont_shape_train} --> {cont_shape_test}')
 
     def _get_zero_counts(self) -> dict:
         all_poses = np.asarray(range(self.min_pos, self.max_pos + 1))
@@ -187,11 +192,5 @@ class DatasetSplitter:
         axs[0, self.n_cv // 2].set_xticks(xticks)
         fig_path = path.abspath(path.splitext(path.basename(self.csv_file))[0] + '_pos_aa_distr.png')
         plt.savefig(fig_path, dpi=300)
-        print(f"Saved figure as {fig_path}")
+        logger.info(f"Saved figure as {fig_path}.")
         plt.close(fig)
-
-
-if __name__ == '__main__':
-    d = DatasetSplitter('C:\dev\DMS_ProteinGym_substitutions\BLAT_ECOLX_Stiffler_2015.csv')
-    d.print_shapes()
-    d.plot_distributions()

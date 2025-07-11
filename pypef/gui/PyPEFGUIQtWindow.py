@@ -1,5 +1,7 @@
-# PyPEF Qt GUI window using PySide6
+# PyPEF - Pythonic Protein Engineering Framework
 # https://github.com/niklases/PyPEF
+
+# PyPEF Qt GUI window using PySide6
 
 import sys
 from os import getcwd, cpu_count, chdir

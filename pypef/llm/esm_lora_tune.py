@@ -1,5 +1,5 @@
-# Niklas Siedhoff
 # PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
 
 # Using (training, testing/infering) ESM model(s) (e.g. ESM1v) published under 
 # MIT License
