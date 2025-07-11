@@ -1,8 +1,8 @@
 ## Table of Contents
 [PyPEF: Pythonic Protein Engineering Framework](#pypef-pythonic-protein-engineering-framework)
   - [Quick Installation](#quick-installation)
+    - [GUI](#gui)
     - [Setup and Run Docker Image](#setup-and-run-docker-image)
-    - [GUI Installation](#gui-installation)
   - [Requirements](#requirements)
   - [Running Examples](#running-examples)
   - [Tutorial](#tutorial)
@@ -64,6 +64,9 @@ After successful installation, PyPEF should work by calling `pypef` in the shell
 ```
 pypef --help
 ```
+
+<a name="gui"></a>
+### GUI
 
 After installation, a rudimentary graphical user interface (GUI) can be invoked using the command
 
