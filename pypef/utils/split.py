@@ -15,12 +15,11 @@ logger = logging.getLogger('pypef.utils.split')
 class DatasetSplitter:
     def __init__(
             self, 
-            csv_file: str | PathLike, 
+            df_or_csv_file: str | PathLike | pd.DataFrame, 
+            n_cv: int | None = None,
             mutation_column: str | None = None, 
-            separator: str | None = None, 
-            n_cv: int | None = None
+            separator: str | None = None
     ):
-        self.csv_file = csv_file
         if mutation_column is None:
             mutation_column = 'mutant'
         self.mutation_column = mutation_column
@@ -30,7 +29,10 @@ class DatasetSplitter:
         if n_cv is None:
             n_cv = 5
         self.n_cv = n_cv
-        self.df = pd.read_csv(self.csv_file, sep=self.separator)
+        if type(df_or_csv_file) == pd.DataFrame:
+            self.df = df_or_csv_file
+        else:
+            self.df = pd.read_csv(self.csv_file, sep=self.separator)
         self.random_splits_train_indices_combined, self.random_splits_test_indices_combined = None, None
         self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined = None, None
         self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined = None, None

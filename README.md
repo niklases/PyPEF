@@ -71,9 +71,9 @@ pypef --help
 After installation, a rudimentary graphical user interface (GUI) can be invoked using the command
 
 ```bash
-pypef-gui       # loading takes some seconds
-# command for extra debug/tqdm progress terminal window:
-#pypef-gui-cli  
+pypef-gui      # loading takes some seconds
+# or
+pypef-gui-cli  # command for keeping background debug/tqdm progress information in terminal on Windows
 ```
 
 <p align="center">
