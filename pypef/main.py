@@ -111,6 +111,7 @@ Converting a STO alignment file to A2M format:
 
 Usage:
     pypef mklsts --wt WT_FASTA --input CSV_FILE
+        [--random] [--modulo] [--cont] [--plot]
         [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]
         [--numrnd NUMBER] [--ls_proportion LS_PROPORTION]
     pypef mkps --wt WT_FASTA [--input CSV_FILE]
@@ -303,6 +304,7 @@ logger.addHandler(ch)
 schema = Schema({
     Optional('--all'): bool,
     Optional('--conc'): bool,
+    Optional('--cont'): bool,
     Optional('--csvaa'): bool,
     Optional('--ddiverse'): bool,
     Optional('--drecomb'): bool,
@@ -319,6 +321,7 @@ schema = Schema({
     Optional('--ls'): Or(None, str),
     Optional('--ls_proportion'): Or(None, Use(float)),
     Optional('--model'): Or(None, str),
+    Optional('--modulo'): bool,
     Optional('--msa'): Or(None, str),
     Optional('--mutation_sep'): Or(None, str),
     Optional('--negative'): bool,
@@ -331,7 +334,9 @@ schema = Schema({
     Optional('--params'): Or(None, str),
     Optional('--pdb'): Or(None, str),    
     Optional('--pmult'): bool,
+    Optional('--plot'): bool,
     Optional('--ps'): Or(None, str),
+    Optional('--random'): bool,
     Optional('--qdiverse'): bool,
     Optional('--qarecomb'): bool,
     Optional('--qirecomb'): bool,

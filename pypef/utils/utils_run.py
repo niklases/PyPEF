@@ -34,12 +34,19 @@ from pypef.hybrid.hybrid_model import plmc_or_gremlin_encoding
 
 
 def run_pypef_utils(arguments):
-    if arguments['mklsts'] or ['mklsts_rnd'] or ['mklsts_mod'] or ['mklsts_cont'] or ['mklsts_plot']:
+    if arguments['mklsts']:
         wt_sequence = get_wt_sequence(arguments['--wt'])
         t_drop = float(arguments['--drop'])
         ls_proportion = arguments['--ls_proportion']
         logger.info(f'Length of provided sequence: {len(wt_sequence)} amino acids.')
-        logger.info(f'Training set proportion (--ls_proportion): {ls_proportion}.')
+        if True in [
+            arguments['--random'], arguments['--modulo'], 
+            arguments['--cont'], arguments['--plot']
+        ]:
+            logger.info(f'Ignoring set proportion (--ls_proportion).')
+        else:
+            logger.info(f'Training set proportion (--ls_proportion): {ls_proportion}.')
+            
         df = drop_rows(arguments['--input'], amino_acids, t_drop, 
                        arguments['--sep'], arguments['--mutation_sep'])
         no_rnd = arguments['--numrnd']
@@ -49,7 +56,24 @@ def run_pypef_utils(arguments):
         if len(single_variants) == 0:
             logger.info('Found no single substitution variants for possible recombination!')
 
-        if arguments['mklsts']:
+        if True in [
+            arguments['--random'], arguments['--modulo'], 
+            arguments['--cont'], arguments['--plot']
+        ]:
+            ds = DatasetSplitter(df)
+            if arguments['--random']:
+                train_data, test_data = ds.get_random_df_split_data()
+                print(train_data)
+            elif arguments['--modulo']:
+                train_data, test_data = ds.get_modulo_df_split_data()
+                print(train_data)
+            elif arguments['--cont']:
+                train_data, test_data = ds.get_continuous_df_split_data()
+                print(train_data)
+            elif arguments['--plot']:
+                ds.print_shapes()
+                ds.plot_distributions() 
+        else:
             sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts(
                 single_variants, single_values, 
                 higher_variants, higher_values, 
@@ -57,10 +81,8 @@ def run_pypef_utils(arguments):
             )
             logger.info('Tip: You can edit your LS and TS datasets just by '
                         'cutting/pasting between the LS and TS fasta datasets.')
-
             make_fasta_ls_ts('LS.fasl', wt_sequence, sub_ls, val_ls)
             make_fasta_ls_ts('TS.fasl', wt_sequence, sub_ts, val_ts)
-
             try:
                 no_rnd = int(no_rnd)
             except ValueError:
@@ -77,19 +99,6 @@ def run_pypef_utils(arguments):
                     make_fasta_ls_ts('LS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ls, val_ls)
                     make_fasta_ls_ts('TS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ts, val_ts)
                     random_set_counter += 1
-        else:
-            ds = DatasetSplitter(df)
-            if arguments['mklsts_rnd']:
-                pass # TODO
-
-            elif arguments['mklsts_mod']:
-                pass # TODO
-
-            elif arguments['mklsts_cont']:
-                pass # TODO   
-
-            elif arguments['mklsts_plot']:
-                pass # TODO  
 
     elif arguments['mkps']:
         wt_sequence = get_wt_sequence(arguments['--wt'])

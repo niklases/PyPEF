@@ -17,22 +17,25 @@ class DatasetSplitter:
             self, 
             df_or_csv_file: str | PathLike | pd.DataFrame, 
             n_cv: int | None = None,
-            mutation_column: str | None = None, 
-            separator: str | None = None
+            mutation_column: str | None = None,
+            mutation_separator: str | None = None,
+            csv_separator: str | None = None
     ):
-        if mutation_column is None:
-            mutation_column = 'mutant'
         self.mutation_column = mutation_column
-        if separator is None:
-            separator = ','
-        self.separator = separator
+        if csv_separator is None:
+            csv_separator = ','
+        if mutation_separator is None:
+            mutation_separator = '/'
+        self.mutation_separator = mutation_separator
+        self.csv_separator = csv_separator
         if n_cv is None:
             n_cv = 5
         self.n_cv = n_cv
         if type(df_or_csv_file) == pd.DataFrame:
             self.df = df_or_csv_file
         else:
-            self.df = pd.read_csv(self.csv_file, sep=self.separator)
+            self.df = pd.read_csv(self.df_or_csv_file, sep=self.csv_separator)
+        print(f'Dataframe size: {self.df.shape[0]}')
         self.random_splits_train_indices_combined, self.random_splits_test_indices_combined = None, None
         self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined = None, None
         self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined = None, None
@@ -43,9 +46,23 @@ class DatasetSplitter:
     
     def order_by_pos(self):
         if self.mutation_column is None:
-            self.mutation_column = 'mutant'
-        variants = self.df[self.mutation_column].to_list()
-        self.df['variant_pos'] = [int(v[1:-1]) for v in variants]
+            variants = self.df.iloc[:, 0].to_list()
+        else:
+            variants = self.df[self.mutation_column].to_list()
+        single_mut_idxs = []
+        for i, variant in enumerate(variants):
+            if not self.mutation_separator in variant:
+                single_mut_idxs.append(i)
+        if single_mut_idxs:   
+            self.df = self.df.loc[single_mut_idxs, :]
+            if len(single_mut_idxs) != self.df.size:
+                print(f'Removed multimutated variants from dataframe... '
+                      f'new dataframe size: {self.df.shape[0]}')
+        if self.mutation_column is None:
+            variants = self.df.iloc[:, 0].to_list()
+        else:
+            variants = self.df[self.mutation_column].to_list()
+        self.df.loc[:, 'variant_pos'] = [int(v[1:-1]) for v in variants]
         self.df['substitutions'] = [v[-1] for v in variants]
         self.df.sort_values(['variant_pos', 'substitutions'], ascending=[True, True], inplace=True)
         self.min_pos, self.max_pos = self.df['variant_pos'].to_numpy()[0], self.df['variant_pos'].to_numpy()[-1]
@@ -144,6 +161,31 @@ class DatasetSplitter:
             [self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined],
             [self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined]
         ]
+    
+    def _get_df_split_data(self, combined_train_indices, combined_test_indices):
+        train_split_data, test_split_data = [], []
+        for train_split, test_split in zip(combined_train_indices, combined_test_indices):
+            train_split_data.append(self.df.iloc[train_split, :])
+            test_split_data.append(self.df.iloc[test_split, :])
+        return train_split_data, test_split_data
+    
+    def get_random_df_split_data(self):
+        return self._get_df_split_data(
+            self.random_splits_train_indices_combined, 
+            self.random_splits_test_indices_combined
+        )
+
+    def get_modulo_df_split_data(self):
+        return self._get_df_split_data(
+            self.modulo_splits_train_indices_combined, 
+            self.modulo_splits_test_indices_combined
+        )
+
+    def get_continuous_df_split_data(self):
+        return self._get_df_split_data(
+            self.cont_splits_train_indices_combined, 
+            self.cont_splits_test_indices_combined
+        )
 
     def plot_distributions(self):
         fig, axs = plt.subplots(
