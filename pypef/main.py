@@ -173,6 +173,8 @@ Options:
   --all                             Finally training on all data [default: False].
   --conc                            Concatenating mutational level variants for predicting variants
                                     from next higher level [default: False].
+  --cont                            Continuous splits in five-fold cross-validation fashion that 
+                                    split the data based on the positions of mutations.
   --csvaa                           Directed evolution csv amino acid substitutions,
                                     requires flag "--usecsv" [default: False].
   --ddiverse                        Create/predict double natural diverse variants [default: False].
@@ -197,6 +199,8 @@ Options:
   --llm LLM                         LLM model to use for hybrid modeling next to DCA (options are 'ESM1v' and 'ProSST').
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
+  --modulo                          Modulo-like splits in five-fold cross-validation fashion that 
+                                    split the data based on the positions of mutations.
   --msa MSA_FILE                    Multiple sequence alignment (MSA) in FASTA or A2M format for
                                     inferring DCA parameters.
   --mutation_sep MUTATION_SEP       Mutation separator [default: /].
@@ -214,6 +218,9 @@ Options:
                                     and couplings [default: 100].
   --params PARAM_FILE               Input PLMC couplings parameter file.
   --pdb PDB_FILE                    Input protein structure file in PDB format used for ProSST LLM modeling.
+  --plot                            Plot different five-fold dataset split distributions performed when using
+                                    the flags --random, --modulo, --cont with the mklsts command.
+  --random                          Random splits in five-fold cross-validation fashion.
   -u --pmult                        Predict for all prediction files in folder for recombinants
                                     or for diverse variants [default: False].
   -p --ps PREDICTION_SET            Prediction set for performing predictions using a trained Model.

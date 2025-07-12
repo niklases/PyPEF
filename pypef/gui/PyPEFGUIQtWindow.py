@@ -149,6 +149,7 @@ class MainWidget(QWidget):
         self.sig_start = Signal()  # needed only due to PyCharm debugger bug (!)
         self.llm = 'esm'
         self.regression_model = 'PLS'
+        self.mklsts_cv_method = ''
         self.c = 0
         self.ls_proportion = 0.8
         self.setMinimumSize(QSize(1400, 400))
@@ -167,6 +168,7 @@ class MainWidget(QWidget):
         self.llm_text = QLabel("LLM")
         self.regression_model_text =  QLabel("Regression model")
         self.utils_text = QLabel("Utilities")
+        self.mklsts_cv_options_text = QLabel("Cross-validation split options")
         self.dca_text = QLabel("DCA (unsupervised)")
         self.hybrid_text = QLabel("Hybrid (supervised DCA)")
         self.hybrid_dca_llm_text = QLabel("Hybrid (supervised DCA+LLM)")
@@ -215,7 +217,7 @@ class MainWidget(QWidget):
         self.slider.move(10, 105)
         self.slider.valueChanged.connect(self.selection_ls_proportion)
 
-        # Boxes ########################################################################
+        # ComboBoxes ########################################################################
         self.box_regression_model = QComboBox()
         self.regression_models = [
             'PLS', 'PLS_LOOCV', 'Ridge', 'Lasso', 'ElasticNet', 'SVR', 'RF', 'MLP'
@@ -232,6 +234,15 @@ class MainWidget(QWidget):
         self.box_llm.addItems(['ESM1v', 'ProSST'])
         self.box_llm.currentIndexChanged.connect(self.selection_llm_model)
         self.box_llm.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
+
+        self.box_mklsts_cv = QComboBox()
+        self.box_mklsts_cv.addItems([
+            'None', 'Random split', 'Modulo split', 
+            'Continuous split', 'Plot distribution'
+        ])
+        self.box_mklsts_cv.currentIndexChanged.connect(self.selection_mklsts_splits)
+        self.box_mklsts_cv.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
+
         
         # Buttons ######################################################################
         # Utilities
@@ -527,6 +538,8 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_mklsts, 5, 0, 1, 1)
         layout.addWidget(self.button_mkps, 6, 0, 1, 1)
 
+        layout.addWidget(self.mklsts_cv_options_text, 1, 1, 1, 1)
+        layout.addWidget(self.box_mklsts_cv, 2, 1, 1, 1)
         layout.addWidget(self.dca_text, 3, 1, 1, 1)
         layout.addWidget(self.button_dca_inference_gremlin, 4, 1, 1, 1)
         layout.addWidget(self.button_dca_inference_gremlin_msa_info, 5, 1, 1, 1)
@@ -641,6 +654,11 @@ class MainWidget(QWidget):
     def selection_llm_model(self, i):
         self.llm = ['esm', 'prosst'][i]
 
+    def selection_mklsts_splits(self, i):
+        self.mklsts_cv_method = [
+            '', '--random', '--modulo', '--cont', '--plot'
+        ][i]
+
     def selection_ls_proportion(self, value):
         self.ls_proportion = value / 100
         self.slider_text.setText(
@@ -680,7 +698,7 @@ class MainWidget(QWidget):
             self.version_text.setText("Running MKLSTS...")
             self.cmd = (
                 f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} '
-                f'--ls_proportion {self.ls_proportion}'
+                f'--ls_proportion {self.ls_proportion} {self.mklsts_cv_method}'
             )
             self.start_threads()
         else:

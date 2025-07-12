@@ -116,7 +116,8 @@ def get_variants(
         df,
         amino_acids,
         wild_type_sequence,
-        mutation_sep: str = '/'
+        mutation_sep: str = '/',
+        verbose=True
 ):
     """
     Gets variants and divides and counts the variant data for single substituted
@@ -202,12 +203,13 @@ def get_variants(
                 single_variants.append([full_variant])
                 if i not in index_lower:
                     index_lower.append(i)
-    logger.info(
-        'Single (for mklsts if provided plus WT): {}, Double: {}, Triple: {}, Quadruple: {}, Quintuple: {}, '
-        'Sextuple: {}, Septuple: {}, Octuple: {}, Nonuple: {}, Decuple: {}, Higher (>Decuple): {}'.format(
-            single, double, triple, quadruple, quintuple, sextuple, septuple, octuple, nonuple, decuple, higher
+    if verbose:
+        logger.info(
+            'Single (for mklsts if provided plus WT): {}, Double: {}, Triple: {}, Quadruple: {}, Quintuple: {}, '
+            'Sextuple: {}, Septuple: {}, Octuple: {}, Nonuple: {}, Decuple: {}, Higher (>Decuple): {}'.format(
+                single, double, triple, quadruple, quintuple, sextuple, septuple, octuple, nonuple, decuple, higher
+            )
         )
-    )
     for vals in y[index_higher]:
         higher_values.append(vals)
     for vals in y[index_lower]:

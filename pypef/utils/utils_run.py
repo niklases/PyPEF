@@ -60,19 +60,37 @@ def run_pypef_utils(arguments):
             arguments['--random'], arguments['--modulo'], 
             arguments['--cont'], arguments['--plot']
         ]:
-            ds = DatasetSplitter(df)
+            ds = DatasetSplitter(df, mutation_separator=arguments['--mutation_sep'])
             if arguments['--random']:
                 train_data, test_data = ds.get_random_df_split_data()
-                print(train_data)
+                cv_technique = 'random'
             elif arguments['--modulo']:
                 train_data, test_data = ds.get_modulo_df_split_data()
-                print(train_data)
+                cv_technique = 'modulo'
             elif arguments['--cont']:
                 train_data, test_data = ds.get_continuous_df_split_data()
-                print(train_data)
+                cv_technique = 'continuous'
             elif arguments['--plot']:
                 ds.print_shapes()
                 ds.plot_distributions() 
+            if not arguments['--plot']:
+                for i_cv, (train_set, test_set) in enumerate(zip(train_data, test_data)):
+                    single_variants_train, single_values_train, _, _ = get_variants(
+                        train_set, amino_acids, wt_sequence, 
+                        arguments['--mutation_sep'], verbose=False
+                    )
+                    single_variants_test, single_values_test, _, _ = get_variants(
+                        test_set, amino_acids, wt_sequence, 
+                        arguments['--mutation_sep'], verbose=False
+                    )
+                    make_fasta_ls_ts(
+                        f'LS_{cv_technique}_{i_cv + 1 }.fasl', wt_sequence, 
+                        single_variants_train, single_values_train
+                    )
+                    make_fasta_ls_ts(
+                        f'TS_{cv_technique}_{i_cv + 1 }.fasl', wt_sequence, 
+                        single_variants_test, single_values_test
+                    )
         else:
             sub_ls, val_ls, sub_ts, val_ts = make_sub_ls_ts(
                 single_variants, single_values, 
@@ -96,8 +114,8 @@ def run_pypef_utils(arguments):
                         higher_variants, higher_values,
                         ls_proportion
                     )
-                    make_fasta_ls_ts('LS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ls, val_ls)
-                    make_fasta_ls_ts('TS_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ts, val_ts)
+                    make_fasta_ls_ts('LS_default_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ls, val_ls)
+                    make_fasta_ls_ts('TS_default_random_' + str(random_set_counter) + '.fasl', wt_sequence, sub_ts, val_ts)
                     random_set_counter += 1
 
     elif arguments['mkps']:
