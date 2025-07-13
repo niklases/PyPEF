@@ -131,7 +131,8 @@ Usage:
     pypef shift_pos --input CSV_FILE --offset OFFSET
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-    pypef hybrid --params PARAM_FILE
+    pypef hybrid 
+        [--params PARAM_FILE]
         [--model MODEL]
         [--ts TEST_SET] [--ps PREDICTION_SET]
         [--ls LEARNING_SET] [--label] 

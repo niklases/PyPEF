@@ -970,41 +970,6 @@ def performance_ls_ts(
         label=False,
         device: str| None = None
 ):
-    """
-    Description
-    -----------
-    Computes performance based on a (linear) regression model trained
-    on the training set by optimizing model hyperparameters based on
-    validation performances on training subsets (default: 5-fold CV)
-    and predicting test set entries using the hyperparmeter-tuned model
-    to estimate performance for model generalization.
-
-    Parameters
-    -----------
-    ls_fasta: str
-        Fasta-like file with fitness values. Will be read and extracted
-        for training the regressor.
-    ts_fasta: str
-        Fasta-like file with fitness values. Used for computing performance
-        of the tuned regressor for test set entries (performance metric of
-        measured and predicted fitness values).
-    threads: int
-        Number of threads to use for parallel computing using Ray.
-    params_file: str
-        PLMC parameter file (containing evolutionary, i.e. MSA-based local
-        and coupling terms.
-    model: str
-        Model to load for TS prediction.
-    separator: str
-        Character to split the variant to obtain the single substitutions
-        (default='/').
-
-    Returns
-    -----------
-    None
-        Just plots test results (predicted fitness vs. measured fitness)
-        using def plot_y_true_vs_y_pred.
-    """
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
     if ls_fasta is not None and ts_fasta is not None:
@@ -1059,7 +1024,9 @@ def performance_ls_ts(
         model_pickle_file is not None 
         and params_file is not None
         ):
-        # # no LS provided --> statistical modeling / no ML
+         # no LS provided but hybrid model provided for 
+         # individual beta contributed zero shot predictions
+        
         logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
         if not model_type.startswith('Hybrid'):  # same as below in next elif
@@ -1086,55 +1053,60 @@ def performance_ls_ts(
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
     
-    # no LS provided --> statistical modeling / no ML
-    elif ts_fasta is not None and model_pickle_file is None:  
-        logger.info(f"No learning set provided, falling back to statistical DCA model: "
-              f"no adjustments of individual hybrid model parameters (\"beta's\").")
-        test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
-        (
-            x_test, test_variants, test_sequences, 
-            y_test, x_wt, model, model_type
-        ) = plmc_or_gremlin_encoding(
-            test_variants, test_sequences, y_test, 
-            params_file, substitution_sep, threads
+    elif ts_fasta is not None and model_pickle_file is None:
+        # no LS and no hybrid model provided:
+        # statistical modeling / no ML / zero-shot LLM predictions
+        logger.info(
+            f"No learning set provided, falling back to statistical DCA model: "
+            f"no adjustments of individual hybrid model parameters (\"beta's\")."
         )
-        logger.info(f"Initial test set variants: {len(test_sequences)}. "
-              f"Remaining: {len(test_variants)} (after removing "
-              f"substitutions at gap positions).")
-        y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
-        if llm == 'esm':
-            llm_dict = esm_setup(test_sequences)
-            x_llm_test = llm_embedder(llm_dict, test_sequences)
-            y_test_pred_llm = llm_dict['esm1v']['llm_inference_function'](
-                xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
-                attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
-                model=llm_dict['esm1v']['llm_base_model'], 
-                device=device
-            ).cpu()
-            plot_y_true_vs_y_pred(
-                np.array(y_test), np.array(y_test_pred_llm), np.array(test_variants), 
-                label=label, hybrid=True, name=f'ESM1v_no_ML'
+        test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
+        logger.info(
+            f"Initial test set variants: {len(test_sequences)}. "
+            f"Remaining: {len(test_variants)} (after removing "
+            f"substitutions at gap positions)."
+        )
+        if params_file is not None:
+            logger.info("DCA inference on test set...")
+            (
+                x_test, test_variants, test_sequences, 
+                y_test, x_wt, model, model_type
+            ) = plmc_or_gremlin_encoding(
+                test_variants, test_sequences, y_test, 
+                params_file, substitution_sep, threads
             )
-        elif llm == 'prosst':
-            llm_dict = prosst_setup(
-                wt_seq, pdb_file, sequences=test_sequences)
-            x_llm_test = llm_embedder(llm_dict, test_sequences)
-            y_test_pred_llm = llm_dict['prosst']['llm_inference_function'](
-                xs=x_llm_test, 
-                model=llm_dict['prosst']['llm_base_model'], 
-                input_ids=llm_dict['prosst']['input_ids'], 
-                attention_mask=llm_dict['prosst']['llm_attention_mask'], 
-                structure_input_ids=llm_dict['prosst']['structure_input_ids'],
-                device=device
-            ).cpu()
-            plot_y_true_vs_y_pred(
-                np.array(y_test), np.array(y_test_pred_llm), np.array(test_variants), 
-                label=label, hybrid=True, name=f'ProSST_no_ML'
-            )
-        save_model_to_dict_pickle(model, model_type)
-        model_type = f'{model_type}_no_ML'
+            y_test_pred = get_delta_e_statistical_model(x_test, x_wt)
+            save_model_to_dict_pickle(model, model_type)
+            model_type = f'{model_type}_no_ML'
+        else:
+            model_type = 'LLM'
+            if llm == 'esm':
+                logger.info("Zero-shot LLM inference on test set using ESM1v...")
+                llm_dict = esm_setup(test_sequences)
+                x_llm_test = llm_embedder(llm_dict, test_sequences)
+                y_test_pred = llm_dict['esm1v']['llm_inference_function'](
+                    xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
+                    attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
+                    model=llm_dict['esm1v']['llm_base_model'], 
+                    device=device
+                ).cpu()
+            elif llm == 'prosst':
+                logger.info("Zero-shot LLM inference on test set using ProSST...")
+                llm_dict = prosst_setup(
+                    wt_seq, pdb_file, sequences=test_sequences)
+                x_llm_test = llm_embedder(llm_dict, test_sequences)
+                y_test_pred = llm_dict['prosst']['llm_inference_function'](
+                    xs=x_llm_test, 
+                    model=llm_dict['prosst']['llm_base_model'], 
+                    input_ids=llm_dict['prosst']['input_ids'], 
+                    attention_mask=llm_dict['prosst']['llm_attention_mask'], 
+                    structure_input_ids=llm_dict['prosst']['structure_input_ids'],
+                    device=device
+                ).cpu()
+            else:
+                raise RuntimeError("Unknown --llm flag option.")
     else:
-        raise SystemError('No test set given for performance estimation.')
+        raise RuntimeError('No test set given for performance estimation.')
     if llm is None or llm == '':
         llm = ''
     else:
