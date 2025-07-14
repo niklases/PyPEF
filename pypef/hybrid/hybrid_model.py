@@ -35,8 +35,10 @@ from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import esm_tokenize_sequences, get_batches, esm_setup, get_esm_models
-from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup, prosst_tokenize_sequences
+from pypef.llm.esm_lora_tune import esm_setup, get_esm_models
+from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup
+from pypef.llm.inference import llm_embedder, inference
+from pypef.llm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
 # will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
@@ -65,7 +67,8 @@ class DCALLMHybridModel:
             batch_size: int | None = None,
             llm_train: bool = True,
             device: str | None = None,
-            seed: int | None = None
+            seed: int | None = None,
+            verbose: bool = True
     ):
         if llm_model_input is not None:
             if type(llm_model_input) is not dict:
@@ -124,6 +127,7 @@ class DCALLMHybridModel:
             batch_size = 5
         self.batch_size = batch_size
         self.llm_train = llm_train
+        self.verbose = verbose
         (
             self.ridge_opt, 
             self.beta1, 
@@ -444,7 +448,8 @@ class DCALLMHybridModel:
                 self.llm_attention_mask,  
                 self.structure_input_ids,
                 n_epochs=50, 
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
@@ -452,7 +457,8 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
@@ -460,7 +466,8 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
         elif self.llm_key == 'esm1v':
             # xs, attns, scores, loss_fn, model, optimizer
@@ -472,19 +479,22 @@ class DCALLMHybridModel:
                 self.llm_model,
                 self.llm_optimizer,  
                 n_epochs=5, 
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=x_llm_ttrain_b,
                 model=self.llm_model,
                 attention_mask=self.llm_attention_mask,
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
                 xs=x_llm_ttest_b,
                 model=self.llm_model,
                 attention_mask=self.llm_attention_mask,
-                device=self.device
+                device=self.device,
+                verbose=self.verbose
             )
         logger.info(
             f"{self.llm_key.upper()} supervised tuned performance: "
@@ -938,25 +948,6 @@ def remove_gap_pos(
     return variants_v, sequences_v, fitnesses_v
 
 
-def llm_embedder(llm_dict, seqs, verbose=True):
-    try:
-        np.shape(seqs)
-    except ValueError:
-        raise SystemError("Unequal input sequence length detected!")
-    if list(llm_dict.keys())[0] == 'esm1v':
-        x_llm_seqs, _attention_mask = esm_tokenize_sequences(
-            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
-            max_length=len(seqs[0]), verbose=verbose
-        )
-    elif list(llm_dict.keys())[0] == 'prosst':
-        x_llm_seqs = prosst_tokenize_sequences(
-            seqs, vocab=llm_dict['prosst']['llm_vocab'], verbose=verbose
-        )
-    else:
-        raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
-    return x_llm_seqs
-
-
 def performance_ls_ts(
         ls_fasta: str | None,
         ts_fasta: str | None,
@@ -1023,10 +1014,9 @@ def performance_ls_ts(
         ts_fasta is not None and 
         model_pickle_file is not None 
         and params_file is not None
-        ):
-         # no LS provided but hybrid model provided for 
-         # individual beta contributed zero shot predictions
-        
+    ):
+        # no LS provided but hybrid model provided for 
+        # individual beta contributed zero shot predictions
         logger.info(f'Taking model from saved model (Pickle file): {model_pickle_file}...')
         model, model_type = get_model_and_type(model_pickle_file)
         if not model_type.startswith('Hybrid'):  # same as below in next elif
@@ -1054,7 +1044,7 @@ def performance_ls_ts(
                 y_test_pred = model.hybrid_prediction(x_test)
     
     elif ts_fasta is not None and model_pickle_file is None:
-        # no LS and no hybrid model provided:
+        # no LS and *no hybrid model* provided:
         # statistical modeling / no ML / zero-shot LLM predictions
         logger.info(
             f"No learning set provided, falling back to statistical DCA model: "
@@ -1082,27 +1072,10 @@ def performance_ls_ts(
             model_type = 'LLM'
             if llm == 'esm':
                 logger.info("Zero-shot LLM inference on test set using ESM1v...")
-                llm_dict = esm_setup(test_sequences)
-                x_llm_test = llm_embedder(llm_dict, test_sequences)
-                y_test_pred = llm_dict['esm1v']['llm_inference_function'](
-                    xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
-                    attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
-                    model=llm_dict['esm1v']['llm_base_model'], 
-                    device=device
-                ).cpu()
+                y_test_pred = inference(test_sequences, llm)
             elif llm == 'prosst':
                 logger.info("Zero-shot LLM inference on test set using ProSST...")
-                llm_dict = prosst_setup(
-                    wt_seq, pdb_file, sequences=test_sequences)
-                x_llm_test = llm_embedder(llm_dict, test_sequences)
-                y_test_pred = llm_dict['prosst']['llm_inference_function'](
-                    xs=x_llm_test, 
-                    model=llm_dict['prosst']['llm_base_model'], 
-                    input_ids=llm_dict['prosst']['input_ids'], 
-                    attention_mask=llm_dict['prosst']['llm_attention_mask'], 
-                    structure_input_ids=llm_dict['prosst']['structure_input_ids'],
-                    device=device
-                ).cpu()
+                y_test_pred = inference(test_sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)
             else:
                 raise RuntimeError("Unknown --llm flag option.")
     else:
@@ -1117,13 +1090,16 @@ def performance_ls_ts(
     )
 
 
-def predict_ps(  # also predicting "pmult" dict directories
+def predict_ps(
         prediction_dict: dict,
         threads: int,
         separator: str,
-        model_pickle_file: str,
-        params_file: str = None,
-        prediction_set: str = None,
+        model_pickle_file: str | None = None,
+        params_file: str | None = None,
+        prediction_set: str | None = None,
+        llm: str | None = None,
+        pdb_file: str | None = None,
+        wt_seq: str | None = None,
         negative: bool = False
 ):
     """
@@ -1144,7 +1120,7 @@ def predict_ps(  # also predicting "pmult" dict directories
         than predicts prediction files that are present in this directory, e.g.
         in directory './Recomb_Double_Split'.
     params_file: str
-        PLMC couplings parameter file
+        PLMC/GREMLIN couplings parameter file
     threads: int
         Threads used for parallelization for DCA-based sequence encoding
     separator: str
@@ -1175,16 +1151,19 @@ def predict_ps(  # also predicting "pmult" dict directories
         in the respective created folders).
 
     """
-    if model_pickle_file is None:
+    dca_modeling = False
+    if model_pickle_file is None and params_file is not None:
         model_pickle_file = params_file
         logger.info(f'Trying to load model from saved parameters (Pickle file): {model_pickle_file}...')
-    else:
+        dca_modeling = True
+    elif params_file is not None:
         logger.info(f'Loading model from saved model (Pickle file {model_pickle_file})...')
-    model, model_type = get_model_and_type(model_pickle_file)
-
-    if model_type == 'PLMC' or model_type == 'GREMLIN':
-        logger.info(f'Found {model_type} model file. No hybrid model provided - '
-              f'falling back to a statistical DCA model...')
+        dca_modeling = True
+    if dca_modeling:
+        model, model_type = get_model_and_type(model_pickle_file)
+        if model_type == 'PLMC' or model_type == 'GREMLIN':
+            logger.info(f'Found {model_type} model file. No hybrid model provided - '
+                        f'falling back to a statistical DCA model...')
 
     pmult = [
         'Recomb_Double_Split', 'Recomb_Triple_Split', 'Recomb_Quadruple_Split',
@@ -1235,24 +1214,36 @@ def predict_ps(  # also predicting "pmult" dict directories
     elif prediction_set is not None:  # Predicting single FASTA file sequences
         sequences, variants, _ = get_sequences_from_file(prediction_set)
         # NaNs are already being removed by the called function
-        if not model_type.startswith('Hybrid'):  # statistical DCA model
-            xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
-                variants, sequences, None, params_file,
-                threads=threads, verbose=False, substitution_sep=separator
-            )
-            ys_pred = get_delta_e_statistical_model(xs, x_wt)
-        else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
-            xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
-                variants, sequences, None, params_file,
-                threads=threads, verbose=True, substitution_sep=separator
-            )
-            if model.llm_key is None:
-                ys_pred = model.hybrid_prediction(xs)
-            else:
-                sequences = [str(seq) for seq in sequences]
-                xs_llm = llm_embedder(model.llm_model_input, sequences)
-                ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
-        assert len(xs) == len(variants) == len(ys_pred)
+        if not dca_modeling:  # model_pickle_file is None and params_file is None:
+            # *No hybrid model* and no DCA params provided:
+            # Zero-shot LLM predictions
+            if llm == 'esm':
+                model_type = 'LLM_ESM1v'
+                logger.info("Zero-shot LLM inference on test set using ESM1v...")
+                ys_pred = inference(sequences, llm)
+            elif llm == 'prosst':
+                model_type = 'LLM_ProSST'
+                logger.info("Zero-shot LLM inference on test set using ProSST...")
+                ys_pred = inference(sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)
+        else:
+            if not model_type.startswith('Hybrid'):  # statistical DCA model
+                xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
+                    variants, sequences, None, params_file,
+                    threads=threads, verbose=False, substitution_sep=separator
+                )
+                ys_pred = get_delta_e_statistical_model(xs, x_wt)
+            else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
+                xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
+                    variants, sequences, None, params_file,
+                    threads=threads, verbose=True, substitution_sep=separator
+                )
+                if model.llm_key is None:
+                    ys_pred = model.hybrid_prediction(xs)
+                else:
+                    sequences = [str(seq) for seq in sequences]
+                    xs_llm = llm_embedder(model.llm_model_input, sequences)
+                    ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
+            assert len(xs) == len(variants) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
         predictions_out(

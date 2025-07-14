@@ -1,0 +1,71 @@
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
+
+# Some helper functions for infernece of different models 
+# based on simple/wrapping functions
+
+import numpy as np
+
+from pypef.llm.utils import get_batches
+from pypef.llm.esm_lora_tune import esm_setup, esm_tokenize_sequences
+from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
+
+import logging
+logger = logging.getLogger('pypef.llm.inference')
+
+
+def llm_embedder(llm_dict, seqs, verbose=True):
+    try:
+        np.shape(seqs)
+    except ValueError:
+        raise SystemError("Unequal input sequence length detected!")
+    if list(llm_dict.keys())[0] == 'esm1v':
+        x_llm_seqs, _attention_mask = esm_tokenize_sequences(
+            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
+            max_length=len(seqs[0]), verbose=verbose
+        )
+    elif list(llm_dict.keys())[0] == 'prosst':
+        x_llm_seqs = prosst_tokenize_sequences(
+            seqs, vocab=llm_dict['prosst']['llm_vocab'], verbose=verbose
+        )
+    else:
+        raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
+    return x_llm_seqs
+
+
+def inference(
+        sequences,
+        llm: str,
+        pdb_file: str | None = None,
+        wt_seq: str | None = None,
+        device: str| None = None
+):
+    """
+    Inference of base models.
+    """
+    if llm == 'esm':
+        logger.info("Zero-shot LLM inference on test set using ESM1v...")
+        llm_dict = esm_setup(sequences)
+        x_llm_test = llm_embedder(llm_dict, sequences)
+        y_test_pred = llm_dict['esm1v']['llm_inference_function'](
+            xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
+            attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
+            model=llm_dict['esm1v']['llm_base_model'], 
+            device=device
+        ).cpu()
+    elif llm == 'prosst':
+        logger.info("Zero-shot LLM inference on test set using ProSST...")
+        llm_dict = prosst_setup(
+            wt_seq, pdb_file, sequences=sequences)
+        x_llm_test = llm_embedder(llm_dict, sequences)
+        y_test_pred = llm_dict['prosst']['llm_inference_function'](
+            xs=x_llm_test, 
+            model=llm_dict['prosst']['llm_base_model'], 
+            input_ids=llm_dict['prosst']['input_ids'], 
+            attention_mask=llm_dict['prosst']['llm_attention_mask'], 
+            structure_input_ids=llm_dict['prosst']['structure_input_ids'],
+            device=device
+        ).cpu()
+    else:
+        raise RuntimeError("Unknown LLM option.")
+    return y_test_pred

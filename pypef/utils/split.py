@@ -21,6 +21,7 @@ class DatasetSplitter:
             mutation_separator: str | None = None,
             csv_separator: str | None = None
     ):
+        self.df_or_csv_file = df_or_csv_file
         self.mutation_column = mutation_column
         if csv_separator is None:
             csv_separator = ','
@@ -32,7 +33,7 @@ class DatasetSplitter:
             n_cv = 5
         self.n_cv = n_cv
         if type(df_or_csv_file) == pd.DataFrame:
-            self.df = df_or_csv_file
+            self.df = self.df_or_csv_file
             self.fig_path = path.abspath('CV_split_pos_aa_distr.png')
         else:
             self.df = pd.read_csv(self.df_or_csv_file, sep=self.csv_separator)
@@ -219,8 +220,8 @@ class DatasetSplitter:
             for i_split in range(self.n_cv):
                 pos_train, counts_train = self._get_distribution(train_indices[i_split])
                 pos_test, counts_test = self._get_distribution(test_indices[i_split])
-                axs[i_category + 1, i_split].plot(pos_train, counts_train)
-                axs[i_category + 1, i_split].plot(pos_test, counts_test)
+                axs[i_category + 1, i_split].plot(pos_train, counts_train, '--o', markersize=1.2)
+                axs[i_category + 1, i_split].plot(pos_test, counts_test, '--o', markersize=1.2)
 
                 xticks = list(axs[i_category + 1, i_split].get_xticks())
                 xticks = xticks[1:-1]

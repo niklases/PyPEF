@@ -71,6 +71,9 @@ def run_pypef_hybrid_modeling(arguments):
             separator=arguments['--mutation_sep'],
             model_pickle_file=arguments['--model'],
             prediction_set=arguments['--ps'],
+            llm=arguments['--llm'],
+            pdb_file=arguments['--pdb'],
+            wt_seq=get_wt_sequence(arguments['--wt']),
             negative=arguments['--negative']
         )
 

@@ -31,6 +31,7 @@ hf_logging.set_verbosity_error()
 from transformers import EsmForMaskedLM, EsmTokenizer
 
 from pypef.utils.helpers import get_device
+from pypef.llm.utils import corr_loss
 
 
 def get_esm_models():
@@ -78,53 +79,9 @@ def get_y_pred_scores(encoded_sequences, attention_masks,
             log_probs = torch.cat(
                 (log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
     return log_probs
-
-
-def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
-    res_true = y_true - torch.mean(y_true)
-    res_pred = y_pred - torch.mean(y_pred)
-    cov = torch.mean(res_true * res_pred)
-    var_true = torch.mean(res_true**2)
-    var_pred = torch.mean(res_pred**2)
-    sigma_true = torch.sqrt(var_true)
-    sigma_pred = torch.sqrt(var_pred)
-    return - cov / (sigma_true * sigma_pred)
-
-
-def get_batches(a, dtype, batch_size=5, 
-                keep_numpy: bool = False, keep_remaining=False, verbose: bool = False):
-    a = np.asarray(a, dtype=dtype)
-    orig_shape = np.shape(a)
-    remaining = len(a) % batch_size
-    if remaining != 0:
-        if len(a) > batch_size:
-            a = a[:-remaining]
-            a_remaining = a[-remaining:]
-        else:
-            logger.info(f"Batch size greater than or equal to total array length: "
-                  f"returning full array (of shape: {np.shape(a)})...")
-            if keep_remaining:
-                return list(a)
-            else:
-                return a
-    if len(orig_shape) == 2:
-        a = a.reshape(np.shape(a)[0] // batch_size, batch_size, np.shape(a)[1])
-    else:  # elif len(orig_shape) == 1:
-        a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
-    new_shape = np.shape(a)
-    if verbose:
-        logger.info(f'{orig_shape} -> {new_shape}  (dropped {remaining})')
-    if keep_remaining: # Returning a list
-        a = list(a)
-        logger.info('Adding dropped back to batches as last batch...')
-        a.append(a_remaining)
-        return a
-    if keep_numpy:
-        return a
-    return torch.Tensor(a).to(dtype)
     
 
-def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = None):
+def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = None, verbose: bool = True):
     if device is None:
         device = get_device()
     attention_masks = torch.Tensor(np.full(
@@ -135,7 +92,7 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
         torch.Tensor(xs).to(device), attention_masks.to(device), 
         torch.Tensor(scores).to(torch.float).to(device)
     )
-    pbar_epochs = tqdm(zip(xs, attention_masks, scores), total=len(xs))
+    pbar_epochs = tqdm(zip(xs, attention_masks, scores), total=len(xs), disable=not verbose)
     for i ,(xs_b, attns_b, scores_b) in enumerate(pbar_epochs):
         xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
         with torch.no_grad():
@@ -166,7 +123,8 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=True
         logger.info(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(
         zip(xs, attention_masks), total=len(xs), 
-        desc="ESM inference - processing sequences", disable=not verbose
+        desc="ESM inference - processing sequences",
+        disable=not verbose
     )):
         xs_b = xs_b.to(torch.int64)
         with torch.no_grad():
@@ -179,7 +137,7 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=True
 
 
 def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
-              device: str | None = None, seed: int | None = None):
+              device: str | None = None, seed: int | None = None, verbose: bool = True):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -198,7 +156,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
         except AttributeError:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
         model.train()
-        pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False)
+        pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False, disable=not verbose)
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)

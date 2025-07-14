@@ -159,7 +159,7 @@ class MainWidget(QWidget):
         self.__workers_done = None
         self.__threads = None
 
-        # Texts ###############################################################
+        # Texts #########################################################################
         layout = QGridLayout(self)  # MAIN LAYOUT: QGridLayout
         self.version_text = QLabel(f"PyPEF v. {__version__}", alignment=Qt.AlignRight)
         #self.ncores_text = QLabel("Single-/multiprocessing")
@@ -204,7 +204,7 @@ class MainWidget(QWidget):
         self.logTextBox.widget.appendPlainText(
             f"Current working directory: {str(getcwd())}")
 
-        # Horizontal slider ###################################################
+        # Horizontal slider #############################################################
         self.slider = QSlider(self)
         self.slider.setGeometry(QRect(190, 100, 200, 16))
         self.slider.setOrientation(Qt.Horizontal)
@@ -215,7 +215,7 @@ class MainWidget(QWidget):
         self.slider.move(10, 105)
         self.slider.valueChanged.connect(self.selection_ls_proportion)
 
-        # ComboBoxes ##########################################################
+        # ComboBoxes ####################################################################
         self.box_regression_model = QComboBox()
         self.regression_models = [
             'PLS', 'PLS_LOOCV', 'Ridge', 'Lasso', 'ElasticNet', 'SVR', 'RF', 'MLP'
@@ -237,12 +237,12 @@ class MainWidget(QWidget):
         self.box_mklsts_cv = QComboBox()
         self.box_mklsts_cv.addItems([
             'None', 'Random split', 'Modulo split', 
-            'Continuous split', 'Plot distribution'
+            'Continuous split', 'Plot distributions'
         ])
         self.box_mklsts_cv.currentIndexChanged.connect(self.selection_mklsts_splits)
         self.box_mklsts_cv.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
         
-        # Buttons #############################################################
+        # Buttons #######################################################################
         # Utilities
         self.button_work_dir = QPushButton("Set Working Directory")
         self.button_work_dir.setToolTip(
@@ -322,6 +322,15 @@ class MainWidget(QWidget):
         )
         self.button_llm_test_zs.clicked.connect(self.pypef_llm_test)
         self.button_llm_test_zs.setStyleSheet(button_style)
+
+        self.button_llm_predict_zs = QPushButton("Predict (LLM)")
+        self.button_llm_predict_zs.setMinimumWidth(80)
+        self.button_llm_predict_zs.setToolTip(
+            "Test performance on any test dataset using "
+            "the LLM model for zero-shot prediction"
+        )
+        self.button_llm_predict_zs.clicked.connect(self.pypef_llm_predict)
+        self.button_llm_predict_zs.setStyleSheet(button_style)
 
         # Hybrid DCA
         self.button_hybrid_train_dca = QPushButton("Train (DCA)")
@@ -515,7 +524,9 @@ class MainWidget(QWidget):
             self.button_dca_inference_gremlin,
             self.button_dca_inference_gremlin_msa_info,
             self.button_dca_test_dca,
+            self.button_llm_test_zs,
             self.button_dca_predict_dca,
+            self.button_llm_predict_zs,
             self.button_hybrid_train_dca,
             self.button_hybrid_train_test_dca,
             self.button_hybrid_test_dca,
@@ -534,7 +545,7 @@ class MainWidget(QWidget):
             self.button_supervised_predict_onehot
         ]
 
-        # Layout widgets ######################################################
+        # Layout widgets ################################################################
         # int fromRow, int fromColumn, int rowSpan, int columnSpan
         layout.addWidget(self.device_text_out, 0, 0, 1, 2)
         layout.addWidget(self.version_text, 0, 5, 1, 1)
@@ -554,6 +565,7 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_dca_test_dca, 6, 1, 1, 1)
         layout.addWidget(self.button_llm_test_zs, 7, 1, 1, 1)
         layout.addWidget(self.button_dca_predict_dca, 8, 1, 1, 1)
+        layout.addWidget(self.button_llm_predict_zs, 9, 1, 1, 1)
 
         layout.addWidget(self.hybrid_text, 3, 2, 1, 1)
         layout.addWidget(self.button_hybrid_train_dca, 4, 2, 1, 1)
@@ -650,7 +662,7 @@ class MainWidget(QWidget):
         self.version_text.setText("Finished...")
     
 
-    # Box selections ##########################################################
+    # Box selections ####################################################################
     def selection_ncores(self, i):
         if i == 0:
             self.n_cores = 1
@@ -686,7 +698,8 @@ class MainWidget(QWidget):
             f"Changed current working directory to: {str(getcwd())}"
         )
 
-    # Layout buttons ##########################################################
+    # Layout buttons ####################################################################
+    # Utils
     def pypef_help(self):
         self.target_button = self.button_help
         self.start_process()
@@ -733,7 +746,8 @@ class MainWidget(QWidget):
             self.start_threads()
         else:
             self.end_process()
-
+    
+    # Unsupervised/Zero-Shot/DCA
     def pypef_gremlin(self):
         self.target_button = self.button_dca_inference_gremlin
         self.start_process()
@@ -796,7 +810,7 @@ class MainWidget(QWidget):
             self.end_process()
 
     def pypef_llm_test(self):
-        self.target_button = self.button_dca_test_dca
+        self.target_button = self.button_llm_test_zs
         self.start_process()
         test_set_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format", 
@@ -827,7 +841,9 @@ class MainWidget(QWidget):
                 self.cmd = f'hybrid --ts {test_set_file} --llm {self.llm}'
                 self.start_threads()
             else:
-                self.logTextBox.widget.appendPlainText("Provide a LLM option for modeling.")
+                self.logTextBox.widget.appendPlainText(
+                    "Provide a LLM option for modeling."
+                )
                 self.end_process()
         else:
             self.end_process()
@@ -855,6 +871,46 @@ class MainWidget(QWidget):
         else:
             self.end_process()
 
+    def pypef_llm_predict(self):
+        self.target_button = self.button_llm_predict_zs
+        self.start_process()
+        prediction_file = QFileDialog.getOpenFileName(
+            self.win2, "Select Prediction Set File in FASTA format",
+            filter="FASTA file (*.fasta *.fa)"
+        )[0]
+        if prediction_file:
+            if self.llm == 'prosst':
+                wt_fasta_file = QFileDialog.getOpenFileName(
+                    self.win2, "Select WT FASTA File",
+                    filter="FASTA file (*.fasta *.fa)"
+                )[0]
+                pdb_file = QFileDialog.getOpenFileName(
+                    self.win2, "Select PDB protein structure File",
+                    filter="PDB file (*.pdb)"
+                )[0]
+                if wt_fasta_file and pdb_file:
+                    self.version_text.setText(
+                        "ProSST zero shot model inference..."
+                    )
+                    self.cmd = (
+                        f'hybrid --ps {prediction_file} --llm {self.llm} '
+                        f'--wt {wt_fasta_file} --pdb {pdb_file}'
+                        )
+                    self.start_threads()
+                else:
+                    self.end_process()
+            elif self.llm == 'esm':
+                self.cmd = f'hybrid --ps {prediction_file} --llm {self.llm}'
+                self.start_threads()
+            else:
+                self.logTextBox.widget.appendPlainText(
+                    "Provide a LLM option for modeling."
+                )
+                self.end_process()
+        else:
+            self.end_process()
+
+    # Supervised/Hybrid
     def pypef_dca_hybrid_train(self):
         self.target_button = self.button_hybrid_train_dca
         self.start_process()

@@ -22,9 +22,10 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
+from pypef.llm.utils import get_batches, corr_loss
 from pypef.llm.esm_lora_tune import (
     get_esm_models, esm_tokenize_sequences, 
-    get_batches, esm_train, esm_infer, corr_loss
+    esm_train, esm_infer
 )
 from pypef.llm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
@@ -146,10 +147,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
-
+            # ESM unsupervised
             try:
                 x_esm, esm_attention_mask = esm_tokenize_sequences(
-                    sequences, esm_tokenizer, max_length=len(wt_seq))
+                    sequences, esm_tokenizer, max_length=len(wt_seq)
+                )
                 y_esm = esm_infer(
                     get_batches(x_esm, dtype=float, batch_size=1), 
                     esm_attention_mask, 
@@ -160,7 +162,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
             except RuntimeError:
                 esm_unopt_perf = np.nan
-
+            # ProSST unsupervised
             try:
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
                     pdb, prosst_tokenizer, wt_seq)
@@ -180,7 +182,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 continue 
 
             ns_y_test = [len(variants)]
-            ds = DatasetSplitter(csv_file=csv_path, n_cv=5)
+            ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=5)
             ds.plot_distributions()
             temp_results = {}
             for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
@@ -200,9 +202,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         esm_lora_model_2 = copy.deepcopy(esm_lora_model)
                         esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
                         train_size, test_size = len(train_i), len(test_i)
-                        print('\nTRAIN SIZE:', train_size, 'TEST SIZE:', test_size, 
-                              '\n-------------------------------------------\n')
-                        get_vram()
+                        #get_vram()
                     except ValueError as e:
                         print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
                               f"cannot split the data in N_Train = {train_size} and N_Test "
@@ -222,6 +222,18 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         reduce_by_batch_modulo(x_llm_train_esm), 
                         reduce_by_batch_modulo(y_train),
                     )
+                    llm_dict_esm = {
+                        'esm1v': {
+                            'llm_base_model': esm_base_model,
+                            'llm_model': esm_lora_model_2,
+                            'llm_optimizer': esm_optimizer,
+                            'llm_train_function': esm_train,
+                            'llm_inference_function': esm_infer,
+                            'llm_loss_function': corr_loss,
+                            'x_llm' : x_llm_train_esm,
+                            'llm_attention_mask':  esm_attention_mask
+                        }
+                    }
                     llm_dict_prosst = {
                         'prosst': {
                             'llm_base_model': prosst_base_model,
@@ -236,18 +248,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             'structure_input_ids': structure_input_ids
                         }
                     }
-                    llm_dict_esm = {
-                        'esm1v': {
-                            'llm_base_model': esm_base_model,
-                            'llm_model': esm_lora_model_2,
-                            'llm_optimizer': esm_optimizer,
-                            'llm_train_function': esm_train,
-                            'llm_inference_function': esm_infer,
-                            'llm_loss_function': corr_loss,
-                            'x_llm' : x_llm_train_esm,
-                            'llm_attention_mask':  esm_attention_mask
-                        }
-                    }
                     print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 20: # TODO: 50
                         print(f"Only {len(fitnesses)} in total, splitting the data "
@@ -258,16 +258,17 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             hybrid_perfs.append(k)
                         ns_y_test.append(np.nan)
                         continue
-                    get_vram()
+                    #get_vram()
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
                         m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m]
-                        print('\n~~~ ' + m_str + ' ~~~')
+                        #print('\n~~~ ' + m_str + ' ~~~')
                         try:
                             hm = DCALLMHybridModel(
                                 x_train_dca=np.array(x_dca_train), 
                                 y_train=y_train,
                                 llm_model_input=method,
-                                x_wt=x_wt
+                                x_wt=x_wt,
+                                verbose=False
                             )
                             y_test_pred = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test), 
@@ -277,13 +278,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                     np.asarray(x_llm_test_prosst)
                                 ][i_m]
                             )
-                            print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
+                            print(f'{m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
+                                  f'(train size={train_size}, test_size={test_size})')
                             temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})
                         except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
                             # or UnboundLocalError in prosst_lora_tune.py, line 167
                             temp_results[category][f'Split {i_split}'].update({m_str: np.nan})
-                        for it in temp_results.items():
-                            print(it)
                     ns_y_test.append(len(y_test_pred))
                     del prosst_lora_model_2
                     del esm_lora_model_2
@@ -291,18 +291,40 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     gc.collect()
 
             dt = time.time() - start_time
-            for it in temp_results.items():
-                print(it)
-            #dset_hybrid_perfs_i = ''
-            #for hp in hybrid_perfs:
-            #    dset_hybrid_perfs_i += f'{hp},'
-            #dset_ns_y_test_i = ''
-            #for ns_y_t in ns_y_test:
-            #    dset_ns_y_test_i += f'{ns_y_t},'
-            #with open(out_results_csv, 'a') as fh:
-            #    fh.write(
-            #        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
-            #        f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n')
+            print(json.dumps(temp_results, indent=4))
+
+            with open(out_results_csv, 'a') as fh:
+                fh.write(
+                    f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},'
+                    f'{dca_unopt_perf},{esm_unopt_perf},{prosst_unopt_perf},'
+                    f'{temp_results['Random']['Split 1']['DCA hybrid']},{temp_results['Random']['Split 2']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 3']['DCA hybrid']},{temp_results['Random']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 5']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 2']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 5']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 1']['DCA+ProSST hybrid']},{temp_results['Random']['Split 2']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Random']['Split 3']['DCA+ProSST hybrid']},{temp_results['Random']['Split 4']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Random']['Split 5']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 1']['DCA hybrid']},{temp_results['Modulo']['Split 2']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 3']['DCA hybrid']},{temp_results['Modulo']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 5']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 2']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 5']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 1']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 2']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 3']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 4']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 5']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 1']['DCA hybrid']},{temp_results['Continuous']['Split 2']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 3']['DCA hybrid']},{temp_results['Continuous']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 5']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 2']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 5']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 1']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 2']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 3']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 4']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 5']['DCA+ProSST hybrid']},'
+                    f'{int(dt)}\n')
                 
 
 def plot_csv_data(csv, plot_name):
@@ -499,9 +521,11 @@ def plot_csv_data(csv, plot_name):
 
 if __name__ == '__main__':
     single_point_mut_data = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), f"single_point_dms_mut_data.json"))
+        os.path.dirname(__file__), f"single_point_dms_mut_data.json"
+    ))
     higher_mut_data = os.path.abspath(os.path.join(
-        os.path.dirname(__file__), f"higher_point_dms_mut_data.json"))
+        os.path.dirname(__file__), f"higher_point_dms_mut_data.json"
+    ))
     with open(single_point_mut_data, 'r') as fh:
         s_mut_data = json.loads(fh.read())
     with open(higher_mut_data, 'r') as fh:
@@ -510,7 +534,9 @@ if __name__ == '__main__':
     combined_mut_data.update(h_mut_data)
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
-    out_results_csv = os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_5cv-split_results.csv')
+    out_results_csv = os.path.join(
+        os.path.dirname(__file__), 'results/dca_esm_and_hybrid_5cv-split_results.csv'
+    )
     if os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
@@ -535,13 +561,27 @@ if __name__ == '__main__':
         with open(out_results_csv, 'w') as fh:
             print(f'\nCreating new file {out_results_csv}...')
             fh.write(
-                f'No.,Dataset,N_Variants,N_Max_Muts,Untrained_Performance_DCA,Untrained_Performance_ESM1v,'
-                f'Untrained_Performance_ProSST,Hybrid_DCA_Trained_Performance_100,'
-                f'Hybrid_DCA_ESM1v_Trained_Performance_100,Hybrid_DCA_ProSST_Trained_Performance_100,'
-                f'Hybrid_DCA_Trained_Performance_200,Hybrid_DCA_ESM1v_Trained_Performance_200,'
-                f'Hybrid_DCA_ProSST_Trained_Performance_200,Hybrid_DCA_Trained_Performance_1000,'
-                f'Hybrid_DCA_ESM1v_Trained_Performance_1000,Hybrid_DCA_ProSST_Trained_Performance_1000,'
-                f'N_Y_test,N_Y_test_100,N_Y_test_200,N_Y_test_1000,Time_in_s\n'
+                'No.,Dataset,N_Variants,N_Max_Muts,'
+                'Untrained_Performance_DCA,Untrained_Performance_ESM1v,Untrained_Performance_ProSST,'
+                'Random_Split_1_DCA_hybrid,Random_Split_2_DCA_hybrid,Random_Split_3_DCA_hybrid,'
+                'Random_Split_4_DCA_hybrid,Random_Split_5_DCA_hybrid,'
+                'Random_Split_1_DCA+ESM1v_hybrid,Random_Split_2_DCA+ESM1v_hybrid,Random_Split_3_DCA+ESM1v_hybrid,'
+                'Random_Split_4_DCA+ESM1v_hybrid,Random_Split_5_DCA+ESM1v_hybrid,'
+                'Random_Split_1_DCA+ProSST_hybrid,Random_Split_2_DCA+ProSST_hybrid,Random_Split_3_DCA+ProSST_hybrid,'
+                'Random_Split_4_DCA+ProSST_hybrid,Random_Split_5_DCA+ProSST_hybrid,'
+                'Modulo_Split_1_DCA_hybrid,Modulo_Split_2_DCA_hybrid,Modulo_Split_3_DCA_hybrid,'
+                'Modulo_Split_4_DCA_hybrid,Modulo_Split_5_DCA_hybrid,'
+                'Modulo_Split_1_DCA+ESM1v_hybrid,Modulo_Split_2_DCA+ESM1v_hybrid,Modulo_Split_3_DCA+ESM1v_hybrid,'
+                'Modulo_Split_4_DCA+ESM1v_hybrid,Modulo_Split_5_DCA+ESM1v_hybrid,'
+                'Modulo_Split_1_DCA+ProSST_hybrid,Modulo_Split_2_DCA+ProSST_hybrid,Modulo_Split_3_DCA+ProSST_hybrid,'
+                'Modulo_Split_4_DCA+ProSST_hybrid,Modulo_Split_5_DCA+ProSST_hybrid,'
+                'Continuous_Split_1_DCA_hybrid,Continuous_Split_2_DCA_hybrid,Continuous_Split_3_DCA_hybrid,'
+                'Continuous_Split_4_DCA_hybrid,Continuous_Split_5_DCA_hybrid,'
+                'Continuous_Split_1_DCA+ESM1v_hybrid,Continuous_Split_2_DCA+ESM1v_hybrid,Continuous_Split_3_DCA+ESM1v_hybrid,'
+                'Continuous_Split_4_DCA+ESM1v_hybrid,Continuous_Split_5_DCA+ESM1v_hybrid,'
+                'Continuous_Split_1_DCA+ProSST_hybrid,Continuous_Split_2_DCA+ProSST_hybrid,Continuous_Split_3_DCA+ProSST_hybrid,'
+                'Continuous_Split_4_DCA+ProSST_hybrid,Continuous_Split_5_DCA+ProSST_hybrid,'
+                'Time_in_s\n'
             )
             start_i = 0
             already_tested_is = []

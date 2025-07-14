@@ -4,7 +4,8 @@
 # Using (training, testing/infering) ProSST model(s) published under 
 # GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
 # Code repository: https://github.com/ai4protein/ProSST
-# Mingchen Li, Pan Tan, Xinzhu Ma, Bozitao Zhong, Huiqun Yu, Ziyi Zhou, Wanli Ouyang, Bingxin Zhou, Liang Hong, Yang Tan
+# Mingchen Li, Pan Tan, Xinzhu Ma, Bozitao Zhong, Huiqun Yu, Ziyi Zhou, 
+# Wanli Ouyang, Bingxin Zhou, Liang Hong, Yang Tan
 # ProSST: Protein Language Modeling with Quantized Structure and Disentangled Attention
 # bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672 
 
@@ -71,8 +72,9 @@ def get_logits_from_full_seqs(
     logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
     for i_s, sequence in enumerate(
         tqdm(
-            xs, disable=not verbose, 
-            desc='ProSST inference: getting sequence logits'
+            xs,
+            desc='ProSST inference: getting sequence logits',
+            disable=not verbose 
         )
     ):
         for i_aa, x_aa in enumerate(sequence):
@@ -104,7 +106,8 @@ def load_model(model, filename):
 def prosst_train(
         x_sequence_batches, score_batches, loss_fn, model, optimizer,  
         input_ids, attention_mask, structure_input_ids,
-        n_epochs=3, device: str | None = None, seed: int | None = None, early_stop: int = 50):
+        n_epochs=3, device: str | None = None, seed: int | None = None, 
+        early_stop: int = 50, verbose: bool = True):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -113,7 +116,7 @@ def prosst_train(
           f"(N_Train={len(torch.flatten(score_batches))})...")
     x_sequence_batches = x_sequence_batches.to(device)
     score_batches = score_batches.to(device)
-    pbar_epochs = tqdm(range(1, n_epochs + 1))
+    pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     epoch_spearman_1 = 0.0
     did_not_improve_counter = 0
     best_model = None
@@ -125,8 +128,10 @@ def prosst_train(
             pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs}')
         model.train()
         y_preds_detached = []
-        pbar_batches = tqdm(zip(x_sequence_batches, score_batches), 
-                            total=len(x_sequence_batches), leave=False)
+        pbar_batches = tqdm(
+            zip(x_sequence_batches, score_batches), 
+            total=len(x_sequence_batches), leave=False, disable=not verbose
+        )
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
             y_preds_b = get_logits_from_full_seqs(
                 seqs_b, model, input_ids, attention_mask, structure_input_ids, 
