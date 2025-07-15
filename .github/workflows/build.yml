@@ -40,7 +40,7 @@ jobs:
       run: |
         pip install .
         echo $(which pypef)
-        python -m pytest tests/test_api_functions.py
+        python -m pytest ./tests/test_api_functions.py
 
   windows:
     name: windows

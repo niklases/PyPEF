@@ -179,7 +179,6 @@ def generate_graph(pdb_file, max_distance=10):
         distances=distances,
         aa_seq=one_letter_seq,
     )
-
     return data
 
 
@@ -244,10 +243,7 @@ def generate_pos_subgraph(
                 node_v=new_node_v,
             )
     
-    #bar = tqdm(list(range(len(graph_data.aa_seq))), desc="Generating subgraphs")
-    # for anchor_node in bar:
     for anchor_node in list(range(len(graph_data.aa_seq))):
-        #bar.set_postfix_str(f"Anchor node: {anchor_node}")
         if anchor_node % subgraph_interval != 0:
             continue
         subgraph_dict[anchor_node] = quick_get_anchor_graph(anchor_node)
@@ -412,8 +408,7 @@ def process_pdb_file(
     pdb_file,
     subgraph_depth,
     subgraph_interval,
-    max_distance,
-    #threads=64,
+    max_distance
 ):
     result_dict, subgraph_dict = {}, {}
     result_dict["name"] = Path(pdb_file).name
@@ -425,7 +420,7 @@ def process_pdb_file(
         result_dict["error"] = str(e)
         return None, result_dict, 0
 
-    # multi thread for subgraph
+    # multi thread for subgraph (removed)
     result_dict["aa_seq"] = graph.aa_seq
     anchor_nodes = list(range(0, len(graph.node_s), subgraph_interval))
 
@@ -441,11 +436,7 @@ def process_pdb_file(
         subgraph = convert_graph(subgraph)
         return anchor_node, subgraph
     
-    #processed_anchor_nodes = tqdm(iter_threading_map(process_subgraph, anchor_nodes, threads))
-    #for anchor, subgraph in processed_anchor_nodes:
-    #    subgraph_dict[anchor] = subgraph
-    
-    for anchor_node in tqdm(anchor_nodes, desc='Getting structure embeddings'):
+    for anchor_node in tqdm(anchor_nodes, desc='Getting ProSST structure embeddings'):
          anchor, subgraph = process_subgraph(anchor_node)
          subgraph_dict[anchor] = subgraph
 
@@ -458,8 +449,7 @@ def pdb_conventer(
     pdb_files,
     subgraph_depth,
     subgraph_interval,
-    max_distance,
-    #threads=64,
+    max_distance
 ):
     error_proteins, error_messages = [], []
     dataset, results, node_counts = [], [], []
@@ -470,7 +460,6 @@ def pdb_conventer(
             subgraph_depth,
             subgraph_interval,
             max_distance,
-            #threads=threads,
         )
 
         if pdb_subgraphs is None:
@@ -500,14 +489,12 @@ def pdb_conventer(
                     item,
                 ]
             )
-
     return data_loader(), results
 
 
 class PdbQuantizer:
     def __init__(
         self,
-        #structure_vocab_size=2048,
         max_distance=10,
         subgraph_depth=None,
         subgraph_interval=1,
@@ -515,11 +502,8 @@ class PdbQuantizer:
         model_path=None,
         cluster_dir=None,
         cluster_model=None,
-        device=None,
-        #threads=64,
+        device=None
     ) -> None:
-        #assert structure_vocab_size in [20, 64, 128, 512, 1024, 2048, 4096]
-        #self.threads = threads
         self.max_distance = max_distance
         self.subgraph_depth = subgraph_depth
         self.subgraph_interval = subgraph_interval
@@ -528,7 +512,6 @@ class PdbQuantizer:
             self.model_path = str(Path(__file__).parent / "static" / "AE.pt")
         else:
             self.model_path = model_path
-        #self.structure_vocab_size = structure_vocab_size
 
         if cluster_dir is None:
             self.cluster_dir = str(Path(__file__).parent / "static")
@@ -569,8 +552,7 @@ class PdbQuantizer:
             ],
             self.subgraph_depth,
             self.subgraph_interval,
-            self.max_distance,
-            #threads=self.threads,
+            self.max_distance
         )
         sturctures = predict_structure(
             self.model, self.cluster_models, data_loader, self.device
