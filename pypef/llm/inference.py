@@ -6,6 +6,7 @@
 
 import numpy as np
 
+from pypef.utils.helpers import get_device
 from pypef.llm.utils import get_batches
 from pypef.llm.esm_lora_tune import esm_setup, esm_tokenize_sequences
 from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
@@ -43,6 +44,8 @@ def inference(
     """
     Inference of base models.
     """
+    if device is None:
+        device = get_device()
     if llm == 'esm':
         logger.info("Zero-shot LLM inference on test set using ESM1v...")
         llm_dict = esm_setup(sequences)

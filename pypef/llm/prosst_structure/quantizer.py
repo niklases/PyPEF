@@ -508,8 +508,15 @@ class PdbQuantizer:
         self.subgraph_depth = subgraph_depth
         self.subgraph_interval = subgraph_interval
         self.anchor_nodes = anchor_nodes
+        if device is None:
+            self.device = get_device()
+        else:
+            self.device = device
         if model_path is None:
-            self.model_path = str(Path(__file__).parent / "static" / "AE.pt")
+            if self.device is 'cpu':
+                self.model_path = str(Path(__file__).parent / "static" / "AE_CPU.pt")
+            else:
+                self.model_path = str(Path(__file__).parent / "static" / "AE.pt")
         else:
             self.model_path = model_path
 
@@ -521,11 +528,6 @@ class PdbQuantizer:
         else:
             self.cluster_dir = cluster_dir
             self.cluster_model = cluster_model
-
-        if device is None:
-            self.device = get_device()
-        else:
-            self.device = device
 
         # Load model
         node_dim = (256, 32)
