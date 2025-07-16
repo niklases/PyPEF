@@ -35,7 +35,7 @@ jobs:
         flake8 ./pypef --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Export Pythonpath and run tests using the main script
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -v -m pytest ./tests/ -m "not pip_specific"
+        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not pip_specific"
     - name: Export Pythonpath and run tests using pip-installation
       run: |
         export PYTHONPATH=""
