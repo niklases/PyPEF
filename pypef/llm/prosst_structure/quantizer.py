@@ -513,7 +513,7 @@ class PdbQuantizer:
         else:
             self.device = device
         if model_path is None:
-            if self.device is 'cpu':
+            if self.device == 'cpu':
                 self.model_path = str(Path(__file__).parent / "static" / "AE_CPU.pt")
             else:
                 self.model_path = str(Path(__file__).parent / "static" / "AE.pt")
