@@ -11,17 +11,21 @@ from sklearn.model_selection import KFold
 import logging
 logger = logging.getLogger('pypef.utils.split')
 
+from typing import Union
+FilePath = Union[str, "PathLike[str]"]
+
 
 class DatasetSplitter:
     def __init__(
             self, 
-            df_or_csv_file: str | PathLike | pd.DataFrame, 
+            df_or_csv_file: FilePath | pd.DataFrame, 
             n_cv: int | None = None,
             mutation_column: str | None = None,
             mutation_separator: str | None = None,
             csv_separator: str | None = None
     ):
         self.df_or_csv_file = df_or_csv_file
+        print(self.df_or_csv_file)
         self.mutation_column = mutation_column
         if csv_separator is None:
             csv_separator = ','
@@ -220,9 +224,12 @@ class DatasetSplitter:
             for i_split in range(self.n_cv):
                 pos_train, counts_train = self._get_distribution(train_indices[i_split])
                 pos_test, counts_test = self._get_distribution(test_indices[i_split])
-                axs[i_category + 1, i_split].plot(pos_train, counts_train, '--o', markersize=1.2)
-                axs[i_category + 1, i_split].plot(pos_test, counts_test, '--o', markersize=1.2)
-
+                axs[i_category + 1, i_split].plot(
+                    pos_train, counts_train, marker="o", linestyle="--", markersize=3
+                )
+                axs[i_category + 1, i_split].plot(
+                    pos_test, counts_test, marker="o", linestyle="--", markersize=3
+                )
                 xticks = list(axs[i_category + 1, i_split].get_xticks())
                 xticks = xticks[1:-1]
                 if 0 in xticks:

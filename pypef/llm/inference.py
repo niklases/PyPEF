@@ -39,31 +39,36 @@ def inference(
         llm: str,
         pdb_file: str | None = None,
         wt_seq: str | None = None,
-        device: str| None = None
+        device: str| None = None,
+        model = None
 ):
     """
-    Inference of base models.
+    Inference of input or base model.
     """
     if device is None:
         device = get_device()
     if llm == 'esm':
+        if model is None:
+            model = llm_dict['esm1v']['llm_base_model']
         logger.info("Zero-shot LLM inference on test set using ESM1v...")
         llm_dict = esm_setup(sequences)
         x_llm_test = llm_embedder(llm_dict, sequences)
         y_test_pred = llm_dict['esm1v']['llm_inference_function'](
             xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
             attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
-            model=llm_dict['esm1v']['llm_base_model'], 
+            model=model, 
             device=device
         ).cpu()
     elif llm == 'prosst':
+        if model is None:
+            model = llm_dict['prosst']['llm_base_model']
         logger.info("Zero-shot LLM inference on test set using ProSST...")
         llm_dict = prosst_setup(
             wt_seq, pdb_file, sequences=sequences)
         x_llm_test = llm_embedder(llm_dict, sequences)
         y_test_pred = llm_dict['prosst']['llm_inference_function'](
             xs=x_llm_test, 
-            model=llm_dict['prosst']['llm_base_model'], 
+            model=model, 
             input_ids=llm_dict['prosst']['input_ids'], 
             attention_mask=llm_dict['prosst']['llm_attention_mask'], 
             structure_input_ids=llm_dict['prosst']['structure_input_ids'],

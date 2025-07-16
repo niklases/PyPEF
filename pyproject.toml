@@ -67,3 +67,9 @@ pypef = [
     "ml/AAindex/Refined_cluster_indices_r0.93_r0.97/*",
     "llm/prosst_structure/static/*"
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "main_script_specific",
+    "pip_specific"
+]

@@ -1,10 +1,11 @@
 import os.path
 import subprocess
-
+import pytest
 
 from pypef import __version__
-
-pypef_main_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+pypef_main_path = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..', '..')
+)
 
 
 def capture(command):
@@ -17,10 +18,22 @@ def capture(command):
     return out, err, proc.returncode
 
 
-def test_pypef_version():
+@pytest.mark.main_script_specific
+def test_main_script_pypef_version():
     command = [
         "python", 
         pypef_main_path + os.path.sep + "pypef" + os.path.sep + "main.py", 
+        "--version"
+    ]
+    out, err, exitcode = capture(command)
+    assert str(out).split('\'')[1].split('\\')[0] == __version__
+    assert exitcode == 0
+
+
+@pytest.mark.pip_specific
+def test_pip_pypef_version():
+    command = [
+        "pypef", 
         "--version"
     ]
     out, err, exitcode = capture(command)

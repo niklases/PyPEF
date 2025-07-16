@@ -31,6 +31,7 @@ from pypef.llm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
     prosst_tokenize_sequences, prosst_train
 )
+from pypef.llm.inference import inference
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
@@ -152,11 +153,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 x_esm, esm_attention_mask = esm_tokenize_sequences(
                     sequences, esm_tokenizer, max_length=len(wt_seq)
                 )
-                y_esm = esm_infer(
-                    get_batches(x_esm, dtype=float, batch_size=1), 
-                    esm_attention_mask, 
-                    esm_base_model
-                )
+                #y_esm = esm_infer(
+                #    get_batches(x_esm, dtype=float, batch_size=1), 
+                #    esm_attention_mask, 
+                #    esm_base_model
+                #)
+                y_esm = inference(sequences, 'esm', model=esm_base_model)
                 print(f'ESM1v (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
@@ -167,10 +169,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
                     pdb, prosst_tokenizer, wt_seq)
                 x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
-                y_prosst = get_logits_from_full_seqs(
-                        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
-                        structure_input_ids, train=False
-                )
+                #y_prosst = get_logits_from_full_seqs(
+                #        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
+                #        structure_input_ids, train=False
+                #)
+                y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model)
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
@@ -297,33 +300,33 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 fh.write(
                     f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},'
                     f'{dca_unopt_perf},{esm_unopt_perf},{prosst_unopt_perf},'
-                    f'{temp_results['Random']['Split 1']['DCA hybrid']},{temp_results['Random']['Split 2']['DCA hybrid']},'
-                    f'{temp_results['Random']['Split 3']['DCA hybrid']},{temp_results['Random']['Split 4']['DCA hybrid']},'
-                    f'{temp_results['Random']['Split 5']['DCA hybrid']},'
-                    f'{temp_results['Random']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 2']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Random']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 4']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Random']['Split 5']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Random']['Split 1']['DCA+ProSST hybrid']},{temp_results['Random']['Split 2']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Random']['Split 3']['DCA+ProSST hybrid']},{temp_results['Random']['Split 4']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Random']['Split 5']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Modulo']['Split 1']['DCA hybrid']},{temp_results['Modulo']['Split 2']['DCA hybrid']},'
-                    f'{temp_results['Modulo']['Split 3']['DCA hybrid']},{temp_results['Modulo']['Split 4']['DCA hybrid']},'
-                    f'{temp_results['Modulo']['Split 5']['DCA hybrid']},'
-                    f'{temp_results['Modulo']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 2']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Modulo']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 4']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Modulo']['Split 5']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Modulo']['Split 1']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 2']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Modulo']['Split 3']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 4']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Modulo']['Split 5']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Continuous']['Split 1']['DCA hybrid']},{temp_results['Continuous']['Split 2']['DCA hybrid']},'
-                    f'{temp_results['Continuous']['Split 3']['DCA hybrid']},{temp_results['Continuous']['Split 4']['DCA hybrid']},'
-                    f'{temp_results['Continuous']['Split 5']['DCA hybrid']},'
-                    f'{temp_results['Continuous']['Split 1']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 2']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Continuous']['Split 3']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 4']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Continuous']['Split 5']['DCA+ESM1v hybrid']},'
-                    f'{temp_results['Continuous']['Split 1']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 2']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Continuous']['Split 3']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 4']['DCA+ProSST hybrid']},'
-                    f'{temp_results['Continuous']['Split 5']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Random']['Split 0']['DCA hybrid']},{temp_results['Random']['Split 1']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 2']['DCA hybrid']},{temp_results['Random']['Split 3']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Random']['Split 0']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 1']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 2']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 3']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 0']['DCA+ProSST hybrid']},{temp_results['Random']['Split 1']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Random']['Split 2']['DCA+ProSST hybrid']},{temp_results['Random']['Split 3']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Random']['Split 4']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 0']['DCA hybrid']},{temp_results['Modulo']['Split 1']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 2']['DCA hybrid']},{temp_results['Modulo']['Split 3']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Modulo']['Split 0']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 1']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 2']['DCA+ESM1v hybrid']},{temp_results['Modulo']['Split 3']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Modulo']['Split 0']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 1']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 2']['DCA+ProSST hybrid']},{temp_results['Modulo']['Split 3']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Modulo']['Split 4']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 0']['DCA hybrid']},{temp_results['Continuous']['Split 1']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 2']['DCA hybrid']},{temp_results['Continuous']['Split 3']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 4']['DCA hybrid']},'
+                    f'{temp_results['Continuous']['Split 0']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 1']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 2']['DCA+ESM1v hybrid']},{temp_results['Continuous']['Split 3']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 4']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Continuous']['Split 0']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 1']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 2']['DCA+ProSST hybrid']},{temp_results['Continuous']['Split 3']['DCA+ProSST hybrid']},'
+                    f'{temp_results['Continuous']['Split 4']['DCA+ProSST hybrid']},'
                     f'{int(dt)}\n')
                 
 

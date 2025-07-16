@@ -33,14 +33,15 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 ./pypef --count --select=E9,F63,F7,F82 --show-source --statistics
-    - name: Export Pythonpath and run PyPEF API and CLI version test with pytest
+    - name: Export Pythonpath and run tests using the main script
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/
-    - name: Test pip install
+        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -v -m pytest ./tests/ -m "not pip_specific"
+    - name: Export Pythonpath and run tests using pip-installation
       run: |
+        export PYTHONPATH=""
         pip install .
         echo $(which pypef)
-        python -m pytest ./tests/test_api_functions.py
+        python -m pytest ./tests/ -v -m "not main_script_specific"
 
   windows:
     name: windows
@@ -66,13 +67,15 @@ jobs:
       run: |
         # stop the build if there are Python syntax errors or undefined names
         flake8 .\pypef --count --select=E9,F63,F7,F82 --show-source --statistics
-    - name: Export Pythonpath and run PyPEF API and CLI version test with pytest
+    - name: Export Pythonpath and run tests using the main script
       shell: pwsh
       run: |
-        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\
-    - name: Test pip install
+        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not pip_specific"
+    - name: Export Pythonpath and run tests using pip-installation
       shell: pwsh
       run: |
+        $env:PYTHONPATH = ""
         pip install .
         echo (Get-Command pypef).Source
-        python -m pytest .\tests\test_api_functions.py
+        python -m pytest .\tests -v -m "not main_script_specific"
+
