@@ -47,7 +47,7 @@ def get_logits_from_full_seqs(
         attention_mask, 
         structure_input_ids,
         train: bool = False,
-        verbose: bool = True,
+        verbose: bool = False,
         device: str | None = None
 ):
     if device is None:

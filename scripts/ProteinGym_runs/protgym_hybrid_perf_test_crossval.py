@@ -151,7 +151,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # ESM unsupervised
             try:
                 x_esm, esm_attention_mask = esm_tokenize_sequences(
-                    sequences, esm_tokenizer, max_length=len(wt_seq)
+                    sequences, esm_tokenizer, max_length=len(wt_seq), verbose=False
                 )
                 #y_esm = esm_infer(
                 #    get_batches(x_esm, dtype=float, batch_size=1), 
@@ -168,7 +168,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             try:
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
                     pdb, prosst_tokenizer, wt_seq)
-                x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
+                x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab, verbose=False)
                 #y_prosst = get_logits_from_full_seqs(
                 #        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
                 #        structure_input_ids, train=False
@@ -190,10 +190,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             temp_results = {}
             for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
                 category = ["Random", "Modulo", "Continuous"][i_category]
+                print(f'Category: {category}')
                 temp_results.update({category: {}})
                 for i_split, (train_i, test_i) in enumerate(zip(
                     train_indices, test_indices
                 )):
+                    print(f'Split: {i_split + 1}')
                     temp_results[category].update({f'Split {i_split}': {}})
                     try:
                         x_dca_train, x_dca_test = np.asarray(x_dca)[train_i], np.asarray(x_dca)[test_i]
@@ -279,7 +281,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                     None, 
                                     np.asarray(x_llm_test_esm), 
                                     np.asarray(x_llm_test_prosst)
-                                ][i_m]
+                                ][i_m],
+                                verbose=False
                             )
                             print(f'{m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')

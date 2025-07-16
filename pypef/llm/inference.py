@@ -47,11 +47,11 @@ def inference(
     """
     if device is None:
         device = get_device()
-    if llm == 'esm':
-        if model is None:
-            model = llm_dict['esm1v']['llm_base_model']
         logger.info("Zero-shot LLM inference on test set using ESM1v...")
         llm_dict = esm_setup(sequences)
+        if llm == 'esm':
+            if model is None:
+                model = llm_dict['esm1v']['llm_base_model']
         x_llm_test = llm_embedder(llm_dict, sequences)
         y_test_pred = llm_dict['esm1v']['llm_inference_function'](
             xs=get_batches(x_llm_test, batch_size=1, dtype=int), 

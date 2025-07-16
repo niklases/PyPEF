@@ -114,7 +114,7 @@ def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = No
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
-def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=True):
+def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=False):
     if device is None:
         device = get_device()
     attention_masks = torch.Tensor(np.full(
