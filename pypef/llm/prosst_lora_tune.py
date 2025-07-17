@@ -94,6 +94,27 @@ def get_logits_from_full_seqs(
     return log_probs
 
 
+def prosst_infer(
+        xs, 
+        model, 
+        input_ids, 
+        attention_mask, 
+        structure_input_ids,
+        verbose: bool = False,
+        device: str | None = None
+):
+    return get_logits_from_full_seqs(
+        xs, 
+        model, 
+        input_ids, 
+        attention_mask, 
+        structure_input_ids,
+        train = False,
+        verbose = verbose,
+        device = device
+    )
+
+
 def checkpoint(model, filename):
     torch.save(model.state_dict(), filename)
 
@@ -205,8 +226,8 @@ def get_prosst_models():
     return prosst_base_model, prosst_lora_model, tokenizer, optimizer
 
 
-def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
-    structure_sequence = PdbQuantizer()(pdb_file=pdb_file)
+def get_structure_quantizied(pdb_file, tokenizer, wt_seq, verbose: bool = True):
+    structure_sequence = PdbQuantizer(verbose=verbose)(pdb_file=pdb_file)
     structure_sequence_offset = [i + 3 for i in structure_sequence]
     tokenized_res = tokenizer([wt_seq], return_tensors='pt')
     input_ids = tokenized_res['input_ids']
@@ -216,7 +237,7 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq):
     return input_ids, attention_mask, structure_input_ids
 
 
-def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
+def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose: bool = True):
     if wt_seq is None:
         raise SystemError(
             "Running ProSST requires a wild-type sequence "
@@ -240,16 +261,18 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None):
     prosst_base_model = prosst_base_model.to(device)
     prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
     input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
-        pdb_file, prosst_tokenizer, wt_seq)
+        pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
+    )
     x_llm_train_prosst = prosst_tokenize_sequences(
-        sequences=sequences, vocab=prosst_vocab)
+        sequences=sequences, vocab=prosst_vocab, verbose=verbose
+    )
     llm_dict_prosst = {
         'prosst': {
             'llm_base_model': prosst_base_model,
             'llm_model': prosst_lora_model,
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': prosst_train,
-            'llm_inference_function': get_logits_from_full_seqs,
+            'llm_inference_function': prosst_infer,
             'llm_loss_function': corr_loss,
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,

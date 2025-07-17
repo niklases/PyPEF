@@ -81,7 +81,8 @@ def get_y_pred_scores(encoded_sequences, attention_masks,
     return log_probs
     
 
-def esm_test(xs, attention_mask, scores, loss_fn, model, device: str | None = None, verbose: bool = True):
+def esm_test(xs, attention_mask, scores, loss_fn, model, 
+             device: str | None = None, verbose: bool = True):
     if device is None:
         device = get_device()
     attention_masks = torch.Tensor(np.full(
@@ -148,7 +149,7 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
     xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
-    pbar_epochs = tqdm(range(1, n_epochs + 1))
+    pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     loss = np.nan
     for epoch in pbar_epochs:
         try:
@@ -156,7 +157,10 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
         except AttributeError:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
         model.train()
-        pbar_batches = tqdm(zip(xs, attention_masks, scores), total=len(xs), leave=False, disable=not verbose)
+        pbar_batches = tqdm(
+            zip(xs, attention_masks, scores), 
+            total=len(xs), leave=False, disable=not verbose
+        )
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
@@ -173,11 +177,11 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
     model.train(False)
 
 
-def esm_setup(sequences, device: str | None = None):
+def esm_setup(sequences, device: str | None = None, verbose: bool = True):
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = esm_tokenize_sequences(
-        sequences, esm_tokenizer, max_length=len(sequences[0]))
+        sequences, esm_tokenizer, max_length=len(sequences[0]), verbose=verbose)
     llm_dict_esm = {
         'esm1v': {
             'llm_base_model': esm_base_model,

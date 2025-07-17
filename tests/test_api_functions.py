@@ -122,11 +122,11 @@ def test_hybrid_model_dca_esm():
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
         print(hm.beta1, hm.beta2, hm.beta3, hm.beta4, hm.ridge_opt)
-        print('hm.y_dca_ttest', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
-        print('hm.y_dca_ridge_ttest', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
-        print('hm.y_llm_ttest', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
-        print('hm.y_llm_lora_ttest', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
-        print('Hybrid', spearmanr(test_ys, y_pred_test), len(test_ys))
+        print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
+        print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
+        print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
+        print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
+        print('Hybrid prediction:', spearmanr(test_ys, y_pred_test), len(test_ys))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], -0.5342743713116743, 
             decimal=5
@@ -137,10 +137,11 @@ def test_hybrid_model_dca_esm():
         )
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-            [-0.21761360470606333, -0.8330644449247571][i], # TODO: ProSST value could invoke error, check value (stability)!
+            [-0.21761360470606333, -0.8330644449247571][i],
             decimal=5
         )  
-        # Nondeterministic behavior, should be about ~ 0.8, checking if not NaN
+        # Nondeterministic behavior, should be about ~0.7 to ~0.9, but as sample size is so low 
+        # the following is only checking if not NaN / >=-1.0 and <=1.0,
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
         assert -1.0 <= spearmanr(test_ys, y_pred_test)[0] <= 1.0  

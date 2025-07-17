@@ -408,7 +408,8 @@ def process_pdb_file(
     pdb_file,
     subgraph_depth,
     subgraph_interval,
-    max_distance
+    max_distance,
+    verbose: bool = True
 ):
     result_dict, subgraph_dict = {}, {}
     result_dict["name"] = Path(pdb_file).name
@@ -436,7 +437,7 @@ def process_pdb_file(
         subgraph = convert_graph(subgraph)
         return anchor_node, subgraph
     
-    for anchor_node in tqdm(anchor_nodes, desc='Getting ProSST structure embeddings'):
+    for anchor_node in tqdm(anchor_nodes, desc='Getting ProSST structure embeddings', disable=not verbose):
          anchor, subgraph = process_subgraph(anchor_node)
          subgraph_dict[anchor] = subgraph
 
@@ -449,7 +450,8 @@ def pdb_conventer(
     pdb_files,
     subgraph_depth,
     subgraph_interval,
-    max_distance
+    max_distance,
+    verbose: bool = True
 ):
     error_proteins, error_messages = [], []
     dataset, results, node_counts = [], [], []
@@ -460,6 +462,7 @@ def pdb_conventer(
             subgraph_depth,
             subgraph_interval,
             max_distance,
+            verbose=verbose
         )
 
         if pdb_subgraphs is None:
@@ -502,7 +505,8 @@ class PdbQuantizer:
         model_path=None,
         cluster_dir=None,
         cluster_model=None,
-        device=None
+        device=None,
+        verbose: bool = True
     ) -> None:
         self.max_distance = max_distance
         self.subgraph_depth = subgraph_depth
@@ -512,6 +516,7 @@ class PdbQuantizer:
             self.device = get_device()
         else:
             self.device = device
+        self.verbose = verbose
         if model_path is None:
             if self.device == 'cpu':
                 self.model_path = str(Path(__file__).parent / "static" / "AE_CPU.pt")
@@ -554,7 +559,8 @@ class PdbQuantizer:
             ],
             self.subgraph_depth,
             self.subgraph_interval,
-            self.max_distance
+            self.max_distance,
+            verbose=self.verbose
         )
         sturctures = predict_structure(
             self.model, self.cluster_models, data_loader, self.device

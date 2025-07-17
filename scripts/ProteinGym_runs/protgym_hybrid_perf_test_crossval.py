@@ -140,13 +140,13 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
             sequences_batched = get_batches(sequences, batch_size=1000, 
                                             dtype=str, keep_remaining=True, verbose=True)
-            x_dca = []
-            for seq_b in tqdm(sequences_batched, desc="Getting GREMLIN sequence encodings"):
+            x_dca = []  # required later on also
+            for seq_b in tqdm(sequences_batched, desc="Getting GREMLIN sequence encodings", disable=True):
                 for x in gremlin.collect_encoded_sequences(seq_b):
                     x_dca.append(x)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
-            print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 
+            print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}')
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
             # ESM unsupervised
             try:
@@ -158,7 +158,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 #    esm_attention_mask, 
                 #    esm_base_model
                 #)
-                y_esm = inference(sequences, 'esm', model=esm_base_model)
+                y_esm = inference(sequences, 'esm', model=esm_base_model, verbose=False)
                 print(f'ESM1v (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
@@ -167,13 +167,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # ProSST unsupervised
             try:
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
-                    pdb, prosst_tokenizer, wt_seq)
+                    pdb, prosst_tokenizer, wt_seq, verbose=False
+                    )
                 x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab, verbose=False)
                 #y_prosst = get_logits_from_full_seqs(
                 #        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
                 #        structure_input_ids, train=False
                 #)
-                y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model)
+                y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model, verbose=False)
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
@@ -195,9 +196,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 for i_split, (train_i, test_i) in enumerate(zip(
                     train_indices, test_indices
                 )):
-                    print(f'Split: {i_split + 1}')
+                    print(f'    Split: {i_split + 1}')
                     temp_results[category].update({f'Split {i_split}': {}})
                     try:
+                        _train_sequences, test_sequences = np.asarray(sequences)[train_i], np.asarray(sequences)[test_i]
                         x_dca_train, x_dca_test = np.asarray(x_dca)[train_i], np.asarray(x_dca)[test_i]
                         x_llm_train_prosst, x_llm_test_prosst = np.asarray(x_prosst)[train_i], np.asarray(x_prosst)[test_i]
                         x_llm_train_esm, x_llm_test_esm = np.asarray(x_esm)[train_i], np.asarray(x_esm)[test_i]
@@ -253,7 +255,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             'structure_input_ids': structure_input_ids
                         }
                     }
-                    print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
+                    print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 20: # TODO: 50
                         print(f"Only {len(fitnesses)} in total, splitting the data "
                               f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
@@ -264,6 +266,17 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         ns_y_test.append(np.nan)
                         continue
                     #get_vram()
+
+                    y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
+                    temp_results[category][f'Split {i_split}'].update({'DCA': spearmanr(y_test, y_test_pred_dca)[0]})
+                    print(f'        DCA ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_dca)[0]:.3f}')
+                    y_test_pred_esm = inference(test_sequences, 'esm', model=esm_base_model, verbose=False)
+                    temp_results[category][f'Split {i_split}'].update({'ESM1v': spearmanr(y_test, y_test_pred_esm)[0]})
+                    print(f'        ESM1v ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_esm)[0]:.3f}')
+                    y_test_pred_prosst = inference(test_sequences, 'prosst', model=prosst_base_model, pdb_file=pdb, wt_seq=wt_seq, verbose=False)
+                    temp_results[category][f'Split {i_split}'].update({'ProSST': spearmanr(y_test, y_test_pred_prosst)[0]})
+                    print(f'        ProSST ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_prosst)[0]:.3f}')
+
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
                         m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m]
                         #print('\n~~~ ' + m_str + ' ~~~')
@@ -284,7 +297,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 ][i_m],
                                 verbose=False
                             )
-                            print(f'{m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
+                            print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')
                             temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})
                         except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 

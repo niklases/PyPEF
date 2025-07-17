@@ -399,7 +399,6 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                train=False,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
@@ -408,7 +407,6 @@ class DCALLMHybridModel:
                 input_ids=self.input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
-                train=False,
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
@@ -598,7 +596,6 @@ class DCALLMHybridModel:
                     self.input_ids,
                     self.llm_attention_mask, 
                     self.structure_input_ids,
-                    train=False,
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
@@ -607,7 +604,6 @@ class DCALLMHybridModel:
                     self.input_ids,
                     self.llm_attention_mask, 
                     self.structure_input_ids,
-                    train=False,
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
@@ -1004,7 +1000,8 @@ def performance_ls_ts(
             x_train_dca=np.array(x_train),
             y_train=np.array(y_train),
             llm_model_input=llm_dict,
-            x_wt=x_wt
+            x_wt=x_wt,
+            device=device
         )
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
         logger.info(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
