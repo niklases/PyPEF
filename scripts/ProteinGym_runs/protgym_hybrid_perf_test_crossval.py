@@ -64,7 +64,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             start_time = time.time()
             print(f'\n{i+1}/{len(mut_data.items())}\n'
                   f'===============================================================')
-            hybrid_perfs = []
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
             wt_seq = dset_paths['WT_sequence']
@@ -214,8 +213,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
                               f"cannot split the data in N_Train = {train_size} and N_Test "
                               f"(N_Total - N_Train) [Excepted error: {e}].")
-                        for k in [np.nan, np.nan, np.nan]:
-                            hybrid_perfs.append(k)
+                        for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
+                            temp_results[category][f'Split {i_split}'].update({m: np.nan})
                         ns_y_test.append(np.nan)
                         continue
                     (
@@ -261,8 +260,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                               f"results in N_Test <= 50 variants - not getting "
                               f"performance for N_Train = {len(y_train)}...")
-                        for k in [np.nan, np.nan, np.nan]:
-                            hybrid_perfs.append(k)
                         ns_y_test.append(np.nan)
                         continue
                     #get_vram()
