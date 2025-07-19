@@ -48,7 +48,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     device = get_device()
     print(f"Using {device.upper()} device")
     get_vram()
-    MAX_WT_SEQUENCE_LENGTH = 1000
+    MAX_WT_SEQUENCE_LENGTH = 600  # TODO: 1000
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
@@ -255,7 +255,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         }
                     }
                     print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
-                    if len(y_test) <= 20: # TODO: 50
+                    if len(y_test) <= 50:
                         print(f"Only {len(fitnesses)} in total, splitting the data "
                               f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                               f"results in N_Test <= 50 variants - not getting "
@@ -605,7 +605,7 @@ if __name__ == '__main__':
     if not JUST_PLOT_RESULTS:
         compute_performances(
             mut_data=combined_mut_data, 
-            start_i=11, 
+            start_i=0, 
             already_tested_is=already_tested_is
         )
 
