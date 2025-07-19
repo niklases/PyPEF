@@ -119,19 +119,12 @@ class Worker(QObject):
         from such long working thread job during run, e.g., 
         every trained epoch from the executed imported function. 
         """
-        thread_name = QThread.currentThread().objectName()
-        #self.sig_msg.emit(
-        #    f'Running worker #{self.__id} from thread "{thread_name}" '
-        #    f'executing command: "{self.cmd}"'
-        #)
         print(f"Executing command: {self.cmd}")
-
         run_main(argv=self.cmd)
         self.sig_done.emit(f"Done: {self.__id}")
 
     def abort(self):
         self.sig_msg.emit(f'Worker #{self.__id} notified to abort')
-        #self.__abort = True
 
 
 class SecondWindow(QWidget):
@@ -162,7 +155,6 @@ class MainWidget(QWidget):
         # Texts #########################################################################
         layout = QGridLayout(self)  # MAIN LAYOUT: QGridLayout
         self.version_text = QLabel(f"PyPEF v. {__version__}", alignment=Qt.AlignRight)
-        #self.ncores_text = QLabel("Single-/multiprocessing")
         self.llm_text = QLabel("LLM")
         self.regression_model_text =  QLabel("Regression model")
         self.utils_text = QLabel("Utilities")

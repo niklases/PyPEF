@@ -377,6 +377,7 @@ class DirectedEvolution:
         plt.tight_layout()
         plt.savefig(str(self.model) + '_DE_trajectories.png', dpi=500)
         plt.clf()
+        plt.close('all')
 
         with open(os.path.join('EvoTraj', 'Trajectories.csv'), 'w') as file:
             file.write('Trajectory;Variant;Sequence;Fitness\n')

@@ -42,12 +42,13 @@ def plot_y_true_vs_y_pred(
             y_true=y_true, y_pred=y_pred
         )
         plt.scatter(
-            y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, c=y_true, vmin=min(y_true), vmax=max(y_true),
-            label=r'$R^2$' + f' = {r_squared:.3f}' + f'\nRMSE = {rmse:.3f}' + f'\nNRMSE = {nrmse:.3f}' 
-                  + f'\nPearson\'s ' + r'$r$'+f' = {pearson_r:.3f}' 
-                  + f'\nSpearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
-                  + r'Recall$_\mathrm{top 10 \%}$' + f' = {rec:.3f}\n'
-                  + fr'($N$ = {len(y_true)})'
+            y_true, y_pred, marker='o', s=20, linewidths=0.5, 
+            edgecolor='black', alpha=0.7, c=y_true, 
+            vmin=min(y_true), vmax=max(y_true),
+            label=r'$R^2$' + f' = {r_squared:.3f}' + f'\nRMSE = {rmse:.3f}' + f'\nNRMSE = {nrmse:.3f}'
+                  + f'\nPearson\'s ' + r'$r$'+f' = {pearson_r:.3f}' + f'\nSpearman\'s ' 
+                  + fr'$\rho$ = {spearman_rho:.3f}' + '\n' + r'Recall$_\mathrm{top 10 \%}$'
+                  + f' = {rec:.3f}\n' + fr'($N$ = {len(y_true)})'
         )
         if name != '':
             file_name = f'ML_Model_Performance_{name}.png'
@@ -77,5 +78,6 @@ def plot_y_true_vs_y_pred(
     #     file_name = f'DCA_Hybrid_Model_LS_TS_Performance({i}).png'
     plt.colorbar()
     plt.savefig(file_name, dpi=500)
+    plt.clf()
     plt.close('all')
     logger.info(f'Saved plot as {os.path.abspath(file_name)}...')

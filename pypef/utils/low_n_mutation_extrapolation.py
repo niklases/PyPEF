@@ -58,6 +58,7 @@ def plot_low_n(
 
     plt.savefig(plt_name.split(os.sep)[-1] + '.png', dpi=500)
     plt.clf()
+    plt.close('all')
 
 
 def low_n(
@@ -386,3 +387,4 @@ def plot_extrapolation(
     name = name.split(os.sep)[-1] + '_extrapolation.png'
     plt.savefig(name, dpi=500)
     plt.clf()
+    plt.close('all')

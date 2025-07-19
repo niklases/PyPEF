@@ -84,7 +84,7 @@ class GREMLIN:
                 else "cpu"
             )
         self.device = device    
-        logger.info(f'Using {self.device.upper()} for GREMLIN computations...')   
+        logger.info(f'Using {self.device.upper()} device for GREMLIN computations...')   
         self.char_alphabet = char_alphabet
         self.allowed_chars = "ARNDCQEGHILKMFPSTWYV-"
         self.allowed_chars += self.allowed_chars.lower()
@@ -734,6 +734,8 @@ def plot_predicted_ssm(gremlin: GREMLIN):
     ax.set_yticks(range(len(aas)), aas, size=6)
     plt.tight_layout()
     plt.savefig('SSM_landscape.png', dpi=500)
+    plt.clf()
+    plt.close('all')
     pd.DataFrame(
         {
             'Variant': np.array(variantss).flatten(),

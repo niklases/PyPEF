@@ -33,8 +33,6 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 - Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) encoding
 - LLM embeddings (currently, [ESM1v](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
 
-Written by Niklas Siedhoff and Alexander-Maurice Illig.
-
 <p align="center">
     <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
 </p>
@@ -68,12 +66,16 @@ pypef --help
 <a name="gui"></a>
 ### GUI
 
+```
+pip install -U pypef[gui]
+```
+
 After installation, a rudimentary graphical user interface (GUI) can be invoked using the command
 
 ```bash
 pypef-gui      # loading takes some seconds
 # or
-pypef-gui-cli  # command for keeping background debug/tqdm progress information in terminal on Windows
+pypef-gui-cli  # command for keeping background debug/tqdm progress information in terminal (only Windows OS-specific)
 ```
 
 <p align="center">
