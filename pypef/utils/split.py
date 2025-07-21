@@ -225,10 +225,10 @@ class DatasetSplitter:
                 pos_train, counts_train = self._get_distribution(train_indices[i_split])
                 pos_test, counts_test = self._get_distribution(test_indices[i_split])
                 axs[i_category + 1, i_split].plot(
-                    pos_train, counts_train, marker="o", linestyle="--", markersize=3
+                    pos_train, counts_train, marker="o", linestyle="--", markersize=3, linewidth=0.5
                 )
                 axs[i_category + 1, i_split].plot(
-                    pos_test, counts_test, marker="o", linestyle="--", markersize=3
+                    pos_test, counts_test, marker="o", linestyle="--", markersize=3, linewidth=0.5
                 )
                 xticks = list(axs[i_category + 1, i_split].get_xticks())
                 xticks = xticks[1:-1]

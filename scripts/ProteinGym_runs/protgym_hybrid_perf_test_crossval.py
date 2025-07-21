@@ -49,6 +49,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     print(f"Using {device.upper()} device")
     get_vram()
     MAX_WT_SEQUENCE_LENGTH = 600  # TODO: 1000
+    MAX_VARIANT_FITNESS_PAIRS = 5000
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
@@ -90,9 +91,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             variants = variant_fitness_data['mutant'].to_numpy()
             variants_orig = variants
             fitnesses = variant_fitness_data['DMS_score'].to_numpy()
-            if len(fitnesses) <= 50:
-                print('Number of available variants <= 50, skipping dataset...')
-                continue
             variants_split = []
             for variant in variants:
                 # Split double and higher substituted variants to multiple single substitutions
@@ -108,6 +106,16 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 n_muts.append(len(variant))
             max_muts = max(n_muts)
             print(f'N max. (multiple) amino acid substitutions: {max_muts}')
+            if len(fitnesses) <= 50 or len(fitnesses) > MAX_VARIANT_FITNESS_PAIRS:
+                print(f'Number of available variants <= 50 or > {MAX_VARIANT_FITNESS_PAIRS}'
+                      f', skipping dataset...')
+                with open(out_results_csv, 'a') as fh:
+                    fh.write(
+                        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                        f'{max_muts},{len(fitnesses)} variant fitness pairs (below 50 '
+                        f'or more than {MAX_WT_SEQUENCE_LENGTH})\n'
+                    )
+                continue
             if len(wt_seq) > MAX_WT_SEQUENCE_LENGTH:
                 print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents '
                       f'a potential out-of-memory risk (when running on GPU, set '
@@ -256,11 +264,13 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     }
                     print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 50:
-                        print(f"Only {len(fitnesses)} in total, splitting the data "
+                        print(f"        Only {len(fitnesses)} in total, splitting the data "
                               f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                               f"results in N_Test <= 50 variants - not getting "
                               f"performance for N_Train = {len(y_train)}...")
                         ns_y_test.append(np.nan)
+                        for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
+                            temp_results[category][f'Split {i_split}'].update({m: np.nan})
                         continue
                     #get_vram()
 

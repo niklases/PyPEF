@@ -24,14 +24,18 @@ def plot_y_true_vs_y_pred(
     Plots predicted versus true values using the hybrid model for prediction.
     Function called by function predict_ps.
     """
-    _prec, _acc, _bacc, rec, _f1, _mcc, _auroc, _aps = get_binarized_classification_performances(y_true, y_pred)
+    _prec, _acc, _bacc, rec, _f1, _mcc, _auroc, _aps = (
+        get_binarized_classification_performances(y_true, y_pred)
+    )
     if hybrid:
         spearman_rho = stats.spearmanr(y_true, y_pred)[0]
         # Recall: Here, top 10 % fit variants are positive labeled (1), rest are labeled negative (0) by default
-        plt.scatter(y_true, y_pred, marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, c=y_true, vmin=min(y_true), vmax=max(y_true),
-                   label=f'Spearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' 
-                   + r'Recall$_\mathrm{top 10 \%}$' + f' = {rec:.3f}\n'
-                   + fr'($N$ = {len(y_true)})'
+        plt.scatter(
+            y_true, y_pred, 
+            marker='o', s=20, linewidths=0.5, edgecolor='black', alpha=0.7, 
+            c=y_true, vmin=min(y_true), vmax=max(y_true),
+            label=f'Spearman\'s ' + fr'$\rho$ = {spearman_rho:.3f}' + '\n' + 
+                  r'Recall$_\mathrm{top 10 \%}$' + f' = {rec:.3f}\n' + fr'($N$ = {len(y_true)})'
         )
         if name != '':
             file_name = f'DCA_Hybrid_Model_Performance_{name}.png'
