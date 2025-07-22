@@ -16,6 +16,7 @@ from os import listdir
 from os.path import isfile, join
 from typing import Union
 import warnings
+import gc
 
 import numpy as np
 import sklearn.base
@@ -788,6 +789,8 @@ def save_model_to_dict_pickle(
         open(pkl_path, 'wb')
     )
     logger.info(f'Saved model as Pickle file ({pkl_path})...')
+    del model
+    gc.collect()
 
 
 global_model = None

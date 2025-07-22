@@ -121,7 +121,7 @@ def get_variants(
 ):
     """
     Gets variants and divides and counts the variant data for single substituted
-    and higher substituted variants. Raises NameError if variant naming is not
+    and higher substituted variants. Raises RuntimeError if variant naming is not
     matching the given wild-type sequence, e.g. if variant A17C would define
     a substitution at residue Ala-17 to Cys but the wild-type sequence has no Ala
     at position 17.
@@ -162,7 +162,7 @@ def get_variants(
                     new = int(re.findall(r'\d+', splits)[0])
                     if splits[0] in amino_acids:
                         if splits[0] != wild_type_sequence[new - 1]:
-                            raise NameError(
+                            raise RuntimeError(
                                 'Position of amino acids in given sequence does not match the given '
                                 'positions in the input data! E.g. see position {} and position {} being {} '
                                 'in the given sequence'.format(variant, new, wild_type_sequence[new - 1])
@@ -189,7 +189,7 @@ def get_variants(
                 if variant[0] in amino_acids:
                     try:
                         if variant[0] != wild_type_sequence[num - 1]:
-                            raise NameError('Position of amino acids in given sequence does not match the given '
+                            raise RuntimeError('Position of amino acids in given sequence does not match the given '
                                             'positions in the input data! E.g. see position {} and position {} being {}'
                                             ' in the given sequence.'.format(variant, num, wild_type_sequence[num - 1]))
                     except IndexError:

@@ -202,16 +202,17 @@ def prosst_train(
         pbar_epochs.set_description(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
             f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
-    try:
-        logger.info(f"Loading best model as {best_model}...")
-    except UnboundLocalError:
-        raise RuntimeError
+    if best_model is None:
+        raise RuntimeError(
+            "Failed to train a model (probably due to the input "
+            "data characteristics and loss/correlation being NaN)."
+        )
+    logger.info(f"Loading best model as {best_model}...")
     load_model(model, best_model)
     y_preds_train = get_logits_from_full_seqs(
         x_sequence_batches.flatten(start_dim=0, end_dim=1), 
-        model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False)
-    #logger.info(f"Train-->Train Performance (N={len(score_batches.cpu().flatten())}): "
-    #            f"{spearmanr(score_batches.cpu().flatten(), y_preds_train.cpu())[0]:.3f}")
+        model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
+    )
     return y_preds_train.cpu()
 
 

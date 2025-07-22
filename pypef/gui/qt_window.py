@@ -7,7 +7,7 @@ import sys
 from os import getcwd, cpu_count, chdir
 import logging
 
-from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget, 
     QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, QFileDialog
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from pypef import __version__
 from pypef.main import __doc__, run_main, logger, formatter
-from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_gpu_info
+from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_nvidia_gpu_info_pynvml
 
 
 button_style = """
@@ -87,19 +87,18 @@ class Worker(QObject):
     Code/logic taken from 
     https://stackoverflow.com/a/41605909/28792835.
     """
-
     sig_step = Signal(int, str)
     sig_done = Signal(int)
     sig_msg = Signal(str)
     sig_abort = Signal(int)
 
-    def __init__(self, id: int, cmd):
+    def __init__(self, id_: int, cmd):
         super().__init__()
         self.__id = id
         #self.__abort = False
         self.cmd =  cmd
 
-    @Slot()
+    @Slot()  
     def work(self):
         """
         This worker method does work that takes a long time: 
@@ -127,6 +126,31 @@ class Worker(QObject):
         self.sig_msg.emit(f'Worker #{self.__id} notified to abort')
 
 
+class InfoWorker(QObject):
+    sig_tick = Signal(str)
+    sig_abort = Signal()
+
+    def __init__(self, id_: int):
+        super().__init__()
+        self.__id = id_
+        self.timer = QTimer(self)
+        self.timer.setInterval(100)
+        self.timer.timeout.connect(self.on_timeout)
+
+        self.sig_abort.connect(self.stop)
+
+    def start(self):
+        self.timer.start()
+
+    def stop(self):
+        self.timer.stop()
+
+    @Slot()
+    def on_timeout(self):
+        self.sig_tick.emit(get_vram(verbose=False)[1]) 
+
+
+
 class SecondWindow(QWidget):
    def __init__(self):
       super().__init__()
@@ -137,7 +161,7 @@ class SecondWindow(QWidget):
 class MainWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.sig_start = Signal()  # needed only due to PyCharm debugger bug (!)
+        self.sig_start = Signal()  # needed only due to PyCharm debugger bug
         self.llm = 'esm'
         self.regression_model = 'PLS'
         self.mklsts_cv_method = ''
@@ -178,11 +202,16 @@ class MainWidget(QWidget):
             "font-family:Consolas;font-size:12px;font-weight:normal;color:white;"
             "background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);"
         )
-        self.device_text_out.setFixedHeight(70)
-        self.device_text_out.append(f"Device (for LLM/DCA): {get_device().upper()}")
-        self.device_text_out.append(get_vram())
-        self.device_text_out.append(get_gpu_info())
-        self.device_text_out.append(f"PyTorch version: {get_torch_version()}")
+        self.device_text_out.setFixedHeight(85)
+        self.device_text_out_info_text = (
+            f"Device (for LLM/DCA): {get_device().upper()}\n"
+            f"{get_nvidia_gpu_info_pynvml()[0]}\n"
+            f"PyTorch version: {get_torch_version()}\n"
+            f"Driver version: {get_nvidia_gpu_info_pynvml()[1]}\n"
+            f"{get_vram(verbose=False)[0]}"
+        )
+        self.device_text_out.setPlainText(self.device_text_out_info_text)
+
 
         self.textedit_out = QTextEdit(readOnly=True)
         self.textedit_out.setStyleSheet(
@@ -204,7 +233,7 @@ class MainWidget(QWidget):
         self.slider.setMaximum(100)
         self.slider.setValue(80)
         self.slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.slider.move(10, 105)
+        self.slider.move(10, 130)
         self.slider.valueChanged.connect(self.selection_ls_proportion)
 
         # ComboBoxes ####################################################################
@@ -589,19 +618,46 @@ class MainWidget(QWidget):
 
         layout.addWidget(self.logTextBox.widget, 12, 2, 1, 4)
 
-    def start_threads(self):
+        # Start info thread #############################################################
+        self.start_info_thread()
+
+    def start_main_thread(self):
         self.textedit_out.append(f"Executing command: {self.cmd}")
         self.__workers_done = 0
         self.__threads = []
         worker = Worker(0, cmd=self.cmd)
         thread = QThread()
-        thread.setObjectName('thread_' + str(0))
+        thread.setObjectName('thread_' + str(0) + '_MainThread')
+        # Store refs to avoid garbage collection
         self.__threads.append((thread, worker))
         worker.moveToThread(thread)
         worker.sig_done.connect(self.on_worker_done)
         worker.sig_msg.connect(self.logTextBox.widget.appendPlainText)
         thread.started.connect(worker.work)
         thread.start()
+    
+    def start_info_thread(self):
+        self.__info_workers_done = 0
+        self.__info_threads = []
+        info_worker = InfoWorker(1)
+        info_thread = QThread()
+        info_thread.setObjectName('thread_' + str(1) + '_InfoThread')
+        info_worker.moveToThread(info_thread)
+        # Store refs to avoid garbage collection
+        self.__info_threads.append((info_thread, info_worker))
+        info_worker.sig_tick.connect(self.handle_info_tick)
+        info_thread.started.connect(info_worker.start)
+        info_thread.start()
+
+    def handle_info_tick(self, info_text: str):
+        new_info = ""
+        for i, s in enumerate(self.device_text_out_info_text.split("\n")):
+            if i < len(self.device_text_out_info_text.split("\n")) - 1:
+                new_info += s + "\n"
+            else:
+                new_info += info_text
+        self.device_text_out.setPlainText(new_info)
+
 
     @Slot(int)
     def on_worker_done(self):
@@ -652,6 +708,18 @@ class MainWidget(QWidget):
         self.toggle_buttons(True)
         self.textedit_out.append("=" * 60 + "\n")
         self.version_text.setText("Finished...")
+
+
+    def closeEvent(self, event):
+        """
+        Overwriting self closeEvent (invoked on GUI window closing): 
+        gracefully stop InfoWorkers and threads
+        """
+        for thread, worker in self.__info_threads:
+                worker.sig_abort.emit()
+                thread.quit()
+                thread.wait()
+        event.accept()
     
 
     # Box selections ####################################################################
@@ -717,7 +785,7 @@ class MainWidget(QWidget):
                 f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} '
                 f'--ls_proportion {self.ls_proportion} {self.mklsts_cv_method}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -735,7 +803,7 @@ class MainWidget(QWidget):
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
             self.cmd = f'mkps --wt {wt_fasta_file} --input {csv_variant_file}'
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
     
@@ -756,7 +824,7 @@ class MainWidget(QWidget):
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.cmd = f'param_inference --wt {wt_fasta_file} --msa {msa_file}'
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -776,7 +844,7 @@ class MainWidget(QWidget):
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.cmd = f'save_msa_info --wt {wt_fasta_file} --msa {msa_file}'
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -797,7 +865,7 @@ class MainWidget(QWidget):
             )
             self.cmd = (f'hybrid --ts {test_set_file} -m {params_pkl_file} '
                         f'--params {params_pkl_file}')
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -826,12 +894,12 @@ class MainWidget(QWidget):
                         f'hybrid --ts {test_set_file} --llm {self.llm} '
                         f'--wt {wt_fasta_file} --pdb {pdb_file}'
                         )
-                    self.start_threads()
+                    self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
                 self.cmd = f'hybrid --ts {test_set_file} --llm {self.llm}'
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
                     "Provide a LLM option for modeling."
@@ -859,7 +927,7 @@ class MainWidget(QWidget):
                 f'hybrid --ps {prediction_file} '
                 f'-m {params_pkl_file} --params {params_pkl_file}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -888,12 +956,12 @@ class MainWidget(QWidget):
                         f'hybrid --ps {prediction_file} --llm {self.llm} '
                         f'--wt {wt_fasta_file} --pdb {pdb_file}'
                         )
-                    self.start_threads()
+                    self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
                 self.cmd = f'hybrid --ps {prediction_file} --llm {self.llm}'
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
                     "Provide a LLM option for modeling."
@@ -920,7 +988,7 @@ class MainWidget(QWidget):
                 f'hybrid --ls {training_file} --ts {training_file} '
                 f'-m {params_pkl_file} --params {params_pkl_file}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -947,7 +1015,7 @@ class MainWidget(QWidget):
                 f'hybrid -m {params_pkl_file} --ls {training_file} '
                 f'--ts {test_file} --params {params_pkl_file}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -970,7 +1038,7 @@ class MainWidget(QWidget):
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.cmd = (f'hybrid -m {model_pkl_file} --ts {test_file} '
                         f'--params {params_pkl_file}')
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -997,7 +1065,7 @@ class MainWidget(QWidget):
                 f'hybrid -m {model_file} --ps {prediction_file} '
                 f'--params {params_pkl_file}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1030,7 +1098,7 @@ class MainWidget(QWidget):
                     f'--params {params_pkl_file} --llm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         elif self.llm == 'esm':
@@ -1042,7 +1110,7 @@ class MainWidget(QWidget):
                     f'hybrid --ls {training_file} --ts {training_file} '
                     f'--params {params_pkl_file} --llm {self.llm}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         else:
@@ -1085,7 +1153,7 @@ class MainWidget(QWidget):
                     f'--params {params_pkl_file} --llm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         elif self.llm == 'esm':
@@ -1097,7 +1165,7 @@ class MainWidget(QWidget):
                     f'hybrid --ls {training_file} --ts {test_file} '
                     f'--params {params_pkl_file} --llm {self.llm}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         else:
@@ -1139,7 +1207,7 @@ class MainWidget(QWidget):
                     f'hybrid -m {model_file} --ts {test_file} '
                     f'--params {params_pkl_file} --llm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}')
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         elif self.llm == 'esm':
@@ -1150,7 +1218,7 @@ class MainWidget(QWidget):
                 self.cmd = (
                     f'hybrid -m {model_file} --ts {test_file} '
                     f'--params {params_pkl_file} --llm {self.llm}')
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         else:
@@ -1193,7 +1261,7 @@ class MainWidget(QWidget):
                     f'--params {params_pkl_file} --llm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         elif self.llm == 'esm':
@@ -1205,7 +1273,7 @@ class MainWidget(QWidget):
                     f'hybrid -m {model_file} --ps {prediction_file} '
                     f'--params {params_pkl_file} --llm {self.llm}'
                 )
-                self.start_threads()
+                self.start_main_thread()
             else:
                 self.end_process()
         else:
@@ -1232,7 +1300,7 @@ class MainWidget(QWidget):
                 f'--ts {training_file} --params {params_pkl_file} '
                 f'--threads {self.n_cores} --regressor {self.regression_model}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1260,7 +1328,7 @@ class MainWidget(QWidget):
                 f'--ts {test_file} --params {params_pkl_file} '
                 f'--threads {self.n_cores} --regressor {self.regression_model}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1287,7 +1355,7 @@ class MainWidget(QWidget):
                 f'--ts {test_file} --params {params_pkl_file} '
                 f'--threads {self.n_cores}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1312,7 +1380,7 @@ class MainWidget(QWidget):
                 f'ml -m {model_file} --encoding dca --ps {prediction_file} '
                 f'--params {params_pkl_file} --threads {self.n_cores}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1331,7 +1399,7 @@ class MainWidget(QWidget):
                 f'ml --encoding onehot --ls {training_file} --ts {training_file} '
                 f'--threads {self.n_cores} --regressor {self.regression_model}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1354,7 +1422,7 @@ class MainWidget(QWidget):
                 f'ml --encoding onehot --ls {training_file} --ts {test_file} '
                 f'--threads {self.n_cores} --regressor {self.regression_model}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1375,7 +1443,7 @@ class MainWidget(QWidget):
                 f'ml -m {model_file} --encoding onehot --ts {test_file} '
                 f'--threads {self.n_cores}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
@@ -1396,7 +1464,7 @@ class MainWidget(QWidget):
                 f'ml -m {model_file} --encoding onehot --ps {prediction_file} '
                 f'--threads {self.n_cores}'
             )
-            self.start_threads()
+            self.start_main_thread()
         else:
             self.end_process()
 
