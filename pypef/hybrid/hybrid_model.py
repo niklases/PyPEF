@@ -789,7 +789,9 @@ def save_model_to_dict_pickle(
         open(pkl_path, 'wb')
     )
     logger.info(f'Saved model as Pickle file ({pkl_path})...')
+    # TODO: Free up memory (when running form Qt GUI) 
     del model
+    torch.cuda.empty_cache()
     gc.collect()
 
 

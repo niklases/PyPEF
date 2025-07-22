@@ -37,6 +37,7 @@ dependencies = [
     "schema",
     "pathos",
     "peft",
+    "pynvml",
     "torch",
     "torch-geometric"
 ]
