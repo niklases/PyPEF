@@ -94,7 +94,7 @@ class Worker(QObject):
 
     def __init__(self, id_: int, cmd):
         super().__init__()
-        self.__id = id
+        self.__id = id_
         #self.__abort = False
         self.cmd =  cmd
 
@@ -658,7 +658,6 @@ class MainWidget(QWidget):
                 new_info += info_text
         self.device_text_out.setPlainText(new_info)
 
-
     @Slot(int)
     def on_worker_done(self):
         self.end_process()
@@ -716,7 +715,7 @@ class MainWidget(QWidget):
         gracefully stop InfoWorkers and threads
         """
         for thread, worker in self.__info_threads:
-                worker.sig_abort.emit()
+                worker.stop()
                 thread.quit()
                 thread.wait()
         event.accept()

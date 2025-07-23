@@ -38,9 +38,10 @@ def get_device():
 
 def get_vram(verbose: bool = True):
     if not torch.cuda.is_available():
+        msg = "No CUDA/GPU device available for VRAM checking"
         if verbose:
-            print("No CUDA/GPU device available for VRAM checking.")
-        return "No CUDA/GPU device available for VRAM checking."
+            print(msg + ".")
+        return msg, msg
     free = torch.cuda.mem_get_info()[0] / 1024 ** 3
     total = torch.cuda.mem_get_info()[1] / 1024 ** 3
     total_cubes = 24
@@ -91,7 +92,7 @@ def get_nvidia_gpu_info_pynvml():
         gpus.append(gpu)
     pynvml.nvmlShutdown()
     if not gpus:
-        output = "No nvidia-smi (and hence GPU) found."
+        print("No GPU information found.")
     gpu_0_name = gpus[0]["name"]
     gpu_0_driver = gpus[0]["driver_version"]
     return gpu_0_name, gpu_0_driver
