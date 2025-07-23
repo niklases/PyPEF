@@ -17,6 +17,7 @@ from os.path import isfile, join
 from typing import Union
 import warnings
 import gc
+import torch
 
 import numpy as np
 import sklearn.base
@@ -789,7 +790,7 @@ def save_model_to_dict_pickle(
         open(pkl_path, 'wb')
     )
     logger.info(f'Saved model as Pickle file ({pkl_path})...')
-    # TODO: Free up memory (when running form Qt GUI) 
+    # Free up memory (needed when running from Qt GUI threads?) 
     del model
     torch.cuda.empty_cache()
     gc.collect()
