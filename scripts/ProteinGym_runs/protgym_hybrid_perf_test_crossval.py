@@ -42,7 +42,6 @@ from pypef.utils.split import DatasetSplitter
 
 JUST_PLOT_RESULTS = False
 
-
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
     device = get_device()
@@ -272,7 +271,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
                             temp_results[category][f'Split {i_split}'].update({m: np.nan})
                         continue
-                    #get_vram()
 
                     y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
                     temp_results[category][f'Split {i_split}'].update({'DCA': spearmanr(y_test, y_test_pred_dca)[0]})
@@ -286,7 +284,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
                         m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m]
-                        #print('\n~~~ ' + m_str + ' ~~~')
                         try:
                             hm = DCALLMHybridModel(
                                 x_train_dca=np.array(x_dca_train), 
@@ -317,7 +314,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     gc.collect()
 
             dt = time.time() - start_time
-            print(json.dumps(temp_results, indent=4))
 
             with open(out_results_csv, 'a') as fh:
                 fh.write(
@@ -354,195 +350,34 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 
 
 def plot_csv_data(csv, plot_name):
-    train_test_size_texts = []
-    df = pd.read_csv(csv, sep=',')  
-    tested_dsets = df['No.']
-    dset_dca_perfs = df['Untrained_Performance_DCA']
-    dset_esm_perfs = df['Untrained_Performance_ESM1v']
-    dset_prosst_perfs = df['Untrained_Performance_ProSST']
-    dset_hybrid_perfs_dca_100 = df['Hybrid_DCA_Trained_Performance_100']
-    dset_hybrid_perfs_dca_200 = df['Hybrid_DCA_Trained_Performance_200']
-    dset_hybrid_perfs_dca_1000 = df['Hybrid_DCA_Trained_Performance_1000']
-    dset_hybrid_perfs_dca_esm_100 = df['Hybrid_DCA_ESM1v_Trained_Performance_100']
-    dset_hybrid_perfs_dca_esm_200 = df['Hybrid_DCA_ESM1v_Trained_Performance_200']
-    dset_hybrid_perfs_dca_esm_1000 = df['Hybrid_DCA_ESM1v_Trained_Performance_1000']
-    dset_hybrid_perfs_dca_prosst_100 = df['Hybrid_DCA_ProSST_Trained_Performance_100']
-    dset_hybrid_perfs_dca_prosst_200 = df['Hybrid_DCA_ProSST_Trained_Performance_200']
-    dset_hybrid_perfs_dca_prosst_1000 = df['Hybrid_DCA_ProSST_Trained_Performance_1000']
-
-    blue_colors = mpl.colormaps['Blues'](np.linspace(0.3, 0.9, 4))
-    red_colors = mpl.colormaps['Reds'](np.linspace(0.3, 0.9, 4))
-    green_colors = mpl.colormaps['Greens'](np.linspace(0.3, 0.9, 4))
-
-    plt.figure(figsize=(80, 12))
-    plt.plot(range(len(tested_dsets)), dset_dca_perfs, 'o--', markersize=8, 
-             color=blue_colors[0], label='DCA (0)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_dca_perfs)), 
-             color=blue_colors[0], linestyle='--')
-    for i, (p, n_test) in enumerate(zip(
-        dset_dca_perfs, df['N_Y_test'].astype('Int64').to_list())):
-        plt.text(i, 0.975, i, color='black', size=2)
-        plt.text(i, 0.980, f'0'  + r'$\rightarrow$' + f'{n_test}', color='black', size=2)
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_dca_perfs), 
-                                          f'{np.nanmean(dset_dca_perfs):.2f}', color=blue_colors[0]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_100, 
-             'o--', markersize=8, color=blue_colors[1], label='Hybrid (100)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_100)), 
-             color=blue_colors[1], linestyle='--')
-    for i, (p, n_test) in enumerate(zip(dset_hybrid_perfs_dca_100, df['N_Y_test_100'].astype('Int64').to_list())):
-        plt.text(i, 0.985, f'100'  + r'$\rightarrow$' + f'{n_test}', color='black', size=2)
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_100), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_100):.2f}', color=blue_colors[1]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_200, 
-             'o--', markersize=8, color=blue_colors[2], label='Hybrid (200)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_200)), 
-             color=blue_colors[2], linestyle='--')
-    for i, (p, n_test) in enumerate(zip(
-        dset_hybrid_perfs_dca_200, df['N_Y_test_200'].astype('Int64').to_list())):
-       plt.text(i, 0.990, f'200'  + r'$\rightarrow$' + f'{n_test}', color='black', size=2)
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_200), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_200):.2f}', color=blue_colors[2]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_1000, 
-             'o--', markersize=8, color=blue_colors[3],  label='Hybrid (1000)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_1000)), 
-             color=blue_colors[3], linestyle='--')
-    for i, (p, n_test) in enumerate(zip(
-        dset_hybrid_perfs_dca_1000, df['N_Y_test_1000'].astype('Int64').to_list())):
-        plt.text(i, 0.995, f'1000'  + r'$\rightarrow$' + f'{n_test}', color='black', size=2)
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_1000), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_1000):.2f}', color=blue_colors[3]))
-
-
-    plt.plot(range(len(tested_dsets)), dset_esm_perfs, 
-             'o--', markersize=8, color=green_colors[0], label='ESM (0)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_esm_perfs)), 
-             color=green_colors[0], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_esm_perfs), 
-                                          f'{np.nanmean(dset_esm_perfs):.2f}', color=green_colors[0]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_esm_100, 
-             'o--', markersize=8, color=green_colors[1], label='Hybrid (100)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_esm_100)), 
-             color=green_colors[1], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_esm_100), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_esm_100):.2f}', color=green_colors[1]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_esm_200, 
-             'o--', markersize=8, color=green_colors[2], label='Hybrid (200)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_esm_200)), 
-             color=green_colors[2], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_esm_200), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_esm_200):.2f}', color=green_colors[2]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_esm_1000, 
-             'o--', markersize=8, color=green_colors[3],  label='Hybrid (1000)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_esm_1000)), 
-             color=green_colors[3], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_esm_1000), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_esm_1000):.2f}', color=green_colors[3]))
-
-
-    plt.plot(range(len(tested_dsets)), dset_prosst_perfs, 
-             'o--', markersize=8, color=red_colors[0], label='ProSST (0)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_prosst_perfs)), 
-             color=red_colors[0], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_prosst_perfs), 
-                                          f'{np.nanmean(dset_prosst_perfs):.2f}', color=red_colors[0]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_prosst_100, 
-             'o--', markersize=8, color=red_colors[1], label='Hybrid (100)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_prosst_100)), 
-             color=red_colors[1], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_prosst_100), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_prosst_100):.2f}', color=red_colors[1]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_prosst_200, 
-             'o--', markersize=8, color=red_colors[2], label='Hybrid (200)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_prosst_200)), 
-             color=red_colors[2], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_prosst_200), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_prosst_200):.2f}', color=red_colors[2]))
-
-    plt.plot(range(len(tested_dsets)), dset_hybrid_perfs_dca_prosst_1000, 
-             'o--', markersize=8, color=red_colors[3],  label='Hybrid (1000)')
-    plt.plot(range(len(tested_dsets) + 1), np.full(len(tested_dsets) + 1, np.nanmean(dset_hybrid_perfs_dca_prosst_1000)), 
-             color=red_colors[3], linestyle='--')
-    train_test_size_texts.append(plt.text(len(tested_dsets), np.nanmean(dset_hybrid_perfs_dca_prosst_1000), 
-                                          f'{np.nanmean(dset_hybrid_perfs_dca_prosst_1000):.2f}', color=red_colors[3]))
-
-
-    plt.grid(zorder=-1)
-    plt.xticks(
-        range(len(tested_dsets)), 
-        ['(' + str(n) + ') ' + name  for (n, name) in zip(tested_dsets, df['Dataset'].to_list())], 
-        rotation=45, ha='right'
-    )
-    plt.margins(0.01)
-    plt.legend()
-    plt.tight_layout()
-    plt.ylim(0.0, 1.0)
-    plt.xlabel('Tested dataset')
-    plt.ylabel(r'Spearman $\rho$')
-    adjust_text(train_test_size_texts, expand=(1.2, 2))
-    plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
-    print('Saved file as ' + os.path.join(os.path.dirname(__file__),  f'{plot_name}.png') + '.')
-
-    plt.clf()
     plt.figure(figsize=(24, 12))
     sns.set_style("whitegrid")
-    df_ = df[[
-        'Untrained_Performance_DCA',
-        'Hybrid_DCA_Trained_Performance_100',
-        'Hybrid_DCA_Trained_Performance_200',
-        'Hybrid_DCA_Trained_Performance_1000',
-        'Untrained_Performance_ESM1v',
-        'Hybrid_DCA_ESM1v_Trained_Performance_100',
-        'Hybrid_DCA_ESM1v_Trained_Performance_200',
-        'Hybrid_DCA_ESM1v_Trained_Performance_1000',
-        'Untrained_Performance_ProSST',
-        'Hybrid_DCA_ProSST_Trained_Performance_100',
-        'Hybrid_DCA_ProSST_Trained_Performance_200',
-        'Hybrid_DCA_ProSST_Trained_Performance_1000',
-        ]]
-    print(df_)
+    df = pd.read_csv(csv, sep=',')  
+    df_mean = pd.DataFrame()
+    print(df)
+    print(df.columns)
+    for method in ['DCA_hybrid', 'DCA+ESM1v_hybrid', 'DCA+ProSST_hybrid']:
+        for split_technique in ['Random', 'Modulo', 'Continuous']:
+            performances = []
+            for split in range(1, 6):
+                performances.append(df[f'{split_technique}_Split_{split}_{method}'].to_list())
+            df_mean[f'{method}_{split_technique}_mean'] = np.mean(performances, axis=0)
     plot = sns.violinplot(
-        df_, saturation=0.4, 
-        palette=[blue_colors[0], blue_colors[1], blue_colors[2], blue_colors[3],
-                 green_colors[0],green_colors[1], green_colors[2], green_colors[3],
-                 red_colors[0], red_colors[1], red_colors[2], red_colors[3]]
-    )
-    plt.ylabel(r'Spearmanr $\rho$')
-    sns.swarmplot(df_, color='black')
-    dset_perfs = [
-        dset_dca_perfs,
-        dset_hybrid_perfs_dca_100,
-        dset_hybrid_perfs_dca_200,
-        dset_hybrid_perfs_dca_1000,
-        dset_esm_perfs,
-        dset_hybrid_perfs_dca_esm_100,
-        dset_hybrid_perfs_dca_esm_200,
-        dset_hybrid_perfs_dca_esm_1000,
-        dset_prosst_perfs,
-        dset_hybrid_perfs_dca_prosst_100,
-        dset_hybrid_perfs_dca_prosst_200,
-        dset_hybrid_perfs_dca_prosst_1000
-    ]
-    for n in range(0, len(dset_perfs)):
+        df_mean, saturation=0.4
+    )      
+    sns.swarmplot(df_mean)
+    for n in range(0, df_mean.shape[1]):
         plt.text(
             n + 0.15, -0.075, 
-            r'$\overline{\rho}=$' + f'{np.nanmean(dset_perfs[n]):.3f}\n' 
-            + r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(dset_perfs)[n]))}'
+            r'$\overline{\rho}=$' + f'{np.nanmean(df_mean.iloc[:, n]):.3f}\n' 
+            + r'$N_\mathrm{Datasets}=$' + f'{np.count_nonzero(~np.isnan(np.array(df_mean.iloc[:, n])))}'
         )
     plot.set_xticks(range(len(plot.get_xticklabels())))
     plot.set_xticklabels(plot.get_xticklabels(), rotation=45, horizontalalignment='right')
     plt.ylim(-0.09, 1.09)
     plt.margins(0.05)
     plt.tight_layout()
-    plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png'), dpi=300)
-    print('Saved file as ' + os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png') + '.')
+    plt.show()
 
 
 if __name__ == '__main__':
