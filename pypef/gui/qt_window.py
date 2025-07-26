@@ -133,9 +133,11 @@ class InfoWorker(QObject):
     def __init__(self, id_: int):
         super().__init__()
         self.__id = id_
+        self.abort = False
         self.timer = QTimer(self)
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.on_timeout)
+        print(self.__id)
 
         self.sig_abort.connect(self.stop)
 
@@ -143,11 +145,14 @@ class InfoWorker(QObject):
         self.timer.start()
 
     def stop(self):
-        self.timer.stop()
+        self.abort=True
 
     @Slot()
     def on_timeout(self):
-        self.sig_tick.emit(get_vram(verbose=False)[1]) 
+        if not self.abort:
+            self.sig_tick.emit(get_vram(verbose=False)[1])
+        else:
+            self.timer.stop()
 
 
 
@@ -712,7 +717,7 @@ class MainWidget(QWidget):
     def closeEvent(self, event):
         """
         Overwriting self closeEvent (invoked on GUI window closing): 
-        gracefully stop InfoWorkers and threads
+        stop InfoWorker and associated threads
         """
         for thread, worker in self.__info_threads:
                 worker.stop()
