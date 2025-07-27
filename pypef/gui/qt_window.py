@@ -171,6 +171,7 @@ class MainWidget(QWidget):
         self.regression_model = 'PLS'
         self.mklsts_cv_method = ''
         self.c = 0
+        self.n_cores = 1
         self.ls_proportion = 0.8
         self.setMinimumSize(QSize(1400, 800))
         self.setWindowTitle("PyPEF GUI")

@@ -983,7 +983,7 @@ def performance_ls_ts(
             substitution_sep, threads, verbose=False
         )
 
-        logger.info(f"\nInitial training set variants: {len(train_sequences)}. "
+        logger.info(f"Initial training set variants: {len(train_sequences)}. "
                     f"Remaining: {len(train_variants)} (after removing "
                     f"substitutions at gap positions).\nInitial test set "
                     f"variants: {len(test_sequences)}. Remaining: " 
