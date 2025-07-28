@@ -237,8 +237,11 @@ class DatasetSplitter:
                 xticks.append(self.min_pos) 
                 xticks.append(self.max_pos)
                 xticks = sorted(xticks)
-                if (xticks[-1] - xticks[-2]) < 0.5 * (xticks[2] - xticks[1]):
-                    xticks.pop()
+                if len(xticks) >= 3:
+                    if (xticks[-1] - xticks[-2]) < 0.5 * (xticks[2] - xticks[1]):
+                        xticks.pop()
+                    if (xticks[1] - xticks[0]) < 0.5 * (xticks[2] - xticks[1]):
+                        xticks.pop(0)
                 axs[i_category + 1, i_split].set_xticks(xticks)
                 if i_category == 0:
                     axs[i_category + 1, i_split].set_title(f"Split {i_split + 1}")

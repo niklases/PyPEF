@@ -41,6 +41,7 @@ jobs:
     - name: Export Pythonpath and run tests using pip-installation
       run: |
         export PYTHONPATH=""
+        sudo apt update && sudo apt install -y libegl1
         pip install .[gui]
         echo $(which pypef)
         python -m pytest ./tests/ -v -m "not main_script_specific"
