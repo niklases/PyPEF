@@ -13,5 +13,7 @@ Depending on the available GPU/VRAM, the variable `MAX_WT_SEQUENCE_LENGTH` in th
 #python -m pip install -r ../../requirements.txt
 python -m pip install seaborn
 python download_proteingym_and_extract_data.py
-python protgym_hybrid_perf_test_dca_llm_low_n.py
+python protgym_hybrid_perf_test_low_n.py
+# and / or
+#python protgym_hybrid_perf_test_crossval.py
 ```
