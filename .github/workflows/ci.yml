@@ -16,7 +16,8 @@ jobs:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     env:
-      QT_QPA_PLATFORM: offscreen
+     QT_QPA_PLATFORM: offscreen
+     DISPLAY: ':99.0'
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
@@ -41,10 +42,15 @@ jobs:
     - name: Export Pythonpath and run tests using pip-installation
       run: |
         export PYTHONPATH=""
-        sudo apt update && sudo apt install -y libegl1
+        sudo apt update
+        sudo apt install -y libegl1 xvfb \
+         libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+         libxcb-randr0 libxcb-render-util0 libxcb-xinerama0 libxcb-xfixes0
+        Xvfb :99 -screen 0 1920x1080x24 -ac &
+        sleep 3
         pip install .[gui]
         echo $(which pypef)
-        python -m pytest ./tests/ -v -m "not main_script_specific"
+        python -m pytest ./tests/ -v -m "not main_script_specific" --capture=tee-sys --log-cli-level=INFO
 
   windows:
     name: windows
@@ -82,5 +88,5 @@ jobs:
         $env:PYTHONPATH = ""
         pip install .[gui]
         echo (Get-Command pypef).Source
-        python -m pytest .\tests -v -m "not main_script_specific"
+        python -m pytest .\tests -v -m "not main_script_specific" --capture=tee-sys --log-cli-level=INFO
 

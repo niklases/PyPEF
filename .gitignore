@@ -9,6 +9,7 @@ Python3127/*
 python-3.12.7-amd64.exe
 run_pypef_gui.bat
 run_pypef_gui.sh
+qt_window.spec
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

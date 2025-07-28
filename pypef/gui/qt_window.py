@@ -7,7 +7,7 @@ import sys
 from os import getcwd, cpu_count, chdir
 import logging
 
-from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot
+from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget, 
     QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, QFileDialog
@@ -137,15 +137,16 @@ class InfoWorker(QObject):
         self.timer = QTimer(self)
         self.timer.setInterval(100)
         self.timer.timeout.connect(self.on_timeout)
-        print(self.__id)
 
         self.sig_abort.connect(self.stop)
 
     def start(self):
         self.timer.start()
 
+    @Slot()
     def stop(self):
         self.abort=True
+        self.timer.stop()
 
     @Slot()
     def on_timeout(self):
@@ -153,7 +154,6 @@ class InfoWorker(QObject):
             self.sig_tick.emit(get_vram(verbose=False)[1])
         else:
             self.timer.stop()
-
 
 
 class SecondWindow(QWidget):
@@ -721,7 +721,9 @@ class MainWidget(QWidget):
         stop InfoWorker and associated threads
         """
         for thread, worker in self.__info_threads:
-                worker.stop()
+                worker.sig_abort.emit()  # stops timer
+                QMetaObject.invokeMethod(worker, "stop", Qt.QueuedConnection)
+                #worker.stop()
                 thread.quit()
                 thread.wait()
         event.accept()
