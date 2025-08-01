@@ -42,6 +42,7 @@ from pypef.utils.split import DatasetSplitter
 
 JUST_PLOT_RESULTS = False
 
+
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
     device = get_device()
@@ -365,7 +366,7 @@ def plot_csv_data(csv, plot_name):
     plot = sns.violinplot(
         df_mean, saturation=0.4
     )      
-    sns.swarmplot(df_mean)
+    sns.swarmplot(df_mean, color='black')
     for n in range(0, df_mean.shape[1]):
         plt.text(
             n + 0.15, -0.075, 
