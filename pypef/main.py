@@ -120,6 +120,10 @@ Usage:
     pypef param_inference
         [--msa MSA_FILE] [--params PARAM_FILE]
         [--wt WT_FASTA] [--opt_iter N_ITER]
+    pypef predict_ssm --wt WT_FASTA
+        [--params PARAM_FILE]
+        [--llm LLM] 
+        [--pdb PDB_FILE] [--wt WT_FASTA]
     pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
         [--opt_iter N_ITER]
     pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
@@ -268,6 +272,8 @@ Options:
   MODELS                            Number of saved models to show [default: 5].
   onehot                            OneHot-based encoding [default: False].
   param_inference                   Inferring DCA params using the GREMLIN approach [default: False].
+  predict_ssm                       Getting all possible amino acid single substutions across the wild type sequence
+                                    and predicting all up to 19 variants per wild type sequence position.
   reformat_csv                      Reformat input CSV with indicated column and mutation separators to default
                                     CSV style (column separator ';' and mutation separator '/') [default: False.]
   save_msa_info                     Optimize local fields and couplings of MSA based on GREMLIN DCA approach and
@@ -369,6 +375,7 @@ schema = Schema({
     Optional('--wt_pos'): Use(int),
     Optional('aaidx'): bool,
     Optional('param_inference'): bool,
+    Optional('predict_ssm'): bool,
     Optional('hybrid'): bool,
     Optional('directevo'): bool,
     Optional('encode'): bool,

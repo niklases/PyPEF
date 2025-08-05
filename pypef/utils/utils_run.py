@@ -371,3 +371,7 @@ def run_pypef_utils(arguments):
             csv_file=arguments['--input'],
             encoding_type=arguments['--encoding']
         )
+    elif arguments('predict_ssm'):
+        pass  # TODO
+    else:
+        raise RuntimeError("Unknown run option!")
