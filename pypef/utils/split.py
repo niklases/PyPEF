@@ -25,7 +25,6 @@ class DatasetSplitter:
             csv_separator: str | None = None
     ):
         self.df_or_csv_file = df_or_csv_file
-        print(self.df_or_csv_file)
         self.mutation_column = mutation_column
         if csv_separator is None:
             csv_separator = ','
@@ -62,25 +61,28 @@ class DatasetSplitter:
             if not self.mutation_separator in variant:
                 single_mut_idxs.append(i)
         if single_mut_idxs:   
-            self.df = self.df.loc[single_mut_idxs, :]
-            if len(single_mut_idxs) != self.df.size:
-                logger.info(f'Removed multimutated variants from dataframe... '
-                      f'new dataframe size: {self.df.shape[0]}')
+            self.df_singles = self.df.loc[single_mut_idxs, :]
+            self.df_singles.reset_index(drop=True, inplace=True)  # TODO: Better, keep an index copy of the full df
+            if self.df_singles.size != self.df.size:
+                logger.info(  #(TODO): For now, removing double or higher mutated variants (keep in future?!)..
+                    f'Removed {self.df.shape[0] - self.df_singles.shape[0]} multimutated variants '
+                    f'from dataframe... new dataframe size: {self.df_singles.shape[0]}'
+                )
         if self.mutation_column is None:
-            variants = self.df.iloc[:, 0].to_list()
+            variants = self.df_singles.iloc[:, 0].to_list()
         else:
-            variants = self.df[self.mutation_column].to_list()
-        self.df.reset_index(drop=True, inplace=True)
-        self.df['variant_pos'] = [int(v[1:-1]) for v in variants]
-        self.df['substitutions'] = [v[-1] for v in variants]
-        self.df.sort_values(['variant_pos', 'substitutions'], ascending=[True, True], inplace=True)
-        self.min_pos, self.max_pos = self.df['variant_pos'].to_numpy()[0], self.df['variant_pos'].to_numpy()[-1]
+            variants = self.df_singles[self.mutation_column].to_list()
+        #self.df.reset_index(drop=True, inplace=True)
+        self.df_singles['variant_pos'] = [int(v[1:-1]) for v in variants]
+        self.df_singles['substitutions'] = [v[-1] for v in variants]
+        self.df_singles.sort_values(['variant_pos', 'substitutions'], ascending=[True, True], inplace=True)
+        self.min_pos, self.max_pos = self.df_singles['variant_pos'].to_numpy()[0], self.df_singles['variant_pos'].to_numpy()[-1]
         
     def split_random(self):
         self.random_splits_train_indices_combined = []
         self.random_splits_test_indices_combined = []
         kf = KFold(n_splits=self.n_cv, shuffle=True, random_state=42)
-        for i_train, i_test in kf.split(range(self.df.shape[0])):
+        for i_train, i_test in kf.split(range(self.df_singles.shape[0])):
             self.random_splits_train_indices_combined.append(i_train)
             self.random_splits_test_indices_combined.append(i_test)
 
@@ -90,7 +92,7 @@ class DatasetSplitter:
         are necessarily equally frequent in the dataset.
         """
         modulo_splits = [[] for _ in range(self.n_cv)]
-        for i_v, v_pos in enumerate(self.df['variant_pos'].to_numpy()):
+        for i_v, v_pos in enumerate(self.df_singles['variant_pos'].to_numpy()):
             for i in range(self.n_cv):
                 if v_pos % self.n_cv == i:
                     modulo_splits[i].append(i_v)
@@ -105,7 +107,7 @@ class DatasetSplitter:
                 self.modulo_splits_train_indices_combined.append(temp)
         self.modulo_splits_test_indices_combined = [[] for _ in range(self.n_cv)]
         for i_ts, train_split in enumerate(self.modulo_splits_train_indices_combined):
-            for i in range(self.df.shape[0]):
+            for i in range(self.df_singles.shape[0]):
                 if i not in train_split:
                     self.modulo_splits_test_indices_combined[i_ts].append(i)
 
@@ -117,7 +119,7 @@ class DatasetSplitter:
         cont_poses = np.array_split(np.array(range(self.min_pos, self.max_pos + 1)), self.n_cv)
         cont_splits = [[] for _ in range(self.n_cv)]
         for i_p, poses in enumerate(cont_poses):
-            for i, pos in enumerate(self.df['variant_pos'].to_numpy()):
+            for i, pos in enumerate(self.df_singles['variant_pos'].to_numpy()):
                 if pos in poses:
                     cont_splits[i_p].append(i)
         cont_train_splits = []
@@ -131,7 +133,7 @@ class DatasetSplitter:
                 self.cont_splits_train_indices_combined.append(temp)
         self.cont_splits_test_indices_combined = [[] for _ in range(self.n_cv)]
         for i_ts, train_split in enumerate(self.cont_splits_train_indices_combined):
-            for i in range(self.df.shape[0]):
+            for i in range(self.df_singles.shape[0]):
                 if i not in train_split:
                     self.cont_splits_test_indices_combined[i_ts].append(i)
         
@@ -158,12 +160,15 @@ class DatasetSplitter:
         return dict(zip(all_poses, zero_counts))
     
     def _get_distribution(self, indices):
-        df_fold = self.df.iloc[indices, :]
+        df_fold = self.df_singles.iloc[indices, :]
         un, c = np.unique(df_fold['variant_pos'].to_numpy(), return_counts=True)
         zc = self._get_zero_counts()
         zc.update(dict(zip(un, c)))
         return list(zc.keys()), list(zc.values())
     
+    def get_single_sub_df(self):
+        return self.df_singles
+
     def get_all_split_indices(self):
         return [
             [self.random_splits_train_indices_combined, self.random_splits_test_indices_combined],
@@ -175,10 +180,10 @@ class DatasetSplitter:
         train_split_data, test_split_data = [], []
         for train_split, test_split in zip(combined_train_indices, combined_test_indices):
             train_split_data.append(
-                self.df.iloc[train_split, :].reset_index(drop=True)
+                self.df_singles.iloc[train_split, :].reset_index(drop=True)
             )
             test_split_data.append(
-                self.df.iloc[test_split, :].reset_index(drop=True)
+                self.df_singles.iloc[test_split, :].reset_index(drop=True)
             )
         return train_split_data, test_split_data
     
@@ -209,7 +214,7 @@ class DatasetSplitter:
         fig.set_figwidth(30)
         fig.set_figheight(10)
         
-        poses, counts = self._get_distribution(sorted(list(self.df.index)))
+        poses, counts = self._get_distribution(sorted(list(self.df_singles.index)))
         for i in range(self.n_cv):
             if i == self.n_cv // 2:
                 axs[0, i].set_title("All data")

@@ -193,9 +193,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 continue 
 
             ns_y_test = [len(variants)]
-            ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=5)
+            ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=5, mutation_separator=mut_sep)
             ds.plot_distributions()
             temp_results = {}
+            # TODO: Get correct indices for full df for multi-muts using DatasetSplitter!
             for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
                 category = ["Random", "Modulo", "Continuous"][i_category]
                 print(f'Category: {category}')
