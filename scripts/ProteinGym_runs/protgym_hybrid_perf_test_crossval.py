@@ -195,9 +195,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             ns_y_test = [len(variants)]
             ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=5, mutation_separator=mut_sep)
             ds.plot_distributions()
+            if max_muts >= 2:  # Only using random cross-validation splits
+                print("Only performing random splits as data contains multi-substituted variants...")
+                target_split_indices = [ds.get_random_single_multi_split_indices()]
+            else:              # Using random, modulo, continuous CV splits
+                print("Only single substituted variants found, performing random, modulo, and continuous data splits...")
+                target_split_indices = ds.get_all_split_indices()
             temp_results = {}
             # TODO: Get correct indices for full df for multi-muts using DatasetSplitter!
-            for i_category, (train_indices, test_indices) in enumerate(ds.get_all_split_indices()):
+            for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = ["Random", "Modulo", "Continuous"][i_category]
                 print(f'Category: {category}')
                 temp_results.update({category: {}})
@@ -205,6 +211,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     train_indices, test_indices
                 )):
                     print(f'    Split: {i_split + 1}')
+                    print(test_i)
                     temp_results[category].update({f'Split {i_split}': {}})
                     try:
                         _train_sequences, test_sequences = np.asarray(sequences)[train_i], np.asarray(sequences)[test_i]

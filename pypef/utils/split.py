@@ -46,10 +46,13 @@ class DatasetSplitter:
         self.random_splits_train_indices_combined, self.random_splits_test_indices_combined = None, None
         self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined = None, None
         self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined = None, None
+        self.random_splits_train_indices_combined_multi = None
+        self.random_splits_test_indices_combined_multi = None
         self.order_by_pos()
         self.split_random()
         self.split_modulo()
         self.split_continuous()
+        self.split_random_single_and_multi()
     
     def order_by_pos(self):
         if self.mutation_column is None:
@@ -62,22 +65,32 @@ class DatasetSplitter:
                 single_mut_idxs.append(i)
         if single_mut_idxs:   
             self.df_singles = self.df.loc[single_mut_idxs, :]
-            self.df_singles.reset_index(drop=True, inplace=True)  # TODO: Better, keep an index copy of the full df
+            self.df_singles.index.name = 'old_index'
+            self.df_singles.reset_index(inplace=True)  # Keeping the index copy of the full old df
+            logger.info(self.df_singles)
             if self.df_singles.size != self.df.size:
                 logger.info(  #(TODO): For now, removing double or higher mutated variants (keep in future?!)..
                     f'Removed {self.df.shape[0] - self.df_singles.shape[0]} multimutated variants '
                     f'from dataframe... new dataframe size: {self.df_singles.shape[0]}'
                 )
         if self.mutation_column is None:
-            variants = self.df_singles.iloc[:, 0].to_list()
+            variants = self.df_singles.iloc[:, 1].to_list()
         else:
             variants = self.df_singles[self.mutation_column].to_list()
-        #self.df.reset_index(drop=True, inplace=True)
         self.df_singles['variant_pos'] = [int(v[1:-1]) for v in variants]
         self.df_singles['substitutions'] = [v[-1] for v in variants]
         self.df_singles.sort_values(['variant_pos', 'substitutions'], ascending=[True, True], inplace=True)
         self.min_pos, self.max_pos = self.df_singles['variant_pos'].to_numpy()[0], self.df_singles['variant_pos'].to_numpy()[-1]
-        
+
+    def get_old_index(self, new_indices: list):
+        if isinstance(new_indices[0], (list, np.ndarray)):  # 2D array/list
+            temp = []
+            for inner in new_indices:
+                temp.append(self.df_singles.loc[inner]['old_index'].tolist())
+            return temp
+        else:  # 1D array/list
+            return self.df_singles.loc[new_indices]['old_index'].tolist()
+
     def split_random(self):
         self.random_splits_train_indices_combined = []
         self.random_splits_test_indices_combined = []
@@ -136,6 +149,15 @@ class DatasetSplitter:
             for i in range(self.df_singles.shape[0]):
                 if i not in train_split:
                     self.cont_splits_test_indices_combined[i_ts].append(i)
+    
+    def split_random_single_and_multi(self):
+        self.random_splits_train_indices_combined_multi = []
+        self.random_splits_test_indices_combined_multi = []
+        kf = KFold(n_splits=self.n_cv, shuffle=True, random_state=42)
+        for i_train, i_test in kf.split(range(self.df.shape[0])):
+            self.random_splits_train_indices_combined_multi.append(i_train)
+            self.random_splits_test_indices_combined_multi.append(i_test)
+
         
     def print_shapes(self):
         """
@@ -169,11 +191,27 @@ class DatasetSplitter:
     def get_single_sub_df(self):
         return self.df_singles
 
-    def get_all_split_indices(self):
+    def get_all_split_indices(self, old_index: bool = True):
+        if old_index:
+            return [
+                [self.get_old_index(self.random_splits_train_indices_combined), 
+                 self.get_old_index(self.random_splits_test_indices_combined)],
+                [self.get_old_index(self.modulo_splits_train_indices_combined), 
+                 self.get_old_index(self.modulo_splits_test_indices_combined)],
+                [self.get_old_index(self.cont_splits_train_indices_combined), 
+                 self.get_old_index(self.cont_splits_test_indices_combined)]
+            ]
+        else:
+            return [
+                [self.random_splits_train_indices_combined, self.random_splits_test_indices_combined],
+                [self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined],
+                [self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined]
+            ]
+    
+    def get_random_single_multi_split_indices(self):
         return [
-            [self.random_splits_train_indices_combined, self.random_splits_test_indices_combined],
-            [self.modulo_splits_train_indices_combined, self.modulo_splits_test_indices_combined],
-            [self.cont_splits_train_indices_combined, self.cont_splits_test_indices_combined]
+            self.random_splits_train_indices_combined_multi,
+            self.random_splits_test_indices_combined_multi
         ]
     
     def _get_df_split_data(self, combined_train_indices, combined_test_indices):
@@ -213,7 +251,6 @@ class DatasetSplitter:
         logger.info("Plotting distributions...")
         fig.set_figwidth(30)
         fig.set_figheight(10)
-        
         poses, counts = self._get_distribution(sorted(list(self.df_singles.index)))
         for i in range(self.n_cv):
             if i == self.n_cv // 2:
@@ -224,7 +261,7 @@ class DatasetSplitter:
                 axs[0, i].set_ylabel(f"# Amino acids")
             else:
                 fig.delaxes(axs[0, i])
-        for i_category, (train_indices, test_indices) in enumerate(self.get_all_split_indices()):
+        for i_category, (train_indices, test_indices) in enumerate(self.get_all_split_indices(old_index=False)):
             category = ["Random", "Modulo", "Continuous"][i_category]
             for i_split in range(self.n_cv):
                 pos_train, counts_train = self._get_distribution(train_indices[i_split])
