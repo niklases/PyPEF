@@ -67,14 +67,15 @@ class DatasetSplitter:
             self.df_singles = self.df.loc[single_mut_idxs, :]
             self.df_singles.index.name = 'old_index'
             self.df_singles.reset_index(inplace=True)  # Keeping the index copy of the full old df
-            logger.info(self.df_singles)
+            self.df_singles['old_index'] = self.df_singles.pop('old_index')  # Move to end (last column)
             if self.df_singles.size != self.df.size:
                 logger.info(  #(TODO): For now, removing double or higher mutated variants (keep in future?!)..
                     f'Removed {self.df.shape[0] - self.df_singles.shape[0]} multimutated variants '
-                    f'from dataframe... new dataframe size: {self.df_singles.shape[0]}'
+                    f'from dataframe (for plotting and modulo and continuous cross-validation splitting)... '
+                    f'new dataframe size: {self.df_singles.shape[0]}'
                 )
         if self.mutation_column is None:
-            variants = self.df_singles.iloc[:, 1].to_list()
+            variants = self.df_singles.iloc[:, 0].to_list()
         else:
             variants = self.df_singles[self.mutation_column].to_list()
         self.df_singles['variant_pos'] = [int(v[1:-1]) for v in variants]
@@ -158,7 +159,6 @@ class DatasetSplitter:
             self.random_splits_train_indices_combined_multi.append(i_train)
             self.random_splits_test_indices_combined_multi.append(i_test)
 
-        
     def print_shapes(self):
         """
         Also gets inhomogeneous shapes (using for loop on sublists of nested lists instead 
@@ -214,21 +214,32 @@ class DatasetSplitter:
             self.random_splits_test_indices_combined_multi
         ]
     
-    def _get_df_split_data(self, combined_train_indices, combined_test_indices):
+    def _get_df_split_data(self, combined_train_indices, combined_test_indices, target_df=None):
+        if target_df is None:
+            target_df = self.df_singles
         train_split_data, test_split_data = [], []
         for train_split, test_split in zip(combined_train_indices, combined_test_indices):
             train_split_data.append(
-                self.df_singles.iloc[train_split, :].reset_index(drop=True)
+                target_df.iloc[train_split, :].reset_index(drop=True)
             )
             test_split_data.append(
-                self.df_singles.iloc[test_split, :].reset_index(drop=True)
+                target_df.iloc[test_split, :].reset_index(drop=True)
             )
         return train_split_data, test_split_data
     
-    def get_random_df_split_data(self):
+    def get_random_df_split_data(self, include_multis: bool = False):
+        if include_multis:
+            target_df = self.df
+            combined_train_indices = self.random_splits_train_indices_combined_multi
+            combined_test_indices = self.random_splits_test_indices_combined_multi
+        else:
+            target_df = self.df_singles
+            combined_train_indices = self.random_splits_train_indices_combined
+            combined_test_indices = self.random_splits_test_indices_combined
         return self._get_df_split_data(
-            self.random_splits_train_indices_combined, 
-            self.random_splits_test_indices_combined
+            combined_train_indices, 
+            combined_test_indices,
+            target_df
         )
 
     def get_modulo_df_split_data(self):

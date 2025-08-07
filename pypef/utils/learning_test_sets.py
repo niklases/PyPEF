@@ -64,12 +64,9 @@ def drop_rows(
         raise FileNotFoundError(
             f"Specify the input CSV file containing the variant-fitness data. "
             f"Required CSV format: variant{csv_sep}fitness.")
-
     label = df_raw.iloc[:, 1]
     sequence = df_raw.iloc[:, 0]
-
     dropping_rows = []
-
     for i, row in enumerate(label):
         try:
             row = float(row)
@@ -77,7 +74,6 @@ def drop_rows(
                 dropping_rows.append(i)
         except ValueError:
             dropping_rows.append(i)
-
     for i, variant in enumerate(sequence):
         try:
             if mutation_sep in variant:
@@ -97,18 +93,15 @@ def drop_rows(
                 elif variant not in ['wt', 'wild_type']:
                     if variant[0] not in amino_acids or variant[-1] not in amino_acids:
                         dropping_rows.append(i)
-
         except TypeError:
             raise TypeError('You might consider checking the input .csv for empty first two columns,'
                             ' e.g. in the last row.')
 
     logger.info(f'No. of dropped rows: {len(dropping_rows)}. '
                 f'Total given variants (if provided plus WT): {len(df_raw)}')
-
     df = df_raw.drop(dropping_rows)
     df.dropna(inplace=True)
     df.reset_index(drop=True, inplace=True)
-
     return df
 
 
@@ -190,8 +183,8 @@ def get_variants(
                     try:
                         if variant[0] != wild_type_sequence[num - 1]:
                             raise RuntimeError('Position of amino acids in given sequence does not match the given '
-                                            'positions in the input data! E.g. see position {} and position {} being {}'
-                                            ' in the given sequence.'.format(variant, num, wild_type_sequence[num - 1]))
+                                               'positions in the input data! E.g. see position {} and position {} being {} '
+                                                'in the given sequence.'.format(variant, num, wild_type_sequence[num - 1]))
                     except IndexError:
                         raise IndexError("Found variant sequence position {} in data which "
                                          "is out of range of wild-type sequence length.".format(str(num)))

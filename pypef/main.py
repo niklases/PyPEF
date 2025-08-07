@@ -123,7 +123,7 @@ Usage:
     pypef predict_ssm --wt WT_FASTA
         [--params PARAM_FILE]
         [--llm LLM] 
-        [--pdb PDB_FILE] [--wt WT_FASTA]
+        [--pdb PDB_FILE]
     pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
         [--opt_iter N_ITER]
     pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
