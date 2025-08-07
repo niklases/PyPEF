@@ -114,7 +114,7 @@ class GREMLIN:
             self.wt_seq = "".join([self.char_alphabet[i] for i in self.msa_ori[0]])
             logger.info(f"No wild-type sequence provided: The first sequence "
                         f"in the MSA is considered the wild-type sequence "
-                        f"(Length: {len(self.wt_seq)}):\n{self.wt_seq}\n")
+                        f"(Length: {len(self.wt_seq)}): {self.wt_seq}")
         if len(self.wt_seq) != self.n_col_ori:
             raise SystemError(f"Length of (provided) wild-type sequence ({len(self.wt_seq)}) "
                               f"does not match number of MSA columns ({self.n_col_ori}), "
@@ -405,6 +405,7 @@ class GREMLIN:
     def get_scores(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
         """
         Computes the GREMLIN score for a given sequence or list of sequences.
+        For now, only runs on CPU.
         """
         if v is None and w is None:
             if self.optimize:

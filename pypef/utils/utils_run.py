@@ -28,7 +28,7 @@ from pypef.utils.prediction_sets import (
 from pypef.utils.split import DatasetSplitter
 from pypef.utils.directed_evolution import DirectedEvolution
 from pypef.utils.sto2a2m import convert_sto2a2m
-
+from pypef.utils.ssm import SSM
 from pypef.ml.regression import OneHotEncoding, AAIndexEncoding, full_aaidx_txt_path
 from pypef.hybrid.hybrid_model import plmc_or_gremlin_encoding
 
@@ -379,7 +379,13 @@ def run_pypef_utils(arguments):
             csv_file=arguments['--input'],
             encoding_type=arguments['--encoding']
         )
-    elif arguments('predict_ssm'):
+    elif arguments['predict_ssm']:
+        ssm = SSM(
+            wt_seq=get_wt_sequence(arguments['--wt']),
+            model=arguments['--llm'],
+            pdb=arguments['--pdb'],
+            params_file=arguments['--params']
+        )
         pass  # TODO
     else:
         raise RuntimeError("Unknown run option!")

@@ -12,6 +12,7 @@ from tqdm import tqdm
 import pandas as pd
 import numpy as np
 
+from pypef.hybrid.hybrid_model import get_model_and_type
 from pypef.llm.inference import inference
 from pypef.dca.gremlin_inference import GREMLIN
 
@@ -23,13 +24,20 @@ class SSM:
             aas: str = "ARNDCQEGHILKMFPSTWYV",
             model: Literal["dca", "esm", "prosst"] = "dca",
             pdb: str | os.PathLike | None = None,
-            gremlin: GREMLIN | None = None
+            params_file: str | os.PathLike | None = None
     ):
         self.wt_seq = wt_seq
         self.aas = aas
+        if model is None:
+            model = "dca"
         self.model = model
         self.pdb = pdb
+        if params_file is not None:
+            gremlin, _ = get_model_and_type(params_file)
         self.gremlin = gremlin
+        self.get_data()
+        self.predict()
+        self.plot()
 
     def get_data(self):
         """
@@ -38,8 +46,7 @@ class SSM:
         M1A, M1C, M1E, ..., D2A, D2C, D2E, ..., ..., T300V, T300W, T300Y
         """
         self.variantss, self.variant_sequencess = [], []
-        logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
-        for i, aa_wt in enumerate(tqdm(self.wt_seq)):
+        for i, aa_wt in enumerate(self.wt_seq):
             variants, variant_sequences = [], []
             for aa_sub in self.aas:
                 variant = aa_wt + str(i + 1) + aa_sub
@@ -50,19 +57,23 @@ class SSM:
             self.variant_sequencess.append(variant_sequences)
 
     def predict(self):
-        if self.model == "dca":
+        if self.model == "dca" and self.gremlin is not None:
+            logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
             wt_score = self.gremlin.get_wt_score()[0]
         self.scoress = []
-        for seqs in self.variant_sequencess:
-            scores = []
-            for seq in seqs:
-                if self.model == "dca":
-                    scores.append(self.gremlin.get_scores(seq)[0] - wt_score)
-                else:
-                    scores.append(inference(
-                        seq, llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
-                    ))
-            self.scoress.append(scores)
+        #for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
+        #scores = []
+        if self.model == "dca" and self.gremlin is not None:
+            for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
+                self.scoress.append(self.gremlin.get_scores(seqs) - wt_score)
+        else:
+            self.scoress = inference(
+                        np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
+            ).numpy()
+            print(np.shape(self.scoress))
+            self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
+            print('-->')
+        print(np.shape(self.scoress))
 
     def plot(self):
         _fig, ax = plt.subplots(figsize=(2 * len(self.wt_seq) / len(self.aas), 3))
