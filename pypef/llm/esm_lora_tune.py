@@ -28,15 +28,17 @@ from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
 from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
-from transformers import EsmForMaskedLM, EsmTokenizer
 
 from pypef.utils.helpers import get_device
-from pypef.llm.utils import corr_loss
+from pypef.llm.utils import corr_loss, load_model_and_tokenizer
 
 
 def get_esm_models():
-    base_model = EsmForMaskedLM.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
-    tokenizer = EsmTokenizer.from_pretrained(f'facebook/esm1v_t33_650M_UR90S_3')
+    base_model, tokenizer = load_model_and_tokenizer(
+        f'facebook/esm1v_t33_650M_UR90S_3'
+        # Just sticking to AutoModelForMaskedLM and AutoTokenizer 
+        # instead to EsmForMaskedLM and EsmTokenizer
+    )  
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     lora_model = get_peft_model(base_model, peft_config)
     optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.01)

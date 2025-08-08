@@ -21,7 +21,6 @@ import torch
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
-from transformers import AutoModelForMaskedLM, AutoTokenizer
 from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)

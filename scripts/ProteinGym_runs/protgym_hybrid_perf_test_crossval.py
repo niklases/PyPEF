@@ -50,6 +50,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     get_vram()
     MAX_WT_SEQUENCE_LENGTH = 600  # TODO: 1000
     MAX_VARIANT_FITNESS_PAIRS = 5000
+    N_CV = 5
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
@@ -160,11 +161,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 x_esm, esm_attention_mask = esm_tokenize_sequences(
                     sequences, esm_tokenizer, max_length=len(wt_seq), verbose=False
                 )
-                #y_esm = esm_infer(
-                #    get_batches(x_esm, dtype=float, batch_size=1), 
-                #    esm_attention_mask, 
-                #    esm_base_model
-                #)
                 y_esm = inference(sequences, 'esm', model=esm_base_model, verbose=False)
                 print(f'ESM1v (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
@@ -177,10 +173,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     pdb, prosst_tokenizer, wt_seq, verbose=False
                     )
                 x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab, verbose=False)
-                #y_prosst = get_logits_from_full_seqs(
-                #        x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
-                #        structure_input_ids, train=False
-                #)
                 y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model, verbose=False)
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
@@ -192,8 +184,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print('Both LLM\'s had RunTimeErrors, skipping dataset...')
                 continue 
 
-            ns_y_test = [len(variants)]
-            ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=5, mutation_separator=mut_sep)
+            ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=N_CV, mutation_separator=mut_sep)
             ds.plot_distributions()
             if max_muts >= 2:  # Only using random cross-validation splits
                 print("Only performing random splits as data contains multi-substituted variants...")
@@ -202,17 +193,20 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print("Only single substituted variants found, performing random, modulo, and continuous data splits...")
                 target_split_indices = ds.get_all_split_indices()
             temp_results = {}
-            # TODO: Get correct indices for full df for multi-muts using DatasetSplitter!
+            for c in ["Random", "Modulo", "Continuous"]:
+                temp_results.update({c: {}})
+                for s in range(N_CV):
+                    temp_results[c].update({f'Split {s}': {}})
+                    for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
+                        # Prefill with NaN's
+                        temp_results[c][f'Split {s}'].update({m: np.nan})
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = ["Random", "Modulo", "Continuous"][i_category]
                 print(f'Category: {category}')
-                temp_results.update({category: {}})
                 for i_split, (train_i, test_i) in enumerate(zip(
                     train_indices, test_indices
                 )):
                     print(f'    Split: {i_split + 1}')
-                    print(test_i)
-                    temp_results[category].update({f'Split {i_split}': {}})
                     try:
                         _train_sequences, test_sequences = np.asarray(sequences)[train_i], np.asarray(sequences)[test_i]
                         x_dca_train, x_dca_test = np.asarray(x_dca)[train_i], np.asarray(x_dca)[test_i]
@@ -224,14 +218,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         esm_lora_model_2 = copy.deepcopy(esm_lora_model)
                         esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
                         train_size, test_size = len(train_i), len(test_i)
-                        #get_vram()
                     except ValueError as e:
                         print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
                               f"cannot split the data in N_Train = {train_size} and N_Test "
                               f"(N_Total - N_Train) [Excepted error: {e}].")
-                        for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
-                            temp_results[category][f'Split {i_split}'].update({m: np.nan})
-                        ns_y_test.append(np.nan)
                         continue
                     (
                         x_dca_train, 
@@ -276,9 +266,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                               f"results in N_Test <= 50 variants - not getting "
                               f"performance for N_Train = {len(y_train)}...")
-                        ns_y_test.append(np.nan)
-                        for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
-                            temp_results[category][f'Split {i_split}'].update({m: np.nan})
                         continue
 
                     y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
@@ -313,10 +300,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')
                             temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})
-                        except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
-                            # or UnboundLocalError in prosst_lora_tune.py, line 167
-                            temp_results[category][f'Split {i_split}'].update({m_str: np.nan})
-                    ns_y_test.append(len(y_test_pred))
+                        except RuntimeError as e:  # modeling_prosst.py in forward
+                            continue
                     del prosst_lora_model_2
                     del esm_lora_model_2
                     torch.cuda.empty_cache()
@@ -358,7 +343,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     f'{int(dt)}\n')
                 
 
-def plot_csv_data(csv, plot_name):
+def plot_csv_data(csv):
     plt.figure(figsize=(24, 12))
     sns.set_style("whitegrid")
     df = pd.read_csv(csv, sep=',')  
@@ -487,4 +472,4 @@ if __name__ == '__main__':
             ):
                 fh2.write(line)
     
-    plot_csv_data(csv=clean_out_results_csv, plot_name='mut_performance')
+    plot_csv_data(csv=clean_out_results_csv)
