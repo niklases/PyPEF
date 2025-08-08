@@ -22,7 +22,7 @@ class SSM:
             self,
             wt_seq: str,
             aas: str = "ARNDCQEGHILKMFPSTWYV",
-            model: Literal["dca", "esm", "prosst"] = "dca",
+            model: Literal["dca", "esm", "prosst"] | None = None,
             pdb: str | os.PathLike | None = None,
             params_file: str | os.PathLike | None = None
     ):
@@ -33,7 +33,11 @@ class SSM:
         self.model = model
         self.pdb = pdb
         if params_file is not None:
-            gremlin, _ = get_model_and_type(params_file)
+            gremlin, m_type = get_model_and_type(params_file)
+            if m_type != "GREMLIN":
+                raise RuntimeError("Model is not a GREMLIN model!")
+        else:
+            gremlin = None
         self.gremlin = gremlin
         self.get_data()
         self.predict()
@@ -61,19 +65,18 @@ class SSM:
             logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
             wt_score = self.gremlin.get_wt_score()[0]
         self.scoress = []
-        #for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
-        #scores = []
         if self.model == "dca" and self.gremlin is not None:
             for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
                 self.scoress.append(self.gremlin.get_scores(seqs) - wt_score)
-        else:
+        elif self.model in ["esm", "prosst"]:
             self.scoress = inference(
                         np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
             ).numpy()
-            print(np.shape(self.scoress))
+            logger.info(f"Reshaping flat array of shape {np.shape(self.scoress)} "
+                        f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
-            print('-->')
-        print(np.shape(self.scoress))
+        else:
+            raise RuntimeError("Unknown modeling option (choose between --llm esm or --llm prosst)!")
 
     def plot(self):
         _fig, ax = plt.subplots(figsize=(2 * len(self.wt_seq) / len(self.aas), 3))
@@ -82,7 +85,7 @@ class SSM:
             for i_vs, vs in enumerate(vss):
                 ax.text(
                     i_vss, i_vs, 
-                    f'{self.variantss[i_vss][i_vs]}\n{round(vs, 1)}', 
+                    f'{self.variantss[i_vss][i_vs]}\n{round(vs, 1):.1f}', 
                     size=1.5, va='center', ha='center'
                 )
         ax.set_xticks(
