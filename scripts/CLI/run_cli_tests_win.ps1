@@ -613,8 +613,18 @@ pypef hybrid -m HYBRIDGREMLIN -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host 
 
-### Similar to old CLI run test from here
+# SSM: predict_ssm
+pypef predict_ssm -w P42212_F64L.fasta --params GREMLIN
+ExitOnExitCode
+Write-Host 
+pypef predict_ssm -w P42212_F64L.fasta --llm esm
+ExitOnExitCode
+Write-Host 
+pypef predict_ssm -w P42212_F64L.fasta --llm prosst --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host 
 
+### Similar to old CLI run test from here
 pypef encode -i avGFP.csv -e dca -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 ExitOnExitCode
 Write-Host
