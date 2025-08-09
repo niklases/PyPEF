@@ -380,12 +380,11 @@ def run_pypef_utils(arguments):
             encoding_type=arguments['--encoding']
         )
     elif arguments['predict_ssm']:
-        ssm = SSM(
+        SSM(
             wt_seq=get_wt_sequence(arguments['--wt']),
             model=arguments['--llm'],
             pdb=arguments['--pdb'],
             params_file=arguments['--params']
         )
-        pass  # TODO
     else:
         raise RuntimeError("Unknown run option!")

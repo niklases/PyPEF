@@ -95,7 +95,6 @@ class Worker(QObject):
     def __init__(self, id_: int, cmd):
         super().__init__()
         self.__id = id_
-        #self.__abort = False
         self.cmd =  cmd
 
     @Slot()  
@@ -297,6 +296,30 @@ class MainWidget(QWidget):
         )
         self.button_mkps.clicked.connect(self.pypef_mkps)
         self.button_mkps.setStyleSheet(button_style)
+        # SSM (Utilities)
+        self.button_gremlin_ssm = QPushButton(
+            "GREMLIN SSM prediction"
+        )
+        self.button_gremlin_ssm.setMinimumWidth(80)
+        self.button_gremlin_ssm.setToolTip(
+            "Generating DCA parameters using GREMLIN (\"MSA optimization\") and save "
+            "plots of visualized results; requires an MSA in FASTA or A2M format"
+        )
+        self.button_gremlin_ssm.clicked.connect(
+            self.pypef_gremlin_ssm
+        )
+        self.button_gremlin_ssm.setStyleSheet(button_style)
+
+        self.button_llm_ssm = QPushButton("LLM SSM prediction")
+        self.button_llm_ssm.setMinimumWidth(80)
+        self.button_llm_ssm.setToolTip(
+            "Runs full site-saturation (single) mutagenesis using the selected LLM predcitor "
+            "and saves resulting landscape mutation effect plot"
+        )
+        self.button_llm_ssm.clicked.connect(
+            self.pypef_llm_ssm
+        )
+        self.button_llm_ssm.setStyleSheet(button_style)
         
         # DCA
         self.button_dca_inference_gremlin = QPushButton(
@@ -309,19 +332,6 @@ class MainWidget(QWidget):
         )
         self.button_dca_inference_gremlin.clicked.connect(self.pypef_gremlin)
         self.button_dca_inference_gremlin.setStyleSheet(button_style)
-
-        self.button_dca_inference_gremlin_msa_info = QPushButton(
-            "GREMLIN SSM prediction"
-        )
-        self.button_dca_inference_gremlin_msa_info.setMinimumWidth(80)
-        self.button_dca_inference_gremlin_msa_info.setToolTip(
-            "Generating DCA parameters using GREMLIN (\"MSA optimization\") and save "
-            "plots of visualized results; requires an MSA in FASTA or A2M format"
-        )
-        self.button_dca_inference_gremlin_msa_info.clicked.connect(
-            self.pypef_gremlin_msa_info
-        )
-        self.button_dca_inference_gremlin_msa_info.setStyleSheet(button_style)
 
         self.button_dca_test_dca = QPushButton("Test (DCA)")
         self.button_dca_test_dca.setMinimumWidth(80)
@@ -549,7 +559,7 @@ class MainWidget(QWidget):
             self.button_mklsts,
             self.button_mkps,
             self.button_dca_inference_gremlin,
-            self.button_dca_inference_gremlin_msa_info,
+            self.button_gremlin_ssm,
             self.button_dca_test_dca,
             self.button_llm_test_zs,
             self.button_dca_predict_dca,
@@ -562,6 +572,7 @@ class MainWidget(QWidget):
             self.button_hybrid_train_test_dca_llm,
             self.button_hybrid_test_dca_llm,
             self.button_hybrid_predict_dca_llm,
+            self.button_llm_ssm,
             self.button_supervised_train_dca,
             self.button_supervised_train_test_dca,
             self.button_supervised_test_dca,
@@ -583,16 +594,17 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_help, 4, 0, 1, 1)
         layout.addWidget(self.button_mklsts, 5, 0, 1, 1)
         layout.addWidget(self.button_mkps, 6, 0, 1, 1)
+        layout.addWidget(self.button_gremlin_ssm, 7, 0, 1, 1)
+        layout.addWidget(self.button_llm_ssm, 8, 0, 1, 1)
 
         layout.addWidget(self.mklsts_cv_options_text, 1, 1, 1, 1)
         layout.addWidget(self.box_mklsts_cv, 2, 1, 1, 1)
         layout.addWidget(self.dca_text, 3, 1, 1, 1)
         layout.addWidget(self.button_dca_inference_gremlin, 4, 1, 1, 1)
-        layout.addWidget(self.button_dca_inference_gremlin_msa_info, 5, 1, 1, 1)
-        layout.addWidget(self.button_dca_test_dca, 6, 1, 1, 1)
-        layout.addWidget(self.button_llm_test_zs, 7, 1, 1, 1)
-        layout.addWidget(self.button_dca_predict_dca, 8, 1, 1, 1)
-        layout.addWidget(self.button_llm_predict_zs, 9, 1, 1, 1)
+        layout.addWidget(self.button_dca_test_dca, 5, 1, 1, 1)
+        layout.addWidget(self.button_llm_test_zs, 6, 1, 1, 1)
+        layout.addWidget(self.button_dca_predict_dca, 7, 1, 1, 1)
+        layout.addWidget(self.button_llm_predict_zs, 8, 1, 1, 1)
 
         layout.addWidget(self.hybrid_text, 3, 2, 1, 1)
         layout.addWidget(self.button_hybrid_train_dca, 4, 2, 1, 1)
@@ -628,6 +640,7 @@ class MainWidget(QWidget):
         self.start_info_thread()
 
     def start_main_thread(self):
+        self.version_text.setText("Running...")
         self.textedit_out.append(f"Executing command: {self.cmd}")
         self.__workers_done = 0
         self.__threads = []
@@ -765,7 +778,7 @@ class MainWidget(QWidget):
             f"Changed current working directory to: {str(getcwd())}"
         )
 
-    # Layout buttons ####################################################################
+    # Button functions ##################################################################
     # Utils
     def pypef_help(self):
         self.target_button = self.button_help
@@ -813,7 +826,60 @@ class MainWidget(QWidget):
             self.start_main_thread()
         else:
             self.end_process()
+
+    def pypef_gremlin_ssm(self):
+        self.target_button = self.button_gremlin_ssm
+        self.start_process()
+        wt_fasta_file = QFileDialog.getOpenFileName(
+            self.win2, "Select WT FASTA File", 
+            filter="FASTA file (*.fasta *.fa)"
+        )[0]
+        if wt_fasta_file:
+            gremlin_pkl_file = QFileDialog.getOpenFileName(
+                self.win2, "GREMLIN Pickle file", 
+                filter="Pickle file (GREMLIN)"
+            )[0]
+            self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
+            self.cmd = f'predict_ssm --wt {wt_fasta_file} --params {gremlin_pkl_file}'
+            self.start_main_thread()
+        else:
+            self.end_process()
     
+    def pypef_llm_ssm(self):
+        self.target_button = self.button_llm_ssm
+        self.start_process()
+        wt_fasta_file = QFileDialog.getOpenFileName(
+            self.win2, "Select WT FASTA File", 
+            filter="FASTA file (*.fasta *.fa)"
+        )[0]
+        if wt_fasta_file:
+            if self.llm == 'prosst':
+                pdb_file = QFileDialog.getOpenFileName(
+                    self.win2, "Select PDB protein structure File",
+                    filter="PDB file (*.pdb)"
+                )[0]
+                if pdb_file:
+                    self.version_text.setText(
+                        "ProSST zero shot model inference..."
+                    )
+                    self.cmd = (
+                        f'predict_ssm --llm {self.llm} '
+                        f'--wt {wt_fasta_file} --pdb {pdb_file}'
+                        )
+                    self.start_main_thread()
+                else:
+                    self.end_process()
+            elif self.llm == 'esm':
+                self.cmd = f'predict_ssm --llm {self.llm} --wt {wt_fasta_file}'
+                self.start_main_thread()
+            else:
+                self.logTextBox.widget.appendPlainText(
+                    "Provide a LLM option for modeling."
+                )
+                self.end_process()
+        else:
+            self.end_process()
+
     # Unsupervised/Zero-Shot/DCA
     def pypef_gremlin(self):
         self.target_button = self.button_dca_inference_gremlin
@@ -831,26 +897,6 @@ class MainWidget(QWidget):
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.cmd = f'param_inference --wt {wt_fasta_file} --msa {msa_file}'
-            self.start_main_thread()
-        else:
-            self.end_process()
-
-    def pypef_gremlin_msa_info(self):
-        self.target_button = self.button_dca_inference_gremlin_msa_info
-        self.start_process()
-        wt_fasta_file = QFileDialog.getOpenFileName(
-            self.win2, "Select WT FASTA File", 
-            filter="FASTA file (*.fasta *.fa)"
-        )[0]
-        msa_file = QFileDialog.getOpenFileName(
-            self, 
-            ("Select Multiple Sequence Alignment (MSA) "
-            "file (in FASTA or A2M format)"),
-            filter="MSA file (*.fasta *.a2m)"
-        )[0]
-        if wt_fasta_file and msa_file:
-            self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
-            self.cmd = f'save_msa_info --wt {wt_fasta_file} --msa {msa_file}'
             self.start_main_thread()
         else:
             self.end_process()

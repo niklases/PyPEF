@@ -80,7 +80,7 @@ def is_model_cached(repo_id: str, cache_dir: str):
     snapshot_dir = None
     if os.path.isdir(cache_dir):
         ref_file = os.path.join(
-            cache_dir, f'models--{repo_id.replace("/", '--')}', 'refs', 'main'
+            cache_dir, f'models--{repo_id.replace("/", "--")}', 'refs', 'main'
         )
         if os.path.isfile(ref_file):
             with open(ref_file, 'r') as fh:
@@ -89,7 +89,7 @@ def is_model_cached(repo_id: str, cache_dir: str):
         else:
             return False, snapshot_dir
         snapshot_dir = os.path.join(
-            cache_dir, f'models--{repo_id.replace("/", '--')}', 'snapshots', ref
+            cache_dir, f'models--{repo_id.replace("/", "--")}', 'snapshots', ref
         )
         if os.path.isdir(snapshot_dir):
             return True, snapshot_dir
@@ -134,7 +134,7 @@ def load_model_and_tokenizer(
             )
     else:
         logger.info(f"Did not find model and tokenizer in cache directory, downloading model "
-              f"and tokenizer from the internet and storing in cache {cache_dir}...")
+                    f"and tokenizer from the internet and storing in cache {cache_dir}...")
         model = model_loader.from_pretrained(
             model_name, cache_dir=cache_dir, trust_remote_code=True
         )
