@@ -11,11 +11,9 @@ import pandas as pd
 import numpy as np
 import torch
 from scipy.stats import spearmanr
-from sklearn.model_selection import train_test_split
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
-from adjustText import adjust_text
 from Bio import SeqIO, BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
@@ -344,12 +342,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 
 
 def plot_csv_data(csv):
+    blue_colors = mpl.colormaps['Blues'](np.linspace(0.3, 0.9, 4))
+    red_colors = mpl.colormaps['Reds'](np.linspace(0.3, 0.9, 4))
+    green_colors = mpl.colormaps['Greens'](np.linspace(0.3, 0.9, 4))
     plt.figure(figsize=(24, 12))
     sns.set_style("whitegrid")
     df = pd.read_csv(csv, sep=',')  
     df_mean = pd.DataFrame()
     print(df)
-    print(df.columns)
     for method in ['DCA_hybrid', 'DCA+ESM1v_hybrid', 'DCA+ProSST_hybrid']:
         for split_technique in ['Random', 'Modulo', 'Continuous']:
             performances = []
@@ -357,8 +357,13 @@ def plot_csv_data(csv):
                 performances.append(df[f'{split_technique}_Split_{split}_{method}'].to_list())
             df_mean[f'{method}_{split_technique}_mean'] = np.mean(performances, axis=0)
     plot = sns.violinplot(
-        df_mean, saturation=0.4
-    )      
+        df_mean, saturation=0.4,
+        palette=[
+            blue_colors[0], blue_colors[1], blue_colors[2],
+            green_colors[0],green_colors[1], green_colors[2],
+            red_colors[0], red_colors[1], red_colors[2]
+        ]
+    )     
     sns.swarmplot(df_mean, color='black')
     for n in range(0, df_mean.shape[1]):
         plt.text(
@@ -368,10 +373,14 @@ def plot_csv_data(csv):
         )
     plot.set_xticks(range(len(plot.get_xticklabels())))
     plot.set_xticklabels(plot.get_xticklabels(), rotation=45, horizontalalignment='right')
+    plt.ylabel(r'Spearman $\rho$')
+    plt.xlabel('Splitting technique')
     plt.ylim(-0.09, 1.09)
     plt.margins(0.05)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(os.path.join(os.path.dirname(__file__), 'crossval_pgym_violin.png'), dpi=300)
+    print('Saved file as ' + os.path.join(os.path.dirname(__file__), 'crossval_pgym_violin.png') + '.')
+    #plt.show()
 
 
 if __name__ == '__main__':
@@ -444,7 +453,7 @@ if __name__ == '__main__':
     if not JUST_PLOT_RESULTS:
         compute_performances(
             mut_data=combined_mut_data, 
-            start_i=0, 
+            start_i=start_i, 
             already_tested_is=already_tested_is
         )
 

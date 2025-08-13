@@ -503,17 +503,7 @@ pypef hybrid -p PS.fasta --params PLMC
 
 using the plmc parameters.
 
-Other well-performing zero-shot prediction methods with available source code are:
-
-- ESM-1v/ESM-2 (https://github.com/facebookresearch/esm)
-- ProteinMPNN (https://github.com/dauparas/ProteinMPNN)
-- DeepSequence (https://github.com/debbiemarkslab/DeepSequence)
-- EVcouplings (plmc-DCA, https://github.com/debbiemarkslab/EVcouplings)
-- EVE (https://github.com/OATML/EVE)
-- Tranception (https://github.com/OATML-Markslab/Tranception)
-- VESPA (https://github.com/Rostlab/VESPA)
-  
-This list is by no means complete, see ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) for a more detailed overview of available methods and achieved performances (as well as for getting many benchmark data sets).
+Other well-performing zero-shot prediction methods with available source code can be obtained from the ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) that provide a more detailed overview of available methods and achieved performances (as well as many benchmark data sets).
 
 The performance of the GREMLIN model used is shown in the following for predicting single substitution effects (blue), including Hybrid model performances with N_Train = {100, 200, 1000}.
 Hybrid GREMLIN-LLM low-N-tuned models using [ESM1v](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
@@ -525,10 +515,19 @@ Hybrid GREMLIN-LLM low-N-tuned models using [ESM1v](https://github.com/facebookr
     <img src=".github/imgs/mut_performance.png" alt="drawing" width="1000"/>
 </p>
 
+
+
+For estimating model performances for different splitting techniques (random, modulo, continuous), a faster-to-compute subset (limited sequence length and number of variant-fitness pairs) of the ProteinGym data was evaluated (example dataset split technique-dependent data distribution and performances on the ProteinGym subset):
+
+<p align="center">
+    <img src=".github/imgs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png" alt="drawing" width="750"/>
+</p>
+<p align="center">
+    <img src=".github/imgs/crossval_pgym_violin.png" alt="drawing" width="750"/>
+</p>
+
+
 <a name="api-usage"></a>
-
-
-
 ## API Usage for Sequence Encoding
 For script-based encoding of sequences using PyPEF and the available AAindex-, OneHot- or DCA-based techniques, the classes and corresponding functions can be imported, i.e. `OneHotEncoding`, `AAIndexEncoding`, `GREMLIN` (DCA),  `PLMC` (DCA), and `DCAHybridModel`. In addition, implemented functions for CV-based tuning of regression models can be used to train and validate models, eventually deriving them to obtain performances on retained data for testing. An exemplary script and a Jupyter notebook for CV-based (low-*N*) tuning of models and using them for testing is provided at [scripts/Encoding_low_N/api_encoding_train_test.py](scripts/Encoding_low_N/api_encoding_train_test.py) and [scripts/Encoding_low_N/api_encoding_train_test.ipynb](scripts/Encoding_low_N/api_encoding_train_test.ipynb), respectively.
 
