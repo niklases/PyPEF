@@ -35,10 +35,8 @@ def get_batches(a, dtype, batch_size=5,
             a_remaining = a[-remaining:]
         else:
             logger.info(f"Batch size greater than or equal to total array length: "
-                 f"returning full array (of shape: {np.shape(a)})...")
+                        f"returning full array (of shape: {np.shape(a)})...")
             if keep_remaining:
-                return list(a)
-            else:
                 return a
     if len(orig_shape) == 2:
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size, np.shape(a)[1])
@@ -47,10 +45,9 @@ def get_batches(a, dtype, batch_size=5,
     new_shape = np.shape(a)
     if verbose:
         logger.info(f'{orig_shape} -> {new_shape} (dropped {remaining})')
-    if keep_remaining: # Returning a list
-        a = list(a)
+    if keep_remaining: 
         logger.info('Adding dropped back to batches as last batch...')
-        a.append(a_remaining)
+        a = np.append(a, a_remaining)
         return a
     if keep_numpy:
         return a

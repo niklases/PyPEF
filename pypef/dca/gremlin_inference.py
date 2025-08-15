@@ -49,6 +49,9 @@ import pandas as pd
 from tqdm import tqdm
 import torch
 
+from pypef.llm.utils import get_batches
+from pypef.utils.variant_data import get_mismatches
+
 
 class GREMLIN:
     """
@@ -65,6 +68,8 @@ class GREMLIN:
             eff_cutoff=0.8,
             opt_iter=100,
             max_msa_seqs: int | None = 10000,
+            msa_start: None | int = None,
+            msa_end: None | int = None,
             seqs: list[str] | np.ndarray[str] | None =None,
             device: str | None = None
     ):
@@ -98,12 +103,20 @@ class GREMLIN:
         else:
             self.max_msa_seqs = max_msa_seqs
         self.states = len(self.char_alphabet)
+        self.msa_start = msa_start
+        if msa_end == 0:
+            msa_end = None
+        self.msa_end = msa_end
         logger.info('Loading MSA...')
         if seqs is None:
             self.seqs, self.seq_ids = self.get_sequences_from_msa(alignment)
         else:
             self.seqs = seqs
             self.seq_ids = np.array([n for n in range(len(self.seqs))])
+        self.first_msa_seq = self.seqs[0]
+        if self.msa_start is not None or self.msa_end is not None:
+            logger.info(f'Trimmed sequence length.. first sequence is printed here as '
+                  f'example (Length: {len(self.first_msa_seq)}): {self.first_msa_seq}') 
         logger.info(f'Found {len(self.seqs)} sequences in the MSA...')
         self.msa_ori = self.get_msa_ori()
         logger.info(f'MSA shape: {np.shape(self.msa_ori)}')
@@ -153,7 +166,14 @@ class GREMLIN:
         with open(msa_file, 'r') as fh:
             alignment = AlignIO.read(fh, "fasta")
         for record in alignment:
-            sequences.append(str(record.seq))
+            seq = str(record.seq)
+            if self.msa_start is not None and self.msa_end is not None:
+                seq = seq[self.msa_start:self.msa_end]
+            elif self.msa_start is not None:
+                seq = seq[self.msa_start:]
+            elif self.msa_end is not None:
+                seq = seq[:self.msa_end]
+            sequences.append(seq)
             seq_ids.append(str(record.id))
         assert len(sequences) == len(seq_ids), f"{len(sequences)}, {len(seq_ids)}"
         return np.array(sequences), np.array(seq_ids)
@@ -353,14 +373,14 @@ class GREMLIN:
 
         self.mt_v, self.vt_v = torch.zeros_like(self.v), torch.zeros_like(self.v)
         self.mt_w, self.vt_w = torch.zeros_like(self.w), torch.zeros_like(self.w)
-        logger.info(f'Initial loss: {self._loss()}')
+        logger.info(f'Initial loss: {self._loss():.5f}')
         for i in range(self.opt_iter):
             self.opt_adam_step()
             try:
                 if (i + 1) % int(self.opt_iter / 10) == 0:
-                    logger.info(f'Loss step {i + 1}: {self._loss()}')
+                    logger.info(f'Loss step {i + 1}: {self._loss():.5f}')
             except ZeroDivisionError:
-                logger.info(f'Loss step {i + 1}: {self._loss()}')
+                logger.info(f'Loss step {i + 1}: {self._loss():.5f}')
         
         self.v = self.v.detach().cpu().numpy()
         self.w = self.w.detach().cpu().numpy()
@@ -416,7 +436,20 @@ class GREMLIN:
         if v_idx is None:
             v_idx = self.v_idx
         seqs_int = self.seq2int(seqs)
-
+        wt_seq_len = len(self.wt_seq)
+        #if np.shape(seqs_int)[1] != wt_seq_len:
+        #    raise RuntimeError(
+        #        f"Input sequence shape (length: {np.shape(seqs_int)[1]}) does not match GREMLIN "
+        #        f"MSA shape (common sequence length: {wt_seq_len}) inferred from the MSA."
+        #    )
+        # Check nums of mutations to MSA first/WT sequence and gives warning if too apart from MSA seq
+        for i, seq in enumerate(seqs):
+            n_mismatches, mismatches = get_mismatches(self.wt_seq, seq)
+            if n_mismatches / wt_seq_len > 0.05:
+                logger.warning(
+                    f"Sequence {mismatches} contains more than 5% sequence mismatches to the "
+                    f"first MSA/\"WT\" sequence. Effect predictions will likely be incorrect!"
+                )
         try:
             if seqs_int.shape[-1] != len(v_idx):  # The input sequence length ({seqs_int.shape[-1]}) 
                 # does not match the common gap-trimmed MSA sequence length (len(v_idx)
@@ -471,8 +504,16 @@ class GREMLIN:
         Wrapper function for encoding input sequences using the self.get_scores
         function with encode set to True.
         """
-        xs = self.get_scores(seqs, v, w, v_idx, encode=True)
-        return xs
+        xs = []
+        sequences_batched = get_batches(
+            seqs, batch_size=1000, dtype=str, 
+            keep_remaining=True, verbose=True
+        )
+        sequences_batched = np.atleast_2d(sequences_batched)
+
+        for seq_batch in sequences_batched:
+            xs.append(self.get_scores(seq_batch, v, w, v_idx, encode=True))
+        return xs[0]
 
     @staticmethod
     def normalize(apc_mat):
@@ -691,7 +732,7 @@ def save_corr_csv(gremlin: GREMLIN, min_distance: int = 0, sort_by: str = 'apc')
     )
     df_mtx_sorted_mindist.to_csv(f"coevolution_{sort_by}_sorted.csv", sep=',')
     logger.info(f"Saved coevolution CSV data as "
-                f"{os.path.abspath(f'coevolution_{sort_by}_sorted.csv')}")
+          f"{os.path.abspath(f'coevolution_{sort_by}_sorted.csv')}")
 
 
 def plot_predicted_ssm(gremlin: GREMLIN):

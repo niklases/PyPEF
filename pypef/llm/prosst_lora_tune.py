@@ -128,7 +128,7 @@ def load_model(model, filename):
 def prosst_train(
         x_sequence_batches, score_batches, loss_fn, model, optimizer,
         input_ids, attention_mask, structure_input_ids,
-        n_epochs=3, device: str | None = None, seed: int | None = None,
+        n_epochs=50, device: str | None = None, seed: int | None = None,
         early_stop: int = 50, verbose: bool = True):
     if seed is not None:
         torch.manual_seed(seed)
@@ -139,7 +139,7 @@ def prosst_train(
     x_sequence_batches = x_sequence_batches.to(device)
     score_batches = score_batches.to(device)
     pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
-    epoch_spearman_1 = 0.0
+    epoch_spearman_1 = -1.0
     did_not_improve_counter = 0
     best_model = None
     best_model_epoch = np.nan
@@ -177,7 +177,7 @@ def prosst_train(
                 f"Y_true: {score_batches.cpu().numpy().flatten()}, "
                 f"Y_pred: {np.array(y_preds_detached)}"
             )
-        if epoch_spearman_2 > epoch_spearman_1:
+        if epoch_spearman_2 > epoch_spearman_1 or epoch == 0:
             if best_model is not None:
                 if os.path.isfile(best_model):
                     os.remove(best_model)

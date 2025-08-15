@@ -447,7 +447,7 @@ class DCALLMHybridModel:
                 self.input_ids,
                 self.llm_attention_mask,  
                 self.structure_input_ids,
-                n_epochs=50, 
+                n_epochs=50,
                 device=self.device,
                 verbose=self.verbose
             )
@@ -639,7 +639,6 @@ class DCALLMHybridModel:
         )
         self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
         return spearman_r, reg, beta_1, beta_2
-
 
 
 """ 
