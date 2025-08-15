@@ -496,11 +496,9 @@ $pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm prosst 
 echo
 
 $pypef hybrid directevo -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm
-ExitOnExitCode
-Write-Host
+echo
 $pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb
-ExitOnExitCode
-Write-Host
+echo
 
 # Takes long.. better delete 7 out of the 8 recomb txt files
 #$pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm --pmult --drecomb
@@ -511,9 +509,6 @@ $pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm 
 echo
 $pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
 echo
-
-
-
 
 $pypef hybrid low_n -i avGFP_dca_encoded.csv
 echo
