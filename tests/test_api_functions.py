@@ -9,13 +9,13 @@
 import os.path
 import numpy as np
 from scipy.stats import spearmanr
+import torch
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
 from pypef.llm.esm_lora_tune import esm_setup
 from pypef.llm.prosst_lora_tune import prosst_setup
-from pypef.llm.utils import corr_loss, get_batches
 from pypef.llm.inference import inference, llm_embedder
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
@@ -47,6 +47,9 @@ ts_b = os.path.abspath(
 train_seqs, _train_vars, train_ys = get_sequences_from_file(ls_b)
 test_seqs, _test_vars, test_ys = get_sequences_from_file(ts_b)
 
+torch.manual_seed(42)
+np.random.seed(42)
+
 
 def test_gremlin():
     g = GREMLIN(
@@ -68,7 +71,7 @@ def test_gremlin():
     )
 
 
-def test_hybrid_model_dca_esm():
+def test_hybrid_model_dca_llm():
     g = GREMLIN(
         alignment=msa_file_aneh,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -140,11 +143,27 @@ def test_hybrid_model_dca_esm():
             [-0.21761360470606333, -0.8330644449247571][i],
             decimal=5
         )  
-        # Nondeterministic behavior, should be about ~0.7 to ~0.9, but as sample size is so low 
-        # the following is only checking if not NaN / >=-1.0 and <=1.0,
+        # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
+        # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
-        assert -1.0 <= spearmanr(test_ys, y_pred_test)[0] <= 1.0  
+        assert -1.0 <= spearmanr(test_ys, y_pred_test)[0] <= 1.0
+        # With seed 42 for numpy and torch for implemented LLM's:
+        if setup == esm_setup:
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7772102863835341, decimal=5
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(test_ys, y_pred_test)[0], 0.8004896406836318, decimal=5
+            )
+        elif setup == prosst_setup:
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7770124558338013, decimal=5
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(test_ys, y_pred_test)[0], 0.8291977762544377, decimal=5
+            )
+
 
 
 def test_dataset_b_results():
@@ -173,6 +192,6 @@ def test_dataset_b_results():
 
 if __name__ == "__main__":
     test_gremlin()
-    test_hybrid_model_dca_esm()
+    test_hybrid_model_dca_llm()
     test_dataset_b_results()
     
