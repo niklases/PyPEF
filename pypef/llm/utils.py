@@ -65,12 +65,12 @@ def get_default_cache_dir():
     if system == "Windows":
         return os.path.join(
             os.environ.get("USERPROFILE", ""), ".cache",
-            "huggingface", "transformers"
+            "huggingface", "hub"
         )
     elif system == "Darwin":
-        return os.path.expanduser("~/.cache/huggingface/transformers")
+        return os.path.expanduser("~/.cache/huggingface/hub")
     else: # Assume Linux or other Unix-like systems
-        return os.path.expanduser("~/.cache/huggingface/transformers")
+        return os.path.expanduser("~/.cache/huggingface/hub")
 
 
 def is_model_cached(repo_id: str, cache_dir: str):
