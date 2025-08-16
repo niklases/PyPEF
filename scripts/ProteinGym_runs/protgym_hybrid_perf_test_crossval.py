@@ -144,12 +144,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
-            sequences_batched = get_batches(sequences, batch_size=1000, 
-                                            dtype=str, keep_remaining=True, verbose=True)
-            x_dca = []  # required later on also
-            for seq_b in tqdm(sequences_batched, desc="Getting GREMLIN sequence encodings", disable=True):
-                for x in gremlin.collect_encoded_sequences(seq_b):
-                    x_dca.append(x)
+            x_dca = gremlin.collect_encoded_sequences(sequences)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}')
@@ -453,7 +448,7 @@ if __name__ == '__main__':
     if not JUST_PLOT_RESULTS:
         compute_performances(
             mut_data=combined_mut_data, 
-            start_i=start_i, 
+            start_i=5,#start_i, 
             already_tested_is=already_tested_is
         )
 

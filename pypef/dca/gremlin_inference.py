@@ -145,6 +145,7 @@ class GREMLIN:
         self.optimize = optimize
         if self.optimize:
             self.run_optimization()
+        self.wt_score = self.get_wt_score()
         self.x_wt = self.collect_encoded_sequences(np.atleast_1d(self.wt_seq))
 
     def get_sequences_from_msa(self, msa_file: str):
@@ -437,17 +438,17 @@ class GREMLIN:
             v_idx = self.v_idx
         seqs_int = self.seq2int(seqs)
         wt_seq_len = len(self.wt_seq)
-        #if np.shape(seqs_int)[1] != wt_seq_len:
-        #    raise RuntimeError(
-        #        f"Input sequence shape (length: {np.shape(seqs_int)[1]}) does not match GREMLIN "
-        #        f"MSA shape (common sequence length: {wt_seq_len}) inferred from the MSA."
-        #    )
+        if np.shape(seqs_int)[1] != wt_seq_len:
+            raise RuntimeError(
+                f"Input sequence shape (length: {np.shape(seqs_int)[1]}) does not match GREMLIN "
+                f"MSA shape (common sequence length: {wt_seq_len}) inferred from the MSA."
+            )
         # Check nums of mutations to MSA first/WT sequence and gives warning if too apart from MSA seq
         for i, seq in enumerate(seqs):
             n_mismatches, mismatches = get_mismatches(self.wt_seq, seq)
             if n_mismatches / wt_seq_len > 0.05:
                 logger.warning(
-                    f"Sequence {mismatches} contains more than 5% sequence mismatches to the "
+                    f"Sequence {i + 1}: {mismatches} contains more than 5% sequence mismatches to the "
                     f"first MSA/\"WT\" sequence. Effect predictions will likely be incorrect!"
                 )
         try:
@@ -496,8 +497,8 @@ class GREMLIN:
     def get_wt_score(self, wt_seq=None, encode=False):
         if wt_seq is None:
             wt_seq = self.wt_seq
-        wt_seq = np.array(wt_seq, dtype=str)
-        return self.get_scores(wt_seq, encode=encode)
+        wt_seq = np.atleast_1d(np.array(wt_seq, dtype=str))
+        return self.get_scores(wt_seq, encode=encode)[0]
 
     def collect_encoded_sequences(self, seqs, v=None, w=None, v_idx=None):
         """

@@ -50,7 +50,7 @@ jobs:
         sleep 3
         pip install .[gui]
         echo $(which pypef)
-        python -m pytest ./tests/ -v -m "not main_script_specific" --capture=tee-sys --log-cli-level=INFO
+        python -m pytest ./tests/ -v -m "not main_script_specific" --log-cli-level=INFO
 
   windows:
     name: windows
@@ -88,5 +88,5 @@ jobs:
         $env:PYTHONPATH = ""
         pip install .[gui]
         echo (Get-Command pypef).Source
-        python -m pytest .\tests -v -m "not main_script_specific" --capture=tee-sys --log-cli-level=INFO
+        python -m pytest .\tests -v -m "not main_script_specific" --log-cli-level=INFO
 
