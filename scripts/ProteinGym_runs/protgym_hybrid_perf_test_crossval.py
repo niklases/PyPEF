@@ -448,7 +448,7 @@ if __name__ == '__main__':
     if not JUST_PLOT_RESULTS:
         compute_performances(
             mut_data=combined_mut_data, 
-            start_i=5,#start_i, 
+            start_i=start_i, 
             already_tested_is=already_tested_is
         )
 
