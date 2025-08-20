@@ -461,7 +461,7 @@ class DCALLMHybridModel:
                 self.input_ids,
                 self.llm_attention_mask,  
                 self.structure_input_ids,
-                n_epochs=1, #TODO:50
+                n_epochs=50,
                 device=self.device,
                 verbose=self.verbose,
                 raise_error_on_train_fail=False

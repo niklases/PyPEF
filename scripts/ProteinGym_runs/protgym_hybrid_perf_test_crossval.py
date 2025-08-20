@@ -46,7 +46,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     device = get_device()
     print(f"Using {device.upper()} device")
     get_vram()
-    MAX_WT_SEQUENCE_LENGTH = 600  # TODO: 1000
+    MAX_WT_SEQUENCE_LENGTH = 600
     MAX_VARIANT_FITNESS_PAIRS = 5000
     N_CV = 5
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
