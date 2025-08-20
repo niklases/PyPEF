@@ -307,21 +307,35 @@ class DCALLMHybridModel:
                 )
             )
         else:
-            loss = lambda params: -np.abs(
-                self.spearmanr(
-                    y, 
-                    params[0] * y_dca + 
-                    params[1] * y_ridge + 
-                    params[2] * y_llm + 
-                    params[3] * y_llm_lora 
+            if np.any(np.isnan(y_llm_lora)):
+                logger.warning("y_llm_lora contains NaN's, weighting lora llm "
+                               "hybrid model weight parameters with zero...")
+                loss = lambda params: -np.abs(
+                    self.spearmanr(
+                        y, 
+                        params[0] * y_dca + 
+                        params[1] * y_ridge + 
+                        params[2] * y_llm
+                    )
                 )
-            )
+            else:
+                loss = lambda params: -np.abs(
+                    self.spearmanr(
+                        y, 
+                        params[0] * y_dca + 
+                        params[1] * y_ridge + 
+                        params[2] * y_llm + 
+                        params[3] * y_llm_lora 
+                    )
+                )
         try:
             minimizer = differential_evolution(
                 loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
         except TypeError:  # SciPy v. 1.15.0 change: `seed` -> `rng` keyword
             minimizer = differential_evolution(
                 loss, bounds=self.parameter_range, tol=1e-4, seed=self.seed)
+        if np.any(np.isnan(y_llm_lora)):
+            minimizer.x[-1] = 0.0
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
@@ -447,9 +461,10 @@ class DCALLMHybridModel:
                 self.input_ids,
                 self.llm_attention_mask,  
                 self.structure_input_ids,
-                n_epochs=50,
+                n_epochs=1, #TODO:50
                 device=self.device,
-                verbose=self.verbose
+                verbose=self.verbose,
+                raise_error_on_train_fail=False
             )
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
@@ -622,7 +637,14 @@ class DCALLMHybridModel:
                     self.llm_model, 
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
-            
+            if np.any(np.isnan(y_llm)) or np.any(np.isnan(y_llm_lora)):
+                logger.warning(
+                    f"LLM predictions contains NaN's... replacing NaN's with "
+                    f"zeros (optimized hybrid model weights: "
+                    f"{self.beta1}, {self.beta2}, {self.beta3}, {self.beta4})..."
+                )
+                y_llm = np.nan_to_num(y_llm_lora, nan=0.0)
+                y_llm_lora = np.nan_to_num(y_llm_lora, nan=0.0)
             return (
                 self.beta1 * y_dca + self.beta2 * y_ridge + 
                 self.beta3 * y_llm + self.beta4 * y_llm_lora

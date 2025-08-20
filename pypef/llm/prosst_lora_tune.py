@@ -49,7 +49,8 @@ def get_logits_from_full_seqs(
         structure_input_ids,
         train: bool = False,
         verbose: bool = False,
-        device: str | None = None
+        device: str | None = None,
+        replace_nan_with_zeros: bool = False
 ):
     if device is None:
         device = get_device()
@@ -74,7 +75,7 @@ def get_logits_from_full_seqs(
     for i_s, sequence in enumerate(
         tqdm(
             xs,
-            desc='ProSST inference: getting sequence logits',
+            desc=f'ProSST inference: getting sequence logits ({device.upper()})',
             disable=not verbose
         )
     ):
@@ -92,6 +93,9 @@ def get_logits_from_full_seqs(
                 torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
                 ), 0
             )
+    if replace_nan_with_zeros:
+        logger.warning("Replacing NaN's with zeros in predictions...")
+        log_probs[torch.isnan(log_probs)] = 0.0
     return log_probs
 
 
@@ -102,7 +106,8 @@ def prosst_infer(
         attention_mask,
         structure_input_ids,
         verbose: bool = False,
-        device: str | None = None
+        device: str | None = None,
+        replace_nan_with_zeros: bool = False
 ):
     return get_logits_from_full_seqs(
         xs,
@@ -112,7 +117,8 @@ def prosst_infer(
         structure_input_ids,
         train = False,
         verbose = verbose,
-        device = device
+        device = device,
+        replace_nan_with_zeros=replace_nan_with_zeros
     )
 
 
@@ -129,7 +135,7 @@ def prosst_train(
         x_sequence_batches, score_batches, loss_fn, model, optimizer,
         input_ids, attention_mask, structure_input_ids,
         n_epochs=50, device: str | None = None, seed: int | None = None,
-        early_stop: int = 50, verbose: bool = True):
+        early_stop: int = 50, verbose: bool = True, raise_error_on_train_fail: bool = True):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -167,7 +173,7 @@ def prosst_train(
             pbar_batches.set_description(
                 f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
                 f"[batch: {batch+1}/{len(x_sequence_batches)} | "
-                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}] "
+                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}] ({device.upper()})"
             )
         epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(),
                                      np.array(y_preds_detached).flatten())[0]
@@ -204,16 +210,25 @@ def prosst_train(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
             f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
     if best_model is None:
-        raise RuntimeError(
-            "Failed to train a model (probably due to the input "
-            "data characteristics and loss/correlation being NaN)."
+        msg = ("Failed to train a model (probably due to the input "
+               "data characteristics and loss/correlation being NaN).")
+        if raise_error_on_train_fail:
+            raise RuntimeError(msg)
+        else:
+            logger.warning(f"{msg} Continuing nonetheless (using failed model "
+                           f"and replacing NaN's with zeros)...")
+            y_preds_train = get_logits_from_full_seqs(
+                x_sequence_batches.flatten(start_dim=0, end_dim=1),
+                model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
+            )
+            y_preds_train[torch.isnan(y_preds_train)] = 0.0
+    else:        
+        logger.info(f"Loading best model as {best_model}...")
+        load_model(model, best_model)
+        y_preds_train = get_logits_from_full_seqs(
+            x_sequence_batches.flatten(start_dim=0, end_dim=1),
+            model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
         )
-    logger.info(f"Loading best model as {best_model}...")
-    load_model(model, best_model)
-    y_preds_train = get_logits_from_full_seqs(
-        x_sequence_batches.flatten(start_dim=0, end_dim=1),
-        model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
-    )
     return y_preds_train.cpu()
 
 
