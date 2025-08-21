@@ -51,27 +51,6 @@ train_seqs_aneh, _train_vars_aneh, train_ys_aneh = get_sequences_from_file(ls_b)
 test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
 
 
-def test_gremlin_aneh():
-    g = GREMLIN(
-        alignment=msa_file_aneh,
-        char_alphabet="ARNDCQEGHILKMFPSTWYV-",
-        wt_seq=None,
-        optimize=True,
-        gap_cutoff=0.5,
-        eff_cutoff=0.8,
-        opt_iter=100
-    )
-    wt_score = g.get_wt_score()
-    np.testing.assert_almost_equal(wt_score, 1743.2087199198131, decimal=1)
-    assert wt_score == g.wt_score == np.sum(g.x_wt)
-    y_pred = g.get_scores(np.append(train_seqs_aneh, test_seqs_aneh))
-    np.testing.assert_almost_equal(
-        spearmanr(np.append(train_ys_aneh, test_ys_aneh), y_pred)[0], 
-        -0.5528510930046211, 
-        decimal=7
-    )
-
-
 def test_gremlin_avgfp():
     g = GREMLIN(
         alignment=msa_file_avgfp,
@@ -96,6 +75,15 @@ def test_hybrid_model_dca_llm():
         gap_cutoff=0.5,
         eff_cutoff=0.8,
         opt_iter=100
+    )
+    wt_score = g.get_wt_score()
+    np.testing.assert_almost_equal(wt_score, 1743.2087199198131, decimal=1)
+    assert wt_score == g.wt_score == np.sum(g.x_wt)
+    y_pred = g.get_scores(np.append(train_seqs_aneh, test_seqs_aneh))
+    np.testing.assert_almost_equal(
+        spearmanr(np.append(train_ys_aneh, test_ys_aneh), y_pred)[0], 
+        -0.5528510930046211, 
+        decimal=7
     )
     x_dca_train = g.get_scores(train_seqs_aneh, encode=True)
     np.testing.assert_almost_equal(
@@ -164,7 +152,7 @@ def test_hybrid_model_dca_llm():
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
         assert -1.0 <= spearmanr(test_ys_aneh, y_pred_test)[0] <= 1.0
-        # With seed 42 for numpy and torch for implemented LLM's:
+        # With seed 42 for numpy and torch for implemented LLM's and on local machine:
         if setup == esm_setup:
             continue  # TODO: Make new/overloaded pytest decorator function
             #try: # Different values on different machines (TODO) has to be investigated
@@ -242,7 +230,6 @@ def test_dataset_b_results():
 
 
 if __name__ == "__main__":
-    test_gremlin_aneh()
     test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
     test_dataset_b_results()

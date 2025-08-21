@@ -63,7 +63,7 @@ class SSM:
     def predict(self):
         if self.model == "dca" and self.gremlin is not None:
             logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
-            wt_score = self.gremlin.get_wt_score()[0]
+            wt_score = self.gremlin.get_wt_score()
         self.scoress = []
         if self.model == "dca" and self.gremlin is not None:
             for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):

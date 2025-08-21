@@ -743,7 +743,7 @@ def plot_predicted_ssm(gremlin: GREMLIN):
     M1A, M1C, M1E, ..., D2A, D2C, D2E, ..., ..., T300V, T300W, T300Y
     """
     wt_sequence = gremlin.wt_seq
-    wt_score = gremlin.get_wt_score()[0]
+    wt_score = gremlin.get_wt_score()
     aas = "".join(sorted(gremlin.char_alphabet.replace("-", "")))
     variantss, variant_sequencess, variant_scoress = [], [], []
     logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
@@ -752,13 +752,11 @@ def plot_predicted_ssm(gremlin: GREMLIN):
         for aa_sub in aas:
             variant = aa_wt + str(i + 1) + aa_sub
             variant_sequence = wt_sequence[:i] + aa_sub + wt_sequence[i + 1:]
-            variant_score = gremlin.get_scores(variant_sequence)[0]
             variants.append(variant)
             variant_sequences.append(variant_sequence)
-            variant_scores.append(variant_score - wt_score)
         variantss.append(variants)
         variant_sequencess.append(variant_sequences)
-        variant_scoress.append(variant_scores)
+        variant_scoress.append(gremlin.get_scores(variant_sequences) - wt_score)
 
     fig, ax = plt.subplots(figsize=(2 * len(wt_sequence) / len(aas), 3))
     ax.imshow(np.array(variant_scoress).T)

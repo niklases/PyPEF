@@ -74,7 +74,7 @@ class DCALLMHybridModel:
     ):
         if llm_model_input is not None:
             if type(llm_model_input) is not dict:
-                raise SystemError(f"Model input must be in form of a dictionary.")
+                raise RuntimeError(f"Model input must be in form of a dictionary.")
             else:
                 logger.info("Using LLM as second model next to DCA for hybrid modeling...")
                 if len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'esm1v':
@@ -100,7 +100,7 @@ class DCALLMHybridModel:
                     self.input_ids = llm_model_input['prosst']['input_ids']
                     self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
                 else:
-                    raise SystemError("LLM input model dictionary not supported. Currently supported "
+                    raise RuntimeError("LLM input model dictionary not supported. Currently supported "
                                       "models are 'esm1v' or 'prosst'")
                 self.llm_model_input = llm_model_input
             if parameter_range is None:
@@ -678,7 +678,7 @@ def check_model_type(model: dict | DCALLMHybridModel | PLMC | GREMLIN):
         try:
             model = model['model']
         except KeyError:
-            raise SystemError("Unknown model dictionary taken from Pickle file.")
+            raise RuntimeError("Unknown model dictionary taken from Pickle file.")
     if type(model) == pypef.dca.plmc_encoding.PLMC:
         return 'PLMC'
     elif type(model) == pypef.hybrid.hybrid_model.DCALLMHybridModel:
@@ -686,10 +686,10 @@ def check_model_type(model: dict | DCALLMHybridModel | PLMC | GREMLIN):
     elif type(model) == pypef.dca.gremlin_inference.GREMLIN:
         return 'GREMLIN'
     elif isinstance(model, sklearn.base.BaseEstimator):
-        raise SystemError("Loaded an sklearn ML model. For pure ML-based modeling the "
+        raise RuntimeError("Loaded an sklearn ML model. For pure ML-based modeling the "
                           "\'ml\' flag has to be used instead of the \'hybrid\' flag.")
     else:
-        raise SystemError('Unknown model/unknown Pickle file.')
+        raise RuntimeError('Unknown model/unknown Pickle file.')
 
 
 def get_model_path(model: str):
@@ -705,7 +705,7 @@ def get_model_path(model: str):
         elif isfile(f'Pickles/{model}'):
             model_path = f'Pickles/{model}'
         else:
-            raise SystemError(
+            raise RuntimeError(
                 f"Did not find specified model file ({model}) in current "
                 "working directory or /Pickles subdirectory. Make sure "
                 "to train/save a model first (e.g., for saving a GREMLIN "
@@ -715,7 +715,7 @@ def get_model_path(model: str):
             )
         return model_path
     except TypeError:
-        raise SystemError(
+        raise RuntimeError(
             "No provided model. Specify a " \
             "model for DCA-based encoding."
         )
@@ -874,7 +874,7 @@ def plmc_or_gremlin_encoding(
             shift_pos=1, substitution_sep=substitution_sep
         )
     else:
-        raise SystemError(
+        raise RuntimeError(
             f"Found a {model_type.lower()} model as input. Please "
             f"train a new hybrid model on the provided LS/TS datasets."
         )
@@ -898,10 +898,13 @@ def gremlin_encoding(gremlin: GREMLIN, variants, sequences, ys_true,
         gremlin.gaps, variants, sequences, ys_true,
         shift_pos=shift_pos, substitution_sep=substitution_sep
     )
-    try:
-        xs = gremlin.get_scores(sequences, encode=True)
-    except SystemError:
+    if not sequences:
         xs = []
+    else:
+        try:
+            xs = gremlin.get_scores(sequences, encode=True)
+        except RuntimeError:
+            xs = []
     x_wt = gremlin.get_scores(np.atleast_1d(gremlin.wt_seq), encode=True)
     return xs, x_wt, variants, sequences, ys_true
 
@@ -1333,7 +1336,7 @@ def predict_directed_evolution(
                     np.atleast_2d(x_llm), verbose=False
                 )[0]
         except ValueError as e:
-            raise SystemError(
+            raise RuntimeError(
                 f"Error: {e}\nProbably a different model was used for encoding than "
                 "for modeling; e.g. using a HYBRIDgremlin model in "
                 "combination with parameters taken from a PLMC file."

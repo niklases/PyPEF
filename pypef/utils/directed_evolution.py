@@ -291,7 +291,7 @@ class DirectedEvolution:
                             f"{predictions[0][0]:.3f} WT relative fitness: "
                             f"{predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
-                logger.info(f"Step {self.de_step_counter + 1}: "
+                logger.info(f"Step {self.de_step_counter + 1}: "                      # 'skip'
                             f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
                 continue
             new_y = predictions[0][0] - wt_prediction[0][0] + add_epsilon  # Adding 1% to prediction for hybrid modeling!
@@ -309,7 +309,7 @@ class DirectedEvolution:
             p = min(1, boltz)
             rand_var = random.random()  # random float between 0 and 1
             if rand_var < p:  # Metropolis-Hastings update selection criterion, else do nothing (do not accept variant)
-                v_traj.append(new_var)       # update the variant naming trajectory
+                v_traj.append(str(new_var))       # update the variant naming trajectory
                 y_traj.append(new_y)         # update the fitness trajectory records
                 s_traj.append(new_sequence)  # update the sequence trajectory records
                 accepted += 1
