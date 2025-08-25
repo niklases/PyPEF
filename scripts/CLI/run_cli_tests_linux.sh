@@ -36,7 +36,7 @@ pypef="python3 $path/pypef/main.py"                                             
 ##########################################################################################################################
 # threads are only used for some parallelization of AAindex and DCA-based sequence encoding                              # 
 # if pypef/settings.py defines USE_RAY = True                                                                            #
-threads=12                                                                                                               #
+threads=1                                                                                                                #
 ##########################################################################################################################
 
 ### threads=1 shows progress bar where possible

@@ -113,7 +113,8 @@ def esm_test(xs, attention_mask, scores, loss_fn, model,
         pbar_epochs.set_description(
             f"Testing: Batch {i + 1}/{len(xs)} | Batch loss: {batch_loss:.4f} (SpearCorr: "
             f"{batch_scorr:.4f})| Total loss: {total_loss:.4f} (SpearCorr: {total_scorr:.4f})")
-    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f}")
+    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f} "
+                f"({device.upper()})")
     return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
 
 
@@ -126,7 +127,7 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=Fals
         logger.info(f'Infering ESM model for predictions using {device.upper()} device...')
     for i , (xs_b, am_b) in enumerate(tqdm(
         zip(xs, attention_masks), total=len(xs), 
-        desc="ESM inference - processing sequences",
+        desc=f"ESM inference - processing sequences ({device.upper()})",
         disable=not verbose
     )):
         xs_b = xs_b.to(torch.int64)
@@ -139,8 +140,11 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=Fals
     return torch.flatten(y_preds_total)
 
 
-def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
-              device: str | None = None, seed: int | None = None, verbose: bool = True):
+def esm_train(
+        xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
+        device: str | None = None, seed: int | None = None, 
+        n_batch_grad_accumulations: int = 1, verbose: bool = True
+):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -166,14 +170,15 @@ def esm_train(xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3,
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
-            loss = loss_fn(scores_b, y_preds_b)
+            loss = loss_fn(scores_b, y_preds_b)  # / n_batch_grad_accumulations
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            if (batch + 1) % n_batch_grad_accumulations == 0:
+                optimizer.step()
+                optimizer.zero_grad()
             pbar_batches.set_description(
                 f"Epoch: {epoch}. Loss: {loss.detach():>1f}  "
-                f"[batch: {batch+1}/{len(xs)} | "
-                f"sequence: {(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}]  "
+                f"[batch: {batch+1}/{len(xs)} | sequence: "
+                f"{(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}] ({device.upper()})"
             )
     y_preds_b = y_preds_b.detach()
     model.train(False)

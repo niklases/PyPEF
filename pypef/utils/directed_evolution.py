@@ -350,6 +350,7 @@ class DirectedEvolution:
         # Idea: Standardizing DCA-HybridModel predictions as just trained by Spearman's rho
         # e.g., meaning that fitness values could differ only at the 6th decimal place and only
         # predicted fitness ranks matter and not associated fitness values
+        logger.info('Plotting evolution trajectories...')
         fig, ax = plt.subplots(figsize=(10,6))  # figsize=(10, 6)
         ax.locator_params(integer=True)
         y_records_ = []
@@ -359,8 +360,10 @@ class DirectedEvolution:
             y_records_.append(fitness_array)
         label_x_y_name = []
         traj_max_len = 0
-        for i, v_record in enumerate(v_records):  # i = 1, 2, 3, .., ; v_record = variant label array
-            for j, v in enumerate(v_record):      # j = 1, 2, 3, ..., ; v = variant name; y_records[i][j] = fitness
+        # i = 1, 2, 3, .., ; v_record = variant label array
+        for i, v_record in enumerate(v_records):
+            # j = 1, 2, 3, ..., ; v = variant name; y_records[i][j] = fitness
+            for j, v in enumerate(v_record):
                 if len(v_record) > traj_max_len:
                     traj_max_len = len(v_record)
                 if i == 0:                      # j + 1 -> x-axis position shifted by 1
@@ -368,6 +371,8 @@ class DirectedEvolution:
                 else:
                     if v != 'WT':  # only plot 'WT' name once at i == 0
                         label_x_y_name.append(ax.text(j + 1, y_records_[i][j], v, size=7))
+        # Potentially adjust_text prints stuff if repeated text label shifting 
+        # is needed (in adjust_text versions <= 1.3.0)
         adjust_text(label_x_y_name, only_move={'points': 'y', 'text': 'y'}, force_points=0.6)
         ax.legend()
         plt.xticks(np.arange(1,  traj_max_len + 1, 1), np.arange(1, traj_max_len + 1, 1))
@@ -375,14 +380,18 @@ class DirectedEvolution:
         plt.ylabel('Predicted fitness')
         plt.xlabel('Mutation trial steps')
         plt.tight_layout()
-        plt.savefig(str(self.model) + '_DE_trajectories.png', dpi=500)
+        fig_name = os.path.abspath(str(self.model) + '_DE_trajectories.png')
+        plt.savefig(fig_name, dpi=500)
         plt.clf()
         plt.close('all')
+        logger.info(f'Saved EvoTrajectory image as {fig_name}')
 
-        with open(os.path.join('EvoTraj', 'Trajectories.csv'), 'w') as file:
+        evo_csv = os.path.abspath(os.path.join('EvoTraj', 'Trajectories.csv'))
+        with open(evo_csv, 'w') as file:
             file.write('Trajectory;Variant;Sequence;Fitness\n')
             for i in range(self.num_trajectories):
                 v_records_str = str(v_records[i])[1:-1].replace("'", "")
                 s_records_str = str(s_records[i])[1:-1].replace("'", "")
                 y_records_str = str(y_records[i])[1:-1]
                 file.write(f'{i+1};{v_records_str};{s_records_str};{y_records_str}\n')
+        logger.info(f'Saved EvoTrajectory CSV as {evo_csv}')

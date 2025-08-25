@@ -334,8 +334,9 @@ class DCALLMHybridModel:
         except TypeError:  # SciPy v. 1.15.0 change: `seed` -> `rng` keyword
             minimizer = differential_evolution(
                 loss, bounds=self.parameter_range, tol=1e-4, seed=self.seed)
-        if np.any(np.isnan(y_llm_lora)):
-            minimizer.x[-1] = 0.0
+        if y_llm is not None or y_llm_lora is not None:
+            if np.any(np.isnan(y_llm_lora)):
+                minimizer.x[-1] = 0.0
         return minimizer.x
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):

@@ -33,7 +33,10 @@ from pypef.utils.helpers import get_device
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
-    for sequence in tqdm(sequences, desc='Tokenizing sequences for ProSST modeling', disable=not verbose):
+    for sequence in tqdm(
+        sequences, desc='Tokenizing sequences for ProSST modeling', 
+        disable=not verbose
+    ):
         x_sequence = []
         for aa in sequence:
             x_sequence.append(vocab[aa])
@@ -135,7 +138,8 @@ def prosst_train(
         x_sequence_batches, score_batches, loss_fn, model, optimizer,
         input_ids, attention_mask, structure_input_ids,
         n_epochs=50, device: str | None = None, seed: int | None = None,
-        early_stop: int = 50, verbose: bool = True, raise_error_on_train_fail: bool = True):
+        early_stop: int = 50, verbose: bool = True, 
+        n_batch_grad_accumulations: int = 1, raise_error_on_train_fail: bool = True):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -166,14 +170,16 @@ def prosst_train(
                 train=True, verbose=False
             )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
-            loss = loss_fn(scores_b, y_preds_b)
+            loss = loss_fn(scores_b, y_preds_b) # / n_batch_grad_accumulations
             loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
+            if (batch + 1) % n_batch_grad_accumulations == 0:
+                optimizer.step()
+                optimizer.zero_grad()
             pbar_batches.set_description(
                 f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
-                f"[batch: {batch+1}/{len(x_sequence_batches)} | "
-                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}] ({device.upper()})"
+                f"[batch: {batch + 1}/{len(x_sequence_batches)} | "
+                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}] "
+                f"({device.upper()})"
             )
         epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(),
                                      np.array(y_preds_detached).flatten())[0]
