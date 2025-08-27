@@ -188,7 +188,7 @@ class MainWidget(QWidget):
         self.regression_model_text =  QLabel("Regression model")
         self.utils_text = QLabel("Utilities")
         self.mklsts_cv_options_text = QLabel("Cross-validation split options")
-        self.dca_text = QLabel("DCA (unsupervised)")
+        self.dca_text = QLabel("DCA & LLM (unsupervised)")
         self.hybrid_text = QLabel("Hybrid (supervised DCA)")
         self.hybrid_dca_llm_text = QLabel("Hybrid (supervised DCA+LLM)")
         self.supervised_text = QLabel("Purely supervised")
@@ -839,9 +839,12 @@ class MainWidget(QWidget):
                 self.win2, "GREMLIN Pickle file", 
                 filter="Pickle file (GREMLIN)"
             )[0]
-            self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
-            self.cmd = f'predict_ssm --wt {wt_fasta_file} --params {gremlin_pkl_file}'
-            self.start_main_thread()
+            if gremlin_pkl_file:
+                self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
+                self.cmd = f'predict_ssm --wt {wt_fasta_file} --params {gremlin_pkl_file}'
+                self.start_main_thread()
+            else:
+                self.end_process()
         else:
             self.end_process()
     
