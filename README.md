@@ -93,12 +93,12 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
 
 - pulling from Docker Hub by specifying the version tag
   ```bash
-  # docker pull niklases/pypef:VERSION_TAG, e.g.
-  docker pull niklases/pypef:0.4.2
+  # docker pull niklases/pypef:VERSION_TAG, or :latest, e.g.
+  docker pull niklases/pypef:latest
   ```
   a chained container command using the pulled Docker image can be run with e.g.:
   ```bash
-  docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP niklases/pypef:0.4.2 /bin/bash -c \
+  docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP niklases/pypef:latest /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
        python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
