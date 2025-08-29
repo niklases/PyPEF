@@ -26,21 +26,26 @@
 [![Build](https://github.com/niklases/PyPEF/actions/workflows/ci.yml/badge.svg)](https://github.com/niklases/PyPEF/actions/?query=workflow:ci)
 [![PyPI Downloads](https://static.pepy.tech/badge/pypef)](https://pepy.tech/projects/pypef)
 
-a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence (and structure) using different forms of sequence encodings and LLM embeddings:
+a framework written in Python 3 for performing sequence-based machine learning-assisted protein engineering to predict a protein's fitness from its sequence (and structure, if the used protein language model (PLM) token embedding considers that) using different forms of sequence encodings and PLM embeddings:
 
 - One-hot encoding
 - Amino acid descriptor sets (taken from AAindex database) encoding
-- Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) encoding
+- Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) based encoding
 - LLM embeddings (currently, [ESM1v](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
 
 <p align="center">
     <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
 </p>
 
-Protein engineering by rational or random approaches generates data that can aid the construction of self-learned sequence-function landscapes to predict beneficial variants by using probabilistic methods that can screen the unexplored sequence space with uncertainty *in silico*. Such predictive methods can be applied for increasing the success/effectivity of an engineering campaign while partly offering the prospect to reveal (higher-order) epistatic mutation effects. Here we present an engineering framework termed PyPEF for assisting the unsupervised optimization, supervised training, and testing of protein fitness models for predicting beneficial combinations of (identified) amino acid substitutions using machine learning approaches.
-As training input, the developed framework requires the variant sequences and the corresponding screening results (fitness labels) of the variants as CSV files (or FASTA-Like ("FASL") data files following a self-defined convention). Using linear or nonlinear regression methods (partial least squares (PLS), Ridge, Lasso, Elastic net, support vector machines (SVR), random forest (RF), and multilayer perceptron (MLP)-based regression), PyPEF trains on the given learning data while optimizing model hyperparameters (default: five-fold cross-validation) and can compute model performances on left-out test data. As sequences are encoded using amino acid descriptor sets taken from the [AAindex database](https://www.genome.jp/aaindex/), finding the best index-dependent encoding for a specific test set can be seen as a hyperparameter search on the test set. In addition, one-hot and [direct coupling analysis (DCA)](https://en.wikipedia.org/wiki/Direct_coupling_analysis)-based feature generation are implemented as sequence encoding techniques, which often outperform AAindex-based encoding techniques. While one-hot encodings fail for positional extrapolation, DCA-based sequence encoding offers positional extrapolation capabilities and is hence better suited for most generalization tasks. In addition, a hybrid, combined model of the unsupervised and supervised DCA model provides even better performance and robust predictions, even when training with only a few data points (e.g. 50-100 variant fitness labels). Furthermore, a mixed hybrid DCA model combined with LLM models  predictions show even increased overall performance across the [ProteinGym](https://proteingym.org/) datasets tested.
+When incorporating DCA and PLM features, both models are fine-tuned via few-shot learning on a subset of the training data. Subsequently, a weighted ensemble of the original (unsupervised) and fine-tuned model outputs is constructed. The ensemble weights are optimized using differential evolution, with the objective function based on performance metrics (Spearman rank correlation) evaluated on the held-out validation split of the training set.
 
-Finally, the selected (un-) trained (pure or hybrid) model can be used to perform directed evolution walks *in silico* (see [Church-lab implementation](https://github.com/churchlab/UniRep) or the [reimplementation](https://github.com/ivanjayapurna/low-n-protein-engineering)) or to predict natural diverse or recombinant variant sequences that subsequently are to be designed and validated in the wet-lab.
+<p align="center">
+<img src=".github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
+</p>
+
+<a name="installation"></a>
+## Quick Installation
+A quick installation of the PyPEF command line framework using PyPI for Linux and Windows and Python >= 3.10 can be performed with:
 
 
 <p align="center">
@@ -515,8 +520,6 @@ Hybrid GREMLIN-LLM low-N-tuned models using [ESM1v](https://github.com/facebookr
     <img src=".github/imgs/mut_performance.png" alt="drawing" width="1000"/>
 </p>
 
-
-
 For estimating model performances for different splitting techniques (random, modulo, continuous), a faster-to-compute subset (limited sequence length and number of variant-fitness pairs) of the ProteinGym data was evaluated (example dataset split technique-dependent data distribution and performances on the ProteinGym subset):
 
 <p align="center">
@@ -526,10 +529,11 @@ For estimating model performances for different splitting techniques (random, mo
     <img src=".github/imgs/crossval_pgym_violin.png" alt="drawing" width="750"/>
 </p>
 
+The official supervised ProteinGym benchmark runs can be performed using scripts provided at [scripts/ProteinGym_runs/official](scripts/ProteinGym_runs/official). However, these benchmark runs are time-consuming, as cross-validation must be performed for each dataset and across all the split methods being evaluated.
 
 <a name="api-usage"></a>
 ## API Usage for Sequence Encoding
-For script-based encoding of sequences using PyPEF and the available AAindex-, OneHot- or DCA-based techniques, the classes and corresponding functions can be imported, i.e. `OneHotEncoding`, `AAIndexEncoding`, `GREMLIN` (DCA),  `PLMC` (DCA), and `DCAHybridModel`. In addition, implemented functions for CV-based tuning of regression models can be used to train and validate models, eventually deriving them to obtain performances on retained data for testing. An exemplary script and a Jupyter notebook for CV-based (low-*N*) tuning of models and using them for testing is provided at [scripts/Encoding_low_N/api_encoding_train_test.py](scripts/Encoding_low_N/api_encoding_train_test.py) and [scripts/Encoding_low_N/api_encoding_train_test.ipynb](scripts/Encoding_low_N/api_encoding_train_test.ipynb), respectively.
+For script-based encoding of sequences using PyPEF and the available AAindex-, OneHot- or DCA-based techniques, the classes and corresponding functions can be imported, i.e. `OneHotEncoding`, `AAIndexEncoding`, `GREMLIN` (DCA),  `PLMC` (DCA), and `DCALLMHybridModel`. In addition, implemented functions for CV-based tuning of regression models can be used to train and validate models, eventually deriving them to obtain performances on retained data for testing. An exemplary script and a Jupyter notebook for CV-based (low-*N*) tuning of models and using them for testing is provided at [scripts/Encoding_low_N/api_encoding_train_test.py](scripts/Encoding_low_N/api_encoding_train_test.py) and [scripts/Encoding_low_N/api_encoding_train_test.ipynb](scripts/Encoding_low_N/api_encoding_train_test.ipynb), respectively.
 
 <p align="center">
     <img src=".github/imgs/low_N_avGFP_extrapolation.png" alt="drawing" width="500"/>

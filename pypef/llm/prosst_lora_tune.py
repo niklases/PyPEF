@@ -170,9 +170,9 @@ def prosst_train(
                 train=True, verbose=False
             )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
-            loss = loss_fn(scores_b, y_preds_b) # / n_batch_grad_accumulations
+            loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
             loss.backward()
-            if (batch + 1) % n_batch_grad_accumulations == 0:
+            if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
                 optimizer.step()
                 optimizer.zero_grad()
             pbar_batches.set_description(

@@ -170,9 +170,9 @@ def esm_train(
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
-            loss = loss_fn(scores_b, y_preds_b)  # / n_batch_grad_accumulations
+            loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
             loss.backward()
-            if (batch + 1) % n_batch_grad_accumulations == 0:
+            if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
                 optimizer.step()
                 optimizer.zero_grad()
             pbar_batches.set_description(
