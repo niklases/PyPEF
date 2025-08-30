@@ -22,9 +22,10 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
+from pypef.llm.utils import get_batches
 from pypef.llm.esm_lora_tune import (
     get_esm_models, esm_tokenize_sequences, 
-    get_batches, esm_train, esm_infer, corr_loss
+    esm_train, esm_infer, corr_loss
 )
 from pypef.llm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
@@ -37,7 +38,7 @@ from pypef.hybrid.hybrid_model import (
 )
 
 
-JUST_PLOT_RESULTS = True
+JUST_PLOT_RESULTS = False
 
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
@@ -117,7 +118,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         f'{max_muts},Sequence too long ({len(wt_seq)} > {MAX_WT_SEQUENCE_LENGTH})\n'
                     )
                 continue
-            ratio_input_vars_at_gaps = count_gap_variants / len(variants)
+            _ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
             try:
                 assert wt_seq == pdb_seq  # pdb_seq.startswith(wt_seq)
@@ -135,12 +136,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
-            sequences_batched = get_batches(sequences, batch_size=1000, 
-                                            dtype=str, keep_remaining=True, verbose=True)
-            x_dca = []
-            for seq_b in tqdm(sequences_batched, desc="Getting GREMLIN sequence encodings"):
-                for x in gremlin.collect_encoded_sequences(seq_b):
-                    x_dca.append(x)
+            x_dca = gremlin.collect_encoded_sequences(sequences)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 
