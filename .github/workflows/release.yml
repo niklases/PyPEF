@@ -5,8 +5,9 @@ on:
     types: [published]
 
 jobs:
-  publish:
+  publish-to-pypi:
     runs-on: ubuntu-latest
+    environment: pypi
 
     steps:
     - name: Checkout code
@@ -29,6 +30,15 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: twine upload dist/*
+
+  publish-docker-image:
+    runs-on: ubuntu-latest
+    environment: docker
+    needs: publish-to-pypi
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Log in to Docker Hub
       uses: docker/login-action@v3
