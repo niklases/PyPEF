@@ -46,7 +46,7 @@ gui = ["pyside6"]
 
 [tool.setuptools.dynamic]
 version = {attr = "pypef.__version__"}
-readme = {file = ["README.md"]}
+readme = {file = "README.md", content-type = "text/markdown"}
 
 [project.urls]
 Homepage = "https://github.com/niklases/PyPEF"
