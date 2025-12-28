@@ -14,7 +14,7 @@ from torch import nn
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 
-from pypef.llm.prosst_structure.scatter import scatter_add
+from pypef.plm.prosst_structure.scatter import scatter_add
 
 
 def tuple_sum(*args):

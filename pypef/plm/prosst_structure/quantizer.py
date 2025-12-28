@@ -28,8 +28,8 @@ from biotite.structure import filter_peptide_backbone, get_chains
 from biotite.structure.io import pdb, pdbx
 from biotite.structure.residues import get_residues
 
-from pypef.llm.prosst_structure.encoder.gvp import AutoGraphEncoder
-from pypef.llm.prosst_structure.scatter import scatter_mean, scatter_sum, scatter_max
+from pypef.plm.prosst_structure.encoder.gvp import AutoGraphEncoder
+from pypef.plm.prosst_structure.scatter import scatter_mean, scatter_sum, scatter_max
 from pypef.utils.helpers import get_device
 
 import logging

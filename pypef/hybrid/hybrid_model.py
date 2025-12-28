@@ -37,10 +37,10 @@ from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.llm.esm_lora_tune import esm_setup, get_esm_models
-from pypef.llm.prosst_lora_tune import get_prosst_models, prosst_setup
-from pypef.llm.inference import llm_embedder, inference
-from pypef.llm.utils import get_batches
+from pypef.plm.esm_lora_tune import esm_setup, get_esm_models
+from pypef.plm.prosst_lora_tune import get_prosst_models, prosst_setup
+from pypef.plm.inference import llm_embedder, inference
+from pypef.plm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
 # will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
@@ -70,7 +70,9 @@ class DCALLMHybridModel:
             llm_train: bool = True,
             device: str | None = None,
             seed: int | None = None,
-            verbose: bool = True
+            verbose: bool = True,
+            progress_cb=None, 
+            abort_cb=None
     ):
         if llm_model_input is not None:
             if type(llm_model_input) is not dict:
@@ -141,6 +143,8 @@ class DCALLMHybridModel:
             self.y_llm_ttest,
             self.y_llm_lora_ttest
         ) = None, None, None, None, None, None, None, None, None
+        self.progress_cb = progress_cb
+        self.abort_cb = abort_cb
         self.train_and_optimize()
 
     @staticmethod
@@ -465,7 +469,9 @@ class DCALLMHybridModel:
                 n_epochs=50,
                 device=self.device,
                 verbose=self.verbose,
-                raise_error_on_train_fail=False
+                raise_error_on_train_fail=False,
+                progress_cb=self.progress_cb, 
+                abort_cb=self.abort_cb
             )
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
@@ -496,7 +502,9 @@ class DCALLMHybridModel:
                 self.llm_optimizer,  
                 n_epochs=5, 
                 device=self.device,
-                verbose=self.verbose
+                verbose=self.verbose,
+                progress_cb=self.progress_cb, 
+                abort_cb=self.abort_cb
             )
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=x_llm_ttrain_b,
@@ -802,6 +810,8 @@ def save_model_to_dict_pickle(
             model.llm_base_model = model.llm_base_model.state_dict()
             model.llm_model_input[model.llm_key]['llm_base_model'] = None
             model.llm_model_input[model.llm_key]['llm_model'] = None
+            model.progress_cb = None
+            model.abort_cb = None
             model_type += model.llm_key.upper()
     pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     pickle.dump(
@@ -986,7 +996,9 @@ def performance_ls_ts(
         wt_seq: str | None = None,
         substitution_sep: str = '/',
         label=False,
-        device: str| None = None
+        device: str| None = None,
+        progress_cb=None, 
+        abort_cb=None
 ):
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
@@ -1032,7 +1044,9 @@ def performance_ls_ts(
             y_train=np.array(y_train),
             llm_model_input=llm_dict,
             x_wt=x_wt,
-            device=device
+            device=device,
+            progress_cb=progress_cb, 
+            abort_cb=abort_cb
         )
         y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
         logger.info(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')

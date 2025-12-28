@@ -49,7 +49,7 @@ import pandas as pd
 from tqdm import tqdm
 import torch
 
-from pypef.llm.utils import get_batches
+from pypef.plm.utils import get_batches
 from pypef.utils.variant_data import get_mismatches
 
 

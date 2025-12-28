@@ -417,7 +417,7 @@ def validate(args):
         exit(e)
 
 
-def run_main(argv=None):
+def run_main(argv=None, progress_cb=None, abort_cb=None):
     """
     Entry point for pip-installed version.
     Arguments are created from Docstring using docopt that 
@@ -434,7 +434,7 @@ def run_main(argv=None):
     elif arguments['ml']:
         run_pypef_pure_ml(arguments)
     elif arguments['hybrid'] or arguments['param_inference'] or arguments['save_msa_info']:
-        run_pypef_hybrid_modeling(arguments)
+        run_pypef_hybrid_modeling(arguments, progress_cb=progress_cb, abort_cb=abort_cb)
     else:
         run_pypef_utils(arguments)
 

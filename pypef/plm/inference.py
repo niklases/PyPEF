@@ -7,9 +7,9 @@
 import numpy as np
 
 from pypef.utils.helpers import get_device
-from pypef.llm.utils import get_batches
-from pypef.llm.esm_lora_tune import esm_setup, esm_tokenize_sequences, esm_infer
-from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences, prosst_infer
+from pypef.plm.utils import get_batches
+from pypef.plm.esm_lora_tune import esm_setup, esm_tokenize_sequences, esm_infer
+from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences, prosst_infer
 
 import logging
 logger = logging.getLogger('pypef.llm.inference')

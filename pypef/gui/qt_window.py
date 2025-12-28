@@ -6,11 +6,14 @@
 import sys
 from os import getcwd, cpu_count, chdir
 import logging
+import time
+
 
 from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget, 
-    QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, QFileDialog
+    QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, 
+    QFileDialog, QProgressBar, QSizePolicy
 )
 
 from pypef import __version__
@@ -87,7 +90,7 @@ class Worker(QObject):
     Code/logic taken from 
     https://stackoverflow.com/a/41605909/28792835.
     """
-    sig_step = Signal(int, str)
+    sig_step = Signal(dict)
     sig_done = Signal(int)
     sig_msg = Signal(str)
     sig_abort = Signal(int)
@@ -96,6 +99,11 @@ class Worker(QObject):
         super().__init__()
         self.__id = id_
         self.cmd =  cmd
+        self._abort = False
+    
+    def abort(self):
+        self._abort = True
+        self.sig_msg.emit(f'Worker #{self.__id} abort requested')
 
     @Slot()  
     def work(self):
@@ -118,7 +126,16 @@ class Worker(QObject):
         every trained epoch from the executed imported function. 
         """
         print(f"Executing command: {self.cmd}")
-        run_main(argv=self.cmd)
+
+        def progress_cb(epoch, batch, epoch_total, batch_total, loss):
+            progress = {'epoch': epoch, 'batch': batch, 'loss': loss,
+                        'epoch_total': epoch_total, 'batch_total': batch_total }
+            self.sig_step.emit(progress)
+        
+        def abort_cb():
+            return self._abort
+
+        run_main(argv=self.cmd, progress_cb=progress_cb, abort_cb=abort_cb)
         self.sig_done.emit(f"Done: {self.__id}")
 
     def abort(self):
@@ -126,6 +143,9 @@ class Worker(QObject):
 
 
 class InfoWorker(QObject):
+    """
+    Class for the Worker that gets GPU information.
+    """
     sig_tick = Signal(str)
     sig_abort = Signal()
 
@@ -172,6 +192,7 @@ class MainWidget(QWidget):
         self.c = 0
         self.n_cores = 1
         self.ls_proportion = 0.8
+        self.shift = 2
         self.setMinimumSize(QSize(1400, 800))
         self.setWindowTitle("PyPEF GUI")
         self.setStyleSheet("background-color: rgb(40, 44, 52);")
@@ -181,32 +202,42 @@ class MainWidget(QWidget):
         self.__workers_done = None
         self.__threads = None
 
+        self.train_start = None
+
+        self._train_start_time = None
+        self._last_eta_update = 0
+
+
         # Texts #########################################################################
         layout = QGridLayout(self)  # MAIN LAYOUT: QGridLayout
         self.version_text = QLabel(f"PyPEF v. {__version__}", alignment=Qt.AlignRight)
-        self.llm_text = QLabel("LLM")
+        self.working_directory_text = QLabel(f"{getcwd()}")
+        self.working_directory_text.setWordWrap(True)
+        self.working_directory_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.plm_text = QLabel("PLM")
         self.regression_model_text =  QLabel("Regression model")
         self.utils_text = QLabel("Utilities")
         self.mklsts_cv_options_text = QLabel("Cross-validation split options")
-        self.dca_text = QLabel("DCA & LLM (unsupervised)")
+        self.dca_text = QLabel("DCA & PLM (unsupervised)")
         self.hybrid_text = QLabel("Hybrid (supervised DCA)")
-        self.hybrid_dca_llm_text = QLabel("Hybrid (supervised DCA+LLM)")
+        self.hybrid_dca_llm_text = QLabel("Hybrid (supervised DCA+PLM)")
         self.supervised_text = QLabel("Purely supervised")
         self.slider_text = QLabel("Train set proportion: 0.8")
+        self.epoch_time_label = QLabel("", self)
+        self.batch_time_label = QLabel("", self)
 
         for txt in [
-            self.version_text, self.regression_model_text, 
-            self.utils_text, self.llm_text, self.dca_text, self.hybrid_text, 
+            self.version_text, self.working_directory_text, self.regression_model_text, 
+            self.utils_text, self.plm_text, self.dca_text, self.hybrid_text, 
             self.supervised_text, self.hybrid_text, self.hybrid_dca_llm_text,
             self.slider_text
         ]:
             txt.setStyleSheet(text_style)
 
+        text_out_style = ("font-family:Consolas;font-size:12px;font-weight:normal;color:white;"
+                          "background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);")
         self.device_text_out = QTextEdit(readOnly=True)
-        self.device_text_out.setStyleSheet(
-            "font-family:Consolas;font-size:12px;font-weight:normal;color:white;"
-            "background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);"
-        )
+        self.device_text_out.setStyleSheet(text_out_style)
         self.device_text_out.setFixedHeight(85)
         self.device_text_out_info_text = (
             f"Device (for LLM/DCA): {get_device().upper()}\n"
@@ -217,12 +248,8 @@ class MainWidget(QWidget):
         )
         self.device_text_out.setPlainText(self.device_text_out_info_text)
 
-
         self.textedit_out = QTextEdit(readOnly=True)
-        self.textedit_out.setStyleSheet(
-            "font-family:Consolas;font-size:12px;font-weight:normal;color:white;"
-            "background-color:rgb(54, 69, 79);border:2px solid rgb(52, 59, 72);"
-        )
+        self.textedit_out.setStyleSheet(text_out_style)
         self.logTextBox = QTextEditLogger(self)
         self.logTextBox.setFormatter(formatter)
         logger.addHandler(self.logTextBox)
@@ -240,6 +267,14 @@ class MainWidget(QWidget):
         self.slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.slider.move(10, 130)
         self.slider.valueChanged.connect(self.selection_ls_proportion)
+
+        self.epoch_progress_bar = QProgressBar()
+        self.epoch_progress_bar.setTextVisible(False)
+        #self.epoch_progress_bar.setFormat("Epoch %v / %m (%p%) | Elapsed: 00:00 | ETA: --:--")
+
+        self.batch_progress_bar = QProgressBar()
+        self.batch_progress_bar.setTextVisible(False)
+        #self.batch_progress_bar.setFormat("Batch %v / %m (%p%) | Elapsed: 00:00 | ETA: --:--")
 
         # ComboBoxes ####################################################################
         self.box_regression_model = QComboBox()
@@ -410,8 +445,8 @@ class MainWidget(QWidget):
         )
         self.button_hybrid_predict_dca.setStyleSheet(button_style)
 
-        # Hybrid DCA+LLM
-        self.button_hybrid_train_dca_llm = QPushButton("Train (DCA+LLM)")
+        # Hybrid DCA+PLM
+        self.button_hybrid_train_dca_llm = QPushButton("Train (DCA+PLM)")
         self.button_hybrid_train_dca_llm.setMinimumWidth(80)
         self.button_hybrid_train_dca_llm.setToolTip(
             "Optimize the GREMLIN model and tune the LLM by "
@@ -422,7 +457,7 @@ class MainWidget(QWidget):
         )
         self.button_hybrid_train_dca_llm.setStyleSheet(button_style)
 
-        self.button_hybrid_train_test_dca_llm = QPushButton("Train-Test (DCA+LLM)")
+        self.button_hybrid_train_test_dca_llm = QPushButton("Train-Test (DCA+PLM)")
         self.button_hybrid_train_test_dca_llm.setMinimumWidth(80)
         self.button_hybrid_train_test_dca_llm.setToolTip(
             "Optimize the GREMLIN model and tune the LLM by supervised "
@@ -434,20 +469,20 @@ class MainWidget(QWidget):
         )
         self.button_hybrid_train_test_dca_llm.setStyleSheet(button_style)
 
-        self.button_hybrid_test_dca_llm = QPushButton("Test (DCA+LLM)")
+        self.button_hybrid_test_dca_llm = QPushButton("Test (DCA+PLM)")
         self.button_hybrid_test_dca_llm.setMinimumWidth(80)
         self.button_hybrid_test_dca_llm.setToolTip(
-            "Test the trained hybrid DCA+LLM model on a test set"
+            "Test the trained hybrid DCA+PLM model on a test set"
         )
         self.button_hybrid_test_dca_llm.clicked.connect(
             self.pypef_dca_llm_hybrid_test
         )
         self.button_hybrid_test_dca_llm.setStyleSheet(button_style)
 
-        self.button_hybrid_predict_dca_llm = QPushButton("Predict (DCA+LLM)")
+        self.button_hybrid_predict_dca_llm = QPushButton("Predict (DCA+PLM)")
         self.button_hybrid_predict_dca_llm.setMinimumWidth(80)
         self.button_hybrid_predict_dca_llm.setToolTip(
-            "Use the trained hybrid DCA+LLM model for prediction"
+            "Use the trained hybrid DCA+PLM model for prediction"
         )
         self.button_hybrid_predict_dca_llm.clicked.connect(
             self.pypef_dca_llm_hybrid_predict
@@ -589,52 +624,64 @@ class MainWidget(QWidget):
         layout.addWidget(self.version_text, 0, 5, 1, 1)
         layout.addWidget(self.slider_text, 1, 0, 1, 1)
         layout.addWidget(self.button_work_dir, 0, 2, 1, 1)
+        layout.addWidget(self.working_directory_text, 0, 3, 1, 1)
 
-        layout.addWidget(self.utils_text, 3, 0, 1, 1)
-        layout.addWidget(self.button_help, 4, 0, 1, 1)
-        layout.addWidget(self.button_mklsts, 5, 0, 1, 1)
-        layout.addWidget(self.button_mkps, 6, 0, 1, 1)
-        layout.addWidget(self.button_gremlin_ssm, 7, 0, 1, 1)
-        layout.addWidget(self.button_llm_ssm, 8, 0, 1, 1)
+        layout.addWidget(self.utils_text, self.shift + 3, 0, 1, 1)
+        layout.addWidget(self.button_help, self.shift + 4, 0, 1, 1)
+        layout.addWidget(self.button_mklsts, self.shift + 5, 0, 1, 1)
+        layout.addWidget(self.button_mkps, self.shift + 6, 0, 1, 1)
+        layout.addWidget(self.button_gremlin_ssm, self.shift + 7, 0, 1, 1)
+        layout.addWidget(self.button_llm_ssm, self.shift + 8, 0, 1, 1)
 
-        layout.addWidget(self.mklsts_cv_options_text, 1, 1, 1, 1)
-        layout.addWidget(self.box_mklsts_cv, 2, 1, 1, 1)
-        layout.addWidget(self.dca_text, 3, 1, 1, 1)
-        layout.addWidget(self.button_dca_inference_gremlin, 4, 1, 1, 1)
-        layout.addWidget(self.button_dca_test_dca, 5, 1, 1, 1)
-        layout.addWidget(self.button_llm_test_zs, 6, 1, 1, 1)
-        layout.addWidget(self.button_dca_predict_dca, 7, 1, 1, 1)
-        layout.addWidget(self.button_llm_predict_zs, 8, 1, 1, 1)
 
-        layout.addWidget(self.hybrid_text, 3, 2, 1, 1)
-        layout.addWidget(self.button_hybrid_train_dca, 4, 2, 1, 1)
-        layout.addWidget(self.button_hybrid_train_test_dca, 5, 2, 1, 1)
-        layout.addWidget(self.button_hybrid_test_dca, 6, 2, 1, 1)
-        layout.addWidget(self.button_hybrid_predict_dca, 7, 2, 1, 1)
+        layout.addWidget(self.mklsts_cv_options_text, self.shift + 1, 1, 1, 1)
+        layout.addWidget(self.box_mklsts_cv, self.shift + 2, 1, 1, 1)
+        layout.addWidget(self.dca_text, self.shift + 3, 1, 1, 1)
+        layout.addWidget(self.button_dca_inference_gremlin, self.shift + 4, 1, 1, 1)
+        layout.addWidget(self.button_dca_test_dca, self.shift + 5, 1, 1, 1)
+        layout.addWidget(self.button_llm_test_zs, self.shift + 6, 1, 1, 1)
+        layout.addWidget(self.button_dca_predict_dca, self.shift + 7, 1, 1, 1)
+        layout.addWidget(self.button_llm_predict_zs, self.shift + 8, 1, 1, 1)
 
-        layout.addWidget(self.llm_text, 1, 3, 1, 1)
-        layout.addWidget(self.box_llm, 2, 3, 1, 1)
-        layout.addWidget(self.hybrid_dca_llm_text, 3, 3, 1, 1)
-        layout.addWidget(self.button_hybrid_train_dca_llm, 4, 3, 1, 1)
-        layout.addWidget(self.button_hybrid_train_test_dca_llm, 5, 3, 1, 1)
-        layout.addWidget(self.button_hybrid_test_dca_llm, 6, 3, 1, 1)
-        layout.addWidget(self.button_hybrid_predict_dca_llm, 7, 3, 1, 1)
+        layout.addWidget(self.hybrid_text, self.shift + 3, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_train_dca, self.shift + 4, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_train_test_dca, self.shift + 5, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_test_dca, self.shift + 6, 2, 1, 1)
+        layout.addWidget(self.button_hybrid_predict_dca, self.shift + 7, 2, 1, 1)
 
-        layout.addWidget(self.regression_model_text, 1, 4, 1, 1)
-        layout.addWidget(self.box_regression_model, 2, 4, 1, 1)
-        layout.addWidget(self.supervised_text, 3, 4, 1, 1)
-        layout.addWidget(self.button_supervised_train_dca, 4, 4, 1, 1)
-        layout.addWidget(self.button_supervised_train_test_dca, 5, 4, 1, 1)
-        layout.addWidget(self.button_supervised_test_dca, 6, 4, 1, 1)
-        layout.addWidget(self.button_supervised_predict_dca, 7, 4, 1, 1)
-        layout.addWidget(self.button_supervised_train_onehot, 4, 5, 1, 1)
-        layout.addWidget(self.button_supervised_train_test_onehot, 5, 5, 1, 1)
-        layout.addWidget(self.button_supervised_test_onehot, 6, 5, 1, 1)
-        layout.addWidget(self.button_supervised_predict_onehot, 7, 5, 1, 1)
+        layout.addWidget(self.plm_text, self.shift + 1, 3, 1, 1)
+        layout.addWidget(self.box_llm, self.shift + 2, 3, 1, 1)
+        layout.addWidget(self.hybrid_dca_llm_text, self.shift + 3, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_train_dca_llm, self.shift + 4, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_train_test_dca_llm, self.shift + 5, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_test_dca_llm, self.shift + 6, 3, 1, 1)
+        layout.addWidget(self.button_hybrid_predict_dca_llm, self.shift + 7, 3, 1, 1)
 
-        layout.addWidget(self.textedit_out, 12, 0, 1, 2)
+        layout.addWidget(self.regression_model_text, self.shift + 1, 4, 1, 1)
+        layout.addWidget(self.box_regression_model, self.shift + 2, 4, 1, 1)
+        layout.addWidget(self.supervised_text, self.shift + 3, 4, 1, 1)
+        layout.addWidget(self.button_supervised_train_dca, self.shift + 4, 4, 1, 1)
+        layout.addWidget(self.button_supervised_train_test_dca, self.shift + 5, 4, 1, 1)
+        layout.addWidget(self.button_supervised_test_dca, self.shift + 6, 4, 1, 1)
+        layout.addWidget(self.button_supervised_predict_dca, self.shift + 7, 4, 1, 1)
+        layout.addWidget(self.button_supervised_train_onehot, self.shift + 4, 5, 1, 1)
+        layout.addWidget(self.button_supervised_train_test_onehot, self.shift + 5, 5, 1, 1)
+        layout.addWidget(self.button_supervised_test_onehot, self.shift + 6, 5, 1, 1)
+        layout.addWidget(self.button_supervised_predict_onehot, self.shift + 7, 5, 1, 1)
 
-        layout.addWidget(self.logTextBox.widget, 12, 2, 1, 4)
+        layout.setRowMinimumHeight(self.shift + 9, 60)  # 60 pixels of space after row
+
+        layout.addWidget(self.epoch_progress_bar, self.shift + 10, 0, 1, 5)
+        layout.addWidget(self.epoch_time_label, self.shift + 10, 5, 1, 1)
+        layout.addWidget(self.batch_progress_bar, self.shift + 11, 0, 1, 5)
+        layout.addWidget(self.batch_time_label, self.shift + 11, 5, 1, 1)
+        # Keep control columns compact
+        for col in range(6):
+            layout.setColumnStretch(col, 1)
+
+        layout.addWidget(self.textedit_out, self.shift + 12, 0, 1, 2)
+
+        layout.addWidget(self.logTextBox.widget, self.shift + 12, 2, 1, 4)
 
         # Start info thread #############################################################
         self.start_info_thread()
@@ -650,8 +697,12 @@ class MainWidget(QWidget):
         # Store refs to avoid garbage collection
         self.__threads.append((thread, worker))
         worker.moveToThread(thread)
+
+        worker.sig_step.connect(self.on_progress_step)
+
         worker.sig_done.connect(self.on_worker_done)
         worker.sig_msg.connect(self.logTextBox.widget.appendPlainText)
+
         thread.started.connect(worker.work)
         thread.start()
     
@@ -676,6 +727,61 @@ class MainWidget(QWidget):
             else:
                 new_info += info_text
         self.device_text_out.setPlainText(new_info)
+    
+    @Slot(dict)
+    def on_progress_step(self, progress):
+        if self._train_start_time is None:
+            self._train_start_time = time.time()
+            self._last_epoch = 1
+            self.epoch_eta = "--:--"
+            self.elapsed = 0
+        
+        now = time.time()
+        self.elapsed = now - self._train_start_time
+
+        self.epoch_progress_bar.setValue(
+            int((progress['epoch'] / progress['epoch_total']) * 100)
+        )
+        
+        self.batch_progress_bar.setValue(
+            int((progress['batch'] / progress['batch_total']) * 100)
+        )
+
+        if now - self._last_eta_update < 0.3:
+            return
+        self._last_eta_update = now
+
+        # Epoch ETA
+        if self._last_epoch != progress['epoch']:
+            self.epoch_eta = self.estimate_eta(
+                self.elapsed,
+                progress['epoch'],
+                progress['epoch_total']
+            )
+            self._last_epoch = progress['epoch']
+
+        # Batch ETA
+        # TODO: Add Batch elapsed reset
+        self.batch_eta = self.estimate_eta(
+            self.elapsed,
+            progress['batch'],
+            progress['batch_total']
+        )
+
+        elapsed_str = self.format_time(self.elapsed)
+
+        # Update format text (stable width!)
+        self.epoch_time_label.setText(
+            f"Batch {progress['epoch']:04d} / {progress['epoch_total']:04d}  "
+            f"({int((progress['epoch'] / progress['epoch_total']) * 100)}%) "
+            f"| Elapsed: {elapsed_str} | ETA: {self.epoch_eta}"
+        )
+
+        self.batch_time_label.setText(
+            f"Batch {progress['batch']:04d} / {progress['batch_total']:04d}  "
+            f"({int((progress['batch'] / progress['batch_total']) * 100)}%) "
+            f"| Elapsed: {elapsed_str} | ETA: {self.batch_eta}"
+        )
 
     @Slot(int)
     def on_worker_done(self):
@@ -714,8 +820,9 @@ class MainWidget(QWidget):
         k = f"Job: {str(self.c):<5}" + "=" * 60
         self.textedit_out.append(k)
         self.logTextBox.widget.appendPlainText(
-            f"Current working directory: {str(getcwd())}"
+            f"Current working directory: {getcwd()}"
         )
+        self.working_directory_text.setText(getcwd())
         self.logTextBox.widget.appendPlainText(
             "Job: " + str(self.c) + " " + "=" * 104
         )
@@ -724,9 +831,10 @@ class MainWidget(QWidget):
     def end_process(self):
         self.target_button.setEnabled(True)
         self.toggle_buttons(True)
+        self.epoch_progress_bar.setValue(0)
+        self.batch_progress_bar.setValue(0)
         self.textedit_out.append("=" * 60 + "\n")
         self.version_text.setText("Finished...")
-
 
     def closeEvent(self, event):
         """
@@ -740,7 +848,19 @@ class MainWidget(QWidget):
                 thread.quit()
                 thread.wait()
         event.accept()
+
+    def format_time(self, seconds: float) -> str:
+        seconds = max(0, int(seconds))
+        m, s = divmod(seconds, 60)
+        h, m = divmod(m, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
     
+    def estimate_eta(self, elapsed, current, total):
+        if current <= 0:
+            return "--:--"
+        rate = elapsed / current
+        remaining = rate * (total - current)
+        return self.format_time(remaining)
 
     # Box selections ####################################################################
     def selection_ncores(self, i):
@@ -777,6 +897,7 @@ class MainWidget(QWidget):
         self.logTextBox.widget.appendPlainText(
             f"Changed current working directory to: {str(getcwd())}"
         )
+        self.working_directory_text.setText(getcwd())
 
     # Button functions ##################################################################
     # Utils
@@ -1147,7 +1268,7 @@ class MainWidget(QWidget):
             )[0]
             if training_file and params_pkl_file and wt_fasta_file and pdb_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
@@ -1160,7 +1281,7 @@ class MainWidget(QWidget):
         elif self.llm == 'esm':
             if training_file and params_pkl_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
@@ -1202,7 +1323,7 @@ class MainWidget(QWidget):
                 and wt_fasta_file and pdb_file
             ):
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
@@ -1215,7 +1336,7 @@ class MainWidget(QWidget):
         elif self.llm == 'esm':
             if training_file and test_file and params_pkl_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
@@ -1257,7 +1378,7 @@ class MainWidget(QWidget):
                 and pdb_file and model_file
             ):
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model testing..."
+                    "Hybrid (DCA+PLM-supervised) model testing..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ts {test_file} '
@@ -1269,7 +1390,7 @@ class MainWidget(QWidget):
         elif self.llm == 'esm':
             if test_file and params_pkl_file and model_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model testing..."
+                    "Hybrid (DCA+PLM-supervised) model testing..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ts {test_file} '
@@ -1310,7 +1431,7 @@ class MainWidget(QWidget):
                 and pdb_file and model_file
             ):
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ps {prediction_file} '
@@ -1323,7 +1444,7 @@ class MainWidget(QWidget):
         elif self.llm == 'esm':
             if prediction_file and params_pkl_file and model_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+LLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ps {prediction_file} '

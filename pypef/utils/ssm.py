@@ -13,7 +13,7 @@ import pandas as pd
 import numpy as np
 
 from pypef.hybrid.hybrid_model import get_model_and_type
-from pypef.llm.inference import inference
+from pypef.plm.inference import inference
 from pypef.dca.gremlin_inference import GREMLIN
 
 

@@ -14,9 +14,9 @@ import torch
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.llm.esm_lora_tune import esm_setup
-from pypef.llm.prosst_lora_tune import prosst_setup
-from pypef.llm.inference import inference, llm_embedder
+from pypef.plm.esm_lora_tune import esm_setup
+from pypef.plm.prosst_lora_tune import prosst_setup
+from pypef.plm.inference import inference, llm_embedder
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
 

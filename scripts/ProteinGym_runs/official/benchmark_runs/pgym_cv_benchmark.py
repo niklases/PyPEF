@@ -17,8 +17,8 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 
 from pypef.utils.variant_data import get_mismatches
-from pypef.llm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
-from pypef.llm.esm_lora_tune import esm_setup, esm_tokenize_sequences
+from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
+from pypef.plm.esm_lora_tune import esm_setup, esm_tokenize_sequences
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 

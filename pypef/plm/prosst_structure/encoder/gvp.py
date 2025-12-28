@@ -12,8 +12,8 @@
 import torch
 import torch.nn as nn
 
-from pypef.llm.prosst_structure.scatter import scatter_mean
-from pypef.llm.prosst_structure.encoder.layer import GVP, GVPConvLayer, LayerNorm
+from pypef.plm.prosst_structure.scatter import scatter_mean
+from pypef.plm.prosst_structure.encoder.layer import GVP, GVPConvLayer, LayerNorm
 
 
 class AttentionPooling(nn.Module):

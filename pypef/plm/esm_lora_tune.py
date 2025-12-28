@@ -30,7 +30,7 @@ from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 
 from pypef.utils.helpers import get_device
-from pypef.llm.utils import corr_loss, load_model_and_tokenizer
+from pypef.plm.utils import corr_loss, load_model_and_tokenizer
 
 
 def get_esm_models():
@@ -143,7 +143,8 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=Fals
 def esm_train(
         xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
         device: str | None = None, seed: int | None = None, 
-        n_batch_grad_accumulations: int = 1, verbose: bool = True
+        n_batch_grad_accumulations: int = 1, verbose: bool = True,
+        progress_cb=None, abort_cb=None
 ):
     if seed is not None:
         torch.manual_seed(seed)
@@ -157,6 +158,7 @@ def esm_train(
     xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     loss = np.nan
+    logger.info(progress_cb)  # TODO: delete
     for epoch in pbar_epochs:
         try:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
@@ -171,6 +173,8 @@ def esm_train(
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
+            if progress_cb:
+                progress_cb(epoch - 1, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
             loss.backward()
             if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
                 optimizer.step()
@@ -180,6 +184,8 @@ def esm_train(
                 f"[batch: {batch+1}/{len(xs)} | sequence: "
                 f"{(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}] ({device.upper()})"
             )
+    if progress_cb:
+        progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
     y_preds_b = y_preds_b.detach()
     model.train(False)
 

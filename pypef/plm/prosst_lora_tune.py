@@ -11,7 +11,7 @@
 
 import logging
 
-from pypef.llm.utils import load_model_and_tokenizer
+from pypef.plm.utils import load_model_and_tokenizer
 logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
 import os
@@ -25,8 +25,8 @@ from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
-from pypef.llm.esm_lora_tune import corr_loss
-from pypef.llm.prosst_structure.quantizer import PdbQuantizer
+from pypef.plm.esm_lora_tune import corr_loss
+from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
 
 
@@ -139,7 +139,9 @@ def prosst_train(
         input_ids, attention_mask, structure_input_ids,
         n_epochs=50, device: str | None = None, seed: int | None = None,
         early_stop: int = 50, verbose: bool = True, 
-        n_batch_grad_accumulations: int = 1, raise_error_on_train_fail: bool = True):
+        n_batch_grad_accumulations: int = 1, raise_error_on_train_fail: bool = True,
+        progress_cb=None, abort_cb=None
+):
     if seed is not None:
         torch.manual_seed(seed)
     if device is None:
@@ -154,6 +156,7 @@ def prosst_train(
     best_model = None
     best_model_epoch = np.nan
     best_model_perf = np.nan
+    loss = np.nan
     os.makedirs('model_saves', exist_ok=True)
     for epoch in pbar_epochs:
         if epoch == 0:
@@ -171,6 +174,8 @@ def prosst_train(
             )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
+            if progress_cb:
+                progress_cb(epoch - 1, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
             loss.backward()
             if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
                 optimizer.step()
@@ -215,6 +220,8 @@ def prosst_train(
         pbar_epochs.set_description(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
             f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
+    if progress_cb:
+        progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
     if best_model is None:
         msg = ("Failed to train a model (probably due to the input "
                "data characteristics and loss/correlation being NaN).")

@@ -20,16 +20,16 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.llm.utils import get_batches, corr_loss
-from pypef.llm.esm_lora_tune import (
+from pypef.plm.utils import get_batches, corr_loss
+from pypef.plm.esm_lora_tune import (
     get_esm_models, esm_tokenize_sequences, 
     esm_train, esm_infer
 )
-from pypef.llm.prosst_lora_tune import (
+from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
     prosst_tokenize_sequences, prosst_train
 )
-from pypef.llm.inference import inference
+from pypef.plm.inference import inference
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
