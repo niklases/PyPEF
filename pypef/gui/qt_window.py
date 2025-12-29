@@ -47,6 +47,23 @@ QLabel {
 }"""
 
 
+progress_style = """
+QProgressBar {
+    border: 1px solid #444;
+    border-radius: 6px;
+    background-color: #2b2b2b;
+    text-align: center;
+    height: 14px;
+}
+
+QProgressBar::chunk {
+    background-color: #3daee9;
+    border-radius: 6px;
+}
+"""
+
+
+
 class QTextEditLogger(logging.Handler, QObject):
     """
     Thread-safe logging handler for PyQt/PySide applications.
@@ -100,10 +117,6 @@ class Worker(QObject):
         self.__id = id_
         self.cmd =  cmd
         self._abort = False
-    
-    def abort(self):
-        self._abort = True
-        self.sig_msg.emit(f'Worker #{self.__id} abort requested')
 
     @Slot()  
     def work(self):
@@ -139,6 +152,7 @@ class Worker(QObject):
         self.sig_done.emit(f"Done: {self.__id}")
 
     def abort(self):
+        self._abort = True
         self.sig_msg.emit(f'Worker #{self.__id} notified to abort')
 
 
@@ -270,11 +284,11 @@ class MainWidget(QWidget):
 
         self.epoch_progress_bar = QProgressBar()
         self.epoch_progress_bar.setTextVisible(False)
-        #self.epoch_progress_bar.setFormat("Epoch %v / %m (%p%) | Elapsed: 00:00 | ETA: --:--")
+        self.epoch_progress_bar.setStyleSheet(progress_style)
 
         self.batch_progress_bar = QProgressBar()
         self.batch_progress_bar.setTextVisible(False)
-        #self.batch_progress_bar.setFormat("Batch %v / %m (%p%) | Elapsed: 00:00 | ETA: --:--")
+        self.batch_progress_bar.setStyleSheet(progress_style)
 
         # ComboBoxes ####################################################################
         self.box_regression_model = QComboBox()
@@ -305,6 +319,10 @@ class MainWidget(QWidget):
         
         # Buttons #######################################################################
         # Utilities
+        self.button_abort = QPushButton("Stop training")
+        self.button_abort.clicked.connect(self.abort_workers)
+        self.button_abort.setStyleSheet(button_style)
+
         self.button_work_dir = QPushButton("Set Working Directory")
         self.button_work_dir.setToolTip(
             "Set working directory for storing output files"
@@ -626,6 +644,8 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_work_dir, 0, 2, 1, 1)
         layout.addWidget(self.working_directory_text, 0, 3, 1, 1)
 
+        layout.addWidget(self.button_abort, 3, 5, 1, 1)
+
         layout.addWidget(self.utils_text, self.shift + 3, 0, 1, 1)
         layout.addWidget(self.button_help, self.shift + 4, 0, 1, 1)
         layout.addWidget(self.button_mklsts, self.shift + 5, 0, 1, 1)
@@ -698,9 +718,12 @@ class MainWidget(QWidget):
         self.__threads.append((thread, worker))
         worker.moveToThread(thread)
 
-        worker.sig_step.connect(self.on_progress_step)
+        worker.sig_step.connect(self.on_train_progress_step)
 
         worker.sig_done.connect(self.on_worker_done)
+        worker.sig_done.connect(thread.quit)
+        worker.sig_done.connect(worker.deleteLater)
+        worker.sig_done.connect(thread.deleteLater)
         worker.sig_msg.connect(self.logTextBox.widget.appendPlainText)
 
         thread.started.connect(worker.work)
@@ -729,10 +752,11 @@ class MainWidget(QWidget):
         self.device_text_out.setPlainText(new_info)
     
     @Slot(dict)
-    def on_progress_step(self, progress):
+    def on_train_progress_step(self, progress):
         if self._train_start_time is None:
             self._train_start_time = time.time()
             self._last_epoch = 1
+            self._last_epoch_time = self._train_start_time
             self.epoch_eta = "--:--"
             self.elapsed = 0
         
@@ -749,7 +773,6 @@ class MainWidget(QWidget):
 
         if now - self._last_eta_update < 0.3:
             return
-        self._last_eta_update = now
 
         # Epoch ETA
         if self._last_epoch != progress['epoch']:
@@ -759,28 +782,32 @@ class MainWidget(QWidget):
                 progress['epoch_total']
             )
             self._last_epoch = progress['epoch']
+            self._last_epoch_time = time.time()
 
         # Batch ETA
-        # TODO: Add Batch elapsed reset
+        elapsed_since_last_epoch = now - self._last_epoch_time
         self.batch_eta = self.estimate_eta(
-            self.elapsed,
+            elapsed_since_last_epoch,
             progress['batch'],
             progress['batch_total']
         )
 
         elapsed_str = self.format_time(self.elapsed)
+        # Batch update is every update
+        if not progress['epoch'] == progress['epoch_total']:
+            delta_elapsed_str = self.format_time(elapsed_since_last_epoch)
 
         # Update format text (stable width!)
         self.epoch_time_label.setText(
-            f"Batch {progress['epoch']:04d} / {progress['epoch_total']:04d}  "
+            f"Epoch {progress['epoch']} / {progress['epoch_total']}  "
             f"({int((progress['epoch'] / progress['epoch_total']) * 100)}%) "
             f"| Elapsed: {elapsed_str} | ETA: {self.epoch_eta}"
         )
 
         self.batch_time_label.setText(
-            f"Batch {progress['batch']:04d} / {progress['batch_total']:04d}  "
+            f"Batch {progress['batch']} / {progress['batch_total']}  "
             f"({int((progress['batch'] / progress['batch_total']) * 100)}%) "
-            f"| Elapsed: {elapsed_str} | ETA: {self.batch_eta}"
+            f"| Elapsed: {delta_elapsed_str} | ETA: {self.batch_eta}"
         )
 
     @Slot(int)
@@ -798,12 +825,15 @@ class MainWidget(QWidget):
         # are running in a single QThread without getting callbacks from 
         # a computing loop or so. So no qthreaded job abortions possible
         # without using QThread::terminate(), which should not be used.
+        # TODO: Add functionality for new Signal-connected training/processing
+        # for aborting (implemented for training..)
         self.logTextBox.widget.appendPlainText(
             'Asking each worker to abort...'
         )
         for thread, worker in self.__threads:
-            thread.quit()
-            thread.wait()
+            #thread.quit()
+            #thread.wait()
+            worker.abort()
         # even though threads have exited, there may still be messages 
         # on the main thread's queue (messages that threads emitted 
         # before the abort):
@@ -833,6 +863,7 @@ class MainWidget(QWidget):
         self.toggle_buttons(True)
         self.epoch_progress_bar.setValue(0)
         self.batch_progress_bar.setValue(0)
+        self._train_start_time = None
         self.textedit_out.append("=" * 60 + "\n")
         self.version_text.setText("Finished...")
 

@@ -168,6 +168,8 @@ def prosst_train(
             total=len(x_sequence_batches), leave=False, disable=not verbose
         )
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
+            if abort_cb and abort_cb():
+                return
             y_preds_b = get_logits_from_full_seqs(
                 seqs_b, model, input_ids, attention_mask, structure_input_ids,
                 train=True, verbose=False

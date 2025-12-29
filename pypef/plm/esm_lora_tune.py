@@ -158,7 +158,6 @@ def esm_train(
     xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
     pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     loss = np.nan
-    logger.info(progress_cb)  # TODO: delete
     for epoch in pbar_epochs:
         try:
             pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
@@ -170,6 +169,8 @@ def esm_train(
             total=len(xs), leave=False, disable=not verbose
         )
         for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
+            if abort_cb and abort_cb():
+                return
             xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
             y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
