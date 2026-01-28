@@ -10,8 +10,6 @@
 # bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672
 
 import logging
-
-from pypef.plm.utils import load_model_and_tokenizer
 logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
 import os
@@ -28,6 +26,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 from pypef.plm.esm_lora_tune import corr_loss
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
+from pypef.plm.utils import load_model_and_tokenizer
 
 
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):

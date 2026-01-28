@@ -17,9 +17,11 @@
 from __future__ import annotations
 
 import logging
+from time import sleep
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 import torch
+import torch.nn.functional as F
 import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
@@ -30,12 +32,12 @@ from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import corr_loss, load_model_and_tokenizer
+from pypef.plm.utils import corr_loss, get_batches, load_model_and_tokenizer
 
 
-def get_esm_models():
+def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
     base_model, tokenizer = load_model_and_tokenizer(
-        f'facebook/esm1v_t33_650M_UR90S_3'
+        model
         # Just sticking to AutoModelForMaskedLM and AutoTokenizer 
         # instead to EsmForMaskedLM and EsmTokenizer
     )  
@@ -46,16 +48,16 @@ def get_esm_models():
 
 
 def esm_tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
-    encoded_sequences = []
+    tokenized_sequences = []
     for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling', disable=not verbose):
         encoded_sequence, attention_mask = tokenizer(
             seq, 
             padding='max_length', 
-            truncation=True, 
+            truncation=True,  # False for not uniform length distribution (truncation) 
             max_length=max_length
         ).values()
-        encoded_sequences.append(encoded_sequence)
-    return encoded_sequences, attention_mask
+        tokenized_sequences.append(encoded_sequence)
+    return tokenized_sequences, attention_mask
 
 
 def get_y_pred_scores(encoded_sequences, attention_masks, 
@@ -81,7 +83,7 @@ def get_y_pred_scores(encoded_sequences, attention_masks,
             log_probs = torch.cat(
                 (log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
     return log_probs
-    
+
 
 def esm_test(xs, attention_mask, scores, loss_fn, model, 
              device: str | None = None, verbose: bool = True):
@@ -140,6 +142,337 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=Fals
     return torch.flatten(y_preds_total)
 
 
+def esm_unmasked_reconstruction_score(
+        tokenized_sequences, 
+        attention_mask, 
+        model, 
+        train: bool = False,
+        device=None, 
+        **kws
+    ):
+    if device is None:
+        device = get_device()
+    attention_masks = torch.Tensor(np.full(
+        shape=np.shape(tokenized_sequences), fill_value=attention_mask)).to(torch.int64)
+    if train:
+        with torch.no_grad():
+            outputs = model(tokenized_sequences.to(device), attention_masks.to(device), 
+                            output_hidden_states=False)
+    else:
+        outputs = model(tokenized_sequences.to(device), attention_masks.to(device), 
+                            output_hidden_states=False)
+    logits = outputs.logits
+    token_probs = torch.log_softmax(logits, dim=-1)
+    for i_s, sequence in enumerate(tokenized_sequences):
+        for i_aa, aa in enumerate(sequence):
+            # alternative: use Tensor.index_select() function
+            if i_aa == 0:
+                seq_log_probs = token_probs[i_s, i_aa, aa].reshape(1)
+            else:
+                seq_log_probs = torch.cat(
+                    (seq_log_probs, token_probs[i_s, i_aa, aa].reshape(1)), 0)
+        if i_s == 0:
+            log_probs = torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
+        else:
+            log_probs = torch.cat(
+                (log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
+    return log_probs
+
+
+def esm_masked_pll(
+    input_ids: torch.Tensor,          # (B, L)
+    attention_mask: torch.Tensor,      # (B, L)
+    model,
+    mask_token_id: int,
+    device: str | None = None,
+    verbose: bool = False,
+):
+    """
+    Compute true pseudo-log-likelihood (PLL) for an MLM (ESM).
+
+    Returns:
+        pll_scores: torch.Tensor of shape (B,)
+    """
+    if device is None:
+        device = next(model.parameters()).device
+
+    input_ids = input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+
+    B, L = input_ids.shape
+    pll_scores = torch.zeros(B, device=device)
+
+    model.eval()
+
+    for pos in tqdm(
+        range(L),
+        desc="ESM masked PLL",
+        disable=not verbose
+    ):
+        # Skip padding positions (position padding for all sequences in the batch)
+        if attention_mask[:, pos].sum() == 0:
+            continue
+
+        # Clone and mask position `pos`
+        masked_input_ids = input_ids.clone()
+        masked_input_ids[:, pos] = mask_token_id
+
+        with torch.no_grad():
+            outputs = model(
+                input_ids=masked_input_ids,
+                attention_mask=attention_mask,
+            )
+
+            logits = outputs.logits  # (B, L, V)
+
+        # Log-probabilities at masked position
+        log_probs = F.log_softmax(logits[:, pos, :], dim=-1)
+
+        # True tokens at this position
+        true_tokens = input_ids[:, pos]
+
+        # Gather log-prob of the true token
+        token_log_probs = log_probs.gather(
+            dim=1,
+            index=true_tokens.unsqueeze(1)
+        ).squeeze(1)
+
+        # Only count non-padding
+        pll_scores += token_log_probs * attention_mask[:, pos]
+
+    return pll_scores
+
+
+def esm_infer_masked_pll(
+    xs,
+    attention_mask,
+    model,
+    mask_token_id,
+    batch_size: int = 4,
+    device: str | None = None,
+    verbose: bool = False,
+):
+    if device is None:
+        device = get_device()
+
+    model = model.to(device)
+    model.eval()
+
+    if not isinstance(xs, torch.Tensor):
+        xs = torch.tensor(xs, dtype=torch.long)
+
+    if not isinstance(attention_mask, torch.Tensor):
+        attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+
+    xs = xs.to(device)
+
+    # Expand mask to (N, L) if needed
+    if attention_mask.dim() == 1:
+        attention_mask = attention_mask.unsqueeze(0).expand(xs.shape[0], -1)
+
+    attention_mask = attention_mask.to(device)
+
+    pll_all = []
+
+    for i in tqdm(
+        range(0, xs.shape[0], batch_size),
+        desc="ESM PLL inference",
+        disable=not verbose,
+    ):
+        xs_b = xs[i:i + batch_size]
+        am_b = attention_mask[i:i + batch_size]
+
+        pll_b = esm_masked_pll(
+            input_ids=xs_b,
+            attention_mask=am_b,
+            model=model,
+            mask_token_id=mask_token_id,
+            device=device,
+            verbose=False,
+        )
+
+        pll_all.append(pll_b.cpu())
+
+    return torch.cat(pll_all)
+
+
+
+def esm_mutation_only_mutation_masked_pll(
+    tokenized_sequences: torch.Tensor,        # (L,)
+    wt_input_ids: torch.Tensor,     # (L,)
+    attention_mask: torch.Tensor,   # (L,)
+    model,
+    mask_token_id: int,
+    train: bool = False,
+    device: str | None = None,
+    verbose: bool = False,
+):
+    """
+    Correct mutation-only pseudo-log-likelihood for ONE sequence.
+    """
+    model.eval()
+
+    tokenized_sequences = tokenized_sequences.to(device)
+    wt_input_ids = wt_input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    plls = torch.empty(len(tokenized_sequences), device=device)
+    for i, tokenized_seq in enumerate(tokenized_sequences):
+        pll = 0.0
+
+        # Identify mutated positions (exclude padding, CLS, EOS)
+        diff = (tokenized_seq != wt_input_ids) & (attention_mask == 1)
+        diff[0] = False
+        diff[-1] = False
+
+        mutated_positions = diff.nonzero(as_tuple=False).flatten()
+        # Mutated positions: [int(m) - 1 for m in mutated_positions.cpu()]  # Remove CLS token position
+
+        for pos in tqdm(
+            mutated_positions,
+            desc="Masked PLL (single sequence)",
+            disable=not verbose
+        ):
+            masked_input_ids = tokenized_seq.clone()
+            masked_input_ids[pos] = mask_token_id
+            if train:
+                with torch.no_grad():
+                    outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0),
+                        attention_mask=attention_mask.unsqueeze(0),
+                    )
+            else:
+                outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0),
+                        attention_mask=attention_mask.unsqueeze(0),
+                    )
+            logits = outputs.logits  # (1, L, V)
+
+            log_probs = F.log_softmax(logits[0, pos], dim=-1)
+            true_token = tokenized_seq[pos]
+
+            pll += log_probs[true_token].item()
+        
+        plls[i] = pll
+
+    return plls
+
+
+def esm_mutation_all_pos_masked_pll(
+    tokenized_sequences: torch.Tensor,        # (L,)
+    wt_input_ids: torch.Tensor,     # (L,)
+    attention_mask: torch.Tensor,   # (L,)
+    model,
+    mask_token_id: int,
+    train: bool = False,
+    device: str | None = None,
+    verbose: bool = False,
+):
+    """
+    Correct mutation-only pseudo-log-likelihood for ONE sequence.
+    """
+    model.eval()
+
+    tokenized_sequences = tokenized_sequences.to(device)
+    wt_input_ids = wt_input_ids.to(device)
+    attention_mask = attention_mask.to(device)
+    plls = torch.empty(len(tokenized_sequences), device=device)
+    for i, tokenized_seq in enumerate(tokenized_sequences):
+        L = tokenized_seq.shape[0]
+        pll = 0.0
+
+        # Positions to score: all real tokens except CLS/EOS
+        positions = (attention_mask == 1).nonzero(as_tuple=False).flatten()
+        positions = positions[(positions != 0) & (positions != L - 1)]
+
+        for pos in tqdm(
+            positions,
+            desc="Masked PLL (single sequence)",
+            disable=not verbose
+        ):
+            masked_input_ids = tokenized_seq.clone()
+            masked_input_ids[pos] = mask_token_id
+
+            if train:
+                with torch.no_grad():
+                    outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0),
+                        attention_mask=attention_mask.unsqueeze(0),
+                    )
+            else:
+                outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0),
+                        attention_mask=attention_mask.unsqueeze(0),
+                    )
+            logits = outputs.logits  # (1, L, V)
+
+            log_probs = F.log_softmax(logits[0, pos], dim=-1)
+            true_token = tokenized_seq[pos]
+
+            pll += log_probs[true_token].item()
+
+        plls[i] = pll
+
+    return plls
+
+
+def esm_infer_pll(
+    xs,
+    wt_input_ids,
+    attention_mask,
+    model,
+    mask_token_id,
+    inference_type='unmasked',
+    batch_size=5,
+    train=False,
+    device=None,
+    verbose=False,
+):
+    if device is None:
+        device = get_device()
+
+    model = model.to(device)
+
+    if not isinstance(xs, torch.Tensor):
+        xs = torch.tensor(xs, dtype=torch.long)
+
+    if not isinstance(attention_mask, torch.Tensor):
+        attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+    
+    if inference_type == 'mutation_masking':
+        inference_function = esm_mutation_only_mutation_masked_pll
+    elif inference_type == 'full_masking':
+        inference_function = esm_mutation_all_pos_masked_pll
+    elif inference_type == 'unmasked':
+        inference_function = esm_unmasked_reconstruction_score
+    else:
+        raise SystemError("Choose between 'mutation_masking', 'unmasked', and 'full_masking'")
+
+    scores = []
+
+    xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
+    desc = f"ESM inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
+
+    pbar = tqdm(
+        range(len(xs_b)),
+        desc=desc,
+        disable=not verbose
+    )
+
+    for i in pbar:
+        pll = inference_function(
+            tokenized_sequences=torch.tensor(xs_b[i]),
+            wt_input_ids=wt_input_ids,
+            attention_mask=attention_mask,
+            model=model,
+            mask_token_id=mask_token_id,
+            train=train,
+            device=device,
+            verbose=False
+        )
+        scores.append(pll)
+    return torch.cat(scores)
+
+
 def esm_train(
         xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
         device: str | None = None, seed: int | None = None, 
@@ -150,7 +483,7 @@ def esm_train(
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
-    logger.info(f'Training ESM model using {device.upper()} device '
+    print(f'Training ESM model using {device.upper()} device '
           f'(N_Train={len(torch.flatten(scores))})...')
     model = model.to(device)
     attention_masks = torch.Tensor(np.full(

@@ -25,7 +25,7 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def get_batches(a, dtype, batch_size=5,
-                keep_numpy: bool = False, keep_remaining=False, verbose: bool = False):
+                keep_remaining=False, verbose: bool = False):
     a = np.asarray(a, dtype=dtype)
     orig_shape = np.shape(a)
     remaining = len(a) % batch_size
@@ -44,14 +44,15 @@ def get_batches(a, dtype, batch_size=5,
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
     new_shape = np.shape(a)
     if verbose:
-        logger.info(f'{orig_shape} -> {new_shape} (dropped {remaining})')
+        print(f'{orig_shape} -> {new_shape} (dropped {remaining})')
     if keep_remaining: 
-        logger.info('Adding dropped back to batches as last batch...')
-        a = np.append(a, a_remaining)
-        return a
-    if keep_numpy:
-        return a
-    return torch.Tensor(a).to(dtype)
+        print(f'Appending remaining to collected batches as last batch '
+                    f'(the resulting inhomogenous list shape is '
+                    f'{np.shape(a)} + {np.shape(a_remaining)} = ('
+                    f'{np.shape(a)[0] + 1}, *, {np.shape(a)[-1]}))...')
+        a = a.tolist()
+        a.append(a_remaining)
+    return a
 
 
 def get_default_cache_dir():

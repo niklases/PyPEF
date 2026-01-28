@@ -8,16 +8,28 @@
 
 import os.path
 import numpy as np
+import pandas as pd
 from scipy.stats import spearmanr
 import torch
+from pypef.plm.utils import corr_loss, get_batches
+import pytest
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.plm.esm_lora_tune import esm_setup
+from pypef.plm.esm_lora_tune import esm_infer, esm_infer_pll, esm_setup, esm_train
 from pypef.plm.prosst_lora_tune import prosst_setup
-from pypef.plm.inference import inference, llm_embedder
+from pypef.plm.inference import inference, llm_tokenizer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
+from pypef.plm.esm_lora_tune import (
+    get_esm_models, esm_tokenize_sequences,
+)
+from pypef.plm.prosst_lora_tune import (
+    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
+    prosst_tokenize_sequences
+)
+from pypef.utils.helpers import get_device
+
 
 
 torch.manual_seed(42)
@@ -30,22 +42,29 @@ msa_file_avgfp = os.path.abspath(os.path.join(
 msa_file_aneh = os.path.abspath(
     os.path.join(__file__, '../../datasets/ANEH/ANEH_jhmmer.a2m'
 ))
-
 pdb_file_aneh = os.path.abspath(os.path.join(
     __file__, '../../datasets/ANEH/AF-Q9UR30-F1-model_v4.pdb'
 ))
-
 wt_seq_file_aneh = os.path.abspath(os.path.join(
     __file__, '../../datasets/ANEH/Sequence_WT_ANEH.fasta'
 ))
-
 ls_b = os.path.abspath(os.path.join(
     __file__, '../../datasets/ANEH/LS_B.fasl'
 ))
-
 ts_b = os.path.abspath(
     os.path.join(__file__, '../../datasets/ANEH/TS_B.fasl'
 ))
+
+csv_blat_ecolx_stiffler2015 = os.path.abspath(
+    os.path.join(__file__, '../../datasets/BLAT_ECOLX/BLAT_ECOLX_Stiffler_2015.csv'
+))
+pdb_blat_ecolx = os.path.abspath(
+    os.path.join(__file__, '../../datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
+))
+wt_seq_file_blat_ecolx = os.path.abspath(
+    os.path.join(__file__, '../../datasets/BLAT_ECOLX/blat_ecolx_wt.fasta'
+))
+
 
 train_seqs_aneh, _train_vars_aneh, train_ys_aneh = get_sequences_from_file(ls_b)
 test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
@@ -118,7 +137,7 @@ def test_hybrid_model_dca_llm():
         else:  # elif setup == prosst_setup:
             llm_dict = setup(
                 aneh_wt_seq, pdb_file_aneh, sequences=train_seqs_aneh)
-        x_llm_test = llm_embedder(llm_dict, test_seqs_aneh)
+        x_llm_test = llm_tokenizer(llm_dict, test_seqs_aneh)
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
             y_train=train_ys_aneh,
@@ -229,8 +248,97 @@ def test_dataset_b_results():
     np.testing.assert_almost_equal(performances[2:5], [0.52, 0.86, 0.89], decimal=2)
 
 
+@pytest.mark.requires_gpu
+def test_plm_corr_blat_ecolx():
+    device = get_device()
+    print("Device", device)
+    blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to(device)
+    df = pd.read_csv(csv_blat_ecolx_stiffler2015)
+    sequences = df['mutated_sequence'].to_list()
+    print(sequences[0][23])
+    print(sequences[1][23])
+    print('len(sequences[0]):', len(sequences[0]))
+    print('len(blat_ecolx_wt_seq):', len(blat_ecolx_wt_seq))
+    y_true = df['DMS_score'].to_list()
+    for x in ['facebook/esm1v_t33_650M_UR90S_3']:
+        esm_base_model, _esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=x)
+        esm_base_model = esm_base_model.to(device)
+        x_esm, esm_attention_mask = esm_tokenize_sequences(
+            sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
+
+        # Tokenize WT sequence once
+        wt_tokens, _ = esm_tokenize_sequences(
+            [blat_ecolx_wt_seq],
+            esm_tokenizer,
+            max_length=len(blat_ecolx_wt_seq) + 2
+        )
+        wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
+        y_esm = esm_infer_pll(
+            xs=x_esm,
+            wt_input_ids=wt_tokens,
+            attention_mask=esm_attention_mask,
+            model=esm_base_model,
+            mask_token_id=esm_tokenizer.mask_token_id,
+            inference_type='mutation_masking',
+            batch_size=5,
+            train=False,
+            verbose=True
+        )
+        print(f'{x}: ESM1v (unsupervised performance): '  
+              f'{spearmanr(y_true, y_esm.cpu())[0]}')
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
+
+        y_esm = esm_infer_pll(
+            xs=x_esm,
+            wt_input_ids=wt_tokens,
+            attention_mask=esm_attention_mask,
+            model=esm_base_model,
+            mask_token_id=esm_tokenizer.mask_token_id,
+            inference_type='unmasked',
+            batch_size=5,
+            train=False,
+            verbose=True
+        )
+        print(f'{x}: ESM1v (unsupervised performance): '  
+              f'{spearmanr(y_true, y_esm.cpu())[0]}')
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6381789551033011, decimal=6)
+
+        #y_esm = esm_infer_pll(
+        #    xs=x_esm,
+        #    wt_input_ids=wt_tokens,
+        #    attention_mask=esm_attention_mask,
+        #    model=esm_base_model,
+        #    mask_token_id=esm_tokenizer.mask_token_id,
+        #    inference_type='full_masking',
+        #    batch_size=5,
+        #    train=False,
+        #    verbose=True
+        #)
+        #print(f'{x}: ESM1v (unsupervised performance): '  
+        #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
+        #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6360209552304472, decimal=6)
+
+    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
+        pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
+    x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
+    y_prosst = get_logits_from_full_seqs(
+            x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
+            structure_input_ids, train=False, verbose=True
+    )
+    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
+    # ACTUAL OLD VERSION: 0.743
+
+
+
+
+
 if __name__ == "__main__":
-    test_gremlin_avgfp()
-    test_hybrid_model_dca_llm()
-    test_dataset_b_results()
+    #test_gremlin_avgfp()
+    #test_hybrid_model_dca_llm()
+    #test_dataset_b_results()
+    test_plm_corr_blat_ecolx()
     

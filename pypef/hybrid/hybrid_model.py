@@ -39,7 +39,7 @@ import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import esm_setup, get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models, prosst_setup
-from pypef.plm.inference import llm_embedder, inference
+from pypef.plm.inference import llm_tokenizer, inference
 from pypef.plm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
@@ -1030,11 +1030,11 @@ def performance_ls_ts(
         if llm is not None:
             if llm.lower().startswith('esm'):
                 llm_dict = esm_setup(train_sequences)
-                x_llm_test = llm_embedder(llm_dict, test_sequences)
+                x_llm_test = llm_tokenizer(llm_dict, test_sequences)
             elif llm.lower() == 'prosst':
                 llm_dict = prosst_setup(
                     wt_seq, pdb_file, sequences=train_sequences)
-                x_llm_test = llm_embedder(llm_dict, test_sequences)
+                x_llm_test = llm_tokenizer(llm_dict, test_sequences)
         else:
             llm_dict = None
             x_llm_test = None
@@ -1080,7 +1080,7 @@ def performance_ls_ts(
             )
             if model.llm_model_input is not None:
                 logger.info(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
-                x_llm_test = llm_embedder(model.llm_model_input, test_sequences)
+                x_llm_test = llm_tokenizer(model.llm_model_input, test_sequences)
                 y_test_pred = model.hybrid_prediction(x_test, x_llm_test)
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
@@ -1236,7 +1236,7 @@ def predict_ps(
                             ys_pred = model.hybrid_prediction(x_test)
                         else:
                             sequences = [str(seq) for seq in test_sequences]
-                            x_llm_test = llm_embedder(model.llm_model_input, sequences)
+                            x_llm_test = llm_tokenizer(model.llm_model_input, sequences)
                             ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
                     for k, y in enumerate(ys_pred):
                         all_y_v_pred.append((ys_pred[k], variants[k]))
@@ -1283,7 +1283,7 @@ def predict_ps(
                     ys_pred = model.hybrid_prediction(xs)
                 else:
                     sequences = [str(seq) for seq in sequences]
-                    xs_llm = llm_embedder(model.llm_model_input, sequences)
+                    xs_llm = llm_tokenizer(model.llm_model_input, sequences)
                     ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
             assert len(xs) == len(variants) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
@@ -1343,7 +1343,7 @@ def predict_directed_evolution(
             if model.llm_model_input is None:
                 y_pred = model.hybrid_prediction(xs)
             else:
-                x_llm = llm_embedder(model.llm_model_input, 
+                x_llm = llm_tokenizer(model.llm_model_input, 
                                      variant_sequence, verbose=False)
 
                 y_pred = model.hybrid_prediction(

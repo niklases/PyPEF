@@ -8,14 +8,14 @@ import numpy as np
 
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import get_batches
-from pypef.plm.esm_lora_tune import esm_setup, esm_tokenize_sequences, esm_infer
+from pypef.plm.esm_lora_tune import esm_infer, esm_setup, esm_tokenize_sequences
 from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences, prosst_infer
 
 import logging
 logger = logging.getLogger('pypef.llm.inference')
 
 
-def llm_embedder(llm_dict, seqs, verbose=True):
+def llm_tokenizer(llm_dict, seqs, verbose=True):
     try:
         np.shape(seqs)
     except ValueError:
@@ -53,7 +53,7 @@ def inference(
         llm_dict = esm_setup(sequences, verbose=verbose)
         if model is None:
             model = llm_dict['esm1v']['llm_base_model']
-        x_llm_test = llm_embedder(llm_dict, sequences, verbose)
+        x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
         y_test_pred = esm_infer(#llm_dict['esm1v']['llm_inference_function'](
             xs=get_batches(x_llm_test, batch_size=1, dtype=int), 
             attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
@@ -68,7 +68,7 @@ def inference(
         )
         if model is None:
             model = llm_dict['prosst']['llm_base_model']
-        x_llm_test = llm_embedder(llm_dict, sequences, verbose)
+        x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
         y_test_pred = prosst_infer(#llm_dict['prosst']['llm_inference_function'](
             xs=x_llm_test, 
             model=model, 

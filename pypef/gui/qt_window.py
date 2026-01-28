@@ -13,7 +13,7 @@ from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, S
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget, 
     QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, 
-    QFileDialog, QProgressBar, QSizePolicy
+    QFileDialog, QProgressBar
 )
 
 from pypef import __version__
