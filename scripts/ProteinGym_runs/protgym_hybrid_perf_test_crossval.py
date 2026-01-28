@@ -22,7 +22,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.plm.utils import get_batches, corr_loss
 from pypef.plm.esm_lora_tune import (
-    get_esm_models, esm_tokenize_sequences, 
+    get_esm_models, tokenize_sequences, 
     esm_train, esm_infer
 )
 from pypef.plm.prosst_lora_tune import (
@@ -151,7 +151,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
             # ESM unsupervised
             try:
-                x_esm, esm_attention_mask = esm_tokenize_sequences(
+                x_esm, esm_attention_mask = tokenize_sequences(
                     sequences, esm_tokenizer, max_length=len(wt_seq), verbose=False
                 )
                 y_esm = inference(sequences, 'esm', model=esm_base_model, verbose=False)

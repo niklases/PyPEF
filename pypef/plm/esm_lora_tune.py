@@ -48,7 +48,7 @@ def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
     return base_model, lora_model, tokenizer, optimizer
 
 
-def esm_tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
+def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
     tokenized_sequences = []
     for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling', disable=not verbose):
         encoded_sequence, attention_mask = tokenizer(
@@ -154,18 +154,49 @@ def esm_unmasked_wt_score(
     ):
     if device is None:
         device = get_device()
-    wt_input_ids = wt_input_ids.unsqueeze(0)
+    if wt_input_ids.dim() == 1:
+        wt_input_ids = wt_input_ids.unsqueeze(0)
+    structure_input_ids = kwargs.get("structure_input_ids", None)
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64)
     if train:
-        outputs = model(wt_input_ids.to(device), attention_masks.to(device), 
-                        output_hidden_states=False)
+        if structure_input_ids is not None:
+            outputs = model(
+                input_ids=wt_input_ids.to(device),
+                attention_mask=attention_masks.to(device),
+                ss_input_ids=structure_input_ids.to(device)
+            )
+        else:
+            outputs = model(
+                wt_input_ids.to(device), 
+                attention_masks.to(device), 
+                output_hidden_states=False
+            )
     else:
         with torch.no_grad():
-            outputs = model(wt_input_ids.to(device), attention_masks.to(device), 
-                            output_hidden_states=False)
+            if structure_input_ids is not None:
+                outputs = model(
+                        input_ids=wt_input_ids.to(device),
+                        attention_mask=attention_masks.to(device),
+                        ss_input_ids=structure_input_ids.to(device)
+                )
+            else:
+                outputs = model(
+                    wt_input_ids.to(device), 
+                    attention_masks.to(device), 
+                    output_hidden_states=False
+                )
+
     logits = outputs.logits
-    token_probs = torch.log_softmax(logits, dim=-1).squeeze(0)
+    logits = logits.squeeze(0)   # remove batch dim
+    #print('logits.shape:', logits.shape)
+    # Better make sure that special tokens are always removed / masked 
+    # and only pure amino acid sequence tokens are present / unmasked
+    #logits = logits[1:-1]        # drop CLS/EOS
+    token_probs = torch.log_softmax(logits, dim=-1)
+    assert len(tokenized_sequences[0]) == token_probs.shape[0], f"{len(tokenized_sequences[0])} != {token_probs.shape[0]}"
+    #print('token_probs.shape:', token_probs.shape)
+
     for i_s, tokenized_seq in enumerate(tokenized_sequences):
         for i_aa, aa in enumerate(tokenized_seq):
             # alternative: use Tensor.index_select() function
@@ -417,7 +448,7 @@ def esm_train(
 def esm_setup(sequences, device: str | None = None, verbose: bool = True):
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
-    x_esm, esm_attention_mask = esm_tokenize_sequences(
+    x_esm, esm_attention_mask = tokenize_sequences(
         sequences, esm_tokenizer, max_length=len(sequences[0]), verbose=verbose)
     llm_dict_esm = {
         'esm1v': {

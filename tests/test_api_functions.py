@@ -22,7 +22,7 @@ from pypef.plm.prosst_lora_tune import prosst_setup
 from pypef.plm.inference import inference, llm_tokenizer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.esm_lora_tune import (
-    get_esm_models, esm_tokenize_sequences,
+    get_esm_models, tokenize_sequences,
 )
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
@@ -266,10 +266,10 @@ def test_plm_corr_blat_ecolx():
     for x in ['facebook/esm1v_t33_650M_UR90S_3']:
         esm_base_model, _esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=x)
         esm_base_model = esm_base_model.to(device)
-        x_esm, esm_attention_mask = esm_tokenize_sequences(
+        x_esm, esm_attention_mask = tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
         # Tokenize WT sequence once
-        wt_tokens, _ = esm_tokenize_sequences(
+        wt_tokens, _ = tokenize_sequences(
             [blat_ecolx_wt_seq],
             esm_tokenizer,
             max_length=len(blat_ecolx_wt_seq) + 2
@@ -316,21 +316,18 @@ def test_plm_corr_blat_ecolx():
         #)
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6360209552304472, decimal=6)
+        #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
 
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
-    x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
-    #y_prosst = get_logits_from_full_seqs(
-    #        x_prosst, prosst_base_model, wt_input_ids, prosst_attention_mask, 
-    #        wt_structure_input_ids, train=False, verbose=True
-    #)
-    #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
-    #      f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
-    print('wt_input_ids:',wt_input_ids)
-    print()
-    print('wt_structure_input_ids:', wt_structure_input_ids)
-    print()
+    x_prosst = tokenize_sequences(sequences=sequences, tokenizer=prosst_tokenizer)
+    y_prosst = get_logits_from_full_seqs(
+            x_prosst, prosst_base_model, wt_input_ids, prosst_attention_mask, 
+            wt_structure_input_ids, train=False, verbose=True
+    )
+    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
+
     y_prosst = esm_infer_pll(
             xs=x_prosst,
             wt_input_ids=(wt_input_ids, wt_structure_input_ids), ## TODO
@@ -342,6 +339,8 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True        
     )
+    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
     # ACTUAL OLD VERSION: 0.743
 
 

@@ -8,7 +8,7 @@ import numpy as np
 
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import get_batches
-from pypef.plm.esm_lora_tune import esm_infer, esm_setup, esm_tokenize_sequences
+from pypef.plm.esm_lora_tune import esm_infer, esm_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences, prosst_infer
 
 import logging
@@ -21,7 +21,7 @@ def llm_tokenizer(llm_dict, seqs, verbose=True):
     except ValueError:
         raise SystemError("Unequal input sequence length detected!")
     if list(llm_dict.keys())[0] == 'esm1v':
-        x_llm_seqs, _attention_mask = esm_tokenize_sequences(
+        x_llm_seqs, _attention_mask = tokenize_sequences(
             seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
             max_length=len(seqs[0]), verbose=verbose
         )

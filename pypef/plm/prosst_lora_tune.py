@@ -30,15 +30,20 @@ from pypef.plm.utils import load_model_and_tokenizer
 
 
 def prosst_tokenize_sequences(sequences, vocab, verbose=True):
+    print(vocab)
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
     for sequence in tqdm(
         sequences, desc='Tokenizing sequences for ProSST modeling', 
         disable=not verbose
     ):
-        x_sequence = []
+        x_sequence = [vocab['<cls>']]
         for aa in sequence:
-            x_sequence.append(vocab[aa])
+            try:
+                x_sequence.append(vocab[aa])
+            except KeyError:
+                x_sequence.append(vocab['<unk>'])
+        x_sequence.append(vocab['<eos>'])
         x_sequences.append(x_sequence)
     return torch.Tensor(x_sequences).to(torch.int)
 

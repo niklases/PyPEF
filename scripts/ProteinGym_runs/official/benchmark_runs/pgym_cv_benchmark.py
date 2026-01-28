@@ -18,7 +18,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.utils.variant_data import get_mismatches
 from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
-from pypef.plm.esm_lora_tune import esm_setup, esm_tokenize_sequences
+from pypef.plm.esm_lora_tune import esm_setup, tokenize_sequences
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 
@@ -182,7 +182,7 @@ def main(cfg: DictConfig) -> None:
         elif llm == "esm1v":
             llm_kwargs = esm_setup(sequences=s_train)
             tokenizer = llm_kwargs['esm1v']['llm_tokenizer']
-            x_llm_test, _attn_masks = esm_tokenize_sequences(
+            x_llm_test, _attn_masks = tokenize_sequences(
                 sequences=s_test, tokenizer=tokenizer, max_length=len(s_test[0])
             )
         
