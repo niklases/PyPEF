@@ -268,7 +268,6 @@ def test_plm_corr_blat_ecolx():
         esm_base_model = esm_base_model.to(device)
         x_esm, esm_attention_mask = esm_tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
-
         # Tokenize WT sequence once
         wt_tokens, _ = esm_tokenize_sequences(
             [blat_ecolx_wt_seq],
@@ -282,7 +281,7 @@ def test_plm_corr_blat_ecolx():
             attention_mask=esm_attention_mask,
             model=esm_base_model,
             mask_token_id=esm_tokenizer.mask_token_id,
-            inference_type='mutation_masking',
+            inference_type='mutation-masking',
             batch_size=5,
             train=False,
             verbose=True
@@ -290,7 +289,6 @@ def test_plm_corr_blat_ecolx():
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
-
         y_esm = esm_infer_pll(
             xs=x_esm,
             wt_input_ids=wt_tokens,
@@ -304,15 +302,14 @@ def test_plm_corr_blat_ecolx():
         )
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6381789551033011, decimal=6)
-
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
         #y_esm = esm_infer_pll(
         #    xs=x_esm,
         #    wt_input_ids=wt_tokens,
         #    attention_mask=esm_attention_mask,
         #    model=esm_base_model,
         #    mask_token_id=esm_tokenizer.mask_token_id,
-        #    inference_type='full_masking',
+        #    inference_type='full-masking',
         #    batch_size=5,
         #    train=False,
         #    verbose=True
@@ -321,15 +318,30 @@ def test_plm_corr_blat_ecolx():
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6360209552304472, decimal=6)
 
-    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
+    wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
     x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
-    y_prosst = get_logits_from_full_seqs(
-            x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
-            structure_input_ids, train=False, verbose=True
+    #y_prosst = get_logits_from_full_seqs(
+    #        x_prosst, prosst_base_model, wt_input_ids, prosst_attention_mask, 
+    #        wt_structure_input_ids, train=False, verbose=True
+    #)
+    #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+    #      f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
+    print('wt_input_ids:',wt_input_ids)
+    print()
+    print('wt_structure_input_ids:', wt_structure_input_ids)
+    print()
+    y_prosst = esm_infer_pll(
+            xs=x_prosst,
+            wt_input_ids=(wt_input_ids, wt_structure_input_ids), ## TODO
+            attention_mask=prosst_attention_mask,
+            model=prosst_base_model,
+            mask_token_id=prosst_tokenizer.mask_token_id,
+            inference_type='prosst',  ## TODO
+            batch_size=5,
+            train=False,
+            verbose=True        
     )
-    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
-          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
     # ACTUAL OLD VERSION: 0.743
 
 

@@ -23,7 +23,7 @@ from peft import LoraConfig, get_peft_model
 from Bio import SeqIO, BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
-from pypef.plm.esm_lora_tune import corr_loss
+from pypef.plm.utils import corr_loss
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import load_model_and_tokenizer
