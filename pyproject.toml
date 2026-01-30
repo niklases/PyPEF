@@ -38,6 +38,7 @@ dependencies = [
     "pathos",
     "peft",
     "pynvml",
+    "gpytorch",
     "torch",
     "torch-geometric"
 ]

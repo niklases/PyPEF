@@ -158,6 +158,7 @@ def unmasked_wt_score(
     if wt_input_ids.dim() == 1:
         wt_input_ids = wt_input_ids.unsqueeze(0)
     structure_input_ids = kwargs.get("structure_input_ids", None)
+
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64)
     if train:
@@ -177,15 +178,15 @@ def unmasked_wt_score(
         with torch.no_grad():
             if structure_input_ids is not None:
                 outputs = model(
-                        input_ids=wt_input_ids.to(device),
-                        attention_mask=attention_masks.to(device),
-                        ss_input_ids=structure_input_ids.to(device)
+                    input_ids=wt_input_ids.to(device),
+                    attention_mask=attention_masks.to(device),
+                    ss_input_ids=structure_input_ids.to(device)
                 )
             else:
                 outputs = model(
                     wt_input_ids.to(device), 
                     attention_masks.to(device), 
-                    output_hidden_states=False
+                    output_hidden_states=False,
                 )
 
     logits = outputs.logits
@@ -228,16 +229,27 @@ def esm_mutation_only_mutation_masked_pll(
     **kwargs
 ):
     """
-    Correct mutation-only pseudo-log-likelihood for ONE sequence.
+    Correct mutation-only pseudo-log-likelihood for sequences.
     """
-    model.eval()
-
     tokenized_sequences = tokenized_sequences.to(device)
+    structure_input_ids = kwargs.get("structure_input_ids", None)
+    if structure_input_ids is not None:
+        assert structure_input_ids.shape[1] == tokenized_sequences.shape[1], (
+            f"{structure_input_ids.shape[1]} != {tokenized_sequences.shape[1]}")
+        structure_input_ids = structure_input_ids.to(device)
+    if wt_input_ids.dim() == 2 and wt_input_ids.shape[0] == 1:
+        wt_input_ids = wt_input_ids.squeeze(0)
     wt_input_ids = wt_input_ids.to(device)
+    if attention_mask.dim() == 2 and attention_mask.shape[0] == 1:
+        attention_mask = attention_mask.squeeze(0)
     attention_mask = attention_mask.to(device)
     plls = torch.empty(len(tokenized_sequences), device=device)
     for i, tokenized_seq in enumerate(tokenized_sequences):
-        pll = 0.0
+        assert tokenized_seq.dim() == 1
+        assert wt_input_ids.dim() == 1
+        assert attention_mask.dim() == 1
+        assert tokenized_seq.shape == wt_input_ids.shape == attention_mask.shape
+        pll = torch.tensor(0.0, device=device)
 
         # Identify mutated positions (exclude padding, CLS, EOS)
         diff = (tokenized_seq != wt_input_ids) & (attention_mask == 1)
@@ -245,6 +257,7 @@ def esm_mutation_only_mutation_masked_pll(
         diff[-1] = False
 
         mutated_positions = diff.nonzero(as_tuple=False).flatten()
+        # n_mutations = (tokenized_seq != wt_input_ids).sum().item()
         # Mutated positions: [int(m) - 1 for m in mutated_positions.cpu()]  # Remove CLS token position
 
         for pos in tqdm(
@@ -254,23 +267,43 @@ def esm_mutation_only_mutation_masked_pll(
         ):
             masked_input_ids = tokenized_seq.clone()
             masked_input_ids[pos] = mask_token_id
+            if structure_input_ids is not None:
+                masked_ss_input_ids = structure_input_ids.clone()
+                masked_ss_input_ids[0, pos] = mask_token_id
+
             if train:
-                outputs = model(
-                    input_ids=masked_input_ids.unsqueeze(0),
-                    attention_mask=attention_mask.unsqueeze(0),
-                )
-            else:
-                with torch.no_grad():
+                if structure_input_ids is not None:
                     outputs = model(
                         input_ids=masked_input_ids.unsqueeze(0),
                         attention_mask=attention_mask.unsqueeze(0),
+                        ss_input_ids=masked_ss_input_ids  # Check
                     )
+                else:
+                    outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0),
+                        attention_mask=attention_mask.unsqueeze(0),
+                        output_hidden_states=False
+                    )
+            else:
+                with torch.no_grad():
+                    if structure_input_ids is not None:
+                        outputs = model(
+                            input_ids=masked_input_ids.unsqueeze(0),
+                            attention_mask=attention_mask.unsqueeze(0),
+                            ss_input_ids=masked_ss_input_ids  # Check
+                        )
+                    else:
+                        outputs = model(
+                            input_ids=masked_input_ids.unsqueeze(0),
+                            attention_mask=attention_mask.unsqueeze(0),
+                            output_hidden_states=False
+                        )
             logits = outputs.logits  # (1, L, V)
 
             log_probs = F.log_softmax(logits[0, pos], dim=-1)
             true_token = tokenized_seq[pos]
 
-            pll += log_probs[true_token].item()
+            pll = pll + log_probs[true_token]
         
         plls[i] = pll
 
@@ -279,30 +312,35 @@ def esm_mutation_only_mutation_masked_pll(
 
 def esm_mutation_all_pos_masked_pll(
     tokenized_sequences: torch.Tensor,        # (L,)
-    wt_input_ids: torch.Tensor,     # (L,)
     attention_mask: torch.Tensor,   # (L,)
     model,
     mask_token_id: int,
     train: bool = False,
     device: str | None = None,
     verbose: bool = False,
+    **kwargs
 ):
     """
     Correct mutation-only pseudo-log-likelihood for sequences.
     """
-    model.eval()
-
+    structure_input_ids = kwargs.get("structure_input_ids", None)
+    if structure_input_ids is not None:
+        assert structure_input_ids.shape[1] == tokenized_sequences.shape[1], (
+            f"{structure_input_ids.shape[1]} != {tokenized_sequences.shape[1]}")
+        structure_input_ids = structure_input_ids.to(device)
     tokenized_sequences = tokenized_sequences.to(device)
-    wt_input_ids = wt_input_ids.to(device)
+    if attention_mask.dim() == 2 and attention_mask.shape[0] == 1:
+        attention_mask = attention_mask.squeeze(0)
     attention_mask = attention_mask.to(device)
     plls = torch.empty(len(tokenized_sequences), device=device)
     for i, tokenized_seq in enumerate(tokenized_sequences):
         L = tokenized_seq.shape[0]
-        pll = 0.0
+        pll = torch.tensor(0.0, device=device)
 
         # Positions to score: all real tokens except CLS/EOS
         positions = (attention_mask == 1).nonzero(as_tuple=False).flatten()
         positions = positions[(positions != 0) & (positions != L - 1)]
+
 
         for pos in tqdm(
             positions,
@@ -312,23 +350,42 @@ def esm_mutation_all_pos_masked_pll(
             masked_input_ids = tokenized_seq.clone()
             masked_input_ids[pos] = mask_token_id
 
+            if structure_input_ids is not None:
+                masked_ss_input_ids = structure_input_ids.clone()
+                masked_ss_input_ids[0, pos] = mask_token_id
+
             if train:
-                outputs = model(
-                    input_ids=masked_input_ids.unsqueeze(0),
-                    attention_mask=attention_mask.unsqueeze(0),
-                )
-            else:
-                with torch.no_grad():
+                if structure_input_ids is not None:
                     outputs = model(
                         input_ids=masked_input_ids.unsqueeze(0),
                         attention_mask=attention_mask.unsqueeze(0),
+                        ss_input_ids=masked_ss_input_ids  # Check 
                     )
+                else:
+                    outputs = model(
+                        input_ids=masked_input_ids.unsqueeze(0), 
+                        attention_mask=attention_mask.unsqueeze(0), 
+                        output_hidden_states=False
+                    )
+            else:
+                with torch.no_grad():
+                    if structure_input_ids is not None:
+                        outputs = model(
+                                input_ids=masked_input_ids.unsqueeze(0),
+                                attention_mask=attention_mask.unsqueeze(0),
+                                ss_input_ids=masked_ss_input_ids  # Check
+                        )
+                    else:
+                        outputs = model(
+                            input_ids=masked_input_ids.unsqueeze(0), 
+                            attention_mask=attention_mask.unsqueeze(0), 
+                            output_hidden_states=False
+                        )
             logits = outputs.logits  # (1, L, V)
 
             log_probs = F.log_softmax(logits[0, pos], dim=-1)
             true_token = tokenized_seq[pos]
-
-            pll += log_probs[true_token].item()
+            pll = pll + log_probs[true_token]
 
         plls[i] = pll
 

@@ -271,6 +271,7 @@ def test_plm_corr_blat_ecolx():
             max_length=len(blat_ecolx_wt_seq) + 2
         )
         wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
+        
         y_esm = plm_inference(
             xs=x_esm,
             wt_input_ids=wt_tokens,
@@ -285,6 +286,7 @@ def test_plm_corr_blat_ecolx():
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
+        
         y_esm = plm_inference(
             xs=x_esm,
             wt_input_ids=wt_tokens,
@@ -299,6 +301,7 @@ def test_plm_corr_blat_ecolx():
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
+        
         #y_esm = plm_inference(
         #    xs=x_esm,
         #    wt_input_ids=wt_tokens,
@@ -313,6 +316,7 @@ def test_plm_corr_blat_ecolx():
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
+    print(prosst_vocab)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
     x_prosst2 = prosst_simple_vocab_aa_tokenizer(sequences, prosst_vocab)
@@ -332,6 +336,23 @@ def test_plm_corr_blat_ecolx():
             attention_mask=prosst_attention_mask,
             model=prosst_base_model,
             mask_token_id=prosst_tokenizer.mask_token_id,
+            inference_type='mutation-masking',
+            wt_structure_input_ids=wt_structure_input_ids,
+            batch_size=5,
+            train=False,
+            verbose=True   
+    )
+    print(f'ProSST (unsupervised performance): '  # ProSST not made/trained for this: 0.607137337377509
+          f'{spearmanr(y_true, y_prosst.cpu())[0]}')
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.607137337377509, decimal=6)
+
+
+    y_prosst = plm_inference(
+            xs=x_prosst,
+            wt_input_ids=wt_input_ids,
+            attention_mask=prosst_attention_mask,
+            model=prosst_base_model,
+            mask_token_id=prosst_tokenizer.mask_token_id,
             inference_type='unmasked',
             wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
@@ -342,8 +363,20 @@ def test_plm_corr_blat_ecolx():
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7430279087189432, decimal=6)
 
-
-
+    #y_prosst = plm_inference(
+    #        xs=x_prosst,
+    #        wt_input_ids=wt_input_ids,
+    #        attention_mask=prosst_attention_mask,
+    #        model=prosst_base_model,
+    #        mask_token_id=prosst_tokenizer.mask_token_id,
+    #        inference_type='full-masking',
+    #        wt_structure_input_ids=wt_structure_input_ids,
+    #        batch_size=5,
+    #        train=False,
+    #        verbose=True        
+    #)
+    #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+    #      f'{spearmanr(y_true, y_prosst.cpu())[0]}')
 
 
 if __name__ == "__main__":

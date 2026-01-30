@@ -12,6 +12,7 @@ schema
 pathos
 peft
 pynvml
+gpytorch
 #scikit-learn-intelex
 #ray[default]
 --extra-index-url https://download.pytorch.org/whl/cu128
