@@ -409,8 +409,8 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         x_llm_ttrain_b, scores_ttrain_b = (
-            get_batches(self.x_llm_ttrain, batch_size=self.batch_size, dtype=int), 
-            get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float)
+            torch.from_numpy(get_batches(self.x_llm_ttrain, batch_size=self.batch_size, dtype=int)), 
+            torch.from_numpy(get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float))
         )
 
         if self.llm_key == 'prosst':
@@ -431,7 +431,7 @@ class DCALLMHybridModel:
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
-            x_llm_ttest_b = get_batches(self.x_llm_ttest, batch_size=1, dtype=int)
+            x_llm_ttest_b = torch.from_numpy(get_batches(self.x_llm_ttest, batch_size=1, dtype=int))
             y_llm_ttest = self.llm_inference_function(
                 xs=x_llm_ttest_b,
                 model=self.llm_model,
@@ -633,7 +633,7 @@ class DCALLMHybridModel:
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                x_llm_b = get_batches(x_llm, batch_size=1, dtype=int)
+                x_llm_b = torch.from_numpy(get_batches(x_llm, batch_size=1, dtype=int))
                 y_llm = self.llm_inference_function(
                     x_llm_b, 
                     self.llm_attention_mask,
@@ -662,7 +662,7 @@ class DCALLMHybridModel:
     def ls_ts_performance(self):
         beta_1, beta_2, reg = self.settings(
             x_train=self.x_train,
-            y_train=self.y_train
+            y_train=self.y_traing
         )
         spearman_r = self.spearmanr(
             self.y_test,

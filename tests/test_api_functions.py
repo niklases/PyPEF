@@ -11,13 +11,13 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 import torch
-from pypef.plm.utils import corr_loss, get_batches
 import pytest
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.plm.esm_lora_tune import esm_infer, plm_inference, esm_setup, esm_train
+from pypef.plm.inference import plm_inference
+from pypef.plm.esm_lora_tune import esm_setup
 from pypef.plm.prosst_lora_tune import prosst_setup
 from pypef.plm.inference import inference, llm_tokenizer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
@@ -380,8 +380,8 @@ def test_plm_corr_blat_ecolx():
 
 
 if __name__ == "__main__":
-    #test_gremlin_avgfp()
-    #test_hybrid_model_dca_llm()
-    #test_dataset_b_results()
+    test_gremlin_avgfp()
+    test_hybrid_model_dca_llm()
+    test_dataset_b_results()
     test_plm_corr_blat_ecolx()
     
