@@ -17,7 +17,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 
 from pypef.utils.variant_data import get_mismatches
-from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences
+from pypef.plm.prosst_lora_tune import prosst_setup, prosst_simple_vocab_aa_tokenizer
 from pypef.plm.esm_lora_tune import esm_setup, tokenize_sequences
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
@@ -177,7 +177,7 @@ def main(cfg: DictConfig) -> None:
                 device='cuda'
             )
             vocab = llm_kwargs['prosst']['llm_vocab']
-            x_llm_test = np.asarray(prosst_tokenize_sequences(
+            x_llm_test = np.asarray(prosst_simple_vocab_aa_tokenizer(
                 sequences=s_test, vocab=vocab, verbose=False))
         elif llm == "esm1v":
             llm_kwargs = esm_setup(sequences=s_train)

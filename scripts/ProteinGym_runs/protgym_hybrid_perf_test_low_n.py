@@ -29,7 +29,7 @@ from pypef.plm.esm_lora_tune import (
 )
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_tokenize_sequences, prosst_train
+    prosst_simple_vocab_aa_tokenizer, prosst_train
 )
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.utils.helpers import get_vram, get_device
@@ -159,7 +159,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             try:
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
                     pdb, prosst_tokenizer, wt_seq)
-                x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab)
+                x_prosst = prosst_simple_vocab_aa_tokenizer(sequences=sequences, vocab=prosst_vocab)
                 y_prosst = get_logits_from_full_seqs(
                         x_prosst, prosst_base_model, input_ids, prosst_attention_mask, 
                         structure_input_ids, train=False

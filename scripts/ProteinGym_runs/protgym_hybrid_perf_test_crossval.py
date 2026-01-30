@@ -27,7 +27,7 @@ from pypef.plm.esm_lora_tune import (
 )
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_tokenize_sequences, prosst_train
+    prosst_simple_vocab_aa_tokenizer, prosst_train
 )
 from pypef.plm.inference import inference
 from pypef.utils.variant_data import get_seqs_from_var_name
@@ -165,7 +165,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
                     pdb, prosst_tokenizer, wt_seq, verbose=False
                     )
-                x_prosst = prosst_tokenize_sequences(sequences=sequences, vocab=prosst_vocab, verbose=False)
+                x_prosst = prosst_simple_vocab_aa_tokenizer(sequences=sequences, vocab=prosst_vocab, verbose=False)
                 y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model, verbose=False)
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')

@@ -143,13 +143,14 @@ def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=Fals
     return torch.flatten(y_preds_total)
 
 
-def esm_unmasked_wt_score(
+def unmasked_wt_score(
         tokenized_sequences, 
         attention_mask, 
         wt_input_ids,
         model, 
         train: bool = False,
-        device=None, 
+        cut_special_tokens: bool = True,  # assumption: cut first and last token
+        device=None,
         **kwargs
     ):
     if device is None:
@@ -189,27 +190,29 @@ def esm_unmasked_wt_score(
 
     logits = outputs.logits
     logits = logits.squeeze(0)   # remove batch dim
-    #print('logits.shape:', logits.shape)
     # Better make sure that special tokens are always removed / masked 
     # and only pure amino acid sequence tokens are present / unmasked
-    #logits = logits[1:-1]        # drop CLS/EOS
+    tokenized_seq_len = tokenized_sequences.shape[1]
+    if cut_special_tokens:
+        logits = logits[1:-1]        # drop CLS/EOS
+        tokenized_seq_len -= 2
     token_probs = torch.log_softmax(logits, dim=-1)
-    assert len(tokenized_sequences[0]) == token_probs.shape[0], f"{len(tokenized_sequences[0])} != {token_probs.shape[0]}"
-    #print('token_probs.shape:', token_probs.shape)
+    assert tokenized_seq_len == token_probs.shape[0], (
+        f"{tokenized_seq_len} != {token_probs.shape[0]}")
 
-    for i_s, tokenized_seq in enumerate(tokenized_sequences):
-        for i_aa, aa in enumerate(tokenized_seq):
-            # alternative: use Tensor.index_select() function
-            if i_aa == 0:
-                seq_log_probs = token_probs[i_aa, aa].reshape(1)
-            else:
-                seq_log_probs = torch.cat(
-                    (seq_log_probs, token_probs[i_aa, aa].reshape(1)), 0)
-        if i_s == 0:
-            log_probs = torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
-        else:
-            log_probs = torch.cat(
-                (log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
+    log_probs = []
+    for tokenized_seq in tokenized_sequences:
+        if cut_special_tokens:
+            tokenized_seq = tokenized_seq[1:-1]
+    
+        seq_lp = token_probs[
+            torch.arange(tokenized_seq.shape[0], device=tokenized_seq.device),
+            tokenized_seq
+        ].sum(dtype=torch.float64)
+
+        log_probs.append(seq_lp)
+    
+    log_probs = torch.stack(log_probs)
     return log_probs
 
 
@@ -285,7 +288,7 @@ def esm_mutation_all_pos_masked_pll(
     verbose: bool = False,
 ):
     """
-    Correct mutation-only pseudo-log-likelihood for ONE sequence.
+    Correct mutation-only pseudo-log-likelihood for sequences.
     """
     model.eval()
 
@@ -332,13 +335,14 @@ def esm_mutation_all_pos_masked_pll(
     return plls
 
 
-def esm_infer_pll(
+def plm_inference(
     xs,
     wt_input_ids,
     attention_mask,
     model,
     mask_token_id,
     inference_type='unmasked',
+    wt_structure_input_ids=None,
     batch_size=5,
     train=False,
     device=None,
@@ -354,23 +358,19 @@ def esm_infer_pll(
 
     if not isinstance(attention_mask, torch.Tensor):
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
-    wt_structure_input_ids = None
     if inference_type == 'mutation-masking':
         inference_function = esm_mutation_only_mutation_masked_pll
     elif inference_type in ['full-masking', 'all-pos-masking']:
         inference_function = esm_mutation_all_pos_masked_pll
     elif inference_type in ['unmasked', 'wt-marginals']:
-        inference_function = esm_unmasked_wt_score
-    elif inference_type == 'prosst':
-        wt_input_ids, wt_structure_input_ids = wt_input_ids
-        inference_function = esm_unmasked_wt_score
+        inference_function = unmasked_wt_score
     else:
-        raise SystemError("Choose between 'mutation_masking', 'unmasked', and 'full_masking'")
+        raise SystemError("Choose between 'mutation-masking', 'unmasked', and 'full-masking'")
 
     scores = []
 
     xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
-    desc = f"ESM inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
+    desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
 
     pbar = tqdm(
         range(len(xs_b)),

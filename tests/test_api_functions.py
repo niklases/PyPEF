@@ -17,7 +17,7 @@ import pytest
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.plm.esm_lora_tune import esm_infer, esm_infer_pll, esm_setup, esm_train
+from pypef.plm.esm_lora_tune import esm_infer, plm_inference, esm_setup, esm_train
 from pypef.plm.prosst_lora_tune import prosst_setup
 from pypef.plm.inference import inference, llm_tokenizer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
@@ -26,7 +26,7 @@ from pypef.plm.esm_lora_tune import (
 )
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_tokenize_sequences
+    prosst_simple_vocab_aa_tokenizer
 )
 from pypef.utils.helpers import get_device
 
@@ -258,10 +258,6 @@ def test_plm_corr_blat_ecolx():
     prosst_base_model = prosst_base_model.to(device)
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
-    print(sequences[0][23])
-    print(sequences[1][23])
-    print('len(sequences[0]):', len(sequences[0]))
-    print('len(blat_ecolx_wt_seq):', len(blat_ecolx_wt_seq))
     y_true = df['DMS_score'].to_list()
     for x in ['facebook/esm1v_t33_650M_UR90S_3']:
         esm_base_model, _esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=x)
@@ -275,7 +271,7 @@ def test_plm_corr_blat_ecolx():
             max_length=len(blat_ecolx_wt_seq) + 2
         )
         wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
-        y_esm = esm_infer_pll(
+        y_esm = plm_inference(
             xs=x_esm,
             wt_input_ids=wt_tokens,
             attention_mask=esm_attention_mask,
@@ -289,7 +285,7 @@ def test_plm_corr_blat_ecolx():
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
-        y_esm = esm_infer_pll(
+        y_esm = plm_inference(
             xs=x_esm,
             wt_input_ids=wt_tokens,
             attention_mask=esm_attention_mask,
@@ -303,7 +299,7 @@ def test_plm_corr_blat_ecolx():
         print(f'{x}: ESM1v (unsupervised performance): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
-        #y_esm = esm_infer_pll(
+        #y_esm = plm_inference(
         #    xs=x_esm,
         #    wt_input_ids=wt_tokens,
         #    attention_mask=esm_attention_mask,
@@ -317,31 +313,34 @@ def test_plm_corr_blat_ecolx():
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
-
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
-    x_prosst = tokenize_sequences(sequences=sequences, tokenizer=prosst_tokenizer)
-    y_prosst = get_logits_from_full_seqs(
-            x_prosst, prosst_base_model, wt_input_ids, prosst_attention_mask, 
-            wt_structure_input_ids, train=False, verbose=True
+    x_prosst2 = prosst_simple_vocab_aa_tokenizer(sequences, prosst_vocab)
+    x_prosst, prosst_attention_mask_ = tokenize_sequences(
+        sequences=sequences, 
+        tokenizer=prosst_tokenizer, 
+        max_length=len(blat_ecolx_wt_seq) + 2
     )
-    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
-          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
+    assert x_prosst[0][1:-1] == x_prosst2.tolist()[0], (
+        f"{x_prosst[0][1:-1]} != {x_prosst2.tolist()[0]}")
+    assert prosst_attention_mask.tolist()[0] == prosst_attention_mask_, (
+        f"{prosst_attention_mask.tolist()[0]} != {prosst_attention_mask_}")
 
-    y_prosst = esm_infer_pll(
+    y_prosst = plm_inference(
             xs=x_prosst,
-            wt_input_ids=(wt_input_ids, wt_structure_input_ids), ## TODO
+            wt_input_ids=wt_input_ids,
             attention_mask=prosst_attention_mask,
             model=prosst_base_model,
             mask_token_id=prosst_tokenizer.mask_token_id,
-            inference_type='prosst',  ## TODO
+            inference_type='unmasked',
+            wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
             train=False,
             verbose=True        
     )
     print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
-          f'{spearmanr(y_true, y_prosst.cpu())[0]:.3f}')
-    # ACTUAL OLD VERSION: 0.743
+          f'{spearmanr(y_true, y_prosst.cpu())[0]}')
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7430279087189432, decimal=6)
 
 
 

@@ -48,9 +48,9 @@ When incorporating DCA and PLM features, both models are fine-tuned via few-shot
 A quick installation of the PyPEF command line framework using PyPI for Linux and Windows and Python >= 3.10 can be performed with:
 
 ```bash
-pip install -U pypef
-# optionally, for GPU support (see requirements section below):
+# For GPU support (e.g., using CUDA 12.8, see requirements section below):
 # pip install torch --index-url https://download.pytorch.org/whl/cu128
+pip install -U pypef
 ```
 
 After successful installation, PyPEF should work by calling `pypef` in the shell:

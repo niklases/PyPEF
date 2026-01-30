@@ -9,7 +9,7 @@ import numpy as np
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import get_batches
 from pypef.plm.esm_lora_tune import esm_infer, esm_setup, tokenize_sequences
-from pypef.plm.prosst_lora_tune import prosst_setup, prosst_tokenize_sequences, prosst_infer
+from pypef.plm.prosst_lora_tune import prosst_setup, prosst_simple_vocab_aa_tokenizer, prosst_infer
 
 import logging
 logger = logging.getLogger('pypef.llm.inference')
@@ -26,7 +26,7 @@ def llm_tokenizer(llm_dict, seqs, verbose=True):
             max_length=len(seqs[0]), verbose=verbose
         )
     elif list(llm_dict.keys())[0] == 'prosst':
-        x_llm_seqs = prosst_tokenize_sequences(
+        x_llm_seqs = prosst_simple_vocab_aa_tokenizer(
             seqs, vocab=llm_dict['prosst']['llm_vocab'], verbose=verbose
         )
     else:

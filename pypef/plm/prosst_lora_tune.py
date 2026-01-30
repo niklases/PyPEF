@@ -29,7 +29,7 @@ from pypef.utils.helpers import get_device
 from pypef.plm.utils import load_model_and_tokenizer
 
 
-def prosst_tokenize_sequences(sequences, vocab, verbose=True):
+def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):
     print(vocab)
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
@@ -37,13 +37,14 @@ def prosst_tokenize_sequences(sequences, vocab, verbose=True):
         sequences, desc='Tokenizing sequences for ProSST modeling', 
         disable=not verbose
     ):
-        x_sequence = [vocab['<cls>']]
+        #x_sequence = [vocab['<cls>']]
+        x_sequence = []
         for aa in sequence:
             try:
                 x_sequence.append(vocab[aa])
             except KeyError:
                 x_sequence.append(vocab['<unk>'])
-        x_sequence.append(vocab['<eos>'])
+        #x_sequence.append(vocab['<eos>'])
         x_sequences.append(x_sequence)
     return torch.Tensor(x_sequences).to(torch.int)
 
@@ -296,7 +297,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
     input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
         pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
     )
-    x_llm_train_prosst = prosst_tokenize_sequences(
+    x_llm_train_prosst = prosst_simple_vocab_aa_tokenizer(
         sequences=sequences, vocab=prosst_vocab, verbose=verbose
     )
     llm_dict_prosst = {
