@@ -26,6 +26,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 from pypef.plm.utils import corr_loss
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
+from pypef.plm.esm_lora_tune import tokenize_sequences
 from pypef.plm.utils import load_model_and_tokenizer
 
 
@@ -37,14 +38,13 @@ def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):
         sequences, desc='Tokenizing sequences for ProSST modeling', 
         disable=not verbose
     ):
-        #x_sequence = [vocab['<cls>']]
-        x_sequence = []
+        x_sequence = [vocab['<cls>']]
         for aa in sequence:
             try:
                 x_sequence.append(vocab[aa])
             except KeyError:
                 x_sequence.append(vocab['<unk>'])
-        #x_sequence.append(vocab['<eos>'])
+        x_sequence.append(vocab['<eos>'])
         x_sequences.append(x_sequence)
     return torch.Tensor(x_sequences).to(torch.int)
 
@@ -80,14 +80,15 @@ def get_logits_from_full_seqs(
                     ss_input_ids=structure_input_ids
             )
     logits = torch.log_softmax(outputs.logits[:, 1:-1], dim=-1).squeeze()
-    for i_s, sequence in enumerate(
+    for i_s, x_sequence in enumerate(
         tqdm(
             xs,
             desc=f'ProSST inference: getting sequence logits ({device.upper()})',
             disable=not verbose
         )
     ):
-        for i_aa, x_aa in enumerate(sequence):
+        x_sequence = x_sequence[1:-1] # if cls, eos tokens included
+        for i_aa, x_aa in enumerate(x_sequence):
             if i_aa == 0:
                 seq_log_probs = logits[i_aa, x_aa].reshape(1)
             else:
@@ -297,8 +298,9 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
     input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
         pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
     )
-    x_llm_train_prosst = prosst_simple_vocab_aa_tokenizer(
-        sequences=sequences, vocab=prosst_vocab, verbose=verbose
+    x_llm_train_prosst, _attention_mask = tokenize_sequences(
+        sequences=sequences, tokenizer=prosst_tokenizer, 
+        max_length=len(wt_seq) + 2, verbose=verbose
     )
     llm_dict_prosst = {
         'prosst': {

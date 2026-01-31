@@ -349,11 +349,12 @@ def llm_tokenizer(llm_dict, seqs, verbose=True):
     if list(llm_dict.keys())[0] == 'esm1v':
         x_llm_seqs, _attention_mask = tokenize_sequences(
             seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
-            max_length=len(seqs[0]), verbose=verbose
+            max_length=len(seqs[0]) + 2, verbose=verbose
         )
     elif list(llm_dict.keys())[0] == 'prosst':
-        x_llm_seqs = prosst_simple_vocab_aa_tokenizer(
-            seqs, vocab=llm_dict['prosst']['llm_vocab'], verbose=verbose
+        x_llm_seqs, _attention_mask = tokenize_sequences(
+            seqs, tokenizer=llm_dict['prosst']['llm_tokenizer'], 
+            max_length=len(seqs[0]) + 2, verbose=verbose
         )
     else:
         raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
@@ -376,17 +377,29 @@ def inference(
         device = get_device()
     if llm == 'esm':
         logger.info("Zero-shot LLM inference on test set using ESM1v...")
-        llm_dict = esm_setup(sequences, verbose=verbose)
+        llm_dict = esm_setup(wt_seq, sequences, verbose=verbose)
         if model is None:
             model = llm_dict['esm1v']['llm_base_model']
         x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
         y_test_pred = esm_infer(#llm_dict['esm1v']['llm_inference_function'](
-            xs=torch.tensor(get_batches(x_llm_test, batch_size=1, dtype=int)), 
+            xs=torch.from_numpy(get_batches(x_llm_test, batch_size=1, dtype=int)), 
             attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
             model=model, 
             device=device,
             verbose=verbose
         ).cpu()
+        y_test_pred = plm_inference(
+            xs=x_llm_test,
+            wt_input_ids=torch.tensor(llm_dict['esm1v']['input_ids'][0], dtype=torch.long),
+            attention_mask=llm_dict['esm1v']['llm_attention_mask'],
+            model=model,
+            mask_token_id=llm_dict['esm1v']['llm_tokenizer'].mask_token_id,
+            inference_type='unmasked',
+            batch_size=5,
+            train=False,
+            verbose=True
+        ).cpu()
+
     elif llm == 'prosst':
         logger.info("Zero-shot LLM inference on test set using ProSST...")
         llm_dict = prosst_setup(
@@ -395,14 +408,27 @@ def inference(
         if model is None:
             model = llm_dict['prosst']['llm_base_model']
         x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
-        y_test_pred = prosst_infer(#llm_dict['prosst']['llm_inference_function'](
-            xs=x_llm_test, 
-            model=model, 
-            input_ids=llm_dict['prosst']['input_ids'], 
-            attention_mask=llm_dict['prosst']['llm_attention_mask'], 
-            structure_input_ids=llm_dict['prosst']['structure_input_ids'],
-            verbose=verbose,
-            device=device
+        #y_test_pred = prosst_infer(#llm_dict['prosst']['llm_inference_function'](
+        #    xs=x_llm_test, 
+        #    model=model, 
+        #    input_ids=llm_dict['prosst']['input_ids'], 
+        #    attention_mask=llm_dict['prosst']['llm_attention_mask'], 
+        #    structure_input_ids=llm_dict['prosst']['structure_input_ids'],
+        #    verbose=verbose,
+        #    device=device
+        #).cpu()
+        print('XXX:', np.shape(x_llm_test))
+        y_test_pred = plm_inference(
+            xs=x_llm_test,
+            wt_input_ids=llm_dict['prosst']['input_ids'],
+            attention_mask=llm_dict['prosst']['llm_attention_mask'],
+            model=model,
+            mask_token_id=llm_dict['prosst']['llm_tokenizer'].mask_token_id,
+            inference_type='mutation-masking',
+            wt_structure_input_ids=llm_dict['prosst']['structure_input_ids'],
+            batch_size=5,
+            train=False,
+            verbose=True   
         ).cpu()
     else:
         raise RuntimeError("Unknown LLM option.")

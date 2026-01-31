@@ -33,6 +33,7 @@ from pypef.utils.helpers import get_device
 
 
 torch.manual_seed(42)
+# torch.use_deterministic_algorithms(True)
 np.random.seed(42)
 
 msa_file_avgfp = os.path.abspath(os.path.join(
@@ -111,21 +112,20 @@ def test_hybrid_model_dca_llm():
         decimal=7
     )
     assert len(train_seqs_aneh[0]) == len(g.wt_seq)
-
-    y_pred_esm = inference(train_seqs_aneh, 'esm')
+    aneh_wt_seq = get_wt_sequence(wt_seq_file_aneh)
+    y_pred_esm = inference(train_seqs_aneh, 'esm', wt_seq=aneh_wt_seq)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_esm)[0], 
-        -0.21073416060442696, 
+         -0.713214007088901, 
         decimal=7
     )
-    aneh_wt_seq = get_wt_sequence(wt_seq_file_aneh)
     y_pred_prosst = inference(
         train_seqs_aneh, 'prosst', 
         pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
     )
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        -0.7425657069861902, 
+        -0.7394433335146882, 
         decimal=7
     )
 
@@ -133,7 +133,7 @@ def test_hybrid_model_dca_llm():
     for i, setup in enumerate([esm_setup, prosst_setup]):
         print(['~~~ ESM ~~~', '~~~ ProSST ~~~'][i])
         if setup == esm_setup:
-            llm_dict = setup(sequences=train_seqs_aneh)
+            llm_dict = setup(sequences=train_seqs_aneh, wt_seq=aneh_wt_seq)
         else:  # elif setup == prosst_setup:
             llm_dict = setup(
                 aneh_wt_seq, pdb_file_aneh, sequences=train_seqs_aneh)
@@ -163,7 +163,7 @@ def test_hybrid_model_dca_llm():
         )
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-            [-0.21761360470606333, -0.8330644449247571][i],
+            [-0.17231040881725562, -0.8330644449247571][i],
             decimal=7
         )  
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
@@ -316,7 +316,6 @@ def test_plm_corr_blat_ecolx():
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
-    print(prosst_vocab)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
     x_prosst2 = prosst_simple_vocab_aa_tokenizer(sequences, prosst_vocab)
