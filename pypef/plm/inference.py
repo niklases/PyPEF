@@ -39,43 +39,31 @@ def unmasked_wt_score(
         train: bool = False,
         cut_special_tokens: bool = True,  # assumption: cut first and last token
         device=None,
-        **kwargs
+        verbose: bool = False,
+        **model_kwargs
     ):
     if device is None:
         device = get_device()
     if wt_input_ids.dim() == 1:
         wt_input_ids = wt_input_ids.unsqueeze(0)
-    structure_input_ids = kwargs.get("structure_input_ids", None)
+    #structure_input_ids = model_kwargs.get("structure_input_ids", None)
 
     attention_masks = torch.Tensor(np.full(
         shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64)
     if train:
-        if structure_input_ids is not None:
+        outputs = model(
+            input_ids=wt_input_ids.to(device),
+            attention_mask=attention_masks.to(device),
+            **model_kwargs
+        )
+
+    else:
+        with torch.no_grad():
             outputs = model(
                 input_ids=wt_input_ids.to(device),
                 attention_mask=attention_masks.to(device),
-                ss_input_ids=structure_input_ids.to(device)
+                **model_kwargs
             )
-        else:
-            outputs = model(
-                wt_input_ids.to(device), 
-                attention_masks.to(device), 
-                output_hidden_states=False
-            )
-    else:
-        with torch.no_grad():
-            if structure_input_ids is not None:
-                outputs = model(
-                    input_ids=wt_input_ids.to(device),
-                    attention_mask=attention_masks.to(device),
-                    ss_input_ids=structure_input_ids.to(device)
-                )
-            else:
-                outputs = model(
-                    wt_input_ids.to(device), 
-                    attention_masks.to(device), 
-                    output_hidden_states=False,
-                )
 
     logits = outputs.logits
     logits = logits.squeeze(0)   # remove batch dim
@@ -105,7 +93,7 @@ def unmasked_wt_score(
     return log_probs
 
 
-def esm_mutation_only_mutation_masked_pll(
+def mutation_only_mutation_masked_pll(
     tokenized_sequences: torch.Tensor,        # (L,)
     wt_input_ids: torch.Tensor,     # (L,)
     attention_mask: torch.Tensor,   # (L,)
@@ -198,7 +186,7 @@ def esm_mutation_only_mutation_masked_pll(
     return plls
 
 
-def esm_mutation_all_pos_masked_pll(
+def mutation_all_pos_masked_pll(
     tokenized_sequences: torch.Tensor,        # (L,)
     attention_mask: torch.Tensor,   # (L,)
     model,
@@ -285,7 +273,7 @@ def plm_inference(
     wt_input_ids,
     attention_mask,
     model,
-    mask_token_id,
+    mask_token_id = None,
     inference_type='unmasked',
     wt_structure_input_ids=None,
     batch_size=5,
@@ -304,9 +292,9 @@ def plm_inference(
     if not isinstance(attention_mask, torch.Tensor):
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
     if inference_type == 'mutation-masking':
-        inference_function = esm_mutation_only_mutation_masked_pll
+        inference_function = mutation_only_mutation_masked_pll
     elif inference_type in ['full-masking', 'all-pos-masking']:
-        inference_function = esm_mutation_all_pos_masked_pll
+        inference_function = mutation_all_pos_masked_pll
     elif inference_type in ['unmasked', 'wt-marginals']:
         inference_function = unmasked_wt_score
     else:
@@ -316,6 +304,13 @@ def plm_inference(
 
     xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
+
+    kwargs = {}
+    if mask_token_id is not None:
+        kwargs["mask_token_id"] = mask_token_id
+
+    if wt_structure_input_ids is not None:
+        kwargs["structure_input_ids"] = wt_structure_input_ids
 
     pbar = tqdm(
         range(len(xs_b)),
@@ -327,13 +322,12 @@ def plm_inference(
         pll = inference_function(
             tokenized_sequences=torch.tensor(xs_b[i]),
             wt_input_ids=wt_input_ids,
-            structure_input_ids=wt_structure_input_ids,
             attention_mask=attention_mask,
             model=model,
-            mask_token_id=mask_token_id,
             train=train,
             device=device,
-            verbose=False
+            verbose=False,
+            **kwargs
         )
         scores.append(pll)
     return torch.cat(scores)

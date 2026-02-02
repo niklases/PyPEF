@@ -72,6 +72,7 @@ test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
 
 
 def test_gremlin_avgfp():
+    print("test_gremlin_avgfp()...")
     g = GREMLIN(
         alignment=msa_file_avgfp,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -87,6 +88,7 @@ def test_gremlin_avgfp():
 
 
 def test_hybrid_model_dca_llm():
+    print("test_hybrid_model_dca_llm()...")
     g = GREMLIN(
         alignment=msa_file_aneh,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -225,6 +227,7 @@ def test_hybrid_model_dca_llm():
 
 
 def test_dataset_b_results():
+    print("test_dataset_b_results()...")
     aaindex = "WOLR810101.txt"
     x_fft_train, _ = AAIndexEncoding(
         full_aaidx_txt_path(aaindex), train_seqs_aneh
@@ -250,6 +253,7 @@ def test_dataset_b_results():
 
 @pytest.mark.requires_gpu
 def test_plm_corr_blat_ecolx():
+    print("test_plm_corr_blat_ecolx()...")
     device = get_device()
     print("Device", device)
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
@@ -283,7 +287,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True
         )
-        print(f'{x}: ESM1v (unsupervised performance): '  
+        print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
         
@@ -292,13 +296,13 @@ def test_plm_corr_blat_ecolx():
             wt_input_ids=wt_tokens,
             attention_mask=esm_attention_mask,
             model=esm_base_model,
-            mask_token_id=esm_tokenizer.mask_token_id,
+            mask_token_id=None, # do not define for unmasked
             inference_type='unmasked',
             batch_size=5,
             train=False,
             verbose=True
         )
-        print(f'{x}: ESM1v (unsupervised performance): '  
+        print(f'{x}: ESM1v (unsupervised performance unmasked): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
         
@@ -341,7 +345,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True   
     )
-    print(f'ProSST (unsupervised performance): '  # ProSST not made/trained for this: 0.607137337377509
+    print(f'ProSST (unsupervised performance): '  # ProSST not made/trained for MLM: 0.607137337377509
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.607137337377509, decimal=6)
 
@@ -351,7 +355,7 @@ def test_plm_corr_blat_ecolx():
             wt_input_ids=wt_input_ids,
             attention_mask=prosst_attention_mask,
             model=prosst_base_model,
-            mask_token_id=prosst_tokenizer.mask_token_id,
+            mask_token_id=None,  # do not define for unmasked
             inference_type='unmasked',
             wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
@@ -379,8 +383,8 @@ def test_plm_corr_blat_ecolx():
 
 
 if __name__ == "__main__":
-    test_gremlin_avgfp()
-    test_hybrid_model_dca_llm()
-    test_dataset_b_results()
+    #test_gremlin_avgfp()
+    #test_hybrid_model_dca_llm()
+    #test_dataset_b_results()
     test_plm_corr_blat_ecolx()
     
