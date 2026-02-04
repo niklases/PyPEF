@@ -37,9 +37,9 @@ from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
-from pypef.plm.esm_lora_tune import esm_setup, get_esm_models
-from pypef.plm.prosst_lora_tune import get_prosst_models, prosst_setup
-from pypef.plm.inference import llm_tokenizer, inference
+from pypef.plm.esm_lora_tune import get_esm_models
+from pypef.plm.prosst_lora_tune import get_prosst_models
+from pypef.plm.inference import esm_setup, llm_tokenizer, inference
 from pypef.plm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
@@ -84,7 +84,7 @@ class DCALLMHybridModel:
                     self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
                     self.llm_model = llm_model_input['esm1v']['llm_model']
                     self.llm_optimizer = llm_model_input['esm1v']['llm_optimizer']
-                    self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
+                    #self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
                     self.llm_inference_function = llm_model_input['esm1v']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
                     self.x_train_llm = llm_model_input['esm1v']['x_llm']
@@ -94,7 +94,7 @@ class DCALLMHybridModel:
                     self.llm_base_model = llm_model_input['prosst']['llm_base_model']
                     self.llm_model = llm_model_input['prosst']['llm_model']
                     self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
-                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
+                    #self.llm_train_function = llm_model_input['prosst']['llm_train_function']
                     self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
                     self.x_train_llm = llm_model_input['prosst']['x_llm']

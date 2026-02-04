@@ -10,9 +10,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import get_batches
-from pypef.plm.esm_lora_tune import esm_infer, esm_setup, tokenize_sequences
-from pypef.plm.prosst_lora_tune import prosst_setup, prosst_simple_vocab_aa_tokenizer, prosst_infer
+from pypef.plm.utils import corr_loss, get_batches
+from pypef.plm.esm_lora_tune import get_esm_models, tokenize_sequences
 
 import logging
 logger = logging.getLogger('pypef.llm.inference')
@@ -427,3 +426,80 @@ def inference(
     else:
         raise RuntimeError("Unknown LLM option.")
     return y_test_pred
+
+
+
+def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True):
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model = esm_base_model.to(device)
+    wt_tokens, _ = tokenize_sequences(
+            [wt_seq],
+            esm_tokenizer,
+            max_length=len(wt_seq) + 2
+    )
+    x_esm, esm_attention_mask = tokenize_sequences(
+        sequences, esm_tokenizer, max_length=len(wt_seq) + 2, verbose=verbose)
+    llm_dict_esm = {
+        'esm1v': {
+            'llm_base_model': esm_base_model,
+            'llm_model': esm_lora_model,
+            'llm_optimizer': esm_optimizer,
+            #'llm_train_function': esm_train,
+            'llm_inference_function': plm_inference,
+            'llm_loss_function': corr_loss,
+            'x_llm' : x_esm,
+            'input_ids': wt_tokens,
+            'llm_attention_mask':  esm_attention_mask,
+            'llm_tokenizer': esm_tokenizer
+        }
+    }
+    return llm_dict_esm
+
+
+def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose: bool = True):
+    if wt_seq is None:
+        raise SystemError(
+            "Running ProSST requires a wild-type sequence "
+            "FASTA file input for embedding sequences! "
+            "Specify a FASTA file with the --wt flag."
+        )
+    if pdb_file is None:
+        raise SystemError(
+            "Running ProSST requires a PDB file input "
+            "for embedding sequences! Specify a PDB file "
+            "with the --pdb flag."
+        )
+
+    pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
+    assert wt_seq == pdb_seq, (
+        f"Wild-type sequence is not matching PDB-extracted sequence:"
+        f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
+    )
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to(device)
+    prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
+    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
+        pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
+    )
+    x_llm_train_prosst, _attention_mask = tokenize_sequences(
+        sequences=sequences, tokenizer=prosst_tokenizer, 
+        max_length=len(wt_seq) + 2, verbose=verbose
+    )
+    llm_dict_prosst = {
+        'prosst': {
+            'llm_base_model': prosst_base_model,
+            'llm_model': prosst_lora_model,
+            'llm_optimizer': prosst_optimizer,
+            #'llm_train_function': prosst_train,
+            'llm_inference_function': plm_inference,  # prosst_infer,
+            'llm_loss_function': corr_loss,
+            'x_llm' : x_llm_train_prosst,
+            'llm_attention_mask': prosst_attention_mask,
+            'llm_vocab': prosst_vocab,
+            'input_ids': input_ids,
+            'structure_input_ids': structure_input_ids,
+            'llm_tokenizer': prosst_tokenizer
+        }
+    }
+    return llm_dict_prosst

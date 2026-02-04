@@ -191,28 +191,4 @@ def esm_train(
     model.train(False)
 
 
-def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True):
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
-    esm_base_model = esm_base_model.to(device)
-    wt_tokens, _ = tokenize_sequences(
-            [wt_seq],
-            esm_tokenizer,
-            max_length=len(wt_seq) + 2
-    )
-    x_esm, esm_attention_mask = tokenize_sequences(
-        sequences, esm_tokenizer, max_length=len(wt_seq) + 2, verbose=verbose)
-    llm_dict_esm = {
-        'esm1v': {
-            'llm_base_model': esm_base_model,
-            'llm_model': esm_lora_model,
-            'llm_optimizer': esm_optimizer,
-            'llm_train_function': esm_train,
-            'llm_inference_function': esm_infer,
-            'llm_loss_function': corr_loss,
-            'x_llm' : x_esm,
-            'input_ids': wt_tokens,
-            'llm_attention_mask':  esm_attention_mask,
-            'llm_tokenizer': esm_tokenizer
-        }
-    }
-    return llm_dict_esm
+

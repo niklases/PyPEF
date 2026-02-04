@@ -18,9 +18,10 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.utils.variant_data import get_mismatches
 from pypef.plm.prosst_lora_tune import prosst_setup, prosst_simple_vocab_aa_tokenizer
-from pypef.plm.esm_lora_tune import esm_setup, tokenize_sequences
+from pypef.plm.esm_lora_tune import tokenize_sequences
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
+from pypef.plm.inference import esm_setup
 
 
 @hydra.main(version_base=None, config_path="../configs", config_name="proteingym_data_setup")

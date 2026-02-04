@@ -28,6 +28,7 @@ from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
 from pypef.plm.esm_lora_tune import tokenize_sequences
 from pypef.plm.utils import load_model_and_tokenizer
+from pypef.plm.inference import plm_inference
 
 
 def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):
@@ -272,50 +273,3 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq, verbose: bool = True):
     return input_ids, attention_mask, structure_input_ids
 
 
-def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose: bool = True):
-    if wt_seq is None:
-        raise SystemError(
-            "Running ProSST requires a wild-type sequence "
-            "FASTA file input for embedding sequences! "
-            "Specify a FASTA file with the --wt flag."
-        )
-    if pdb_file is None:
-        raise SystemError(
-            "Running ProSST requires a PDB file input "
-            "for embedding sequences! Specify a PDB file "
-            "with the --pdb flag."
-        )
-
-    pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
-    assert wt_seq == pdb_seq, (
-        f"Wild-type sequence is not matching PDB-extracted sequence:"
-        f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
-    )
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
-    prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to(device)
-    prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
-    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
-        pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
-    )
-    x_llm_train_prosst, _attention_mask = tokenize_sequences(
-        sequences=sequences, tokenizer=prosst_tokenizer, 
-        max_length=len(wt_seq) + 2, verbose=verbose
-    )
-    llm_dict_prosst = {
-        'prosst': {
-            'llm_base_model': prosst_base_model,
-            'llm_model': prosst_lora_model,
-            'llm_optimizer': prosst_optimizer,
-            'llm_train_function': prosst_train,
-            'llm_inference_function': prosst_infer,
-            'llm_loss_function': corr_loss,
-            'x_llm' : x_llm_train_prosst,
-            'llm_attention_mask': prosst_attention_mask,
-            'llm_vocab': prosst_vocab,
-            'input_ids': input_ids,
-            'structure_input_ids': structure_input_ids,
-            'llm_tokenizer': prosst_tokenizer
-        }
-    }
-    return llm_dict_prosst

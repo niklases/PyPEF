@@ -17,9 +17,7 @@ from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regres
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
 from pypef.plm.inference import plm_inference
-from pypef.plm.esm_lora_tune import esm_setup
-from pypef.plm.prosst_lora_tune import prosst_setup
-from pypef.plm.inference import inference, llm_tokenizer
+from pypef.plm.inference import esm_setup, prosst_setup, llm_tokenizer
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.esm_lora_tune import (
     get_esm_models, tokenize_sequences,
@@ -115,16 +113,49 @@ def test_hybrid_model_dca_llm():
     )
     assert len(train_seqs_aneh[0]) == len(g.wt_seq)
     aneh_wt_seq = get_wt_sequence(wt_seq_file_aneh)
-    y_pred_esm = inference(train_seqs_aneh, 'esm', wt_seq=aneh_wt_seq)
+    #y_pred_esm = inference(train_seqs_aneh, 'esm', wt_seq=aneh_wt_seq)
+
+    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
+        model='facebook/esm1v_t33_650M_UR90S_3')
+    esm_base_model = esm_base_model.to(get_device())
+    x_esm, esm_attention_mask = tokenize_sequences(
+        train_seqs_aneh, esm_tokenizer, max_length=len(wt_seq_file_aneh) + 2)
+    # Tokenize WT sequence once
+    wt_tokens, _ = tokenize_sequences(
+            [aneh_wt_seq],
+            esm_tokenizer,
+            max_length=len(aneh_wt_seq) + 2
+    )
+    wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
+    print(wt_tokens.shape)
+    print(esm_attention_mask.shape)
+    print(x_esm.shape)
+
+    y_pred_esm = plm_inference(xs=x_esm, wt_input_ids=wt_tokens, 
+                               attention_mask=esm_attention_mask, model=esm_base_model)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_esm)[0], 
          -0.713214007088901, 
         decimal=7
     )
-    y_pred_prosst = inference(
-        train_seqs_aneh, 'prosst', 
-        pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
+
+    #y_pred_prosst = inference(
+    #    train_seqs_aneh, 'prosst', 
+    #    pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
+    #)
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to(get_device())
+    wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
+        pdb_blat_ecolx, prosst_tokenizer, aneh_wt_seq)
+    x_prosst, prosst_attention_mask_ = tokenize_sequences(
+        sequences=train_seqs_aneh, 
+        tokenizer=prosst_tokenizer, 
+        max_length=len(wt_seq_file_aneh) + 2
     )
+    y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
+                                  attention_mask=prosst_attention_mask, model=prosst_base_model, 
+                                  wt_structure_input_ids=wt_structure_input_ids)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
         -0.7394433335146882, 
@@ -383,8 +414,8 @@ def test_plm_corr_blat_ecolx():
 
 
 if __name__ == "__main__":
-    #test_gremlin_avgfp()
-    #test_hybrid_model_dca_llm()
-    #test_dataset_b_results()
+    test_gremlin_avgfp()
+    test_hybrid_model_dca_llm()
+    test_dataset_b_results()
     test_plm_corr_blat_ecolx()
     
