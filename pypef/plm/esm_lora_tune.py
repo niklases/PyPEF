@@ -47,7 +47,7 @@ def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
 
 def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
     tokenized_sequences = []
-    for seq in tqdm(sequences, desc='Tokenizing sequences for ESM modeling', disable=not verbose):
+    for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
         encoded_sequence, attention_mask = tokenizer(
             seq, 
             padding='max_length', 

@@ -38,7 +38,7 @@ def get_batches(a, dtype, batch_size=5,
             logger.info(f"Batch size greater than or equal to total array length: "
                         f"returning full array (of shape: {np.shape(a)})...")
             if keep_remaining:
-                return a
+                return a.tolist()
     if len(orig_shape) == 2:
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size, np.shape(a)[1])
     else: # elif len(orig_shape) == 1:

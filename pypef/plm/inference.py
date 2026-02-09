@@ -4,17 +4,31 @@
 # Some helper functions for infernece of different models 
 # based on simple/wrapping functions
 
+import os
+import inspect
 import numpy as np
+from scipy.stats import spearmanr
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
+from Bio import SeqIO
 
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import corr_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models, tokenize_sequences
 
+
 import logging
 logger = logging.getLogger('pypef.llm.inference')
+
+
+def checkpoint(model, filename):
+    torch.save(model.state_dict(), filename)
+
+
+def load_model(model, filename):
+    logger.info(f'Loading best model: {os.path.abspath(filename)}...')
+    model.load_state_dict(torch.load(filename, weights_only=True))
 
 
 def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
@@ -45,24 +59,33 @@ def unmasked_wt_score(
         device = get_device()
     if wt_input_ids.dim() == 1:
         wt_input_ids = wt_input_ids.unsqueeze(0)
+    wt_input_ids = wt_input_ids.to(device)
     #structure_input_ids = model_kwargs.get("structure_input_ids", None)
 
     attention_masks = torch.Tensor(np.full(
-        shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64)
-    if train:
-        outputs = model(
-            input_ids=wt_input_ids.to(device),
-            attention_mask=attention_masks.to(device),
-            **model_kwargs
-        )
-
-    else:
-        with torch.no_grad():
+        shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64).to(device)
+    try:
+        if train:
             outputs = model(
-                input_ids=wt_input_ids.to(device),
-                attention_mask=attention_masks.to(device),
+                input_ids=wt_input_ids,
+                attention_mask=attention_masks,
                 **model_kwargs
             )
+
+        else:
+            with torch.no_grad():
+                outputs = model(
+                    input_ids=wt_input_ids,
+                    attention_mask=attention_masks,
+                    **model_kwargs
+                )
+    except TypeError as e:
+        print(f"Did not find model input keyword arguments (kwargs: "
+              f"{model_kwargs.keys()}). Available kawrgs identified from "
+              f"model.forward function inspect:\n"
+              f"{inspect.signature(model.forward)}\nOriginal error:")
+        raise e
+        
 
     logits = outputs.logits
     logits = logits.squeeze(0)   # remove batch dim
@@ -174,10 +197,8 @@ def mutation_only_mutation_masked_pll(
                             output_hidden_states=False
                         )
             logits = outputs.logits  # (1, L, V)
-
             log_probs = F.log_softmax(logits[0, pos], dim=-1)
             true_token = tokenized_seq[pos]
-
             pll = pll + log_probs[true_token]
         
         plls[i] = pll
@@ -186,8 +207,8 @@ def mutation_only_mutation_masked_pll(
 
 
 def mutation_all_pos_masked_pll(
-    tokenized_sequences: torch.Tensor,        # (L,)
-    attention_mask: torch.Tensor,   # (L,)
+    tokenized_sequences: torch.Tensor,    # (L,)
+    attention_mask: torch.Tensor,         # (L,)
     model,
     mask_token_id: int,
     train: bool = False,
@@ -275,7 +296,7 @@ def plm_inference(
     mask_token_id = None,
     inference_type='unmasked',
     wt_structure_input_ids=None,
-    batch_size=5,
+    batch_size: int | None = 5,
     train=False,
     device=None,
     verbose=False,
@@ -300,8 +321,10 @@ def plm_inference(
         raise SystemError("Choose between 'mutation-masking', 'unmasked', and 'full-masking'")
 
     scores = []
-
-    xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
+    if batch_size is None:
+        xs_b = xs
+    else:
+        xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
 
     kwargs = {}
@@ -309,7 +332,7 @@ def plm_inference(
         kwargs["mask_token_id"] = mask_token_id
 
     if wt_structure_input_ids is not None:
-        kwargs["structure_input_ids"] = wt_structure_input_ids
+        kwargs["ss_input_ids"] = wt_structure_input_ids.to(device)
 
     pbar = tqdm(
         range(len(xs_b)),
@@ -330,6 +353,141 @@ def plm_inference(
         )
         scores.append(pll)
     return torch.cat(scores)
+
+
+def plm_train(
+        x_sequences, 
+        scores, 
+        loss_fn, 
+        model, 
+        optimizer,
+        input_ids, 
+        attention_mask, 
+        batch_size: int = 5,
+        n_epochs=50, 
+        device: str | None = None, 
+        seed: int | None = None,
+        early_stop: int = 50, 
+        verbose: bool = True, 
+        wt_structure_input_ids=None,
+        n_batch_grad_accumulations: int = 1, 
+        raise_error_on_train_fail: bool = True,
+        progress_cb=None, 
+        abort_cb=None
+):
+    """
+    TODO: Wrapper function for `plm_inference()` for PLM training.
+    """
+    if seed is not None:
+        torch.manual_seed(seed)
+    if device is None:
+        device = get_device()
+    logger.info(f"ProSST training using {device.upper()} device "
+                f"(N_Train={len(torch.flatten(score_batches))})...")
+    x_sequences_batched = get_batches(x_sequences, dtype=int, batch_size=batch_size, 
+                                      keep_remaining=False, verbose=True)
+    x_sequences_batched = x_sequences_batched.to(device)
+    score_batches = get_batches(scores, dtype=float, batch_size=batch_size, 
+                                keep_remaining=False, verbose=True)
+    score_batches = score_batches.to(device)
+    pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
+    epoch_spearman_1 = -1.0
+    did_not_improve_counter = 0
+    best_model = None
+    best_model_epoch = np.nan
+    best_model_perf = np.nan
+    loss = np.nan
+    os.makedirs('model_saves', exist_ok=True)
+    for epoch in pbar_epochs:
+        if epoch == 0:
+            pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs}')
+        model.train()
+        y_preds_detached = []
+        pbar_batches = tqdm(
+            zip(x_sequences_batched, score_batches),
+            total=len(x_sequences), leave=False, disable=not verbose
+        )
+        for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
+            if abort_cb and abort_cb():
+                return
+            y_preds_b = plm_inference(
+                seqs_b, model, input_ids, attention_mask,
+                train=True, verbose=False
+            )
+            y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
+            loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
+            if progress_cb:
+                progress_cb(epoch - 1, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
+            loss.backward()
+            if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
+                optimizer.step()
+                optimizer.zero_grad()
+            pbar_batches.set_description(
+                f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
+                f"[batch: {batch + 1}/{len(x_sequences)} | "
+                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequences) * len(seqs_b)}] "
+                f"({device.upper()})"
+            )
+        epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(),
+                                     np.array(y_preds_detached).flatten())[0]
+        if epoch_spearman_2 == np.nan:
+            raise SystemError(
+                f"No correlation between Y_true and Y_pred could be computed...\n"
+                f"Y_true: {score_batches.cpu().numpy().flatten()}, "
+                f"Y_pred: {np.array(y_preds_detached)}"
+            )
+        if epoch_spearman_2 > epoch_spearman_1 or epoch == 0:
+            if best_model is not None:
+                if os.path.isfile(best_model):
+                    os.remove(best_model)
+            did_not_improve_counter = 0
+            best_model_epoch = epoch
+            best_model_perf = epoch_spearman_2
+            best_model = (
+                f"model_saves/Epoch{epoch}-Ntrain{len(score_batches.cpu().numpy().flatten())}"
+                f"-SpearCorr{epoch_spearman_2:.3f}.pt"
+            )
+            checkpoint(model, best_model)
+            epoch_spearman_1 = epoch_spearman_2
+            #logger.info(f"Saved current best model as {best_model}")
+        else:
+            did_not_improve_counter += 1
+            if did_not_improve_counter >= early_stop:
+                logger.info(f'\nEarly stop at epoch {epoch}...')
+                break
+        loss_total = loss_fn(
+            torch.flatten(score_batches).to('cpu'),
+            torch.flatten(torch.Tensor(np.array(y_preds_detached).flatten()))
+        )
+        pbar_epochs.set_description(
+            f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
+            f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
+    if progress_cb:
+        progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
+    if best_model is None:
+        msg = ("Failed to train a model (probably due to the input "
+               "data characteristics and loss/correlation being NaN).")
+        if raise_error_on_train_fail:
+            raise RuntimeError(msg)
+        else:
+            logger.warning(f"{msg} Continuing nonetheless (using failed model "
+                           f"and replacing NaN's with zeros)...")
+            #y_preds_train = get_logits_from_full_seqs(
+            #    x_sequences.flatten(start_dim=0, end_dim=1),
+            #    model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
+            #)
+            #y_preds_train[torch.isnan(y_preds_train)] = 0.0
+    else:        
+        logger.info(f"Loading best model as {best_model}...")
+        load_model(model, best_model)
+        #y_preds_train = get_logits_from_full_seqs(
+        #    x_sequences.flatten(start_dim=0, end_dim=1),
+        #    model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
+        #)
+    return #y_preds_train.cpu()
+
+
+
 
 
 ######################### Deprecated
@@ -444,12 +602,12 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_base_model': esm_base_model,
             'llm_model': esm_lora_model,
             'llm_optimizer': esm_optimizer,
-            #'llm_train_function': esm_train,
+            'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
             'llm_loss_function': corr_loss,
-            'x_llm' : x_esm,
-            'input_ids': wt_tokens,
-            'llm_attention_mask':  esm_attention_mask,
+            'x_llm' : torch.tensor(x_esm),
+            'llm_attention_mask':  torch.tensor(esm_attention_mask),
+            'wt_input_ids': torch.tensor(wt_tokens),
             'llm_tokenizer': esm_tokenizer
         }
     }
@@ -491,7 +649,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'llm_base_model': prosst_base_model,
             'llm_model': prosst_lora_model,
             'llm_optimizer': prosst_optimizer,
-            #'llm_train_function': prosst_train,
+            'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,  # prosst_infer,
             'llm_loss_function': corr_loss,
             'x_llm' : x_llm_train_prosst,

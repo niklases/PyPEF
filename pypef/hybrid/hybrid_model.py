@@ -84,17 +84,18 @@ class DCALLMHybridModel:
                     self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
                     self.llm_model = llm_model_input['esm1v']['llm_model']
                     self.llm_optimizer = llm_model_input['esm1v']['llm_optimizer']
-                    #self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
+                    self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
                     self.llm_inference_function = llm_model_input['esm1v']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
                     self.x_train_llm = llm_model_input['esm1v']['x_llm']
+                    self.wt_input_ids = llm_model_input['esm1v']['wt_input_ids']
                     self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
                 elif len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'prosst':
                     self.llm_key = 'prosst'
                     self.llm_base_model = llm_model_input['prosst']['llm_base_model']
                     self.llm_model = llm_model_input['prosst']['llm_model']
                     self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
-                    #self.llm_train_function = llm_model_input['prosst']['llm_train_function']
+                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
                     self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
                     self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
                     self.x_train_llm = llm_model_input['prosst']['x_llm']
@@ -432,16 +433,29 @@ class DCALLMHybridModel:
             )
         elif self.llm_key == 'esm1v':
             x_llm_ttest_b = torch.from_numpy(get_batches(self.x_llm_ttest, batch_size=1, dtype=int))
+                #xs,
+                #wt_input_ids,
+                #attention_mask,
+                #model,
+                #mask_token_id = None,
+                #inference_type='unmasked',
+                #wt_structure_input_ids=None,
+                #batch_size=5,
+                #train=False,
+                #device=None,
+                #verbose=False,
             y_llm_ttest = self.llm_inference_function(
-                xs=x_llm_ttest_b,
-                model=self.llm_model,
+                xs=self.x_llm_ttest,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
+                model=self.llm_model,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
-                xs=x_llm_ttrain_b,
-                model=self.llm_model,
+                xs=self.x_llm_ttrain,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
+                model=self.llm_model,
                 device=self.device
             )
         logger.info(
@@ -493,7 +507,7 @@ class DCALLMHybridModel:
             )
         elif self.llm_key == 'esm1v':
             # xs, attns, scores, loss_fn, model, optimizer
-            self.llm_train_function(
+            self.llm_train_function( 
                 x_llm_ttrain_b, 
                 self.llm_attention_mask,
                 scores_ttrain_b,

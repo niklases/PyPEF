@@ -486,7 +486,7 @@ def process_pdb_file(
         return anchor_node, subgraph
     for anchor_node in tqdm(
         anchor_nodes, 
-        desc=f'Getting ProSST structure embeddings ({device.upper()})', 
+        desc=f'Getting ProSST structure tokens ({device.upper()})', 
         disable=not verbose
     ):
         anchor, subgraph = process_subgraph(anchor_node)
