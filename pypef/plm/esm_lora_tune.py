@@ -45,18 +45,6 @@ def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
     return base_model, lora_model, tokenizer, optimizer
 
 
-def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
-    tokenized_sequences = []
-    for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
-        encoded_sequence, attention_mask = tokenizer(
-            seq, 
-            padding='max_length', 
-            truncation=True,  # False for not uniform length distribution (truncation) 
-            max_length=max_length
-        ).values()
-        tokenized_sequences.append(encoded_sequence)
-    return tokenized_sequences, attention_mask
-
 
 def get_y_pred_scores(encoded_sequences, attention_masks, 
                       model, device: str | None = None):

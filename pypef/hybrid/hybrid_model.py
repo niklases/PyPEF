@@ -100,7 +100,7 @@ class DCALLMHybridModel:
                     self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
                     self.x_train_llm = llm_model_input['prosst']['x_llm']
                     self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
-                    self.input_ids = llm_model_input['prosst']['input_ids']
+                    self.wt_input_ids = llm_model_input['prosst']['wt_input_ids']
                     self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
                 else:
                     raise RuntimeError("LLM input model dictionary not supported. Currently supported "
@@ -418,7 +418,7 @@ class DCALLMHybridModel:
             y_llm_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
                 model=self.llm_base_model,
-                input_ids=self.input_ids,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
                 device=self.device
@@ -426,7 +426,7 @@ class DCALLMHybridModel:
             y_llm_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
                 model=self.llm_base_model,
-                input_ids=self.input_ids,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
                 device=self.device
@@ -472,12 +472,12 @@ class DCALLMHybridModel:
         # void function, training model in place
         if self.llm_key == 'prosst':
             self.llm_train_function(
-                x_llm_ttrain_b, 
-                scores_ttrain_b,
+                self.x_llm_ttrain, 
+                self.y_ttrain,
                 self.llm_loss_function,
                 self.llm_model,
                 self.llm_optimizer, 
-                self.input_ids,
+                self.wt_input_ids,
                 self.llm_attention_mask,  
                 self.structure_input_ids,
                 n_epochs=50,
@@ -490,7 +490,7 @@ class DCALLMHybridModel:
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
                 model=self.llm_model,
-                input_ids=self.input_ids,
+                input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
                 device=self.device,
@@ -499,7 +499,7 @@ class DCALLMHybridModel:
             y_llm_lora_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
                 model=self.llm_model,
-                input_ids=self.input_ids,
+                input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 structure_input_ids=self.structure_input_ids,
                 device=self.device,
@@ -507,29 +507,39 @@ class DCALLMHybridModel:
             )
         elif self.llm_key == 'esm1v':
             # xs, attns, scores, loss_fn, model, optimizer
+            # x_sequences, 
+            # scores, 
+            # loss_fn, 
+            # model, 
+            # optimizer,
+            # input_ids, 
+            # attention_mask, 
             self.llm_train_function( 
-                x_llm_ttrain_b, 
-                self.llm_attention_mask,
-                scores_ttrain_b,
-                self.llm_loss_function,
-                self.llm_model,
-                self.llm_optimizer,  
-                n_epochs=5, 
+                x_sequences=self.x_llm_ttrain, 
+                scores=self.y_ttrain,
+                loss_fn=self.llm_loss_function,
+                model=self.llm_model,
+                optimizer=self.llm_optimizer, 
+                wt_input_ids=self.wt_input_ids,
+                attention_mask=self.llm_attention_mask,
+                n_epochs=50, 
                 device=self.device,
                 verbose=self.verbose,
                 progress_cb=self.progress_cb, 
                 abort_cb=self.abort_cb
             )
             y_llm_lora_ttrain = self.llm_inference_function(
-                xs=x_llm_ttrain_b,
+                xs=self.x_llm_ttrain,
                 model=self.llm_model,
                 attention_mask=self.llm_attention_mask,
+                wt_input_ids=self.wt_input_ids,
                 device=self.device,
                 verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
-                xs=x_llm_ttest_b,
+                xs=self.x_llm_ttest,
                 model=self.llm_model,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 device=self.device,
                 verbose=self.verbose
@@ -630,36 +640,44 @@ class DCALLMHybridModel:
         
         else:
             if self.llm_key == 'prosst':
+                #    xs,
+                #wt_input_ids,
+                #attention_mask,
+                #model,
                 y_llm = self.llm_inference_function(
-                    x_llm, 
-                    self.llm_base_model, 
-                    self.input_ids,
-                    self.llm_attention_mask, 
-                    self.structure_input_ids,
+                    xs=x_llm, 
+                    wt_input_ids=self.wt_input_ids,
+                    attention_mask=self.llm_attention_mask, 
+                    model=self.llm_base_model, 
+                    wt_structure_input_ids=self.structure_input_ids,
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
-                    x_llm, 
-                    self.llm_model, 
-                    self.input_ids,
-                    self.llm_attention_mask, 
-                    self.structure_input_ids,
+                    xs=x_llm, 
+                    wt_input_ids=self.wt_input_ids,
+                    attention_mask=self.llm_attention_mask, 
+                    model=self.llm_model, 
+                    wt_structure_input_ids=self.structure_input_ids,
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
                 x_llm_b = torch.from_numpy(get_batches(x_llm, batch_size=1, dtype=int))
                 y_llm = self.llm_inference_function(
-                    x_llm_b, 
-                    self.llm_attention_mask,
-                    self.llm_base_model, 
+                    xs=x_llm, 
+                    wt_input_ids=self.wt_input_ids,
+                    attention_mask=self.llm_attention_mask, 
+                    model=self.llm_base_model, 
                     verbose=verbose,
-                    device=self.device).detach().cpu().numpy()
+                    device=self.device
+                ).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
-                    x_llm_b, 
-                    self.llm_attention_mask,
-                    self.llm_model, 
+                    xs=x_llm, 
+                    wt_input_ids=self.wt_input_ids,
+                    attention_mask=self.llm_attention_mask, 
+                    model=self.llm_model, 
                     verbose=verbose,
-                    device=self.device).detach().cpu().numpy()
+                    device=self.device
+                ).detach().cpu().numpy()
             if np.any(np.isnan(y_llm)) or np.any(np.isnan(y_llm_lora)):
                 logger.warning(
                     f"LLM predictions contains NaN's... replacing NaN's with "

@@ -16,14 +16,11 @@ import pytest
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.plm.inference import plm_inference
-from pypef.plm.inference import esm_setup, prosst_setup, llm_tokenizer
+from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, llm_tokenizer, tokenize_sequences
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
-from pypef.plm.esm_lora_tune import (
-    get_esm_models, tokenize_sequences,
-)
+from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import (
-    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
+    get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer
 )
 from pypef.utils.helpers import get_device
@@ -198,7 +195,7 @@ def test_hybrid_model_dca_llm():
         )
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-            [-0.17231040881725562, -0.8330644449247571][i],
+            [ -0.7704181041760417, -0.8330644449247571][i],
             decimal=7
         )  
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
@@ -206,6 +203,7 @@ def test_hybrid_model_dca_llm():
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
         assert -1.0 <= spearmanr(test_ys_aneh, y_pred_test)[0] <= 1.0
+        np.testing.assert_almost_equal(spearmanr(test_ys_aneh, y_pred_test)[0], 0.8403249605842074, decimal=7)
         # With seed 42 for numpy and torch for implemented LLM's and on local machine:
         if setup == esm_setup:
             continue  # TODO: Make new/overloaded pytest decorator function
@@ -416,7 +414,7 @@ def test_plm_corr_blat_ecolx():
 
 
 if __name__ == "__main__":
-    test_gremlin_avgfp()
+    #test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()

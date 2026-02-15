@@ -20,15 +20,12 @@ import numpy as np
 from scipy.stats import spearmanr
 from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
-from Bio import SeqIO, BiopythonParserWarning
+from Bio import BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
-from pypef.plm.utils import corr_loss
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
-from pypef.plm.esm_lora_tune import tokenize_sequences
 from pypef.plm.utils import load_model_and_tokenizer
-from pypef.plm.inference import plm_inference
 
 
 def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):

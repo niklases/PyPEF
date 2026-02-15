@@ -13,9 +13,10 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from Bio import SeqIO
 
+from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import corr_loss, get_batches
-from pypef.plm.esm_lora_tune import get_esm_models, tokenize_sequences
+from pypef.plm.esm_lora_tune import get_esm_models
 
 
 import logging
@@ -55,6 +56,7 @@ def unmasked_wt_score(
         verbose: bool = False,
         **model_kwargs
     ):
+    #print('unmasked_wt_score() tokenized_sequences.shape', tokenized_sequences.shape)
     if device is None:
         device = get_device()
     if wt_input_ids.dim() == 1:
@@ -322,10 +324,12 @@ def plm_inference(
 
     scores = []
     if batch_size is None:
-        xs_b = xs
+        xs_b = torch.atleast_2d(xs)
     else:
-        xs_b = get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True)
+        logger.info(f"Splitting tokenized sequences into batches...")
+        xs_b = torch.from_numpy(get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True))
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
+    #print(desc, "xs_b.shape", xs_b.shape)
 
     kwargs = {}
     if mask_token_id is not None:
@@ -333,6 +337,8 @@ def plm_inference(
 
     if wt_structure_input_ids is not None:
         kwargs["ss_input_ids"] = wt_structure_input_ids.to(device)
+    
+    #print('xs_b.shape', xs_b.shape, 'xs_b[0]', xs_b[0])
 
     pbar = tqdm(
         range(len(xs_b)),
@@ -342,7 +348,7 @@ def plm_inference(
 
     for i in pbar:
         pll = inference_function(
-            tokenized_sequences=torch.tensor(xs_b[i]),
+            tokenized_sequences=xs_b[i],
             wt_input_ids=wt_input_ids,
             attention_mask=attention_mask,
             model=model,
@@ -361,7 +367,7 @@ def plm_train(
         loss_fn, 
         model, 
         optimizer,
-        input_ids, 
+        wt_input_ids, 
         attention_mask, 
         batch_size: int = 5,
         n_epochs=50, 
@@ -382,14 +388,19 @@ def plm_train(
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
-    logger.info(f"ProSST training using {device.upper()} device "
-                f"(N_Train={len(torch.flatten(score_batches))})...")
-    x_sequences_batched = get_batches(x_sequences, dtype=int, batch_size=batch_size, 
-                                      keep_remaining=False, verbose=True)
+    print(f"Model training using {device.upper()} device "
+          f"(N_Train={len(scores)})...")
+    scores_batched = torch.from_numpy(
+        get_batches(scores, dtype=float, batch_size=batch_size,
+                    keep_remaining=False, verbose=True)
+    )
+    x_sequences_batched = torch.from_numpy(
+        get_batches(x_sequences, dtype=int, batch_size=batch_size, 
+                    keep_remaining=False, verbose=True)
+    )
     x_sequences_batched = x_sequences_batched.to(device)
-    score_batches = get_batches(scores, dtype=float, batch_size=batch_size, 
-                                keep_remaining=False, verbose=True)
-    score_batches = score_batches.to(device)
+    #print('x_sequences_batched.shape:', x_sequences_batched.shape)
+    scores_batched = scores_batched.to(device)
     pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     epoch_spearman_1 = -1.0
     did_not_improve_counter = 0
@@ -404,16 +415,20 @@ def plm_train(
         model.train()
         y_preds_detached = []
         pbar_batches = tqdm(
-            zip(x_sequences_batched, score_batches),
+            zip(x_sequences_batched, scores_batched),
             total=len(x_sequences), leave=False, disable=not verbose
         )
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
             if abort_cb and abort_cb():
                 return
+            if seqs_b.dim() == 2:
+                seqs_b = seqs_b.unsqueeze(0)  # e.g., (5, 400)  -> (1, 5 400)
             y_preds_b = plm_inference(
-                seqs_b, model, input_ids, attention_mask,
-                train=True, verbose=False
+                xs=seqs_b, 
+                wt_input_ids=wt_input_ids, attention_mask=attention_mask,
+                model=model, train=True, batch_size=None, verbose=False
             )
+            #print('y_preds_b.shape', y_preds_b.shape, y_preds_b)
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
             if progress_cb:
@@ -428,12 +443,12 @@ def plm_train(
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequences) * len(seqs_b)}] "
                 f"({device.upper()})"
             )
-        epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(),
+        epoch_spearman_2 = spearmanr(scores_batched.cpu().numpy().flatten(),
                                      np.array(y_preds_detached).flatten())[0]
         if epoch_spearman_2 == np.nan:
             raise SystemError(
                 f"No correlation between Y_true and Y_pred could be computed...\n"
-                f"Y_true: {score_batches.cpu().numpy().flatten()}, "
+                f"Y_true: {scores_batched.cpu().numpy().flatten()}, "
                 f"Y_pred: {np.array(y_preds_detached)}"
             )
         if epoch_spearman_2 > epoch_spearman_1 or epoch == 0:
@@ -444,7 +459,7 @@ def plm_train(
             best_model_epoch = epoch
             best_model_perf = epoch_spearman_2
             best_model = (
-                f"model_saves/Epoch{epoch}-Ntrain{len(score_batches.cpu().numpy().flatten())}"
+                f"model_saves/Epoch{epoch}-Ntrain{len(scores_batched.cpu().numpy().flatten())}"
                 f"-SpearCorr{epoch_spearman_2:.3f}.pt"
             )
             checkpoint(model, best_model)
@@ -456,7 +471,7 @@ def plm_train(
                 logger.info(f'\nEarly stop at epoch {epoch}...')
                 break
         loss_total = loss_fn(
-            torch.flatten(score_batches).to('cpu'),
+            torch.flatten(scores_batched).to('cpu'),
             torch.flatten(torch.Tensor(np.array(y_preds_detached).flatten()))
         )
         pbar_epochs.set_description(
@@ -586,6 +601,18 @@ def inference(
     return y_test_pred
 
 
+def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
+    tokenized_sequences = []
+    for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
+        encoded_sequence, attention_mask = tokenizer(
+            seq, 
+            padding='max_length', 
+            truncation=True,  # False for not uniform length distribution (truncation) 
+            max_length=max_length
+        ).values()
+        tokenized_sequences.append(encoded_sequence)
+    return tokenized_sequences, attention_mask
+
 
 def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True):
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
@@ -655,7 +682,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
-            'input_ids': input_ids,
+            'wt_input_ids': input_ids,
             'structure_input_ids': structure_input_ids,
             'llm_tokenizer': prosst_tokenizer
         }
