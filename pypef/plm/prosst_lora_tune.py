@@ -12,12 +12,10 @@
 import logging
 logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
-import os
-import warnings
 
+import warnings
 import torch
 import numpy as np
-from scipy.stats import spearmanr
 from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
 from Bio import BiopythonParserWarning
@@ -29,7 +27,6 @@ from pypef.plm.utils import load_model_and_tokenizer
 
 
 def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):
-    print(vocab)
     sequences = np.atleast_1d(sequences).tolist()
     x_sequences = []
     for sequence in tqdm(
@@ -129,119 +126,6 @@ def prosst_infer(
     )
 
 
-def prosst_train(
-        x_sequence_batches, score_batches, loss_fn, model, optimizer,
-        input_ids, attention_mask, structure_input_ids,
-        n_epochs=50, device: str | None = None, seed: int | None = None,
-        early_stop: int = 50, verbose: bool = True, 
-        n_batch_grad_accumulations: int = 1, raise_error_on_train_fail: bool = True,
-        progress_cb=None, abort_cb=None
-):
-    if seed is not None:
-        torch.manual_seed(seed)
-    if device is None:
-        device = get_device()
-    logger.info(f"ProSST training using {device.upper()} device "
-         f"(N_Train={len(torch.flatten(score_batches))})...")
-    x_sequence_batches = x_sequence_batches.to(device)
-    score_batches = score_batches.to(device)
-    pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
-    epoch_spearman_1 = -1.0
-    did_not_improve_counter = 0
-    best_model = None
-    best_model_epoch = np.nan
-    best_model_perf = np.nan
-    loss = np.nan
-    os.makedirs('model_saves', exist_ok=True)
-    for epoch in pbar_epochs:
-        if epoch == 0:
-            pbar_epochs.set_description(f'Epoch {epoch}/{n_epochs}')
-        model.train()
-        y_preds_detached = []
-        pbar_batches = tqdm(
-            zip(x_sequence_batches, score_batches),
-            total=len(x_sequence_batches), leave=False, disable=not verbose
-        )
-        for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
-            if abort_cb and abort_cb():
-                return
-            y_preds_b = get_logits_from_full_seqs(
-                seqs_b, model, input_ids, attention_mask, structure_input_ids,
-                train=True, verbose=False
-            )
-            y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
-            loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
-            if progress_cb:
-                progress_cb(epoch - 1, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
-            loss.backward()
-            if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
-                optimizer.step()
-                optimizer.zero_grad()
-            pbar_batches.set_description(
-                f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
-                f"[batch: {batch + 1}/{len(x_sequence_batches)} | "
-                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequence_batches) * len(seqs_b)}] "
-                f"({device.upper()})"
-            )
-        epoch_spearman_2 = spearmanr(score_batches.cpu().numpy().flatten(),
-                                     np.array(y_preds_detached).flatten())[0]
-        if epoch_spearman_2 == np.nan:
-            raise SystemError(
-                f"No correlation between Y_true and Y_pred could be computed...\n"
-                f"Y_true: {score_batches.cpu().numpy().flatten()}, "
-                f"Y_pred: {np.array(y_preds_detached)}"
-            )
-        if epoch_spearman_2 > epoch_spearman_1 or epoch == 0:
-            if best_model is not None:
-                if os.path.isfile(best_model):
-                    os.remove(best_model)
-            did_not_improve_counter = 0
-            best_model_epoch = epoch
-            best_model_perf = epoch_spearman_2
-            best_model = (
-                f"model_saves/Epoch{epoch}-Ntrain{len(score_batches.cpu().numpy().flatten())}"
-                f"-SpearCorr{epoch_spearman_2:.3f}.pt"
-            )
-            checkpoint(model, best_model)
-            epoch_spearman_1 = epoch_spearman_2
-            #logger.info(f"Saved current best model as {best_model}")
-        else:
-            did_not_improve_counter += 1
-            if did_not_improve_counter >= early_stop:
-                logger.info(f'\nEarly stop at epoch {epoch}...')
-                break
-        loss_total = loss_fn(
-            torch.flatten(score_batches).to('cpu'),
-            torch.flatten(torch.Tensor(np.array(y_preds_detached).flatten()))
-        )
-        pbar_epochs.set_description(
-            f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
-            f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
-    if progress_cb:
-        progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
-    if best_model is None:
-        msg = ("Failed to train a model (probably due to the input "
-               "data characteristics and loss/correlation being NaN).")
-        if raise_error_on_train_fail:
-            raise RuntimeError(msg)
-        else:
-            logger.warning(f"{msg} Continuing nonetheless (using failed model "
-                           f"and replacing NaN's with zeros)...")
-            y_preds_train = get_logits_from_full_seqs(
-                x_sequence_batches.flatten(start_dim=0, end_dim=1),
-                model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
-            )
-            y_preds_train[torch.isnan(y_preds_train)] = 0.0
-    else:        
-        logger.info(f"Loading best model as {best_model}...")
-        load_model(model, best_model)
-        y_preds_train = get_logits_from_full_seqs(
-            x_sequence_batches.flatten(start_dim=0, end_dim=1),
-            model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
-        )
-    return y_preds_train.cpu()
-
-
 def get_prosst_models():
     prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048")
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
@@ -259,5 +143,3 @@ def get_structure_quantizied(pdb_file, tokenizer, wt_seq, verbose: bool = True):
     structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2],
                                      dtype=torch.long).unsqueeze(0)
     return input_ids, attention_mask, structure_input_ids
-
-

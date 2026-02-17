@@ -25,7 +25,8 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
 
 
 def get_batches(a, dtype, batch_size=5,
-                keep_remaining=False, verbose: bool = False):
+                keep_remaining=False, verbose: bool = False
+                ) -> list | list[np.ndarray]:
     a = np.asarray(a, dtype=dtype)
     a_remaining = None
     orig_shape = np.shape(a)
@@ -45,15 +46,16 @@ def get_batches(a, dtype, batch_size=5,
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
     new_shape = np.shape(a)
     if verbose:
-        print(f'{orig_shape} -> {new_shape} (dropped {remaining})')
+        logger.info(f'{orig_shape} -> {new_shape} (dropped {remaining})')
     if keep_remaining: 
         if a_remaining is not None:
-            print(f'Appending remaining to collected batches as last batch '
+            logger.info(f'Appending remaining to collected batches as last batch '
                         f'(the resulting inhomogenous list shape is '
                         f'{np.shape(a)} + {np.shape(a_remaining)} = ('
                         f'{np.shape(a)[0] + 1}, *, {np.shape(a)[-1]}))...')
             a = a.tolist()
             a.append(a_remaining)
+            a = [np.asarray(it) for it in a]
     return a
 
 

@@ -2,16 +2,16 @@ from typing import Literal, Tuple
 from sklearn.model_selection import train_test_split
 import torch
 
-from gpytorch.kernels import ScaleKernel
 import gpytorch
+from gpytorch.kernels import ScaleKernel
 import pandas as pd
 from tqdm import tqdm
 
-from gp_esm2_test import extract_esm_embeddings
-from gp_pmpnn_test import HellingerRBFKernel, get_probs_from_mutations
-from gp_prosst_test import (extract_prosst_embeddings, get_prosst_models, 
+from pypef.gaussian_process.gp_esm2_test import extract_esm_embeddings
+from pypef.gaussian_process.gp_pmpnn_test import HellingerRBFKernel, get_probs_from_mutations
+from pypef.gaussian_process.gp_prosst_test import (extract_prosst_embeddings, get_prosst_models, 
                             get_structure_quantizied, read_fasta_biopython)
-from metrics import spearman_soft, spearman_corr_differentiable, spearmanr2
+from pypef.gaussian_process.metrics import spearman_soft, spearman_corr_differentiable, spearmanr2
 
 class CombinedKernel(gpytorch.kernels.Kernel):
     """

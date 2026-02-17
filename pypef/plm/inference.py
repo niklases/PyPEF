@@ -45,76 +45,230 @@ def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
     return tokenized_sequences, attention_mask
 
 
-def unmasked_wt_score(
+def sequence_log_likelihood(
         tokenized_sequences, 
         attention_mask, 
         wt_input_ids,
         model, 
+        scoring_mode: str = "wt-marginal",   # "wt-marginal" | "full-sequence"
         train: bool = False,
         cut_special_tokens: bool = True,  # assumption: cut first and last token
         device=None,
         verbose: bool = False,
         **model_kwargs
     ):
-    #print('unmasked_wt_score() tokenized_sequences.shape', tokenized_sequences.shape)
+    """
+    Unified scoring function.
+
+    scoring_mode:
+        - "wt-marginal": forward pass on WT only (fast, approximate)
+        - "full-sequence": forward pass per sequence (exact PLL)
+
+    Returns:
+        torch.Tensor of shape [num_sequences]
+    """
+    assert scoring_mode in ["wt-marginal", "full-sequence"]
     if device is None:
         device = get_device()
     if wt_input_ids.dim() == 1:
         wt_input_ids = wt_input_ids.unsqueeze(0)
     wt_input_ids = wt_input_ids.to(device)
+    log_probs = []
     #structure_input_ids = model_kwargs.get("structure_input_ids", None)
-
-    attention_masks = torch.Tensor(np.full(
-        shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64).to(device)
-    try:
-        if train:
-            outputs = model(
-                input_ids=wt_input_ids,
-                attention_mask=attention_masks,
-                **model_kwargs
-            )
-
-        else:
-            with torch.no_grad():
+    if scoring_mode == "wt-marginal":
+        attention_masks = torch.Tensor(np.full(
+            shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64).to(device)
+        try:
+            if train:
                 outputs = model(
                     input_ids=wt_input_ids,
                     attention_mask=attention_masks,
+                    output_hidden_states=False,
+                    return_dict=True,
                     **model_kwargs
                 )
-    except TypeError as e:
-        print(f"Did not find model input keyword arguments (kwargs: "
-              f"{model_kwargs.keys()}). Available kawrgs identified from "
-              f"model.forward function inspect:\n"
-              f"{inspect.signature(model.forward)}\nOriginal error:")
-        raise e
-        
 
-    logits = outputs.logits
-    logits = logits.squeeze(0)   # remove batch dim
-    # Better make sure that special tokens are always removed / masked 
-    # and only pure amino acid sequence tokens are present / unmasked
-    tokenized_seq_len = tokenized_sequences.shape[1]
-    if cut_special_tokens:
-        logits = logits[1:-1]        # drop CLS/EOS
-        tokenized_seq_len -= 2
-    token_probs = torch.log_softmax(logits, dim=-1)
-    assert tokenized_seq_len == token_probs.shape[0], (
-        f"{tokenized_seq_len} != {token_probs.shape[0]}")
+            else:
+                with torch.no_grad():
+                    outputs = model(
+                        input_ids=wt_input_ids,
+                        attention_mask=attention_masks,
+                        output_hidden_states=False,
+                        return_dict=True,
+                        **model_kwargs
+                    )
+        except TypeError as e:
+            logger.info(f"Did not find model input keyword arguments (kwargs: "
+                  f"{model_kwargs.keys()}). Available kawrgs identified from "
+                  f"model.forward function inspect:\n"
+                  f"{inspect.signature(model.forward)}\nOriginal error:")
+            raise e
 
-    log_probs = []
-    for tokenized_seq in tokenized_sequences:
+
+        logits = outputs.logits
+        logits = logits.squeeze(0)   # remove batch dim
+        # Better make sure that special tokens are always removed / masked 
+        # and only pure amino acid sequence tokens are present / unmasked
+        tokenized_seq_len = tokenized_sequences.shape[1]
         if cut_special_tokens:
-            tokenized_seq = tokenized_seq[1:-1]
-    
-        seq_lp = token_probs[
-            torch.arange(tokenized_seq.shape[0], device=tokenized_seq.device),
-            tokenized_seq
-        ].sum(dtype=torch.float64)
+            logits = logits[1:-1]        # drop CLS/EOS
+            tokenized_seq_len -= 2
+        token_probs = torch.log_softmax(logits, dim=-1)
+        assert tokenized_seq_len == token_probs.shape[0], (
+            f"{tokenized_seq_len} != {token_probs.shape[0]}")
 
-        log_probs.append(seq_lp)
-    
-    log_probs = torch.stack(log_probs)
-    return log_probs
+        for tokenized_seq in tokenized_sequences:
+            if cut_special_tokens:
+                tokenized_seq = tokenized_seq[1:-1]
+
+            seq_lp = token_probs[
+                torch.arange(tokenized_seq.shape[0], device=tokenized_seq.device),
+                tokenized_seq
+            ].sum(dtype=torch.float64)
+
+            log_probs.append(seq_lp)
+
+
+    elif scoring_mode == "full-sequence":
+        for tokenized_seq in tokenized_sequences:
+            if tokenized_seq.dim() == 1:
+                tokenized_seq = tokenized_seq.unsqueeze(0)
+
+            attention_masks = torch.Tensor(np.full(
+                shape=tokenized_seq.shape,
+                fill_value=attention_mask)
+            ).to(torch.int64).to(device)
+
+            try:
+                if train:
+                    outputs = model(
+                        input_ids=tokenized_seq,
+                        attention_mask=attention_masks,
+                        return_dict=True,
+                        **model_kwargs
+                    )
+                else:
+                    with torch.no_grad():
+                        outputs = model(
+                            input_ids=tokenized_seq,
+                            attention_mask=attention_masks,
+                            return_dict=True,
+                            **model_kwargs
+                        )
+
+            except TypeError as e:
+                logger.info(f"Did not find model input keyword arguments (kwargs: "
+                    f"{model_kwargs.keys()}). Available kawrgs identified from "
+                    f"model.forward function inspect:\n"
+                    f"{inspect.signature(model.forward)}\nOriginal error:"
+                )
+                raise e
+
+            logits = outputs.logits.squeeze(0)
+
+            if cut_special_tokens:
+                logits = logits[1:-1]
+                target_tokens = tokenized_seq.squeeze(0)[1:-1]
+            else:
+                target_tokens = tokenized_seq.squeeze(0)
+
+            token_log_probs = torch.log_softmax(logits, dim=-1)
+
+            seq_lp = token_log_probs[
+                torch.arange(target_tokens.shape[0], device=device),
+                target_tokens
+            ].sum(dtype=torch.float64)
+
+            log_probs.append(seq_lp)
+
+    return torch.stack(log_probs)
+
+
+def full_sequence_log_likelihood(
+    model,
+    tokenizer,
+    sequences,
+    structures=None,              # None or list of lists or single WT list
+    device="cuda",
+    cut_special_tokens=True,
+):
+    """
+    Compute full-sequence pseudo log-likelihood for each sequence.
+
+    Unlike WT-based scoring, this runs a forward pass on each
+    actual sequence, so context reflects mutations.
+
+    Returns:
+        torch.Tensor of shape [num_sequences]
+    """
+
+    model.eval()
+    model.to(device)
+
+    log_probs_all = []
+
+    # Handle single WT structure reuse
+    if structures is not None:
+        if isinstance(structures[0], int):
+            structures = [structures] * len(sequences)
+
+        assert len(sequences) == len(structures), \
+            "Number of sequences must match number of structures"
+
+    for i, seq in enumerate(sequences):
+
+        tokenized = tokenizer(
+            [seq],
+            return_tensors="pt",
+            padding=False,
+            truncation=False
+        )
+
+        input_ids = tokenized["input_ids"].to(device)
+        attention_mask = tokenized["attention_mask"].to(device)
+
+        model_kwargs = {}
+
+        # Structure handling (ProSST)
+        if structures is not None:
+            struct = structures[i]
+            structure_input_ids = torch.tensor(
+                [1, *struct, 2],
+                dtype=torch.long
+            ).unsqueeze(0).to(device)
+
+            assert input_ids.shape == structure_input_ids.shape, \
+                f"Shape mismatch: {input_ids.shape} vs {structure_input_ids.shape}"
+
+            model_kwargs["ss_input_ids"] = structure_input_ids
+
+        with torch.no_grad():
+            outputs = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                return_dict=True,
+                **model_kwargs
+            )
+
+        logits = outputs.logits.squeeze(0)
+
+        if cut_special_tokens:
+            logits = logits[1:-1]
+            target_tokens = input_ids.squeeze(0)[1:-1]
+        else:
+            target_tokens = input_ids.squeeze(0)
+
+        token_log_probs = torch.log_softmax(logits, dim=-1)
+
+        seq_log_prob = token_log_probs[
+            torch.arange(target_tokens.shape[0], device=device),
+            target_tokens
+        ].sum()
+
+        log_probs_all.append(seq_log_prob.cpu())
+
+    return torch.stack(log_probs_all)
+
 
 
 def mutation_only_mutation_masked_pll(
@@ -132,7 +286,7 @@ def mutation_only_mutation_masked_pll(
     Correct mutation-only pseudo-log-likelihood for sequences.
     """
     tokenized_sequences = tokenized_sequences.to(device)
-    structure_input_ids = kwargs.get("structure_input_ids", None)
+    structure_input_ids = kwargs.get("ss_input_ids", None)
     if structure_input_ids is not None:
         assert structure_input_ids.shape[1] == tokenized_sequences.shape[1], (
             f"{structure_input_ids.shape[1]} != {tokenized_sequences.shape[1]}")
@@ -221,7 +375,7 @@ def mutation_all_pos_masked_pll(
     """
     Correct mutation-only pseudo-log-likelihood for sequences.
     """
-    structure_input_ids = kwargs.get("structure_input_ids", None)
+    structure_input_ids = kwargs.get("ss_input_ids", None)
     if structure_input_ids is not None:
         assert structure_input_ids.shape[1] == tokenized_sequences.shape[1], (
             f"{structure_input_ids.shape[1]} != {tokenized_sequences.shape[1]}")
@@ -296,7 +450,7 @@ def plm_inference(
     attention_mask,
     model,
     mask_token_id = None,
-    inference_type='unmasked',
+    inference_type='wt-marginal-log-likelihood',
     wt_structure_input_ids=None,
     batch_size: int | None = 5,
     train=False,
@@ -305,31 +459,45 @@ def plm_inference(
 ):
     if device is None:
         device = get_device()
+    
+    if train:
+        keep_remaining = False
+    else:
+        keep_remaining = True
 
     model = model.to(device)
 
-    if not isinstance(xs, torch.Tensor):
-        xs = torch.tensor(xs, dtype=torch.long)
-
+    #if not isinstance(xs, torch.Tensor):
+    #    xs = torch.tensor(xs, dtype=torch.long)
     if not isinstance(attention_mask, torch.Tensor):
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
+    scoring_mode = None
     if inference_type == 'mutation-masking':
         inference_function = mutation_only_mutation_masked_pll
     elif inference_type in ['full-masking', 'all-pos-masking']:
         inference_function = mutation_all_pos_masked_pll
-    elif inference_type in ['unmasked', 'wt-marginals']:
-        inference_function = unmasked_wt_score
+    # Unmasked
+    elif inference_type in ['wt-marginal', 'wt-marginal-log-likelihood']:
+        inference_function = sequence_log_likelihood
+        scoring_mode = "wt-marginal"
+    elif inference_type in ['full-sequence', 'full-sequence-log-likelihood']:
+        inference_function = sequence_log_likelihood
+        scoring_mode = "full-sequence"
     else:
-        raise SystemError("Choose between 'mutation-masking', 'unmasked', and 'full-masking'")
+        raise SystemError(
+            f"Choose between 'wt-marginal-log-likelihood', "
+            f"'full-sequence-log-likelihood', 'mutation-masking', "
+            f"and 'full-masking', got {inference_type}.")
 
     scores = []
     if batch_size is None:
         xs_b = torch.atleast_2d(xs)
     else:
         logger.info(f"Splitting tokenized sequences into batches...")
-        xs_b = torch.from_numpy(get_batches(xs, dtype=int, batch_size=batch_size, keep_remaining=True, verbose=True))
+        xs_b = get_batches(xs, dtype=int, batch_size=batch_size,  # torch.from_numpy
+                           keep_remaining=keep_remaining, verbose=True)
+        xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
-    #print(desc, "xs_b.shape", xs_b.shape)
 
     kwargs = {}
     if mask_token_id is not None:
@@ -337,22 +505,21 @@ def plm_inference(
 
     if wt_structure_input_ids is not None:
         kwargs["ss_input_ids"] = wt_structure_input_ids.to(device)
-    
-    #print('xs_b.shape', xs_b.shape, 'xs_b[0]', xs_b[0])
 
     pbar = tqdm(
-        range(len(xs_b)),
+        xs_b,
         desc=desc,
         disable=not verbose
     )
 
-    for i in pbar:
+    for x in pbar:
         pll = inference_function(
-            tokenized_sequences=xs_b[i],
+            tokenized_sequences=x,
             wt_input_ids=wt_input_ids,
             attention_mask=attention_mask,
             model=model,
             train=train,
+            scoring_mode=scoring_mode,
             device=device,
             verbose=False,
             **kwargs
@@ -388,7 +555,7 @@ def plm_train(
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
-    print(f"Model training using {device.upper()} device "
+    logger.info(f"Model training using {device.upper()} device "
           f"(N_Train={len(scores)})...")
     scores_batched = torch.from_numpy(
         get_batches(scores, dtype=float, batch_size=batch_size,
@@ -399,7 +566,6 @@ def plm_train(
                     keep_remaining=False, verbose=True)
     )
     x_sequences_batched = x_sequences_batched.to(device)
-    #print('x_sequences_batched.shape:', x_sequences_batched.shape)
     scores_batched = scores_batched.to(device)
     pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
     epoch_spearman_1 = -1.0
@@ -416,7 +582,7 @@ def plm_train(
         y_preds_detached = []
         pbar_batches = tqdm(
             zip(x_sequences_batched, scores_batched),
-            total=len(x_sequences), leave=False, disable=not verbose
+            total=len(x_sequences_batched), leave=False, disable=not verbose
         )
         for batch, (seqs_b, scores_b) in enumerate(pbar_batches):
             if abort_cb and abort_cb():
@@ -425,10 +591,14 @@ def plm_train(
                 seqs_b = seqs_b.unsqueeze(0)  # e.g., (5, 400)  -> (1, 5 400)
             y_preds_b = plm_inference(
                 xs=seqs_b, 
-                wt_input_ids=wt_input_ids, attention_mask=attention_mask,
-                model=model, train=True, batch_size=None, verbose=False
+                wt_input_ids=wt_input_ids, 
+                attention_mask=attention_mask,
+                model=model, 
+                train=True, 
+                wt_structure_input_ids=wt_structure_input_ids, 
+                batch_size=None, 
+                verbose=False
             )
-            #print('y_preds_b.shape', y_preds_b.shape, y_preds_b)
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
             if progress_cb:
@@ -439,7 +609,7 @@ def plm_train(
                 optimizer.zero_grad()
             pbar_batches.set_description(
                 f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
-                f"[batch: {batch + 1}/{len(x_sequences)} | "
+                f"[batch: {batch + 1}/{len(seqs_b[0])} | "
                 f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequences) * len(seqs_b)}] "
                 f"({device.upper()})"
             )
@@ -464,7 +634,7 @@ def plm_train(
             )
             checkpoint(model, best_model)
             epoch_spearman_1 = epoch_spearman_2
-            #logger.info(f"Saved current best model as {best_model}")
+            logger.info(f"Saved current best model as {best_model}")
         else:
             did_not_improve_counter += 1
             if did_not_improve_counter >= early_stop:
@@ -487,19 +657,29 @@ def plm_train(
         else:
             logger.warning(f"{msg} Continuing nonetheless (using failed model "
                            f"and replacing NaN's with zeros)...")
-            #y_preds_train = get_logits_from_full_seqs(
-            #    x_sequences.flatten(start_dim=0, end_dim=1),
-            #    model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
-            #)
-            #y_preds_train[torch.isnan(y_preds_train)] = 0.0
+            y_preds_train = plm_inference(
+                x_sequences,#.flatten(start_dim=0, end_dim=1),
+                wt_input_ids, 
+                attention_mask, 
+                model,
+                wt_structure_input_ids=wt_structure_input_ids,
+                train=False, 
+                verbose=False
+            )
+            y_preds_train[torch.isnan(y_preds_train)] = 0.0
     else:        
         logger.info(f"Loading best model as {best_model}...")
         load_model(model, best_model)
-        #y_preds_train = get_logits_from_full_seqs(
-        #    x_sequences.flatten(start_dim=0, end_dim=1),
-        #    model, input_ids, attention_mask, structure_input_ids, train=False, verbose=False
-        #)
-    return #y_preds_train.cpu()
+        y_preds_train = plm_inference(
+                x_sequences,#.flatten(start_dim=0, end_dim=1),
+                wt_input_ids, 
+                attention_mask, 
+                model,
+                wt_structure_input_ids=wt_structure_input_ids,
+                train=False, 
+                verbose=False
+            )
+    return y_preds_train.cpu()
 
 
 
@@ -583,7 +763,7 @@ def inference(
         #    verbose=verbose,
         #    device=device
         #).cpu()
-        print('XXX:', np.shape(x_llm_test))
+        logger.info('XXX:', np.shape(x_llm_test))
         y_test_pred = plm_inference(
             xs=x_llm_test,
             wt_input_ids=llm_dict['prosst']['input_ids'],

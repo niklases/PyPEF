@@ -420,7 +420,7 @@ class DCALLMHybridModel:
                 model=self.llm_base_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
+                wt_structure_input_ids=self.structure_input_ids,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
@@ -428,7 +428,7 @@ class DCALLMHybridModel:
                 model=self.llm_base_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
+                wt_structure_input_ids=self.structure_input_ids,
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
@@ -472,14 +472,14 @@ class DCALLMHybridModel:
         # void function, training model in place
         if self.llm_key == 'prosst':
             self.llm_train_function(
-                self.x_llm_ttrain, 
-                self.y_ttrain,
-                self.llm_loss_function,
-                self.llm_model,
-                self.llm_optimizer, 
-                self.wt_input_ids,
-                self.llm_attention_mask,  
-                self.structure_input_ids,
+                x_sequences=self.x_llm_ttrain, 
+                scores=self.y_ttrain,
+                loss_fn=self.llm_loss_function,
+                model=self.llm_model,
+                optimizer=self.llm_optimizer, 
+                wt_input_ids=self.wt_input_ids,
+                attention_mask=self.llm_attention_mask,
+                wt_structure_input_ids=self.structure_input_ids,
                 n_epochs=50,
                 device=self.device,
                 verbose=self.verbose,
@@ -490,18 +490,18 @@ class DCALLMHybridModel:
             y_llm_lora_ttrain = self.llm_inference_function(
                 xs=self.x_llm_ttrain,
                 model=self.llm_model,
-                input_ids=self.wt_input_ids,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
+                wt_structure_input_ids=self.structure_input_ids,
                 device=self.device,
                 verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
                 model=self.llm_model,
-                input_ids=self.wt_input_ids,
+                wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                structure_input_ids=self.structure_input_ids,
+                wt_structure_input_ids=self.structure_input_ids,
                 device=self.device,
                 verbose=self.verbose
             )

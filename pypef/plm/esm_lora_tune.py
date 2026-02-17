@@ -21,16 +21,12 @@ import logging
 logger = logging.getLogger('pypef.llm.esm_lora_tune')
 
 import torch
-import numpy as np
-from scipy.stats import spearmanr
-from tqdm import tqdm
 
 from peft import LoraConfig, get_peft_model
 from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 
-from pypef.utils.helpers import get_device
-from pypef.plm.utils import corr_loss, get_batches, load_model_and_tokenizer
+from pypef.plm.utils import load_model_and_tokenizer
 
 
 def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
@@ -43,140 +39,3 @@ def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3'):
     lora_model = get_peft_model(base_model, peft_config)
     optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.01)
     return base_model, lora_model, tokenizer, optimizer
-
-
-
-def get_y_pred_scores(encoded_sequences, attention_masks, 
-                      model, device: str | None = None):
-    if device is None:
-        device = get_device()
-    model = model.to(device)
-    out = model(encoded_sequences.to(device), attention_masks.to(device), 
-                output_hidden_states=True)
-    logits = out.logits
-    token_probs = torch.log_softmax(logits, dim=-1)
-    for i_s, sequence in enumerate(encoded_sequences):
-        for i_aa, aa in enumerate(sequence):
-            # alternative: use Tensor.index_select() function
-            if i_aa == 0:
-                seq_log_probs = token_probs[i_s, i_aa, aa].reshape(1)
-            else:
-                seq_log_probs = torch.cat(
-                    (seq_log_probs, token_probs[i_s, i_aa, aa].reshape(1)), 0)
-        if i_s == 0:
-            log_probs = torch.sum(torch.Tensor(seq_log_probs)).reshape(1)
-        else:
-            log_probs = torch.cat(
-                (log_probs, torch.sum(torch.Tensor(seq_log_probs)).reshape(1)), 0)
-    return log_probs
-
-
-def esm_test(xs, attention_mask, scores, loss_fn, model, 
-             device: str | None = None, verbose: bool = True):
-    if device is None:
-        device = get_device()
-    attention_masks = torch.Tensor(np.full(
-        shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    logger.info(f'Infering ESM model for testing using {device.upper()} device...')
-    model = model.to(device)
-    xs, attention_masks, scores = (
-        torch.Tensor(xs).to(device), attention_masks.to(device), 
-        torch.Tensor(scores).to(torch.float).to(device)
-    )
-    pbar_epochs = tqdm(zip(xs, attention_masks, scores), total=len(xs), disable=not verbose)
-    for i ,(xs_b, attns_b, scores_b) in enumerate(pbar_epochs):
-        xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
-        with torch.no_grad():
-            y_preds = get_y_pred_scores(xs_b, attns_b, model, device)
-            if i == 0:
-                y_preds_total = y_preds
-                scores_total = scores_b
-            else:
-                y_preds_total = torch.cat((y_preds_total, y_preds))
-                scores_total = torch.cat((scores_total, scores_b))
-        batch_loss = loss_fn(scores_b, y_preds)
-        total_loss = loss_fn(torch.flatten(scores_total), torch.flatten(y_preds_total))
-        batch_scorr = spearmanr(scores_b.cpu(), y_preds.cpu())[0]
-        total_scorr = spearmanr(scores_total.cpu(), y_preds_total.cpu())[0]
-        pbar_epochs.set_description(
-            f"Testing: Batch {i + 1}/{len(xs)} | Batch loss: {batch_loss:.4f} (SpearCorr: "
-            f"{batch_scorr:.4f})| Total loss: {total_loss:.4f} (SpearCorr: {total_scorr:.4f})")
-    logger.info(f"Test performance: Loss: {total_loss:.4f}, SpearCorr: {total_scorr:.4f} "
-                f"({device.upper()})")
-    return torch.flatten(scores).detach().cpu(), torch.flatten(y_preds_total).detach().cpu()
-
-
-def esm_infer(xs, attention_mask, model, device: str | None = None, verbose=False):
-    if device is None:
-        device = get_device()
-    attention_masks = torch.Tensor(np.full(
-        shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    if verbose:
-        logger.info(f'Infering ESM model for predictions using {device.upper()} device...')
-    for i , (xs_b, am_b) in enumerate(tqdm(
-        zip(xs, attention_masks), total=len(xs), 
-        desc=f"ESM inference - processing sequences ({device.upper()})",
-        disable=not verbose
-    )):
-        xs_b = xs_b.to(torch.int64)
-        with torch.no_grad():
-            y_preds = get_y_pred_scores(xs_b, am_b, model, device)
-            if i == 0:
-                y_preds_total = y_preds
-            else:
-                y_preds_total = torch.cat((y_preds_total, y_preds))
-    return torch.flatten(y_preds_total)
-
-
-def esm_train(
-        xs, attention_mask, scores, loss_fn, model, optimizer, n_epochs=3, 
-        device: str | None = None, seed: int | None = None, 
-        n_batch_grad_accumulations: int = 1, verbose: bool = True,
-        progress_cb=None, abort_cb=None
-):
-    if seed is not None:
-        torch.manual_seed(seed)
-    if device is None:
-        device = get_device()
-    print(f'Training ESM model using {device.upper()} device '
-          f'(N_Train={len(torch.flatten(scores))})...')
-    model = model.to(device)
-    attention_masks = torch.Tensor(np.full(
-        shape=np.shape(xs), fill_value=attention_mask)).to(torch.int64)
-    xs, attention_masks, scores = xs.to(device), attention_masks.to(device), scores.to(device) 
-    pbar_epochs = tqdm(range(1, n_epochs + 1), disable=not verbose)
-    loss = np.nan
-    for epoch in pbar_epochs:
-        try:
-            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}. Loss: {loss.detach():>1f}')
-        except AttributeError:
-            pbar_epochs.set_description(f'Epoch: {epoch}/{n_epochs}')
-        model.train()
-        pbar_batches = tqdm(
-            zip(xs, attention_masks, scores), 
-            total=len(xs), leave=False, disable=not verbose
-        )
-        for batch, (xs_b, attns_b, scores_b) in enumerate(pbar_batches):
-            if abort_cb and abort_cb():
-                return
-            xs_b, attns_b = xs_b.to(torch.int64), attns_b.to(torch.int64)
-            y_preds_b = get_y_pred_scores(xs_b, attns_b, model, device=device)
-            loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
-            if progress_cb:
-                progress_cb(epoch - 1, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
-            loss.backward()
-            if (batch + 1) % n_batch_grad_accumulations == 0 or (batch + 1) == len(pbar_batches):
-                optimizer.step()
-                optimizer.zero_grad()
-            pbar_batches.set_description(
-                f"Epoch: {epoch}. Loss: {loss.detach():>1f}  "
-                f"[batch: {batch+1}/{len(xs)} | sequence: "
-                f"{(batch + 1) * len(xs_b):>5d}/{len(xs) * len(xs_b)}] ({device.upper()})"
-            )
-    if progress_cb:
-        progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
-    y_preds_b = y_preds_b.detach()
-    model.train(False)
-
-
-
