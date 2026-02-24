@@ -39,7 +39,7 @@ import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.plm.inference import esm_setup, llm_tokenizer, inference
+from pypef.plm.inference import esm_setup, prosst_setup, llm_tokenizer, inference
 from pypef.plm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 

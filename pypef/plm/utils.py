@@ -86,19 +86,19 @@ def is_model_cached(repo_id: str, cache_dir: str):
         )
         if os.path.isfile(ref_file):
             with open(ref_file, 'r') as fh:
-                t = fh.readlines()
+                t = fh.readlines()  # Getting hash contents
             ref = t[0].strip()
         else:
-            return False, snapshot_dir
+            return False, snapshot_dir, ref_file
         snapshot_dir = os.path.join(
             cache_dir, f'models--{repo_id.replace("/", "--")}', 'snapshots', ref
         )
         if os.path.isdir(snapshot_dir):
-            return True, snapshot_dir
+            return True, snapshot_dir, ref_file
         else:
-            return False, None
+            return False, None, ref_file
     else:
-        return False, snapshot_dir
+        return False, snapshot_dir, ref_file
 
 
 def load_model_and_tokenizer(
@@ -116,7 +116,7 @@ def load_model_and_tokenizer(
         model_loader = AutoModelForMaskedLM
     if tokenizer_loader is None:
         tokenizer_loader = AutoTokenizer
-    exists, exists_at = is_model_cached(model_name, cache_dir)
+    exists, exists_at, ref_file = is_model_cached(model_name, cache_dir)
     if exists:
         try:
             logger.info(f"Loading model and tokenizer from cache {exists_at}...")
@@ -135,8 +135,9 @@ def load_model_and_tokenizer(
                 model_name, cache_dir=cache_dir, trust_remote_code=True
             )
     else:
-        logger.info(f"Did not find model and tokenizer in cache directory, downloading model "
-                    f"and tokenizer from the internet and storing in cache {cache_dir}...")
+        logger.info(f"Did not find model {model_name} and associated tokenizer in cache directory "
+                    f"(checked for model snapshot reference file {ref_file}), downloading model and tokenizer "
+                    f"from the internet and storing in cache {cache_dir}...")
         model = model_loader.from_pretrained(
             model_name, cache_dir=cache_dir, trust_remote_code=True
         )
