@@ -32,7 +32,10 @@ def load_model(model, filename):
     model.load_state_dict(torch.load(filename, weights_only=True))
 
 
-def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
+def tokenize_sequences(sequences, tokenizer, max_length=None, verbose=True):
+    if max_length is None:
+        logger.info(f"Setting max. tokenized sequence length to {len(sequences[0]) + 2}...")
+        max_length = len(sequences[0]) + 2
     tokenized_sequences = []
     for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
         encoded_sequence, attention_mask = tokenizer(
@@ -67,6 +70,7 @@ def sequence_log_likelihood(
     Returns:
         torch.Tensor of shape [num_sequences]
     """
+    extract_emb = model_kwargs.pop("extract_emb", False)
     assert scoring_mode in ["wt-marginal", "full-sequence"]
     if device is None:
         device = get_device()
@@ -130,6 +134,8 @@ def sequence_log_likelihood(
 
 
     elif scoring_mode == "full-sequence":
+        if extract_emb:
+            embeddings = []
         for tokenized_seq in tokenized_sequences:
             if tokenized_seq.dim() == 1:
                 tokenized_seq = tokenized_seq.unsqueeze(0)
@@ -153,8 +159,15 @@ def sequence_log_likelihood(
                             input_ids=tokenized_seq,
                             attention_mask=attention_masks,
                             return_dict=True,
+                            output_hidden_states=extract_emb,
                             **model_kwargs
                         )
+
+                    token_embeddings = outputs.hidden_states[-1]  # (1, L+2, D)
+                    # Mean pool over residues (exclude CLS/EOS)
+                    seq_embedding = token_embeddings[0, 1:-1].mean(dim=0)
+                    embeddings.append(seq_embedding)
+                    continue
 
             except TypeError as e:
                 logger.info(f"Did not find model input keyword arguments (kwargs: "
@@ -180,95 +193,9 @@ def sequence_log_likelihood(
             ].sum(dtype=torch.float64)
 
             log_probs.append(seq_lp)
-
+    if extract_emb:
+        return torch.stack(embeddings)
     return torch.stack(log_probs)
-
-
-def full_sequence_log_likelihood(
-    model,
-    tokenizer,
-    sequences,
-    structures=None,              # None or list of lists or single WT list
-    device="cuda",
-    cut_special_tokens=True,
-):
-    """
-    Compute full-sequence pseudo log-likelihood for each sequence.
-
-    Unlike WT-based scoring, this runs a forward pass on each
-    actual sequence, so context reflects mutations.
-
-    Returns:
-        torch.Tensor of shape [num_sequences]
-    """
-
-    model.eval()
-    model.to(device)
-
-    log_probs_all = []
-
-    # Handle single WT structure reuse
-    if structures is not None:
-        if isinstance(structures[0], int):
-            structures = [structures] * len(sequences)
-
-        assert len(sequences) == len(structures), \
-            "Number of sequences must match number of structures"
-
-    for i, seq in enumerate(sequences):
-
-        tokenized = tokenizer(
-            [seq],
-            return_tensors="pt",
-            padding=False,
-            truncation=False
-        )
-
-        input_ids = tokenized["input_ids"].to(device)
-        attention_mask = tokenized["attention_mask"].to(device)
-
-        model_kwargs = {}
-
-        # Structure handling (ProSST)
-        if structures is not None:
-            struct = structures[i]
-            structure_input_ids = torch.tensor(
-                [1, *struct, 2],
-                dtype=torch.long
-            ).unsqueeze(0).to(device)
-
-            assert input_ids.shape == structure_input_ids.shape, \
-                f"Shape mismatch: {input_ids.shape} vs {structure_input_ids.shape}"
-
-            model_kwargs["ss_input_ids"] = structure_input_ids
-
-        with torch.no_grad():
-            outputs = model(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                return_dict=True,
-                **model_kwargs
-            )
-
-        logits = outputs.logits.squeeze(0)
-
-        if cut_special_tokens:
-            logits = logits[1:-1]
-            target_tokens = input_ids.squeeze(0)[1:-1]
-        else:
-            target_tokens = input_ids.squeeze(0)
-
-        token_log_probs = torch.log_softmax(logits, dim=-1)
-
-        seq_log_prob = token_log_probs[
-            torch.arange(target_tokens.shape[0], device=device),
-            target_tokens
-        ].sum()
-
-        log_probs_all.append(seq_log_prob.cpu())
-
-    return torch.stack(log_probs_all)
-
 
 
 def mutation_only_mutation_masked_pll(
@@ -451,6 +378,7 @@ def plm_inference(
     model,
     mask_token_id = None,
     inference_type='wt-marginal-log-likelihood',
+    extract_emb: bool = False,
     wt_structure_input_ids=None,
     batch_size: int | None = 5,
     train=False,
@@ -467,8 +395,8 @@ def plm_inference(
 
     model = model.to(device)
 
-    #if not isinstance(xs, torch.Tensor):
-    #    xs = torch.tensor(xs, dtype=torch.long)
+    kwargs = {}
+
     if not isinstance(attention_mask, torch.Tensor):
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
     scoring_mode = None
@@ -488,7 +416,13 @@ def plm_inference(
             f"Choose between 'wt-marginal-log-likelihood', "
             f"'full-sequence-log-likelihood', 'mutation-masking', "
             f"and 'full-masking', got {inference_type}.")
-
+    if extract_emb:
+        logger.info(f"Extracting sequence embeddings using the 'full-sequence-log-likelihood' "
+                    f"function. ")
+        inference_function = sequence_log_likelihood
+        scoring_mode = "full-sequence"
+        kwargs["extract_emb"] = True
+        
     scores = []
     if batch_size is None:
         xs_b = torch.atleast_2d(xs)
@@ -499,7 +433,7 @@ def plm_inference(
         xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
 
-    kwargs = {}
+
     if mask_token_id is not None:
         kwargs["mask_token_id"] = mask_token_id
 
@@ -682,118 +616,6 @@ def plm_train(
     return y_preds_train.cpu()
 
 
-
-
-
-######################### Deprecated
-
-def llm_tokenizer(llm_dict, seqs, verbose=True):
-    try:
-        np.shape(seqs)
-    except ValueError:
-        raise SystemError("Unequal input sequence length detected!")
-    if list(llm_dict.keys())[0] == 'esm1v':
-        x_llm_seqs, _attention_mask = tokenize_sequences(
-            seqs, tokenizer=llm_dict['esm1v']['llm_tokenizer'], 
-            max_length=len(seqs[0]) + 2, verbose=verbose
-        )
-    elif list(llm_dict.keys())[0] == 'prosst':
-        x_llm_seqs, _attention_mask = tokenize_sequences(
-            seqs, tokenizer=llm_dict['prosst']['llm_tokenizer'], 
-            max_length=len(seqs[0]) + 2, verbose=verbose
-        )
-    else:
-        raise SystemError(f"Unknown LLM dictionary input:\n{list(llm_dict.keys())[0]}")
-    return x_llm_seqs
-
-
-def inference(
-        sequences,
-        llm: str,
-        pdb_file: str | None = None,
-        wt_seq: str | None = None,
-        device: str| None = None,
-        model = None,
-        verbose: bool = True
-):
-    """
-    Inference of input or base model.
-    """
-    if device is None:
-        device = get_device()
-    if llm == 'esm':
-        logger.info("Zero-shot LLM inference on test set using ESM1v...")
-        llm_dict = esm_setup(wt_seq, sequences, verbose=verbose)
-        if model is None:
-            model = llm_dict['esm1v']['llm_base_model']
-        x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
-        y_test_pred = esm_infer(#llm_dict['esm1v']['llm_inference_function'](
-            xs=torch.from_numpy(get_batches(x_llm_test, batch_size=1, dtype=int)), 
-            attention_mask=llm_dict['esm1v']['llm_attention_mask'], 
-            model=model, 
-            device=device,
-            verbose=verbose
-        ).cpu()
-        y_test_pred = plm_inference(
-            xs=x_llm_test,
-            wt_input_ids=torch.tensor(llm_dict['esm1v']['input_ids'][0], dtype=torch.long),
-            attention_mask=llm_dict['esm1v']['llm_attention_mask'],
-            model=model,
-            mask_token_id=llm_dict['esm1v']['llm_tokenizer'].mask_token_id,
-            inference_type='unmasked',
-            batch_size=5,
-            train=False,
-            verbose=True
-        ).cpu()
-
-    elif llm == 'prosst':
-        logger.info("Zero-shot LLM inference on test set using ProSST...")
-        llm_dict = prosst_setup(
-            wt_seq, pdb_file, sequences=sequences, verbose=verbose
-        )
-        if model is None:
-            model = llm_dict['prosst']['llm_base_model']
-        x_llm_test = llm_tokenizer(llm_dict, sequences, verbose)
-        #y_test_pred = prosst_infer(#llm_dict['prosst']['llm_inference_function'](
-        #    xs=x_llm_test, 
-        #    model=model, 
-        #    input_ids=llm_dict['prosst']['input_ids'], 
-        #    attention_mask=llm_dict['prosst']['llm_attention_mask'], 
-        #    structure_input_ids=llm_dict['prosst']['structure_input_ids'],
-        #    verbose=verbose,
-        #    device=device
-        #).cpu()
-        logger.info('XXX:', np.shape(x_llm_test))
-        y_test_pred = plm_inference(
-            xs=x_llm_test,
-            wt_input_ids=llm_dict['prosst']['input_ids'],
-            attention_mask=llm_dict['prosst']['llm_attention_mask'],
-            model=model,
-            mask_token_id=llm_dict['prosst']['llm_tokenizer'].mask_token_id,
-            inference_type='mutation-masking',
-            wt_structure_input_ids=llm_dict['prosst']['structure_input_ids'],
-            batch_size=5,
-            train=False,
-            verbose=True   
-        ).cpu()
-    else:
-        raise RuntimeError("Unknown LLM option.")
-    return y_test_pred
-
-
-def tokenize_sequences(sequences, tokenizer, max_length, verbose=True):
-    tokenized_sequences = []
-    for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
-        encoded_sequence, attention_mask = tokenizer(
-            seq, 
-            padding='max_length', 
-            truncation=True,  # False for not uniform length distribution (truncation) 
-            max_length=max_length
-        ).values()
-        tokenized_sequences.append(encoded_sequence)
-    return tokenized_sequences, attention_mask
-
-
 def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True):
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
@@ -812,9 +634,9 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
             'llm_loss_function': corr_loss,
-            'x_llm' : torch.tensor(x_esm),
-            'llm_attention_mask':  torch.tensor(esm_attention_mask),
-            'wt_input_ids': torch.tensor(wt_tokens),
+            'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
+            'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
+            'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
             'llm_tokenizer': esm_tokenizer
         }
     }

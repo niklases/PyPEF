@@ -1,3 +1,16 @@
+
+
+"""
+Gaussian process optimization similar (but less sophisticated compared) to 
+Kermut: Composite kernel regression for protein variant effects
+Peter Mørch Groth, Mads Herbert Kerrn, Lars Olsen, Jesper Salomon, Wouter Boomsma
+2024, 38th Conference on Neural Information Processing Systems (NeurIPS 2024).
+TL;DR: Gaussian process regression model with a novel composite kernel, Kermut, achieves 
+state-of-the-art variant effect prediction while providing meaningful uncertainties.
+https://openreview.net/forum?id=jM9atrvUii
+"""
+
+
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -10,12 +23,11 @@ from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 
 from tqdm import tqdm
 
-from pypef.llm.prosst_lora_tune import (
-    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_tokenize_sequences, prosst_train
+from pypef.plm.prosst_lora_tune import (
+    get_prosst_models, get_structure_quantizied
 )
-from pypef.llm.inference import inference
-from pypef.utils.helpers import get_vram, get_device
+from pypef.plm.inference import tokenize_sequences, plm_inference
+from pypef.utils.helpers import get_device
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -76,7 +88,8 @@ def extract_prosst_embeddings(
         structures = [structures] * len(sequences)
 
     assert len(sequences) == len(structures), \
-        "Number of sequences must match number of structures"
+        (f"Number of sequences must match number of structures "
+         f"{len(sequences)} != {len(structures)}")
 
     for seq, struct in tqdm(zip(sequences, structures),
                             total=len(sequences),
@@ -84,6 +97,7 @@ def extract_prosst_embeddings(
         # Tokenize sequence
         tokenized = prosst_tokenizer(
             [seq],
+            max_length=len(seq) + 2,
             return_tensors="pt",
             padding=False,
             truncation=False
@@ -124,14 +138,20 @@ def extract_prosst_embeddings(
     return X
 
 
+def gp_fit():
+    pass
 
+
+
+def gp_fit_sklearn():
+    pass
 
 
 
 
 if __name__ == '__main__':
-    wt_seq = list(read_fasta_biopython('example_data/blat_ecolx/blat_ecolx_wt_seq.fa').values())[0]
-    pdb = 'example_data/blat_ecolx/BLAT_ECOLX.pdb'
+    wt_seq = list(read_fasta_biopython('datasets/BLAT_ECOLX/blat_ecolx_wt.fasta').values())[0]
+    pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
     device = get_device()
     print("Getting ProSST models")
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
@@ -139,14 +159,11 @@ if __name__ == '__main__':
     prosst_base_model = prosst_base_model.to(device)
     
     print(f"Getting structure tokens...")
-    input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
+    wt_input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
         pdb, prosst_tokenizer, wt_seq, verbose=True
     )
 
-
-
-
-    df = pd.read_csv('example_data/blat_ecolx/BLAT_ECOLX_Stiffler_2015.csv')
+    df = pd.read_csv('datasets/BLAT_ECOLX/BLAT_ECOLX_Stiffler_2015.csv')
     sequences = df['mutated_sequence'].to_list()
     y = df['DMS_score'].to_list()
 
@@ -156,10 +173,18 @@ if __name__ == '__main__':
     # --- Step 2: Extract ProSST embeddings ---
     print(structure_input_ids)
     print('np.shape(structure_input_ids):', np.shape(structure_input_ids))
-    wt_structure_input_ids = structure_input_ids[0, 1:-1].tolist()  # Remove CLS/EOS
-    X_train = extract_prosst_embeddings(prosst_base_model, prosst_tokenizer, s_train, wt_structure_input_ids)
+    wt_structure_input_ids = structure_input_ids  
+
+    X_emb_train = extract_prosst_embeddings(prosst_base_model, prosst_tokenizer, s_train, wt_structure_input_ids[0, 1:-1].tolist()) # Remove CLS/EOS
+
+    x_train_2, prosst_attention_mask_2 = tokenize_sequences(s_train, prosst_tokenizer)
+    assert len(prosst_attention_mask[0]) == len(prosst_attention_mask_2), f"{len(prosst_attention_mask[0])}\n  !=\n  {len(prosst_attention_mask_2)}"
+
+    X_emb_train_2 = plm_inference(x_train_2, wt_input_ids, prosst_attention_mask, prosst_base_model, 
+                                  extract_emb=True, wt_structure_input_ids=wt_structure_input_ids) #[0, 1:-1])
+
     print("Embedding extraction done")
-    print(np.shape(X_train))
+    assert np.shape(X_emb_train) == np.shape(X_emb_train_2)
 
     # --- Step 3: Fit Gaussian Process ---
     if USE_SCIKIT_LEARN:
@@ -168,12 +193,12 @@ if __name__ == '__main__':
 
         kernel = 1.0 * RBF(length_scale=1.0) + WhiteKernel(noise_level=0.1)
         gpr = GaussianProcessRegressor(kernel=kernel, n_restarts_optimizer=10, normalize_y=True)
-        gpr.fit(X_train, y_train)
+        gpr.fit(X_emb_train, y_train)
 
     else:  # GPYTORCH
         import gpytorch
 
-        X_train_t = torch.tensor(X_train, dtype=torch.float32).to(device)
+        X_train_t = torch.tensor(X_emb_train, dtype=torch.float32).to(device)
         y_train_t = torch.tensor(y_train, dtype=torch.float32).to(device)
 
         likelihood = gpytorch.likelihoods.GaussianLikelihood().to(device)
@@ -195,26 +220,31 @@ if __name__ == '__main__':
 
     # --- Step 4: Extract ProSST embeddings for test sequences ---
     print("Extracting ProSST embeddings for test sequences...")
-    X_test = extract_prosst_embeddings(
+    X_emb_test = extract_prosst_embeddings(
         model=prosst_base_model,
         prosst_tokenizer=prosst_tokenizer,
         sequences=s_test,
-        structures=wt_structure_input_ids,  # still using same WT structure
+        structures=wt_structure_input_ids[0, 1:-1].tolist(),  # still using same WT structure
         device=device
     )
-    print("Test embeddings shape:", X_test.shape)
+    print("Test embeddings shape:", X_emb_test.shape)
+
+    x_test_2, prosst_attention_mask_2 = tokenize_sequences(s_test, prosst_tokenizer)
+    X_emb_test_2 = plm_inference(x_test_2, wt_input_ids, prosst_attention_mask, prosst_base_model, 
+                                  extract_emb=True, wt_structure_input_ids=wt_structure_input_ids)  #[0, 1:-1])
 
     # --- Step 5: Predict with Gaussian Process ---
-    if USE_SCIKIT_LEARN:
-        y_mean, y_std = gpr.predict(X_test, return_std=True)
-    else:
-        X_test_t = torch.tensor(X_test, dtype=torch.float32).to(device)
-        gp_model.eval()
-        likelihood.eval()
-        with torch.no_grad(), gpytorch.settings.fast_pred_var():
-            pred = likelihood(gp_model(X_test_t))
-            y_mean = pred.mean.cpu().numpy()
-            lower, upper = pred.confidence_region()  # optional 95% CI
+    for x_t in [torch.tensor(X_emb_test).to(device), X_emb_test_2]:
+        if USE_SCIKIT_LEARN:
+            y_mean, y_std = gpr.predict(x_t, return_std=True)
+        else:
+            #X_test_t = torch.tensor(x_t, dtype=torch.float32).to(device)
+            gp_model.eval()
+            likelihood.eval()
+            with torch.no_grad(), gpytorch.settings.fast_pred_var():
+                pred = likelihood(gp_model(x_t))
+                y_mean = pred.mean.cpu().numpy()
+                lower, upper = pred.confidence_region()  # optional 95% CI
 
-    print("Predicted fitness:", y_mean)
-    print("Spearman correlation:", spearmanr(y_test, y_mean))
+        print("Predicted fitness:", y_mean)
+        print("Spearman correlation:", spearmanr(y_test, y_mean))  #  SignificanceResult(statistic=0.8617991109937434, pvalue=0.0)

@@ -39,7 +39,7 @@ import pypef.dca.gremlin_inference
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.plm.inference import esm_setup, prosst_setup, llm_tokenizer, inference
+from pypef.plm.inference import esm_setup, prosst_setup, tokenize_sequences, plm_inference
 from pypef.plm.utils import get_batches
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
@@ -90,6 +90,7 @@ class DCALLMHybridModel:
                     self.x_train_llm = llm_model_input['esm1v']['x_llm']
                     self.wt_input_ids = llm_model_input['esm1v']['wt_input_ids']
                     self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
+                    self.llm_tokenizer = llm_model_input['esm1v']['llm_tokenizer']
                 elif len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'prosst':
                     self.llm_key = 'prosst'
                     self.llm_base_model = llm_model_input['prosst']['llm_base_model']
@@ -102,6 +103,7 @@ class DCALLMHybridModel:
                     self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
                     self.wt_input_ids = llm_model_input['prosst']['wt_input_ids']
                     self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
+                    self.llm_tokenizer = llm_model_input['prosst']['llm_tokenizer']
                 else:
                     raise RuntimeError("LLM input model dictionary not supported. Currently supported "
                                       "models are 'esm1v' or 'prosst'")
@@ -661,7 +663,7 @@ class DCALLMHybridModel:
                     verbose=verbose,
                     device=self.device).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                x_llm_b = torch.from_numpy(get_batches(x_llm, batch_size=1, dtype=int))
+                #x_llm_b = torch.from_numpy(get_batches(x_llm, batch_size=1, dtype=int))
                 y_llm = self.llm_inference_function(
                     xs=x_llm, 
                     wt_input_ids=self.wt_input_ids,
@@ -1062,11 +1064,11 @@ def performance_ls_ts(
         if llm is not None:
             if llm.lower().startswith('esm'):
                 llm_dict = esm_setup(train_sequences)
-                x_llm_test = llm_tokenizer(llm_dict, test_sequences)
+                x_llm_test = tokenize_sequences(test_sequences, llm_dict['esm1v']['llm_tokenizer'])
             elif llm.lower() == 'prosst':
                 llm_dict = prosst_setup(
                     wt_seq, pdb_file, sequences=train_sequences)
-                x_llm_test = llm_tokenizer(llm_dict, test_sequences)
+                x_llm_test = tokenize_sequences(test_sequences, llm_dict['prosst']['llm_tokenizer'])
         else:
             llm_dict = None
             x_llm_test = None
@@ -1111,8 +1113,10 @@ def performance_ls_ts(
                 substitution_sep, threads, False
             )
             if model.llm_model_input is not None:
-                logger.info(f"Found hybrid model with LLM {list(model.llm_model_input.keys())[0]}...")
-                x_llm_test = llm_tokenizer(model.llm_model_input, test_sequences)
+                llm_ = list(model.llm_model_input.keys())[0]
+                tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
+                logger.info(f"Found hybrid model with LLM {llm_}...")
+                x_llm_test = tokenize_sequences(test_sequences, tokenizer)
                 y_test_pred = model.hybrid_prediction(x_test, x_llm_test)
             else:
                 y_test_pred = model.hybrid_prediction(x_test)
@@ -1145,11 +1149,23 @@ def performance_ls_ts(
         else:
             model_type = 'LLM'
             if llm == 'esm':
+                llm_dict = esm_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
                 logger.info("Zero-shot LLM inference on test set using ESM1v...")
-                y_test_pred = inference(test_sequences, llm)
+                y_test_pred = plm_inference(
+                    xs = llm_dict['esm1v']['x_llm'],
+                    wt_input_ids=llm_dict['esm1v']['wt_input_ids'],
+                    model=llm_dict['esm1v']['llm_base_model']
+                )
             elif llm == 'prosst':
+                llm_dict = prosst_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
                 logger.info("Zero-shot LLM inference on test set using ProSST...")
-                y_test_pred = inference(test_sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)
+                y_test_pred = plm_inference(
+                    xs = llm_dict['prosst']['x_llm'],
+                    wt_input_ids=llm_dict['prosst']['wt_input_ids'],
+                    model=llm_dict['prosst']['llm_base_model'],
+                    wt_structure_input_ids=llm_dict['prosst']['wt_structure_input_ids']
+                    
+                )
             else:
                 raise RuntimeError("Unknown --llm flag option.")
     else:
@@ -1264,11 +1280,13 @@ def predict_ps(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
-                        if model.llm_key is None:
+                        if model.llm_key is None:  # TODO: Check llm_key
                             ys_pred = model.hybrid_prediction(x_test)
                         else:
                             sequences = [str(seq) for seq in test_sequences]
-                            x_llm_test = llm_tokenizer(model.llm_model_input, sequences)
+                            llm_ = list(model.llm_model_input.keys())[0]
+                            tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
+                            x_llm_test = tokenize_sequences(sequences, tokenizer)
                             ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
                     for k, y in enumerate(ys_pred):
                         all_y_v_pred.append((ys_pred[k], variants[k]))
@@ -1294,11 +1312,11 @@ def predict_ps(
             if llm == 'esm':
                 model_type = 'LLM_ESM1v'
                 logger.info("Zero-shot LLM inference on test set using ESM1v...")
-                ys_pred = inference(sequences, llm)
+                ys_pred = plm_inference(sequences, llm)  # TODO
             elif llm == 'prosst':
                 model_type = 'LLM_ProSST'
                 logger.info("Zero-shot LLM inference on test set using ProSST...")
-                ys_pred = inference(sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)
+                ys_pred = plm_inference(sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)  # TODO
         else:
             if not model_type.startswith('Hybrid'):  # statistical DCA model
                 xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
@@ -1315,7 +1333,9 @@ def predict_ps(
                     ys_pred = model.hybrid_prediction(xs)
                 else:
                     sequences = [str(seq) for seq in sequences]
-                    xs_llm = llm_tokenizer(model.llm_model_input, sequences)
+                    llm_ = list(model.llm_model_input.keys())[0]
+                    tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
+                    xs_llm = tokenize_sequences(sequences, tokenizer)
                     ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
             assert len(xs) == len(variants) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
@@ -1375,7 +1395,7 @@ def predict_directed_evolution(
             if model.llm_model_input is None:
                 y_pred = model.hybrid_prediction(xs)
             else:
-                x_llm = llm_tokenizer(model.llm_model_input, 
+                x_llm = tokenize_sequences(model.llm_model_input, 
                                      variant_sequence, verbose=False)
 
                 y_pred = model.hybrid_prediction(

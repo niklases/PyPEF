@@ -16,7 +16,7 @@ import pytest
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.utils.variant_data import get_sequences_from_file, get_wt_sequence
-from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, llm_tokenizer, tokenize_sequences
+from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, tokenize_sequences
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import (
@@ -28,7 +28,7 @@ from pypef.utils.helpers import get_device
 
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
-torch.use_deterministic_algorithms(True)
+#torch.use_deterministic_algorithms(True)
 np.random.seed(42)
 
 msa_file_avgfp = os.path.abspath(os.path.join(
@@ -155,11 +155,11 @@ def test_hybrid_model_dca_llm():
     y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids).cpu()
-    #np.testing.assert_almost_equal(
-    #    spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-    #    -0.7425657069861902,  # TODO: Check: 0.5016080825897611
-    #    decimal=7
-    #)
+    np.testing.assert_almost_equal(
+        spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+        -0.7425657069861902,  # TODO: Check: 0.5016080825897611
+        decimal=7
+    )
 
     x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
     for i, setup in enumerate([esm_setup, prosst_setup]):
@@ -169,7 +169,7 @@ def test_hybrid_model_dca_llm():
         else:  # elif setup == prosst_setup:
             llm_dict = setup(
                 aneh_wt_seq, pdb_file_aneh, sequences=train_seqs_aneh)
-        x_llm_test = llm_tokenizer(llm_dict, test_seqs_aneh)
+        x_llm_test, _ = tokenize_sequences(test_seqs_aneh, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
             y_train=train_ys_aneh,
@@ -201,6 +201,7 @@ def test_hybrid_model_dca_llm():
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
         # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
+        # https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
         assert -1.0 <= spearmanr(test_ys_aneh, y_pred_test)[0] <= 1.0
         #np.testing.assert_almost_equal(spearmanr(test_ys_aneh, y_pred_test)[0], 0.8403249605842074, decimal=7)  # 0.814064805565951
@@ -333,7 +334,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True
         )
-        print(f'{x}: ESM1v (unsupervised performance unmasked): '  
+        print(f'{x}: ESM1v (unsupervised performance wt-marginal): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
 
@@ -348,9 +349,9 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True
         )
-        print(f'{x}: ESM1v (unsupervised performance unmasked): '  
+        print(f'{x}: ESM1v (unsupervised performance full-sequence): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.66666666666, decimal=6)
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6400694954450116, decimal=6)
         
         #y_esm = plm_inference(
         #    xs=x_esm,
@@ -391,7 +392,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True   
     )
-    print(f'ProSST (unsupervised performance): '  # ProSST not made/trained for MLM: 0.607137337377509
+    print(f'ProSST (unsupervised performance mutation-masking): '  # ProSST not made/trained for MLM: 0.607137337377509
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.607137337377509, decimal=6)
 
@@ -407,7 +408,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True        
     )
-    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+    print(f'ProSST (unsupervised performance wt-marginal): '  # ProteinGym: ProSST: 0.760
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7430279087189432, decimal=6)
 
@@ -423,9 +424,9 @@ def test_plm_corr_blat_ecolx():
             train=False,
             verbose=True        
     )
-    print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
+    print(f'ProSST (unsupervised performance full-sequence): '
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.66666666666666, decimal=6)
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5656131250565296, decimal=6)
 
     #y_prosst = plm_inference(
     #        xs=x_prosst,
