@@ -20,7 +20,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.plm.utils import get_batches, corr_loss
+from pypef.plm.utils import get_batches, pearson_loss
 from pypef.plm.esm_lora_tune import (
     get_esm_models, tokenize_sequences, 
     esm_train, esm_infer
@@ -234,7 +234,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             'llm_optimizer': esm_optimizer,
                             'llm_train_function': esm_train,
                             'llm_inference_function': esm_infer,
-                            'llm_loss_function': corr_loss,
+                            'llm_loss_function': pearson_loss,
                             'x_llm' : x_llm_train_esm,
                             'llm_attention_mask':  esm_attention_mask
                         }
@@ -246,7 +246,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             'llm_optimizer': prosst_optimizer,
                             'llm_train_function': prosst_train,
                             'llm_inference_function': get_logits_from_full_seqs,
-                            'llm_loss_function': corr_loss,
+                            'llm_loss_function': pearson_loss,
                             'x_llm' : x_llm_train_prosst,
                             'llm_attention_mask':  prosst_attention_mask,
                             'input_ids': input_ids,

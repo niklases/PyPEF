@@ -139,14 +139,11 @@ def extract_prosst_embeddings(
 
 
 def gp_fit():
-    pass
-
+    pass  # TODO
 
 
 def gp_fit_sklearn():
-    pass
-
-
+    pass  # TODO
 
 
 if __name__ == '__main__':

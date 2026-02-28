@@ -13,7 +13,70 @@ import logging
 logger = logging.getLogger('pypef.llm.utils')
 
 
-def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
+def hybrid_corr_mse_loss(y_true, y_pred, tau=0.1, alpha=0.5):
+    """
+    Hybrid differentiable loss combining Spearman correlation and MSE.
+    """
+    # Differentiable Spearman
+    loss_rank = correlation_loss(y_true, y_pred, method="spearman", tau=tau)
+    # MSE
+    loss_value = torch.mean((y_pred - y_true)**2)
+    # Combine
+    return alpha * loss_rank + (1 - alpha) * loss_value
+
+
+
+def correlation_loss(y_true: torch.Tensor, 
+                     y_pred: torch.Tensor, 
+                     method: str = "spearman", 
+                     tau: float = 0.1) -> torch.Tensor:
+    """
+    Differentiable correlation loss for PyTorch.
+    
+    Args:
+        y_true: Tensor of shape (..., n) or (batch, n)
+        y_pred: Tensor of same shape as y_true
+        method: "pearson" or "spearman"
+        tau: temperature for soft-rank approximation (used if method="spearman")
+        
+    Returns:
+        Scalar tensor representing the loss (to minimize)
+    """
+    if method == "spearman":
+        # Soft rank approximation
+        x = y_true
+        y = y_pred
+
+        def soft_rank(x, tau):
+            x = x.unsqueeze(-1)
+            diff = x - x.transpose(-1, -2)
+            P = torch.sigmoid(diff / tau)
+            return P.sum(dim=-1) + 0.5
+
+        rx = soft_rank(x, tau)
+        ry = soft_rank(y, tau)
+    elif method == "pearson":
+        rx = y_true
+        ry = y_pred
+    else:
+        raise ValueError(f"Unsupported method: {method}. Choose 'pearson' or 'spearman'.")
+
+    # Centering
+    rx_c = rx - rx.mean(dim=-1, keepdim=True)
+    ry_c = ry - ry.mean(dim=-1, keepdim=True)
+
+    # Normalize (like dividing by std)
+    rx_n = rx_c / (rx_c.norm(dim=-1, keepdim=True) + 1e-8)
+    ry_n = ry_c / (ry_c.norm(dim=-1, keepdim=True) + 1e-8)
+
+    # Compute correlation
+    corr = (rx_n * ry_n).sum(dim=-1)
+
+    # Return scalar loss (to minimize, so negative correlation)
+    return -corr.mean()
+
+
+def pearson_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
     res_true = y_true - torch.mean(y_true)
     res_pred = y_pred - torch.mean(y_pred)
     cov = torch.mean(res_true * res_pred)
@@ -22,6 +85,41 @@ def corr_loss(y_true: torch.Tensor, y_pred: torch.Tensor):
     sigma_true = torch.sqrt(var_true)
     sigma_pred = torch.sqrt(var_pred)
     return - cov / (sigma_true * sigma_pred)
+
+
+def spearman_loss(y_true, y_pred, tau=0.1):
+    """Maximizing Spearman correlation"""
+    return - spearman_soft(y_true, y_pred, tau=tau).mean()
+
+
+def soft_rank_approx(x, tau=1.0):
+    """
+    A simple soft rank approximation using pairwise comparisons.
+    Args:
+        x: tensor of shape (..., n)
+        tau: temperature (larger = softer, smaller = closer to true ranks)
+    Returns:
+        approx ranks same shape as x
+    """
+    diff = x.unsqueeze(-1) - x.unsqueeze(-2)
+    # pairwise sigmoid scores
+    P = torch.sigmoid(diff / tau)
+    # sum of how many values each element is less than
+    r = P.sum(dim=-1) + 0.5  # +0.5 to approximate average rank
+    return r
+
+
+def spearman_soft(x, y, tau=0.1):
+    rx = soft_rank_approx(x, tau)
+    ry = soft_rank_approx(y, tau)
+
+    rxc = rx - rx.mean(dim=-1, keepdim=True)
+    ryc = ry - ry.mean(dim=-1, keepdim=True)
+
+    rxn = rxc / (rxc.norm(dim=-1, keepdim=True) + 1e-8)
+    ryn = ryc / (ryc.norm(dim=-1, keepdim=True) + 1e-8)
+
+    return (rxn * ryn).sum(dim=-1)
 
 
 def get_batches(a, dtype, batch_size=5,
@@ -80,6 +178,7 @@ def is_model_cached(repo_id: str, cache_dir: str):
     Check if the required model and tokenizer files are cached locally.
     """
     snapshot_dir = None
+    ref_file = None
     if os.path.isdir(cache_dir):
         ref_file = os.path.join(
             cache_dir, f'models--{repo_id.replace("/", "--")}', 'refs', 'main'

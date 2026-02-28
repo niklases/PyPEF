@@ -11,7 +11,8 @@ from pypef.gaussian_process.gp_esm2_test import extract_esm_embeddings
 from pypef.gaussian_process.gp_pmpnn_test import HellingerRBFKernel, get_probs_from_mutations
 from pypef.gaussian_process.gp_prosst_test import (extract_prosst_embeddings, get_prosst_models, 
                             get_structure_quantizied, read_fasta_biopython)
-from pypef.gaussian_process.metrics import spearman_soft, spearman_corr_differentiable, spearmanr2
+from pypef.plm.utils import spearman_soft, correlation_loss, hybrid_corr_mse_loss, pearson_loss
+
 
 class CombinedKernel(gpytorch.kernels.Kernel):
     """
@@ -47,14 +48,10 @@ class MultiInputGP(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-
-
-
-
 # -----------------------------
 # Load and preprocess data
 # -----------------------------
-df = pd.read_csv('example_data/blat_ecolx/BLAT_ECOLX_Stiffler_2015.csv')
+df = pd.read_csv('datasets/BLAT_ECOLX/BLAT_ECOLX_Stiffler_2015.csv')
 
 print(df.columns)
 mutants = df['mutant'].to_list()
@@ -62,15 +59,15 @@ sequences = df['mutated_sequence'].to_list()
 y = df['DMS_score'].to_list()
 
 m_train, m_test, s_train, s_test, y_train, y_test = train_test_split(
-    mutants, sequences, y, test_size=0.33, random_state=42
+    mutants, sequences, y, train_size=100, test_size=100, random_state=42
 )
 
-X_struct = get_probs_from_mutations(m_train)        # [N, 20]
+#X_struct = get_probs_from_mutations(m_train)        # [N, 20]
 
 
 print("Getting ProSST models")
-pdb = 'example_data/blat_ecolx/BLAT_ECOLX.pdb'
-wt_seq = list(read_fasta_biopython('example_data/blat_ecolx/blat_ecolx_wt_seq.fa').values())[0]
+pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
+wt_seq = list(read_fasta_biopython('datasets/BLAT_ECOLX/blat_ecolx_wt.fasta').values())[0]
 prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
 prosst_vocab = prosst_tokenizer.get_vocab()
 prosst_base_model = prosst_base_model.to("cuda")
@@ -87,7 +84,7 @@ y_train = torch.tensor(y_train).float()
 y_test = torch.tensor(y_test).float()
 
 # Concatenate features
-X_combined = torch.cat([X_seq, X_struct], dim=-1)  # Concenation is necessary as GPkernel does not accept a tuple as input 
+X_combined = torch.cat([X_seq, X_seq], dim=-1)  # Concenation is necessary as GPkernel does not accept a tuple as input 
 d_seq = X_seq.shape[1]
 
 # -----------------------------
@@ -121,10 +118,10 @@ for i in pbar:
 # -----------------------------
 # Test
 # -----------------------------
-X_struct_test = get_probs_from_mutations(m_test)
+#X_struct_test = get_probs_from_mutations(m_test)
 #X_seq_test = torch.tensor(extract_esm_embeddings(s_test)).float()
 X_seq_test = torch.tensor(extract_prosst_embeddings(prosst_base_model, prosst_tokenizer, s_test, wt_structure_input_ids))
-X_test_combined = torch.cat([X_seq_test, X_struct_test], dim=-1)
+X_test_combined = torch.cat([X_seq_test, X_seq_test], dim=-1)
 
 model.eval()
 likelihood.eval()
@@ -143,15 +140,23 @@ from scipy.stats import spearmanr
 rho, p = spearmanr(y_train, y_pred_train)
 print("Spearman rho SciPy           TRAIN:", rho)
 print("Spearman soft                TRAIN:", spearman_soft(y_train, torch.from_numpy(y_pred_train)).item())
+print("Correlation loss Spearman    TRAIN:", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="spearman"))
+print("Correlation hybrid MSE loss Spearman    TRAIN:", hybrid_corr_mse_loss(y_train, torch.from_numpy(y_pred_train)))
+print("Correlation loss Pearson     TRAIN:", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="pearson"))
+print("Correlation loss Pearson 2   TRAIN:", pearson_loss(y_train, torch.from_numpy(y_pred_train)))
 y_train_t  = y_train.float().unsqueeze(0)       # shape (1, n)
 y_pred_train_t  = torch.from_numpy(y_pred_train).float().unsqueeze(0)    # shape (1, n)
-print("Spearman corr diff (ChatGPT) TRAIN:", spearman_corr_differentiable(y_train_t, y_pred_train_t).item())
-print("Spearman2 torchsort          TRAIN:", spearmanr2(y_train_t, y_pred_train_t).item())
+#print("Spearman corr diff (ChatGPT) TRAIN:", spearman_corr_differentiable(y_train_t, y_pred_train_t).item())
+#print("Spearman2 torchsort          TRAIN:", spearmanr2(y_train_t, y_pred_train_t).item())
 
 rho, p = spearmanr(y_test, y_pred)
 print("Spearman rho SciPy           TEST:", rho)
 print("Spearman soft                TEST:", spearman_soft(y_test, torch.from_numpy(y_pred)).item())
+print("Correlation loss Spearman    TEST:", correlation_loss(y_test, torch.from_numpy(y_pred), method="spearman"))
+print("Correlation hybrid MSE loss Spearman    TEST:", hybrid_corr_mse_loss(y_test, torch.from_numpy(y_pred)))
+print("Correlation loss Pearson     TEST:", correlation_loss(y_test, torch.from_numpy(y_pred), method="pearson"))
+print("Correlation loss Pearson 2   TEST:", pearson_loss(y_test, torch.from_numpy(y_pred)))
 y_test_t  = y_test.float().unsqueeze(0)       # shape (1, n)
 y_pred_t  = torch.from_numpy(y_pred).float().unsqueeze(0)    # shape (1, n)
-print("Spearman corr diff (ChatGPT) TEST:", spearman_corr_differentiable(y_test_t, y_pred_t).item())
-print("Spearman2 torchsort          TEST:", spearmanr2(y_test_t, y_pred_t).item())
+#print("Spearman corr diff (ChatGPT) TEST:", spearman_corr_differentiable(y_test_t, y_pred_t).item())
+#print("Spearman2 torchsort          TEST:", spearmanr2(y_test_t, y_pred_t).item())

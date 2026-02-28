@@ -15,7 +15,7 @@ from Bio import SeqIO
 
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import corr_loss, get_batches
+from pypef.plm.utils import pearson_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models
 
 
@@ -162,12 +162,12 @@ def sequence_log_likelihood(
                             output_hidden_states=extract_emb,
                             **model_kwargs
                         )
-
-                    token_embeddings = outputs.hidden_states[-1]  # (1, L+2, D)
-                    # Mean pool over residues (exclude CLS/EOS)
-                    seq_embedding = token_embeddings[0, 1:-1].mean(dim=0)
-                    embeddings.append(seq_embedding)
-                    continue
+                    if extract_emb:
+                        token_embeddings = outputs.hidden_states[-1]  # (1, L+2, D)
+                        # Mean pool over residues (exclude CLS/EOS)
+                        seq_embedding = token_embeddings[0, 1:-1].mean(dim=0)
+                        embeddings.append(seq_embedding)
+                        continue
 
             except TypeError as e:
                 logger.info(f"Did not find model input keyword arguments (kwargs: "
@@ -633,7 +633,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': corr_loss,
+            'llm_loss_function': pearson_loss,
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
@@ -680,7 +680,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,  # prosst_infer,
-            'llm_loss_function': corr_loss,
+            'llm_loss_function': pearson_loss,
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
