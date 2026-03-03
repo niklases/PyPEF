@@ -29,8 +29,8 @@ def test_main_script_pypef_version():
         pypef_main_path + os.path.sep + "pypef" + os.path.sep + "main.py", 
         "--version"
     ]
-    out, _err, exitcode = capture(command)
-    assert str(out).split('\'')[1].split('\\')[0] == __version__
+    out, err, exitcode = capture(command)
+    assert str(out).split('\'')[1].split('\\')[0] == __version__, err
     assert exitcode == 0
 
 
@@ -44,3 +44,7 @@ def test_pip_pypef_version():
     out, _err, exitcode = capture(command)
     assert str(out).split('\'')[1].split('\\')[0] == __version__
     assert exitcode == 0
+
+
+if __name__ == "__main__":
+    test_main_script_pypef_version()

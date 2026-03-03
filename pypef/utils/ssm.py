@@ -3,6 +3,8 @@
 
 
 import logging
+
+from pypef.plm.prosst_lora_tune import get_structure_quantizied
 logger = logging.getLogger('pypef.utils.ssm')
 
 import os
@@ -11,10 +13,12 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import pandas as pd
 import numpy as np
+import torch
 
 from pypef.hybrid.hybrid_model import get_model_and_type
-from pypef.plm.inference import inference
-from pypef.dca.gremlin_inference import GREMLIN
+from pypef.plm.inference import (
+    plm_inference, get_esm_models, get_prosst_models, tokenize_sequences
+)
 
 
 class SSM:
@@ -69,9 +73,21 @@ class SSM:
             for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
                 self.scoress.append(self.gremlin.get_scores(seqs) - wt_score)
         elif self.model in ["esm", "prosst"]:
-            self.scoress = inference(
-                        np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
-            ).numpy()
+            if self.model == "esm":
+                base_model, _lora_model, tokenizer, _optimizer = get_esm_models()
+                wt_structure_input_ids = None
+            else:
+                base_model, _lora_model, tokenizer, _optimizer = get_prosst_models
+                _wt_input_ids, _attention_mask, wt_structure_input_ids = get_structure_quantizied(
+                    self.pdb, tokenizer, self.wt_seq)
+            wt_tokens, _ = tokenize_sequences([self.wt_seq], tokenizer=tokenizer)
+            wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
+            xs, attn_mask = tokenize_sequences(np.array(self.variant_sequencess).flatten(), tokenizer=tokenizer)
+            #self.scoress = inference(
+            #            np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
+            #).numpy()
+            self.scoress = plm_inference(xs, wt_tokens, attn_mask, base_model, 
+                                         wt_structure_input_ids=wt_structure_input_ids)
             logger.info(f"Reshaping flat array of shape {np.shape(self.scoress)} "
                         f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
