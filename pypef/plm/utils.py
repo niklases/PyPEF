@@ -215,15 +215,15 @@ def load_model_and_tokenizer(
         model_loader = AutoModelForMaskedLM
     if tokenizer_loader is None:
         tokenizer_loader = AutoTokenizer
-    exists, exists_at, ref_file = is_model_cached(model_name, cache_dir)
+    exists, snapshot_dir, ref_file = is_model_cached(model_name, cache_dir)
     if exists:
         try:
-            logger.info(f"Loading model and tokenizer from cache {exists_at}...")
+            logger.info(f"Loading model and tokenizer from cache {snapshot_dir}...")
             model = model_loader.from_pretrained(
-                exists_at, trust_remote_code=True
+                snapshot_dir, trust_remote_code=True
             )
             tokenizer = tokenizer_loader.from_pretrained(
-                exists_at, trust_remote_code=True
+                snapshot_dir, trust_remote_code=True
             )
         except OSError as e:
             logger.info(f"Faced error \"{e}\": Trying to load with regular cache load path...")

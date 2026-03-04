@@ -115,6 +115,7 @@ def test_hybrid_model_dca_llm():
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
         model='facebook/esm1v_t33_650M_UR90S_3')
+    esm_base_model.eval()
     esm_base_model = esm_base_model.to(get_device())
     x_esm, esm_attention_mask = tokenize_sequences(
         train_seqs_aneh, esm_tokenizer, max_length=len(aneh_wt_seq) + 2)
@@ -138,6 +139,7 @@ def test_hybrid_model_dca_llm():
     #    pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
     #)
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_base_model.eval()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(get_device())
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
@@ -150,9 +152,11 @@ def test_hybrid_model_dca_llm():
     y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids).cpu()
+
+    # TODO: Check reproducibility on different devices and machines
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        [0.5016080825897611, -0.7425657069861902][0],  # TODO: Check
+        [0.5016080825897611, -0.7425657069861902][1], 
         decimal=7
     )
 

@@ -1,3 +1,16 @@
+
+"""
+Gaussian process optimization similar (but less sophisticated compared) to 
+Kermut: Composite kernel regression for protein variant effects
+Peter Mørch Groth, Mads Herbert Kerrn, Lars Olsen, Jesper Salomon, Wouter Boomsma
+2024, 38th Conference on Neural Information Processing Systems (NeurIPS 2024).
+TL;DR: Gaussian process regression model with a novel composite kernel, Kermut, achieves 
+state-of-the-art variant effect prediction while providing meaningful uncertainties.
+Literature: https://openreview.net/forum?id=jM9atrvUii.
+Used under MIT license; code available at https://github.com/petergroth/kermut.
+"""
+
+
 import torch
 import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor

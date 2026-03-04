@@ -16,6 +16,8 @@ logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 import warnings
 import torch
 import numpy as np
+import random
+from transformers import set_seed
 from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
 from Bio import BiopythonParserWarning
@@ -126,7 +128,12 @@ def prosst_infer(
     )
 
 
-def get_prosst_models():
+def get_prosst_models(seed: int = 42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    set_seed(seed)
     prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048")
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)

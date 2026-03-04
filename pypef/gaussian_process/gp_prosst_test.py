@@ -1,5 +1,4 @@
 
-
 """
 Gaussian process optimization similar (but less sophisticated compared) to 
 Kermut: Composite kernel regression for protein variant effects
@@ -7,7 +6,8 @@ Peter Mørch Groth, Mads Herbert Kerrn, Lars Olsen, Jesper Salomon, Wouter Booms
 2024, 38th Conference on Neural Information Processing Systems (NeurIPS 2024).
 TL;DR: Gaussian process regression model with a novel composite kernel, Kermut, achieves 
 state-of-the-art variant effect prediction while providing meaningful uncertainties.
-https://openreview.net/forum?id=jM9atrvUii
+Literature: https://openreview.net/forum?id=jM9atrvUii.
+Used under MIT license; code available at https://github.com/petergroth/kermut.
 """
 
 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
     assert len(prosst_attention_mask[0]) == len(prosst_attention_mask_2), f"{len(prosst_attention_mask[0])}\n  !=\n  {len(prosst_attention_mask_2)}"
 
     X_emb_train_2 = plm_inference(x_train_2, wt_input_ids, prosst_attention_mask, prosst_base_model, 
-                                  extract_emb=True, wt_structure_input_ids=wt_structure_input_ids) #[0, 1:-1])
+                                  extract_emb=True, wt_structure_input_ids=wt_structure_input_ids)
 
     print("Embedding extraction done")
     assert np.shape(X_emb_train) == np.shape(X_emb_train_2)
@@ -244,4 +244,4 @@ if __name__ == '__main__':
                 lower, upper = pred.confidence_region()  # optional 95% CI
 
         print("Predicted fitness:", y_mean)
-        print("Spearman correlation:", spearmanr(y_test, y_mean))  #  SignificanceResult(statistic=0.8617991109937434, pvalue=0.0)
+        print("Spearman correlation:", spearmanr(y_test, y_mean))  #  about 0.87
