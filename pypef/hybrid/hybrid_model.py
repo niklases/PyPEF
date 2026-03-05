@@ -67,7 +67,6 @@ class DCALLMHybridModel:
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             batch_size: int | None = None,
-            llm_train: bool = True,
             device: str | None = None,
             seed: int | None = None,
             verbose: bool = True,
@@ -133,7 +132,6 @@ class DCALLMHybridModel:
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
-        self.llm_train = llm_train
         self.verbose = verbose
         (
             self.ridge_opt, 
@@ -411,11 +409,6 @@ class DCALLMHybridModel:
 
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
-        x_llm_ttrain_b, scores_ttrain_b = (
-            torch.from_numpy(get_batches(self.x_llm_ttrain, batch_size=self.batch_size, dtype=int)), 
-            torch.from_numpy(get_batches(self.y_ttrain, batch_size=self.batch_size, dtype=float))
-        )
-
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
@@ -434,18 +427,6 @@ class DCALLMHybridModel:
                 device=self.device
             )
         elif self.llm_key == 'esm1v':
-            x_llm_ttest_b = torch.from_numpy(get_batches(self.x_llm_ttest, batch_size=1, dtype=int))
-                #xs,
-                #wt_input_ids,
-                #attention_mask,
-                #model,
-                #mask_token_id = None,
-                #inference_type='unmasked',
-                #wt_structure_input_ids=None,
-                #batch_size=5,
-                #train=False,
-                #device=None,
-                #verbose=False,
             y_llm_ttest = self.llm_inference_function(
                 xs=self.x_llm_ttest,
                 wt_input_ids=self.wt_input_ids,
@@ -508,14 +489,6 @@ class DCALLMHybridModel:
                 verbose=self.verbose
             )
         elif self.llm_key == 'esm1v':
-            # xs, attns, scores, loss_fn, model, optimizer
-            # x_sequences, 
-            # scores, 
-            # loss_fn, 
-            # model, 
-            # optimizer,
-            # input_ids, 
-            # attention_mask, 
             self.llm_train_function( 
                 x_sequences=self.x_llm_ttrain, 
                 scores=self.y_ttrain,

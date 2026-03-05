@@ -12,7 +12,7 @@
 import logging
 logger = logging.getLogger('pypef.llm.prosst_lora_tune')
 
-
+import os
 import warnings
 import torch
 import numpy as np
@@ -134,6 +134,11 @@ def get_prosst_models(seed: int = 42):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     set_seed(seed)
+    # The crucial "Secret Sauce" for cross-machine consistency:
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
+    torch.use_deterministic_algorithms(True)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
     prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048")
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
@@ -141,12 +146,14 @@ def get_prosst_models(seed: int = 42):
     return prosst_base_model, prosst_lora_model, tokenizer, optimizer
 
 
-def get_structure_quantizied(pdb_file, tokenizer, wt_seq, verbose: bool = True):
-    structure_sequence = PdbQuantizer(verbose=verbose)(pdb_file=pdb_file)
+def get_structure_quantizied(pdb_file, tokenizer, wt_seq, device: None | str = None, verbose: bool = True):
+    structure_sequence = PdbQuantizer(device=device, verbose=verbose)(pdb_file=pdb_file)
     structure_sequence_offset = [i + 3 for i in structure_sequence]
     tokenized_res = tokenizer([wt_seq], return_tensors='pt')
     input_ids = tokenized_res['input_ids']
     attention_mask = tokenized_res['attention_mask']
-    structure_input_ids = torch.tensor([1, *structure_sequence_offset, 2],
-                                     dtype=torch.long).unsqueeze(0)
+    structure_input_ids = torch.tensor(
+        [1, *structure_sequence_offset, 2],
+        dtype=torch.long
+    ).unsqueeze(0)
     return input_ids, attention_mask, structure_input_ids

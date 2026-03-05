@@ -15,7 +15,7 @@ from Bio import SeqIO
 
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import pearson_loss, get_batches
+from pypef.plm.utils import pearson_loss, spearman_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models
 
 
@@ -428,7 +428,7 @@ def plm_inference(
         xs_b = torch.atleast_2d(xs)
     else:
         logger.info(f"Splitting tokenized sequences into batches...")
-        xs_b = get_batches(xs, dtype=int, batch_size=batch_size,  # torch.from_numpy
+        xs_b = get_batches(xs, dtype=int, batch_size=batch_size,
                            keep_remaining=keep_remaining, verbose=True)
         xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
@@ -531,6 +531,7 @@ def plm_train(
                 train=True, 
                 wt_structure_input_ids=wt_structure_input_ids, 
                 batch_size=None, 
+                device=device,
                 verbose=False
             )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
@@ -633,7 +634,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': pearson_loss,
+            'llm_loss_function': spearman_loss,  # pearson_loss,
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
@@ -680,7 +681,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,  # prosst_infer,
-            'llm_loss_function': pearson_loss,
+            'llm_loss_function': spearman_loss,  # pearson_loss,
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,

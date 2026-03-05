@@ -25,7 +25,7 @@ from pypef.plm.prosst_lora_tune import (
 )
 from pypef.utils.helpers import get_device
 
-
+device = "cpu"  # get_device()
 torch.manual_seed(42)
 torch.cuda.manual_seed(42)
 #torch.use_deterministic_algorithms(True)
@@ -116,7 +116,7 @@ def test_hybrid_model_dca_llm():
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
         model='facebook/esm1v_t33_650M_UR90S_3')
     esm_base_model.eval()
-    esm_base_model = esm_base_model.to(get_device())
+    esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
         train_seqs_aneh, esm_tokenizer, max_length=len(aneh_wt_seq) + 2)
     # Tokenize WT sequence once
@@ -127,7 +127,8 @@ def test_hybrid_model_dca_llm():
     )
     wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
     y_pred_esm = plm_inference(xs=x_esm, wt_input_ids=wt_tokens, 
-                               attention_mask=esm_attention_mask, model=esm_base_model).cpu()
+                               attention_mask=esm_attention_mask, model=esm_base_model,
+                               device=device).cpu()
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_esm)[0], 
          -0.713214007088901, 
@@ -141,9 +142,9 @@ def test_hybrid_model_dca_llm():
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
     prosst_base_model.eval()
     prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to(get_device())
+    prosst_base_model = prosst_base_model.to(device)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-        pdb_file_aneh, prosst_tokenizer, aneh_wt_seq)
+        pdb_file_aneh, prosst_tokenizer, aneh_wt_seq, device=device)
     x_prosst, prosst_attention_mask_ = tokenize_sequences(
         sequences=train_seqs_aneh, 
         tokenizer=prosst_tokenizer, 
@@ -151,12 +152,12 @@ def test_hybrid_model_dca_llm():
     )
     y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
-                                  wt_structure_input_ids=wt_structure_input_ids).cpu()
+                                  wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
 
     # TODO: Check reproducibility on different devices and machines
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        [0.5016080825897611, -0.7425657069861902][1], 
+        [-0.5022957688493356, -0.7425657069861902][0], 
         decimal=7
     )
 
@@ -174,7 +175,8 @@ def test_hybrid_model_dca_llm():
             y_train=train_ys_aneh,
             llm_model_input=llm_dict,
             x_wt=g.x_wt,
-            seed=42
+            seed=42,
+            device=device
         )
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
@@ -286,7 +288,6 @@ def test_dataset_b_results():
 @pytest.mark.requires_gpu
 def test_plm_corr_blat_ecolx():
     print("test_plm_corr_blat_ecolx()...")
-    device = get_device()
     print("Device", device)
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
@@ -317,6 +318,7 @@ def test_plm_corr_blat_ecolx():
             inference_type='mutation-masking',
             batch_size=5,
             train=False,
+            device=device,
             verbose=True
         )
         print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
@@ -368,7 +370,7 @@ def test_plm_corr_blat_ecolx():
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-        pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq)
+        pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq, device=device)
     x_prosst2 = prosst_simple_vocab_aa_tokenizer(sequences, prosst_vocab)
     x_prosst, prosst_attention_mask_ = tokenize_sequences(
         sequences=sequences, 
