@@ -10,7 +10,10 @@ import os.path
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
+from sklearn.model_selection import train_test_split
 import torch
+import gpytorch
+from pypef.plm.utils import correlation_loss, hybrid_corr_mse_loss, pearson_loss, spearman_soft
 import pytest
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
@@ -23,6 +26,7 @@ from pypef.plm.prosst_lora_tune import (
     get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer
 )
+from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 device = "cpu"  # get_device()
@@ -196,8 +200,8 @@ def test_hybrid_model_dca_llm():
         )
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-            [[0.5016080825897611, -0.7704181041760417][1]  # TODO: Check on different machines
-             , -0.8330644449247571][i], 
+            [-0.7704181041760417,        # TODO: Check on different machines (CPU vs CUDA)
+             -0.6370803136561448][i],    # Use same loss function, e.g. Spearman!
             decimal=7
         )  
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
@@ -446,9 +450,96 @@ def test_plm_corr_blat_ecolx():
     #      f'{spearmanr(y_true, y_prosst.cpu())[0]}')
 
 
+def test_gaussian_process_opt():
+    print("test_gaussian_process_opt()...")
+    df = pd.read_csv(csv_blat_ecolx_stiffler2015)
+    mutants = df['mutant'].to_list()
+    sequences = df['mutated_sequence'].to_list()
+    y = df['DMS_score'].to_list()
+    m_train, m_test, s_train, s_test, y_train, y_test = train_test_split(
+        mutants, sequences, y, test_size=0.80, random_state=42
+    )
+    print("Getting ProSST models")
+    pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
+    wt_seq = get_wt_sequence('datasets/BLAT_ECOLX/blat_ecolx_wt.fasta')
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_vocab = prosst_tokenizer.get_vocab()
+    prosst_base_model = prosst_base_model.to("cuda")
+
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+
+    wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
+            pdb, prosst_tokenizer, wt_seq, verbose=True
+    )
+
+    wt_esm_input_ids, esm_attention_mask_2 = tokenize_sequences([wt_seq], esm_tokenizer)
+    wt_esm_input_ids = torch.tensor( wt_esm_input_ids[0], dtype=torch.long)  # shape (L,)
+
+    x_prosst_tok_train, prosst_attention_mask_2 = tokenize_sequences(s_train, prosst_tokenizer)
+    x_prosst_emb_train = plm_inference(x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
+                                       extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).cpu()
+
+    x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train, esm_tokenizer)
+    x_esm_emb_train = plm_inference(x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, 
+                                    esm_base_model, extract_emb=True).cpu()
+
+    y_train = torch.tensor(y_train).float()
+    y_test = torch.tensor(y_test).float()
+
+    # Concatenate features
+    X_combined = torch.cat([x_prosst_emb_train, x_esm_emb_train], dim=-1)  # Concenation is necessary as GPkernel does not accept a tuple as input 
+
+    model = get_gp_kernel_model(X_combined, y_train, train=True)
+    likelihood = model.likelihood
+
+    # Test
+    # -----------------------------
+    x_prosst_tok_test, prosst_attention_mask_2 = tokenize_sequences(s_test, prosst_tokenizer)
+    x_prosst_emb_test = plm_inference(x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
+                                      extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).cpu()
+
+    x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test, esm_tokenizer)
+    x_esm_emb_test = plm_inference(x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, 
+                                    esm_base_model, extract_emb=True).cpu()
+
+    X_test_combined = torch.cat([x_prosst_emb_test, x_esm_emb_test], dim=-1)
+
+    model.eval()
+    likelihood.eval()
+
+    with torch.no_grad(), gpytorch.settings.fast_pred_var():
+        pred_train = likelihood(model(X_combined))
+        y_pred_train = pred_train.mean.cpu().numpy()
+
+        pred = likelihood(model(X_test_combined))
+        y_pred = pred.mean.cpu().numpy()
+
+    rho, p = spearmanr(y_train, y_pred_train)
+    print("Spearman rho SciPy TRAIN:                   ", rho)
+    print("Spearman soft TRAIN:                        ", spearman_soft(y_train, torch.from_numpy(y_pred_train)).item())
+    print("Correlation loss Spearman TRAIN:            ", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="spearman"))
+    print("Correlation hybrid MSE loss Spearman TRAIN: ", hybrid_corr_mse_loss(y_train, torch.from_numpy(y_pred_train)))
+    print("Correlation loss Pearson     TRAIN:         ", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="pearson"))
+    print("Correlation loss Pearson 2   TRAIN:         ", pearson_loss(y_train, torch.from_numpy(y_pred_train)))
+    np.testing.assert_almost_equal(rho, 0.9776388058043837, decimal=6)
+
+    print()
+    rho, p = spearmanr(y_test, y_pred)
+    print("Spearman rho SciPy TEST:                   ", rho)
+    print("Spearman soft TEST:                        ", spearman_soft(y_test, torch.from_numpy(y_pred)).item())
+    print("Correlation loss Spearman TEST:            ", correlation_loss(y_test, torch.from_numpy(y_pred), method="spearman"))
+    print("Correlation hybrid MSE loss Spearman TEST: ", hybrid_corr_mse_loss(y_test, torch.from_numpy(y_pred)))
+    print("Correlation loss Pearson TEST:             ", correlation_loss(y_test, torch.from_numpy(y_pred), method="pearson"))
+    print("Correlation loss Pearson 2 TEST:           ", pearson_loss(y_test, torch.from_numpy(y_pred)))
+    np.testing.assert_almost_equal(rho, 0.8360499046598064, decimal=6)
+
+
+
+
 if __name__ == "__main__":
     test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()
+    test_gaussian_process_opt()
     

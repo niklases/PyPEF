@@ -544,9 +544,9 @@ def plm_train(
                 optimizer.zero_grad()
             pbar_batches.set_description(
                 f"Epoch: {epoch}. Loss: {loss.detach():>1f} "
-                f"[batch: {batch + 1}/{len(seqs_b[0])} | "
-                f"sequence: {(batch + 1) * len(seqs_b):>5d}/{len(x_sequences) * len(seqs_b)}] "
-                f"({device.upper()})"
+                f"[batch: {batch + 1}/{len(x_sequences_batched)} | "
+                f"sequence: {(batch + 1) * len(x_sequences_batched[0]):>5d}/"
+                f"{len(x_sequences)}] ({device.upper()})"
             )
         epoch_spearman_2 = spearmanr(scores_batched.cpu().numpy().flatten(),
                                      np.array(y_preds_detached).flatten())[0]
