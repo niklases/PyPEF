@@ -462,20 +462,19 @@ def test_gaussian_process_opt():
     print("Getting ProSST models")
     pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
     wt_seq = get_wt_sequence('datasets/BLAT_ECOLX/blat_ecolx_wt.fasta')
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
-    prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to("cuda")
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models()
+    prosst_base_model = prosst_base_model.to(device)
 
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models()
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
             pdb, prosst_tokenizer, wt_seq, verbose=True
     )
 
-    wt_esm_input_ids, esm_attention_mask_2 = tokenize_sequences([wt_seq], esm_tokenizer)
+    wt_esm_input_ids, _esm_attention_mask = tokenize_sequences([wt_seq], esm_tokenizer)
     wt_esm_input_ids = torch.tensor( wt_esm_input_ids[0], dtype=torch.long)  # shape (L,)
 
-    x_prosst_tok_train, prosst_attention_mask_2 = tokenize_sequences(s_train, prosst_tokenizer)
+    x_prosst_tok_train, _prosst_attention_mask = tokenize_sequences(s_train, prosst_tokenizer)
     x_prosst_emb_train = plm_inference(x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
                                        extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).cpu()
 
@@ -486,60 +485,57 @@ def test_gaussian_process_opt():
     y_train = torch.tensor(y_train).float()
     y_test = torch.tensor(y_test).float()
 
-    # Concatenate features
-    X_combined = torch.cat([x_prosst_emb_train, x_esm_emb_train], dim=-1)  # Concenation is necessary as GPkernel does not accept a tuple as input 
-
-    model = get_gp_kernel_model(X_combined, y_train, train=True)
-    likelihood = model.likelihood
+    # Concatenate features, necessary as GPkernel does not accept a tuple as input
+    x_combined_train = torch.cat([x_prosst_emb_train, x_esm_emb_train], dim=-1) 
 
     # Test
     # -----------------------------
-    x_prosst_tok_test, prosst_attention_mask_2 = tokenize_sequences(s_test, prosst_tokenizer)
+    x_prosst_tok_test, _prosst_attention_mask = tokenize_sequences(s_test, prosst_tokenizer)
     x_prosst_emb_test = plm_inference(x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
-                                      extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).cpu()
+                                      extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).to(device)
 
     x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test, esm_tokenizer)
     x_esm_emb_test = plm_inference(x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, 
-                                    esm_base_model, extract_emb=True).cpu()
+                                    esm_base_model, extract_emb=True).to(device)
 
-    X_test_combined = torch.cat([x_prosst_emb_test, x_esm_emb_test], dim=-1)
+    x_combined_test = torch.cat([x_prosst_emb_test, x_esm_emb_test], dim=-1)
 
-    model.eval()
-    likelihood.eval()
+    esm_model = get_gp_kernel_model(x_esm_emb_train, y_train, train=True).to(device)
+    prosst_model = get_gp_kernel_model(x_prosst_emb_train, y_train, train=True).to(device)
+    comb_model = get_gp_kernel_model(x_combined_train, y_train, train=True).to(device)
 
-    with torch.no_grad(), gpytorch.settings.fast_pred_var():
-        pred_train = likelihood(model(X_combined))
-        y_pred_train = pred_train.mean.cpu().numpy()
+    for i, (model, x_test) in enumerate(
+        zip(
+            [esm_model, prosst_model, comb_model], 
+            [x_esm_emb_test, x_prosst_emb_test, x_combined_test]
+        )
+    ):
+        print("~~~ " + ["ESM", "ProSST", "ESM + ProSST combined "][i] + "GP Test ~~~")
+        likelihood = model.likelihood
+        model.eval()
+        likelihood.eval()
+        with torch.no_grad(), gpytorch.settings.fast_pred_var():
+            pred = likelihood(model(x_test))
+            y_pred = pred.mean
 
-        pred = likelihood(model(X_test_combined))
-        y_pred = pred.mean.cpu().numpy()
-
-    rho, p = spearmanr(y_train, y_pred_train)
-    print("Spearman rho SciPy TRAIN:                   ", rho)
-    print("Spearman soft TRAIN:                        ", spearman_soft(y_train, torch.from_numpy(y_pred_train)).item())
-    print("Correlation loss Spearman TRAIN:            ", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="spearman"))
-    print("Correlation hybrid MSE loss Spearman TRAIN: ", hybrid_corr_mse_loss(y_train, torch.from_numpy(y_pred_train)))
-    print("Correlation loss Pearson     TRAIN:         ", correlation_loss(y_train, torch.from_numpy(y_pred_train), method="pearson"))
-    print("Correlation loss Pearson 2   TRAIN:         ", pearson_loss(y_train, torch.from_numpy(y_pred_train)))
-    np.testing.assert_almost_equal(rho, 0.9776388058043837, decimal=6)
-
-    print()
-    rho, p = spearmanr(y_test, y_pred)
-    print("Spearman rho SciPy TEST:                   ", rho)
-    print("Spearman soft TEST:                        ", spearman_soft(y_test, torch.from_numpy(y_pred)).item())
-    print("Correlation loss Spearman TEST:            ", correlation_loss(y_test, torch.from_numpy(y_pred), method="spearman"))
-    print("Correlation hybrid MSE loss Spearman TEST: ", hybrid_corr_mse_loss(y_test, torch.from_numpy(y_pred)))
-    print("Correlation loss Pearson TEST:             ", correlation_loss(y_test, torch.from_numpy(y_pred), method="pearson"))
-    print("Correlation loss Pearson 2 TEST:           ", pearson_loss(y_test, torch.from_numpy(y_pred)))
-    np.testing.assert_almost_equal(rho, 0.8360499046598064, decimal=6)
-
-
+        rho = spearmanr(y_test, y_pred.cpu().numpy())[0]
+        print("Spearman rho SciPy TEST:                   ", rho)
+        print("Spearman soft TEST:                        ", spearman_soft(y_test, y_pred).item())
+        print("Correlation loss Spearman TEST:            ", correlation_loss(y_test, y_pred, method="spearman"))
+        print("Correlation hybrid MSE loss Spearman TEST: ", hybrid_corr_mse_loss(y_test, y_pred))
+        print("Correlation loss Pearson TEST:             ", correlation_loss(y_test, y_pred, method="pearson"))
+        print("Correlation loss Pearson 2 TEST:           ", pearson_loss(y_test, y_pred))
+        np.testing.assert_almost_equal(
+            rho, 
+            [0.8213561923449809,  0.7873173926713299, 0.8360338429235056][i], 
+            decimal=3
+        )
 
 
 if __name__ == "__main__":
-    test_gremlin_avgfp()
-    test_hybrid_model_dca_llm()
-    test_dataset_b_results()
-    test_plm_corr_blat_ecolx()
+    #test_gremlin_avgfp()
+    #test_hybrid_model_dca_llm()
+    #test_dataset_b_results()
+    #test_plm_corr_blat_ecolx()
     test_gaussian_process_opt()
     

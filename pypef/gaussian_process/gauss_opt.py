@@ -15,18 +15,9 @@ Used under MIT license; code available at https://github.com/petergroth/kermut.
 """
 
 
-from sklearn.model_selection import train_test_split
 import torch
 import gpytorch
-import pandas as pd
 from tqdm import tqdm
-
-from pypef.plm.esm_lora_tune import get_esm_models
-from pypef.plm.inference import plm_inference, tokenize_sequences
-from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
-from pypef.plm.utils import spearman_soft, correlation_loss, hybrid_corr_mse_loss, pearson_loss
-from pypef.utils.variant_data import get_wt_sequence
-
 
 
 class ExactGPModel(gpytorch.models.ExactGP):
