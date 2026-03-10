@@ -19,6 +19,11 @@ import torch
 import gpytorch
 from tqdm import tqdm
 
+from pypef.utils.helpers import get_device
+
+import logging
+logger = logging.getLogger('pypef.gaussian_process.gauss_opt')
+
 
 class ExactGPModel(gpytorch.models.ExactGP):
     def __init__(self, train_x, train_y, likelihood):
@@ -82,25 +87,20 @@ class HellingerRBFKernel(gpytorch.kernels.Kernel):
 
 
 class CombinedKernel(gpytorch.kernels.Kernel):
-    """
-    Combine two kernels: K_seq + K_struct
-    Input X is a single concatenated tensor: [seq | struct]
-    """
-
-    def __init__(self, kernel_seq, kernel_struct, d_seq):
+    def __init__(self, kernel_seq, kernel_struct, d_seq=None):
         super().__init__()
         self.kernel_seq = kernel_seq
         self.kernel_struct = kernel_struct
-        self.d_seq = d_seq  # number of sequence dimensions
+        self.d_seq = d_seq
 
     def forward(self, X1, X2, **params):
-        X1_seq, X1_struct = X1[:, :self.d_seq], X1[:, self.d_seq:]
-        X2_seq, X2_struct = X2[:, :self.d_seq], X2[:, self.d_seq:]
+        if self.d_seq is None:
+            raise ValueError("d_seq must be specified for CombinedKernel")
 
-        K_seq = self.kernel_seq(X1_seq, X2_seq)
-        K_struct = self.kernel_struct(X1_struct, X2_struct)
+        X1_seq, X1_struct = X1[..., :self.d_seq], X1[..., self.d_seq:]
+        X2_seq, X2_struct = X2[..., :self.d_seq], X2[..., self.d_seq:]
 
-        return K_seq + K_struct  # could also use product or weighted sum
+        return self.kernel_seq(X1_seq, X2_seq) + self.kernel_struct(X1_struct, X2_struct)
 
 
 class MultiInputGP(gpytorch.models.ExactGP):
@@ -116,15 +116,34 @@ class MultiInputGP(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-def get_gp_kernel_model(X_combined, y_train, train: bool = False):
-    # Define kernels and model
-    d_seq = X_combined.shape[1]  # TODO: Check
-    seq_kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-    struct_kernel = HellingerRBFKernel()
-    combined_kernel = CombinedKernel(seq_kernel, struct_kernel, d_seq=d_seq)
+def get_gp_kernel_model(x_train, y_train, x_train_2=None, device=None, train: bool = False):
+    # Define kernels and model: x_train is by default seq kernel and 
+    # x_train_2 struct kernel for now
+    if device is None:
+        device = get_device()
 
+    seq_kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
+    if x_train_2 is None:
+        print(f"Using only sequence embeddings and kernel ({x_train.shape})")
+        kernel = seq_kernel
+    else:
+        # [ sequence_features | structure_features ]
+        #   <---- d_seq -----> 
+        print(
+            f"Taking first sequence embeddings for sequence kernel and concatenting "
+            f"second sequence embeddings for structure kernel processing ({x_train.shape}"
+            f" + {x_train_2.shape} -> {torch.cat([x_train, x_train_2], dim=-1).shape}; "
+            f"d_seq for split: {x_train.shape[1]})"
+        )
+        d_seq = x_train.shape[1]
+        x_train = torch.cat([x_train, x_train_2], dim=-1)
+        
+        struct_kernel = HellingerRBFKernel()
+        kernel = CombinedKernel(seq_kernel, struct_kernel, d_seq=d_seq)
+
+    kernel = kernel.to(device)
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
-    model = MultiInputGP(X_combined, y_train, likelihood, combined_kernel)
+    model = MultiInputGP(x_train, y_train, likelihood, kernel).to(device)
 
     # Train
     # -----------------------------
@@ -136,9 +155,10 @@ def get_gp_kernel_model(X_combined, y_train, train: bool = False):
         pbar = tqdm(range(100), desc='Training')
         for i in pbar:
             optimizer.zero_grad()
-            output = model(X_combined)
+            output = model(x_train)
             loss = -mll(output, y_train)
             loss.backward()
             optimizer.step()
-            pbar.set_description(f"Training (step {i+1}/{100}, loss: {loss:.4f})")
+            pbar.set_description(f"Training: step {i+1}/{100}, loss: {loss:.4f} "
+                                 f"({device.upper()})")
     return model

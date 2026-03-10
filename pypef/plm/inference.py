@@ -431,7 +431,12 @@ def plm_inference(
         xs_b = get_batches(xs, dtype=int, batch_size=batch_size,
                            keep_remaining=keep_remaining, verbose=True)
         xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
-    desc = f"Inference: {inference_type} batch (size={batch_size}) processing ({device.upper()})'"
+    if extract_emb:
+        desc = (f"Inference: getting embeddings batch "
+                f"(size={batch_size}) processing ({device.upper()})")
+    else:
+        desc = (f"Inference: {inference_type} batch (size={batch_size}) "
+                f"processing ({device.upper()})'")
 
 
     if mask_token_id is not None:

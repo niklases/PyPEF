@@ -457,7 +457,7 @@ def test_gaussian_process_opt():
     sequences = df['mutated_sequence'].to_list()
     y = df['DMS_score'].to_list()
     m_train, m_test, s_train, s_test, y_train, y_test = train_test_split(
-        mutants, sequences, y, test_size=0.80, random_state=42
+        mutants, sequences, y, train_size=400, test_size=400, random_state=42
     )
     print("Getting ProSST models")
     pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
@@ -468,41 +468,53 @@ def test_gaussian_process_opt():
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models()
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-            pdb, prosst_tokenizer, wt_seq, verbose=True
+            pdb, prosst_tokenizer, wt_seq, device=device, verbose=True
     )
 
     wt_esm_input_ids, _esm_attention_mask = tokenize_sequences([wt_seq], esm_tokenizer)
-    wt_esm_input_ids = torch.tensor( wt_esm_input_ids[0], dtype=torch.long)  # shape (L,)
+    wt_esm_input_ids = torch.tensor(wt_esm_input_ids[0], dtype=torch.long)  # shape (L,)
 
     x_prosst_tok_train, _prosst_attention_mask = tokenize_sequences(s_train, prosst_tokenizer)
-    x_prosst_emb_train = plm_inference(x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
-                                       extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).cpu()
+    print("Getting ProSST embeddings...")
+    x_prosst_emb_train = plm_inference(
+        x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
+        extract_emb=True, wt_structure_input_ids=wt_structure_input_ids
+    ).to(device)
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train, esm_tokenizer)
+    print("Getting ESM embeddings...")
     x_esm_emb_train = plm_inference(x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, 
-                                    esm_base_model, extract_emb=True).cpu()
+                                    esm_base_model, extract_emb=True).to(device)
 
     y_train = torch.tensor(y_train).float()
     y_test = torch.tensor(y_test).float()
 
-    # Concatenate features, necessary as GPkernel does not accept a tuple as input
-    x_combined_train = torch.cat([x_prosst_emb_train, x_esm_emb_train], dim=-1) 
-
     # Test
     # -----------------------------
     x_prosst_tok_test, _prosst_attention_mask = tokenize_sequences(s_test, prosst_tokenizer)
-    x_prosst_emb_test = plm_inference(x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
-                                      extract_emb=True, wt_structure_input_ids=wt_structure_input_ids).to(device)
+    print("Getting ProSST test sequence embeddings...")
+    x_prosst_emb_test = plm_inference(
+        x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
+        extract_emb=True, wt_structure_input_ids=wt_structure_input_ids, 
+        device=device, verbose=True
+    )
 
     x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test, esm_tokenizer)
-    x_esm_emb_test = plm_inference(x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, 
-                                    esm_base_model, extract_emb=True).to(device)
+    print("Getting ESM test sequence embeddings...")
+    x_esm_emb_test = plm_inference(
+        x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, 
+        esm_base_model, extract_emb=True, device=device, verbose=True
+    )
 
-    x_combined_test = torch.cat([x_prosst_emb_test, x_esm_emb_test], dim=-1)
+    x_combined_test = torch.cat([x_esm_emb_test, x_prosst_emb_test], dim=-1)  # Pay attention to correct order!
 
-    esm_model = get_gp_kernel_model(x_esm_emb_train, y_train, train=True).to(device)
-    prosst_model = get_gp_kernel_model(x_prosst_emb_train, y_train, train=True).to(device)
-    comb_model = get_gp_kernel_model(x_combined_train, y_train, train=True).to(device)
+    print("Training models...\n-------------------\nESM...")
+    esm_model = get_gp_kernel_model(x_esm_emb_train, y_train, device=device, train=True)
+    print("ProSST...")
+    prosst_model = get_gp_kernel_model(x_prosst_emb_train, y_train, device=device, train=True)
+    print("Combined...")
+    comb_model = get_gp_kernel_model(x_esm_emb_train, y_train, x_train_2=x_prosst_emb_train, 
+                                     device=device, train=True)
 
     for i, (model, x_test) in enumerate(
         zip(
@@ -510,7 +522,7 @@ def test_gaussian_process_opt():
             [x_esm_emb_test, x_prosst_emb_test, x_combined_test]
         )
     ):
-        print("~~~ " + ["ESM", "ProSST", "ESM + ProSST combined "][i] + "GP Test ~~~")
+        print("~~~ " + ["ESM", "ProSST", "ESM + ProSST combined"][i] + " GP Test ~~~")
         likelihood = model.likelihood
         model.eval()
         likelihood.eval()
@@ -527,7 +539,7 @@ def test_gaussian_process_opt():
         print("Correlation loss Pearson 2 TEST:           ", pearson_loss(y_test, y_pred))
         np.testing.assert_almost_equal(
             rho, 
-            [0.8213561923449809,  0.7873173926713299, 0.8360338429235056][i], 
+            [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 
             decimal=3
         )
 

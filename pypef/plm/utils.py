@@ -13,12 +13,12 @@ import logging
 logger = logging.getLogger('pypef.llm.utils')
 
 
-def hybrid_corr_mse_loss(y_true, y_pred, tau=0.1, alpha=0.5):
+def hybrid_corr_mse_loss(y_true, y_pred, method="spearman", tau=0.1, alpha=0.5):
     """
     Hybrid differentiable loss combining Spearman correlation and MSE.
     """
-    # Differentiable Spearman
-    loss_rank = correlation_loss(y_true, y_pred, method="spearman", tau=tau)
+    # Differentiable Spearman or Pearson
+    loss_rank = correlation_loss(y_true, y_pred, method=method, tau=tau)
     # MSE
     loss_value = torch.mean((y_pred - y_true)**2)
     # Combine
@@ -26,10 +26,12 @@ def hybrid_corr_mse_loss(y_true, y_pred, tau=0.1, alpha=0.5):
 
 
 
-def correlation_loss(y_true: torch.Tensor, 
-                     y_pred: torch.Tensor, 
-                     method: str = "spearman", 
-                     tau: float = 0.1) -> torch.Tensor:
+def correlation_loss(
+    y_true: torch.Tensor, 
+    y_pred: torch.Tensor, 
+    method: str = "spearman", 
+    tau: float = 0.1
+) -> torch.Tensor:
     """
     Differentiable correlation loss for PyTorch.
     
