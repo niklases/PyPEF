@@ -639,7 +639,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': spearman_loss,  # pearson_loss,
+            'llm_loss_function': spearman_loss,  # pearson_loss, hybrid_corr_mse_loss
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?

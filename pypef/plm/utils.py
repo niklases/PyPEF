@@ -25,7 +25,6 @@ def hybrid_corr_mse_loss(y_true, y_pred, method="spearman", tau=0.1, alpha=0.5):
     return alpha * loss_rank + (1 - alpha) * loss_value
 
 
-
 def correlation_loss(
     y_true: torch.Tensor, 
     y_pred: torch.Tensor, 

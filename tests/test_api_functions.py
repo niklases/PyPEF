@@ -460,15 +460,14 @@ def test_gaussian_process_opt():
         mutants, sequences, y, train_size=400, test_size=400, random_state=42
     )
     print("Getting ProSST models")
-    pdb = 'datasets/BLAT_ECOLX/BLAT_ECOLX.pdb'
-    wt_seq = get_wt_sequence('datasets/BLAT_ECOLX/blat_ecolx_wt.fasta')
+    wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models()
     prosst_base_model = prosst_base_model.to(device)
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models()
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-            pdb, prosst_tokenizer, wt_seq, device=device, verbose=True
+            pdb_blat_ecolx, prosst_tokenizer, wt_seq, device=device, verbose=True
     )
 
     wt_esm_input_ids, _esm_attention_mask = tokenize_sequences([wt_seq], esm_tokenizer)
@@ -483,8 +482,10 @@ def test_gaussian_process_opt():
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train, esm_tokenizer)
     print("Getting ESM embeddings...")
-    x_esm_emb_train = plm_inference(x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, 
-                                    esm_base_model, extract_emb=True).to(device)
+    x_esm_emb_train = plm_inference(
+        x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, 
+        esm_base_model, extract_emb=True
+    ).to(device)
 
     y_train = torch.tensor(y_train).float()
     y_test = torch.tensor(y_test).float()
