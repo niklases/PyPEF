@@ -125,9 +125,6 @@ def prosst_infer(
     )
 
 
-
-
-
 def get_prosst_models(seed: None | bool = None):
     if seed is not None:
         _set_seeds(seed)
