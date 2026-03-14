@@ -10,11 +10,11 @@ import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import numpy as np
 import pandas as pd
-from scipy.stats import spearmanr
+from scipy.stats import pearsonr, spearmanr
 from sklearn.model_selection import train_test_split
 import torch
 import gpytorch
-from pypef.plm.utils import correlation_loss, hybrid_corr_mse_loss
+from pypef.plm.utils import hybrid_corr_mse_loss
 import pytest
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
@@ -161,10 +161,10 @@ def test_hybrid_model_dca_llm():
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
 
-    # TODO: Check reproducibility on different devices and machines
+    # TODO: Check reproducibility on different devices and machines (and different loss methods)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        [-0.5022957688493356, -0.7425657069861902][0], 
+        [-0.5022957688493356, -0.7425657069861902][1], 
         decimal=7
     )
 
@@ -538,22 +538,25 @@ def test_gaussian_process_opt():
             pred = likelihood(model(x_test))
             y_pred = pred.mean
 
-        rho = spearmanr(y_test, y_pred.cpu().numpy())[0]
-        print("Spearman rho SciPy TEST:                   ", rho)
-        print("Correlation loss Spearman TEST:            ", correlation_loss(y_test, y_pred, method="spearman"))
-        print("Correlation hybrid MSE loss Spearman TEST: ", hybrid_corr_mse_loss(y_test, y_pred))
-        print("Correlation loss Pearson TEST:             ", correlation_loss(y_test, y_pred, method="pearson"))
+        spear_rho = spearmanr(y_test, y_pred.cpu().numpy())[0]
+        pear_r = pearsonr(y_test, y_pred.cpu().numpy())[0]
+        print("Spearman's rho SciPy TEST:                 ", spear_rho)
+        print("Correlation loss Spearman TEST:            ", hybrid_corr_mse_loss(y_test, y_pred, method="spearman"))
+        print("Pearson's r SciPy TEST:                    ", pear_r)
+        print("Correlation loss Pearson TEST:             ", hybrid_corr_mse_loss(y_test, y_pred, method="pearson"))
+        print("Correlation hybrid MSE-Spearman loss TEST: ", hybrid_corr_mse_loss(y_test, y_pred, method='hybrid-spearman'))
+        print("Correlation hybrid MSE-Pearson TEST:       ", hybrid_corr_mse_loss(y_test, y_pred, method='hybrid-pearson'))
         np.testing.assert_almost_equal(
-            rho, 
+            spear_rho, 
             [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 
             decimal=3
         )
 
 
 if __name__ == "__main__":
-    #test_gremlin_avgfp()
+    test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
-    #test_dataset_b_results()
-    #test_plm_corr_blat_ecolx()
-    #test_gaussian_process_opt()
+    test_dataset_b_results()
+    test_plm_corr_blat_ecolx()
+    test_gaussian_process_opt()
     

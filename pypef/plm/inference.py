@@ -6,6 +6,7 @@
 
 import os
 import inspect
+from functools import partial
 import numpy as np
 from scipy.stats import spearmanr
 import torch
@@ -15,7 +16,7 @@ from Bio import SeqIO
 
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import correlation_loss, get_batches
+from pypef.plm.utils import hybrid_corr_mse_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models
 
 
@@ -622,7 +623,16 @@ def plm_train(
     return y_preds_train.cpu()
 
 
-def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True):
+def esm_setup(
+        wt_seq, 
+        sequences, 
+        loss_method: str = "spearman",
+        device: str | None = None, 
+        verbose: bool = True
+):
+    allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
+    if loss_method not in allowed_methods:
+        raise RuntimeError(f"Loss function must be within {allowed_methods}.")
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
     esm_base_model = esm_base_model.to(device)
     wt_tokens, _ = tokenize_sequences(
@@ -639,7 +649,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': correlation_loss(method="spearman"),
+            'llm_loss_function': partial(hybrid_corr_mse_loss(method=loss_method)),
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
@@ -649,19 +659,31 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
     return llm_dict_esm
 
 
-def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose: bool = True):
+def prosst_setup(
+        wt_seq, 
+        pdb_file, 
+        sequences, 
+        loss_method: str = "spearman",
+        device: str | None = None, 
+        verbose: bool = True
+):
     if wt_seq is None:
-        raise SystemError(
+        raise RuntimeError(
             "Running ProSST requires a wild-type sequence "
             "FASTA file input for embedding sequences! "
             "Specify a FASTA file with the --wt flag."
         )
     if pdb_file is None:
-        raise SystemError(
+        raise RuntimeError(
             "Running ProSST requires a PDB file input "
             "for embedding sequences! Specify a PDB file "
             "with the --pdb flag."
         )
+    
+    allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
+    if loss_method not in allowed_methods:
+        raise RuntimeError(f"Loss function must be within {allowed_methods}.")
+
 
     pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
     assert wt_seq == pdb_seq, (
@@ -686,7 +708,7 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': correlation_loss(method="spearman"),
+            'llm_loss_function': partial(hybrid_corr_mse_loss(method=loss_method)),
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,

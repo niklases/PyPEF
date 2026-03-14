@@ -1,10 +1,13 @@
 # PyPEF - Pythonic Protein Engineering Framework
 # https://github.com/niklases/PyPEF
 
+import os
 import numpy as np
 import torch
-import os
+import torch.nn.functional as F
 import platform
+import random
+from transformers import set_seed
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
 ts_logging.set_verbosity_error()
@@ -13,68 +16,94 @@ import logging
 logger = logging.getLogger('pypef.plm.utils')
 
 
-def hybrid_corr_mse_loss(y_true, y_pred, method="spearman", tau=0.1, alpha=0.5):
-    """
-    Hybrid differentiable loss combining Spearman correlation and MSE.
-    """
-    # Differentiable Spearman or Pearson
-    loss_rank = correlation_loss(y_true, y_pred, method=method, tau=tau)
-    # MSE
-    loss_value = torch.mean((y_pred - y_true)**2)
-    # Combine
-    return alpha * loss_rank + (1 - alpha) * loss_value
+def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        set_seed(seed)
+        if use_deterministic_algorithms:
+            # For cross-machine consistency, before run:
+            # export CUBLAS_WORKSPACE_CONFIG=:4096:8
+            # or
+            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
+            if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
+                raise RuntimeWarning(
+                "'CUBLAS_WORKSPACE_CONFIG' not set, "
+                "will likely face a torch RuntimeError. "
+                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+                "before running with set seeds and determinism."
+            )
+            torch.use_deterministic_algorithms(True)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
 
 
-def correlation_loss(
+def hybrid_corr_mse_loss(
     y_true: torch.Tensor, 
     y_pred: torch.Tensor, 
     method: str = "spearman", 
-    tau: float = 0.1
+    tau: float = 0.1, 
+    alpha: float| None = None
 ) -> torch.Tensor:
     """
-    Differentiable correlation loss for PyTorch.
+    Hybrid differentiable loss combining correlation (Spearman/Pearson) and MSE.
     
     Args:
-        y_true: Tensor of shape (..., n) or (batch, n)
-        y_pred: Tensor of same shape as y_true
-        method: "pearson" or "spearman"
-        tau: temperature for soft-rank approximation (used if method="spearman")
-        
-    Returns:
-        Scalar tensor representing the loss (to minimize)
+        y_true: Ground truth tensor.
+        y_pred: Predicted tensor.
+        method: "spearman" (uses soft-ranking) or "pearson".
+        tau: Temperature for soft-rank approximation.
+        alpha: Weight for correlation loss. (1 - alpha) is weight for MSE.
     """
+    if alpha is None:
+        if method in ["spearman", "pearson"]:
+            alpha=1.0
+        elif method in ["spearman-hybrid", "pearson-hybrid"]:
+            alpha=0.5
+        else:
+            raise RuntimeError(
+                "Alpha parameter for loss function is not defined. Define alpha or a method "
+                "from within ['spearman', 'pearson', 'spearman-hybrid', 'pearson-hybrid']."
+            )
+    logger.info(
+        f"Defined loss: {method} with alpha={alpha} (alpha=1.0: only consider "
+        f"correlation, alpha=0.0: only consider MSE, in between: hybrid loss)."
+    )
+    # 1. Calculate Correlation Component
     if method == "spearman":
-        # Soft rank approximation
-        x = y_true
-        y = y_pred
-
-        def soft_rank(x, tau):
-            x = x.unsqueeze(-1)
-            diff = x - x.transpose(-1, -2)
-            P = torch.sigmoid(diff / tau)
+        # Soft rank approximation helper
+        def get_soft_ranks(z, t):
+            # z: (batch, n) -> (batch, n, 1)
+            z_expanded = z.unsqueeze(-1)
+            # pairwise differences: (batch, n, n)
+            diff = z_expanded - z_expanded.transpose(-1, -2)
+            # sigmoid approximation of indicator function
+            P = torch.sigmoid(diff / t)
             return P.sum(dim=-1) + 0.5
-
-        rx = soft_rank(x, tau)
-        ry = soft_rank(y, tau)
+        
+        rx = get_soft_ranks(y_true, tau)
+        ry = get_soft_ranks(y_pred, tau)
     elif method == "pearson":
         rx = y_true
         ry = y_pred
     else:
-        raise ValueError(f"Unsupported method: {method}. Choose 'pearson' or 'spearman'.")
+        raise ValueError(f"Method {method} not supported. Use 'spearman' or 'pearson'.")
 
-    # Centering
+    # Centering and Normalizing for Cosine Similarity (Correlation)
     rx_c = rx - rx.mean(dim=-1, keepdim=True)
     ry_c = ry - ry.mean(dim=-1, keepdim=True)
+    
+    # Cosine similarity of centered vectors = Correlation
+    corr = F.cosine_similarity(rx_c, ry_c, dim=-1).mean()
+    loss_corr = -corr  # We want to maximize correlation, so minimize negative
 
-    # Normalize (like dividing by std)
-    rx_n = rx_c / (rx_c.norm(dim=-1, keepdim=True) + 1e-8)
-    ry_n = ry_c / (ry_c.norm(dim=-1, keepdim=True) + 1e-8)
+    # 2. Calculate MSE Component
+    loss_mse = F.mse_loss(y_pred, y_true)
 
-    # Compute correlation
-    corr = (rx_n * ry_n).sum(dim=-1)
-
-    # Return scalar loss (to minimize, so negative correlation)
-    return -corr.mean()
+    # 3. Combine
+    return (alpha * loss_corr) + ((1 - alpha) * loss_mse)
 
 
 def get_batches(a, dtype, batch_size=5,

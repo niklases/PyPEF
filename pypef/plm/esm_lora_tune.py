@@ -27,7 +27,7 @@ from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 
 from pypef.plm.utils import load_model_and_tokenizer
-from pypef.plm.prosst_lora_tune import _set_seeds
+from pypef.plm.utils import _set_seeds
 
 
 def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed: None | bool = None):

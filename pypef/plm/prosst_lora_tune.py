@@ -12,12 +12,9 @@
 import logging
 logger = logging.getLogger('pypef.plm.prosst_lora_tune')
 
-import os
 import warnings
 import torch
 import numpy as np
-import random
-from transformers import set_seed
 from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
 from Bio import BiopythonParserWarning
@@ -25,7 +22,7 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import load_model_and_tokenizer
+from pypef.plm.utils import _set_seeds, load_model_and_tokenizer
 
 
 def prosst_simple_vocab_aa_tokenizer(sequences, vocab, verbose=True):
@@ -128,28 +125,7 @@ def prosst_infer(
     )
 
 
-def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        set_seed(seed)
-        if use_deterministic_algorithms:
-            # For cross-machine consistency, before run:
-            # export CUBLAS_WORKSPACE_CONFIG=:4096:8
-            # or
-            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
-            if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
-                raise RuntimeWarning(
-                "'CUBLAS_WORKSPACE_CONFIG' not set, "
-                "will likely face a torch RuntimeError. "
-                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
-                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
-                "before running with set seeds and determinism."
-            )
-            torch.use_deterministic_algorithms(True)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+
 
 
 def get_prosst_models(seed: None | bool = None):
