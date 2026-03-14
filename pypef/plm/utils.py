@@ -72,7 +72,7 @@ def hybrid_corr_mse_loss(
         f"correlation, alpha=0.0: only consider MSE, in between: hybrid loss)."
     )
     # 1. Calculate Correlation Component
-    if method == "spearman":
+    if method.startswith("spearman"):
         # Soft rank approximation helper
         def get_soft_ranks(z, t):
             # z: (batch, n) -> (batch, n, 1)
@@ -85,11 +85,11 @@ def hybrid_corr_mse_loss(
         
         rx = get_soft_ranks(y_true, tau)
         ry = get_soft_ranks(y_pred, tau)
-    elif method == "pearson":
+    elif method.startswith("pearson"):
         rx = y_true
         ry = y_pred
     else:
-        raise ValueError(f"Method {method} not supported. Use 'spearman' or 'pearson'.")
+        raise ValueError(f"Method {method} not supported.")
 
     # Centering and Normalizing for Cosine Similarity (Correlation)
     rx_c = rx - rx.mean(dim=-1, keepdim=True)
