@@ -639,7 +639,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': correlation_loss(method="spearman"), # =spearman_loss, correlation_loss(method="pearson")=pearson_loss, hybrid_corr_mse_loss(method="spearman") or "pearson"
+            'llm_loss_function': correlation_loss(method="spearman"),
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
@@ -685,8 +685,8 @@ def prosst_setup(wt_seq, pdb_file, sequences, device: str | None = None, verbose
             'llm_model': prosst_lora_model,
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': plm_train,
-            'llm_inference_function': plm_inference,  # prosst_infer,
-            'llm_loss_function': spearman_loss,  # pearson_loss,
+            'llm_inference_function': plm_inference,
+            'llm_loss_function': correlation_loss(method="spearman"),
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
