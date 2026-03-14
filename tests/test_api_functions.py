@@ -164,7 +164,7 @@ def test_hybrid_model_dca_llm():
     # TODO: Check reproducibility on different devices and machines (and different loss methods)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        [-0.5022957688493356, -0.7425657069861902][1], 
+        [-0.5022957688493356, -0.7425657069861902][0], 
         decimal=7
     )
 
@@ -544,8 +544,8 @@ def test_gaussian_process_opt():
         print("Correlation loss Spearman TEST:            ", hybrid_corr_mse_loss(y_test, y_pred, method="spearman"))
         print("Pearson's r SciPy TEST:                    ", pear_r)
         print("Correlation loss Pearson TEST:             ", hybrid_corr_mse_loss(y_test, y_pred, method="pearson"))
-        print("Correlation hybrid MSE-Spearman loss TEST: ", hybrid_corr_mse_loss(y_test, y_pred, method='hybrid-spearman'))
-        print("Correlation hybrid MSE-Pearson TEST:       ", hybrid_corr_mse_loss(y_test, y_pred, method='hybrid-pearson'))
+        print("Correlation hybrid MSE-Spearman loss TEST: ", hybrid_corr_mse_loss(y_test, y_pred, method='spearman-hybrid'))
+        print("Correlation hybrid MSE-Pearson TEST:       ", hybrid_corr_mse_loss(y_test, y_pred, method='pearson-hybrid'))
         np.testing.assert_almost_equal(
             spear_rho, 
             [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 
