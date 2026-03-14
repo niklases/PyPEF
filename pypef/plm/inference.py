@@ -649,7 +649,7 @@ def esm_setup(
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': partial(hybrid_corr_mse_loss(method=loss_method)),
+            'llm_loss_function': partial(hybrid_corr_mse_loss, method=loss_method),
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
@@ -708,7 +708,7 @@ def prosst_setup(
             'llm_optimizer': prosst_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': partial(hybrid_corr_mse_loss(method=loss_method)),
+            'llm_loss_function': partial(hybrid_corr_mse_loss, method=loss_method),
             'x_llm' : x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,

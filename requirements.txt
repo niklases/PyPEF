@@ -11,7 +11,7 @@ biotite
 schema
 pathos
 peft
-pynvml
+nvidia-ml-py
 gpytorch
 #scikit-learn-intelex
 #ray[default]

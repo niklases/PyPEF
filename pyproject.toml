@@ -37,7 +37,7 @@ dependencies = [
     "schema",
     "pathos",
     "peft",
-    "pynvml",
+    "nvidia-ml-py",
     "gpytorch",
     "torch",
     "torch-geometric"

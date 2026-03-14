@@ -164,7 +164,7 @@ def test_hybrid_model_dca_llm():
     # TODO: Check reproducibility on different devices and machines (and different loss methods)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        [-0.5022957688493356, -0.7425657069861902][0], 
+        [-0.5022957688493356, -0.7425657069861902][1], 
         decimal=7
     )
 
