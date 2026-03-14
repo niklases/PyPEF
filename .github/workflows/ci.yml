@@ -37,9 +37,11 @@ jobs:
         # stop the build if there are Python syntax errors or undefined names
         flake8 ./pypef --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Export Pythonpath and run tests using the main script
+      env: 
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)"
-    - name: Export Pythonpath and run tests using pip-installation
+    - name: Export Pythonpath and run GUI tests using pip-installation
       run: |
         export PYTHONPATH=""
         sudo apt update
@@ -50,7 +52,7 @@ jobs:
         sleep 3
         pip install .[gui]
         echo $(which pypef)
-        python -m pytest ./tests/ -v -m "not (main_script_specific or requires_gpu)" --log-cli-level=INFO
+        python -m pytest ./tests/ -v -m "pip_specific" --log-cli-level=INFO
 
   windows:
     name: windows
@@ -80,13 +82,14 @@ jobs:
         flake8 .\pypef --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Export Pythonpath and run tests using the main script
       shell: pwsh
+      env: 
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)"
-    - name: Export Pythonpath and run tests using pip-installation
+    - name: Export Pythonpath and run GUI tests using pip-installation
       shell: pwsh
       run: |
         $env:PYTHONPATH = ""
         pip install .[gui]
         echo (Get-Command pypef).Source
-        python -m pytest .\tests -v -m "not (main_script_specific or requires_gpu)" --log-cli-level=INFO
-
+        python -m pytest .\tests -v -m "pip_specific" --log-cli-level=INFO

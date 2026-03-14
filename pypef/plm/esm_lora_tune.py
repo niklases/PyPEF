@@ -17,25 +17,22 @@
 from __future__ import annotations
 
 import logging
-logger = logging.getLogger('pypef.llm.esm_lora_tune')
+
+
+logger = logging.getLogger('pypef.plm.esm_lora_tune')
 
 import torch
 from peft import LoraConfig, get_peft_model
-import numpy as np
-import random
-from transformers import set_seed
 from transformers import logging as hf_logging
 hf_logging.set_verbosity_error()
 
 from pypef.plm.utils import load_model_and_tokenizer
+from pypef.plm.prosst_lora_tune import _set_seeds
 
 
-def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed: int = 42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    set_seed(seed)
+def get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed: None | bool = None):
+    if seed is not None:
+        _set_seeds(seed)
     base_model, tokenizer = load_model_and_tokenizer(
         model
         # Just sticking to AutoModelForMaskedLM and AutoTokenizer 

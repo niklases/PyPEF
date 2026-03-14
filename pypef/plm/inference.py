@@ -15,12 +15,12 @@ from Bio import SeqIO
 
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import pearson_loss, spearman_loss, get_batches
+from pypef.plm.utils import correlation_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models
 
 
 import logging
-logger = logging.getLogger('pypef.llm.inference')
+logger = logging.getLogger('pypef.plm.inference')
 
 
 def checkpoint(model, filename):
@@ -639,7 +639,7 @@ def esm_setup(wt_seq, sequences, device: str | None = None, verbose: bool = True
             'llm_optimizer': esm_optimizer,
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
-            'llm_loss_function': spearman_loss,  # pearson_loss, hybrid_corr_mse_loss
+            'llm_loss_function': correlation_loss(method="spearman"), # =spearman_loss, correlation_loss(method="pearson")=pearson_loss, hybrid_corr_mse_loss(method="spearman") or "pearson"
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?

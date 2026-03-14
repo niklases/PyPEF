@@ -10,7 +10,7 @@
 # bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672
 
 import logging
-logger = logging.getLogger('pypef.llm.prosst_lora_tune')
+logger = logging.getLogger('pypef.plm.prosst_lora_tune')
 
 import os
 import warnings
@@ -128,17 +128,33 @@ def prosst_infer(
     )
 
 
-def get_prosst_models(seed: int = 42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    set_seed(seed)
-    # The crucial "Secret Sauce" for cross-machine consistency:
-    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
-    torch.use_deterministic_algorithms(True)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        set_seed(seed)
+        if use_deterministic_algorithms:
+            # For cross-machine consistency, before run:
+            # export CUBLAS_WORKSPACE_CONFIG=:4096:8
+            # or
+            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
+            if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
+                raise RuntimeWarning(
+                "'CUBLAS_WORKSPACE_CONFIG' not set, "
+                "will likely face a torch RuntimeError. "
+                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+                "before running with set seeds and determinism."
+            )
+            torch.use_deterministic_algorithms(True)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+
+
+def get_prosst_models(seed: None | bool = None):
+    if seed is not None:
+        _set_seeds(seed)
     prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048")
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)

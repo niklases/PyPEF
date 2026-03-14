@@ -1,19 +1,20 @@
 
 # Run me from parent dir:
 #   Linux
-#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/
+#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/  # --log-cli-level=INFO
 #   Windows
-#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\
+#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\  # --log-cli-level=INFO
 
 
-import os.path
+import os
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 from sklearn.model_selection import train_test_split
 import torch
 import gpytorch
-from pypef.plm.utils import correlation_loss, hybrid_corr_mse_loss, pearson_loss, spearman_soft
+from pypef.plm.utils import correlation_loss, hybrid_corr_mse_loss
 import pytest
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
@@ -30,10 +31,10 @@ from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 device = "cpu"  # get_device()
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
-#torch.use_deterministic_algorithms(True)
-np.random.seed(42)
+seed = 42
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+np.random.seed(seed)
 
 msa_file_avgfp = os.path.abspath(os.path.join(
     __file__, '../../datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
@@ -79,7 +80,8 @@ def test_gremlin_avgfp():
         optimize=True,
         gap_cutoff=0.5,
         eff_cutoff=0.8,
-        opt_iter=100
+        opt_iter=100,
+        device=device
     )
     wt_score = g.get_wt_score()  
     np.testing.assert_almost_equal(wt_score, 952.1102220697624, decimal=1)
@@ -95,7 +97,8 @@ def test_hybrid_model_dca_llm():
         optimize=True,
         gap_cutoff=0.5,
         eff_cutoff=0.8,
-        opt_iter=100
+        opt_iter=100,
+        device=device
     )
     wt_score = g.get_wt_score()
     np.testing.assert_almost_equal(wt_score, 1743.2087199198131, decimal=1)
@@ -118,7 +121,7 @@ def test_hybrid_model_dca_llm():
     print('len(aneh_wt_seq)', len(aneh_wt_seq))
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3')
+        model='facebook/esm1v_t33_650M_UR90S_3', seed=seed)
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
@@ -143,7 +146,7 @@ def test_hybrid_model_dca_llm():
     #    train_seqs_aneh, 'prosst', 
     #    pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
     #)
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(seed=seed)
     prosst_base_model.eval()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
@@ -294,14 +297,16 @@ def test_plm_corr_blat_ecolx():
     print("test_plm_corr_blat_ecolx()...")
     print("Device", device)
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    (prosst_base_model, _prosst_lora_model, 
+     prosst_tokenizer, _prosst_optimizer) = get_prosst_models(seed=seed)
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
     y_true = df['DMS_score'].to_list()
     for x in ['facebook/esm1v_t33_650M_UR90S_3']:
-        esm_base_model, _esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=x)
+        (esm_base_model, _esm_lora_model, 
+         esm_tokenizer, _esm_optimizer) = get_esm_models(model=x, seed=seed)
         esm_base_model = esm_base_model.to(device)
         x_esm, esm_attention_mask = tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
@@ -461,10 +466,12 @@ def test_gaussian_process_opt():
     )
     print("Getting ProSST models")
     wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
-    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models()
+    (prosst_base_model, _prosst_lora_model, 
+     prosst_tokenizer, _prosst_optimizer) = get_prosst_models(seed=seed)
     prosst_base_model = prosst_base_model.to(device)
 
-    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models()
+    (esm_base_model, _esm_lora_model, 
+     esm_tokenizer, _esm_optimizer) = get_esm_models(seed=seed)
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
             pdb_blat_ecolx, prosst_tokenizer, wt_seq, device=device, verbose=True
@@ -533,11 +540,9 @@ def test_gaussian_process_opt():
 
         rho = spearmanr(y_test, y_pred.cpu().numpy())[0]
         print("Spearman rho SciPy TEST:                   ", rho)
-        print("Spearman soft TEST:                        ", spearman_soft(y_test, y_pred).item())
         print("Correlation loss Spearman TEST:            ", correlation_loss(y_test, y_pred, method="spearman"))
         print("Correlation hybrid MSE loss Spearman TEST: ", hybrid_corr_mse_loss(y_test, y_pred))
         print("Correlation loss Pearson TEST:             ", correlation_loss(y_test, y_pred, method="pearson"))
-        print("Correlation loss Pearson 2 TEST:           ", pearson_loss(y_test, y_pred))
         np.testing.assert_almost_equal(
             rho, 
             [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 
@@ -547,8 +552,8 @@ def test_gaussian_process_opt():
 
 if __name__ == "__main__":
     #test_gremlin_avgfp()
-    #test_hybrid_model_dca_llm()
+    test_hybrid_model_dca_llm()
     #test_dataset_b_results()
     #test_plm_corr_blat_ecolx()
-    test_gaussian_process_opt()
+    #test_gaussian_process_opt()
     
