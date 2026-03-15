@@ -73,5 +73,6 @@ pypef = [
 [tool.pytest.ini_options]
 markers = [
     "main_script_specific",
-    "pip_specific"
+    "pip_specific",
+    "requires_gpu"
 ]

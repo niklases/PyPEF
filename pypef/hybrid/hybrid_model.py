@@ -67,6 +67,7 @@ class DCALLMHybridModel:
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             batch_size: int | None = None,
+            n_epochs: int | None = None,
             device: str | None = None,
             seed: int | None = None,
             verbose: bool = True,
@@ -132,6 +133,9 @@ class DCALLMHybridModel:
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
+        if n_epochs is None:
+            n_epochs = 50
+        self.n_epochs = n_epochs
         self.verbose = verbose
         (
             self.ridge_opt, 
@@ -463,7 +467,7 @@ class DCALLMHybridModel:
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 wt_structure_input_ids=self.structure_input_ids,
-                n_epochs=50,
+                n_epochs=self.n_epochs,
                 device=self.device,
                 verbose=self.verbose,
                 raise_error_on_train_fail=False,
@@ -497,7 +501,7 @@ class DCALLMHybridModel:
                 optimizer=self.llm_optimizer, 
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                n_epochs=50, 
+                n_epochs=self.n_epochs, 
                 device=self.device,
                 verbose=self.verbose,
                 progress_cb=self.progress_cb, 
@@ -615,10 +619,6 @@ class DCALLMHybridModel:
         
         else:
             if self.llm_key == 'prosst':
-                #    xs,
-                #wt_input_ids,
-                #attention_mask,
-                #model,
                 y_llm = self.llm_inference_function(
                     xs=x_llm, 
                     wt_input_ids=self.wt_input_ids,
@@ -626,7 +626,8 @@ class DCALLMHybridModel:
                     model=self.llm_base_model, 
                     wt_structure_input_ids=self.structure_input_ids,
                     verbose=verbose,
-                    device=self.device).detach().cpu().numpy()
+                    device=self.device
+                ).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
                     xs=x_llm, 
                     wt_input_ids=self.wt_input_ids,
@@ -634,9 +635,9 @@ class DCALLMHybridModel:
                     model=self.llm_model, 
                     wt_structure_input_ids=self.structure_input_ids,
                     verbose=verbose,
-                    device=self.device).detach().cpu().numpy()
+                    device=self.device
+                ).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
-                #x_llm_b = torch.from_numpy(get_batches(x_llm, batch_size=1, dtype=int))
                 y_llm = self.llm_inference_function(
                     xs=x_llm, 
                     wt_input_ids=self.wt_input_ids,

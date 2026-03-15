@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 import platform
 import random
+import warnings
 from transformers import set_seed
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
@@ -27,14 +28,20 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
             # export CUBLAS_WORKSPACE_CONFIG=:4096:8
             # or
             # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
-            if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
-                raise RuntimeWarning(
-                "'CUBLAS_WORKSPACE_CONFIG' not set, "
-                "will likely face a torch RuntimeError. "
-                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
-                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
-                "before running with set seeds and determinism."
-            )
+            rw = False
+            try:
+                if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
+                    rw = True
+            except KeyError:
+                rw = True
+            if rw:
+                warnings.warn(
+                    "'CUBLAS_WORKSPACE_CONFIG' not set, "
+                    "will likely face a torch RuntimeError. "
+                    "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+                    "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+                    "before running with set seeds and determinism."
+                )
             torch.use_deterministic_algorithms(True)
             torch.backends.cudnn.deterministic = True
             torch.backends.cudnn.benchmark = False
@@ -55,7 +62,8 @@ def hybrid_corr_mse_loss(
         y_pred: Predicted tensor.
         method: "spearman" (uses soft-ranking) or "pearson".
         tau: Temperature for soft-rank approximation.
-        alpha: Weight for correlation loss. (1 - alpha) is weight for MSE.
+        alpha: Weight for correlation loss. (1 - alpha) is weight for MSE:
+        alpha=0.0: only consider MSE, in between: hybrid loss).
     """
     if alpha is None:
         if method in ["spearman", "pearson"]:
@@ -67,10 +75,6 @@ def hybrid_corr_mse_loss(
                 "Alpha parameter for loss function is not defined. Define alpha or a method "
                 "from within ['spearman', 'pearson', 'spearman-hybrid', 'pearson-hybrid']."
             )
-    logger.info(
-        f"Defined loss: {method} with alpha={alpha} (alpha=1.0: only consider "
-        f"correlation, alpha=0.0: only consider MSE, in between: hybrid loss)."
-    )
     # 1. Calculate Correlation Component
     if method.startswith("spearman"):
         # Soft rank approximation helper

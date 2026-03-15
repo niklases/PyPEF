@@ -8,11 +8,24 @@
 
 import os
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+seed = 42
+os.environ['PYTHONHASHSEED'] = str(seed)
+import torch
 import numpy as np
+import random
+random.seed(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+# Even if we use CPU, setting these doesn't hurt
+torch.cuda.manual_seed_all(seed)
+# Force deterministic algorithms
+torch.use_deterministic_algorithms(True)
+# benchmark=False prevents torch from searching for the "fastest" (and often random) convolution algorithm
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from sklearn.model_selection import train_test_split
-import torch
 import gpytorch
 from pypef.plm.utils import hybrid_corr_mse_loss
 import pytest
@@ -30,11 +43,8 @@ from pypef.plm.prosst_lora_tune import (
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
+
 device = "cpu"  # get_device()
-seed = 42
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
-np.random.seed(seed)
 
 msa_file_avgfp = os.path.abspath(os.path.join(
     __file__, '../../datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
@@ -184,7 +194,8 @@ def test_hybrid_model_dca_llm():
             llm_model_input=llm_dict,
             x_wt=g.x_wt,
             seed=42,
-            device=device
+            device=device,
+            n_epochs=5
         )
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
@@ -296,20 +307,19 @@ def test_dataset_b_results():
 
 @pytest.mark.requires_gpu
 def test_plm_corr_blat_ecolx():
-    print("test_plm_corr_blat_ecolx()...")
-    print("Device", device)
+    print("test_plm_corr_blat_ecolx() [CUDA]...")
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     (prosst_base_model, _prosst_lora_model, 
      prosst_tokenizer, _prosst_optimizer) = get_prosst_models(seed=seed)
     prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to(device)
+    prosst_base_model = prosst_base_model.to("")
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
     y_true = df['DMS_score'].to_list()
     for x in ['facebook/esm1v_t33_650M_UR90S_3']:
         (esm_base_model, _esm_lora_model, 
          esm_tokenizer, _esm_optimizer) = get_esm_models(model=x, seed=seed)
-        esm_base_model = esm_base_model.to(device)
+        esm_base_model = esm_base_model.to("cuda")
         x_esm, esm_attention_mask = tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
         # Tokenize WT sequence once
@@ -329,7 +339,7 @@ def test_plm_corr_blat_ecolx():
             inference_type='mutation-masking',
             batch_size=5,
             train=False,
-            device=device,
+            device="cuda",
             verbose=True
         )
         print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
@@ -345,6 +355,7 @@ def test_plm_corr_blat_ecolx():
             inference_type='wt-marginal',
             batch_size=5,
             train=False,
+            device="cuda",
             verbose=True
         )
         print(f'{x}: ESM1v (unsupervised performance wt-marginal): '  
@@ -360,6 +371,7 @@ def test_plm_corr_blat_ecolx():
             inference_type='full-sequence',
             batch_size=5,
             train=False,
+            device="cuda",
             verbose=True
         )
         print(f'{x}: ESM1v (unsupervised performance full-sequence): '  
@@ -375,13 +387,14 @@ def test_plm_corr_blat_ecolx():
         #    inference_type='full-masking',
         #    batch_size=5,
         #    train=False,
+        #    device="cuda",
         #    verbose=True
         #)
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-        pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq, device=device)
+        pdb_blat_ecolx, prosst_tokenizer, blat_ecolx_wt_seq, device="cuda")
     x_prosst2 = prosst_simple_vocab_aa_tokenizer(sequences, prosst_vocab)
     x_prosst, prosst_attention_mask_ = tokenize_sequences(
         sequences=sequences, 
@@ -403,6 +416,7 @@ def test_plm_corr_blat_ecolx():
             wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
             train=False,
+            device="cuda",
             verbose=True   
     )
     print(f'ProSST (unsupervised performance mutation-masking): '  # ProSST not made/trained for MLM: 0.607137337377509
@@ -419,6 +433,7 @@ def test_plm_corr_blat_ecolx():
             wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
             train=False,
+            device="cuda",
             verbose=True        
     )
     print(f'ProSST (unsupervised performance wt-marginal): '  # ProteinGym: ProSST: 0.760
@@ -435,6 +450,7 @@ def test_plm_corr_blat_ecolx():
             wt_structure_input_ids=wt_structure_input_ids,
             batch_size=5,
             train=False,
+            device="cuda",
             verbose=True        
     )
     print(f'ProSST (unsupervised performance full-sequence): '
@@ -451,6 +467,7 @@ def test_plm_corr_blat_ecolx():
     #        wt_structure_input_ids=wt_structure_input_ids,
     #        batch_size=5,
     #        train=False,
+    #        device="cuda",
     #        verbose=True        
     #)
     #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
@@ -485,15 +502,26 @@ def test_gaussian_process_opt():
     x_prosst_tok_train, _prosst_attention_mask = tokenize_sequences(s_train, prosst_tokenizer)
     print("Getting ProSST embeddings...")
     x_prosst_emb_train = plm_inference(
-        x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
-        extract_emb=True, wt_structure_input_ids=wt_structure_input_ids
+        x_prosst_tok_train, 
+        wt_prosst_input_ids, 
+        prosst_attention_mask, 
+        prosst_base_model, 
+        extract_emb=True, 
+        wt_structure_input_ids=wt_structure_input_ids,
+        device=device,
+        verbose=True
     ).to(device)
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train, esm_tokenizer)
     print("Getting ESM embeddings...")
     x_esm_emb_train = plm_inference(
-        x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, 
-        esm_base_model, extract_emb=True
+        x_esm_tok_train, 
+        wt_esm_input_ids, 
+        esm_attention_mask, 
+        esm_base_model, 
+        extract_emb=True,
+        device=device,
+        verbose=True
     ).to(device)
 
     y_train = torch.tensor(y_train).float()

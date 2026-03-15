@@ -40,7 +40,7 @@ jobs:
       env: 
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)"
+        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
     - name: Export Pythonpath and run GUI tests using pip-installation
       run: |
         export PYTHONPATH=""
@@ -85,7 +85,7 @@ jobs:
       env: 
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
-        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)"
+        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
     - name: Export Pythonpath and run GUI tests using pip-installation
       shell: pwsh
       run: |
