@@ -18,33 +18,33 @@ logger = logging.getLogger('pypef.plm.utils')
 
 
 def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
-        random.seed(seed)
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        set_seed(seed)
-        if use_deterministic_algorithms:
-            # For cross-machine consistency, before run:
-            # export CUBLAS_WORKSPACE_CONFIG=:4096:8
-            # or
-            # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
-            rw = False
-            try:
-                if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
-                    rw = True
-            except KeyError:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    set_seed(seed)
+    if use_deterministic_algorithms:
+        # For cross-machine consistency, before run:
+        # export CUBLAS_WORKSPACE_CONFIG=:4096:8
+        # or
+        # os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8" 
+        rw = False
+        try:
+            if not os.environ["CUBLAS_WORKSPACE_CONFIG"]:
                 rw = True
-            if rw:
-                warnings.warn(
-                    "'CUBLAS_WORKSPACE_CONFIG' not set, "
-                    "will likely face a torch RuntimeError. "
-                    "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
-                    "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
-                    "before running with set seeds and determinism."
-                )
-            torch.use_deterministic_algorithms(True)
-            torch.backends.cudnn.deterministic = True
-            torch.backends.cudnn.benchmark = False
+        except KeyError:
+            rw = True
+        if rw:
+            warnings.warn(
+                "'CUBLAS_WORKSPACE_CONFIG' not set, "
+                "will likely face a torch RuntimeError. "
+                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+                "before running with set seeds and determinism."
+            )
+        torch.use_deterministic_algorithms(True)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def hybrid_corr_mse_loss(
@@ -192,7 +192,8 @@ def load_model_and_tokenizer(
         model_name: str, 
         cache_dir: str | os.PathLike | None = None, 
         model_loader=None, 
-        tokenizer_loader=None
+        tokenizer_loader=None,
+        revision: str | None = None
 ):
     """
     Load the model and tokenizer from cache directory. Downloads to cache if not present.
@@ -208,28 +209,28 @@ def load_model_and_tokenizer(
         try:
             logger.info(f"Loading model and tokenizer from cache {snapshot_dir}...")
             model = model_loader.from_pretrained(
-                snapshot_dir, trust_remote_code=True
+                snapshot_dir, trust_remote_code=True, revision=revision
             )
             tokenizer = tokenizer_loader.from_pretrained(
-                snapshot_dir, trust_remote_code=True
+                snapshot_dir, trust_remote_code=True, revision=revision
             )
         except OSError as e:
             logger.info(f"Faced error \"{e}\": Trying to load with regular cache load path...")
             model = model_loader.from_pretrained(
-                model_name, cache_dir=cache_dir, trust_remote_code=True
+                model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
             )
             tokenizer = tokenizer_loader.from_pretrained(
-                model_name, cache_dir=cache_dir, trust_remote_code=True
+                model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
             )
     else:
         logger.info(f"Did not find model {model_name} and associated tokenizer in cache directory "
                     f"(checked for model snapshot reference file {ref_file}), downloading model and tokenizer "
                     f"from the internet and storing in cache {cache_dir}...")
         model = model_loader.from_pretrained(
-            model_name, cache_dir=cache_dir, trust_remote_code=True
+            model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
         )
         tokenizer = tokenizer_loader.from_pretrained(
-            model_name, cache_dir=cache_dir, trust_remote_code=True
+            model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
         )
     logger.info("Model and tokenizer loaded successfully...")
     return model, tokenizer

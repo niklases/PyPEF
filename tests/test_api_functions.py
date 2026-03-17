@@ -1,14 +1,15 @@
 
 # Run me from parent dir:
 #   Linux
-#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/  # --log-cli-level=INFO
+#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/   # -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
 #   Windows
-#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\  # --log-cli-level=INFO
-
+#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\  # -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
+# python -m pip install torch==2.7.1 --extra-index-url https://download.pytorch.org/whl/cpu
 
 import os
-os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 seed = 42
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+# Better export the PYTHONHASHSEED env variable before running! 
 os.environ['PYTHONHASHSEED'] = str(seed)
 import torch
 import numpy as np
@@ -16,11 +17,15 @@ import random
 random.seed(seed)
 np.random.seed(seed)
 torch.manual_seed(seed)
-# Even if we use CPU, setting these doesn't hurt
+# Very slow
+#torch.set_num_threads(1)
+#torch.set_num_interop_threads(1)
+# Even if only using CPU, these settings don't hurt
 torch.cuda.manual_seed_all(seed)
 # Force deterministic algorithms
 torch.use_deterministic_algorithms(True)
-# benchmark=False prevents torch from searching for the "fastest" (and often random) convolution algorithm
+# benchmark=False prevents torch from searching for the 
+# "fastest" (and often random) convolution algorithm
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 import pandas as pd
@@ -29,6 +34,7 @@ from sklearn.model_selection import train_test_split
 import gpytorch
 from pypef.plm.utils import hybrid_corr_mse_loss
 import pytest
+import hashlib
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
@@ -45,6 +51,8 @@ from pypef.utils.helpers import get_device
 
 
 device = "cpu"  # get_device()
+print(f"Torch version: {torch.__version__}")
+print(f"Device: {device}")
 
 msa_file_avgfp = os.path.abspath(os.path.join(
     __file__, '../../datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
@@ -131,7 +139,7 @@ def test_hybrid_model_dca_llm():
     print('len(aneh_wt_seq)', len(aneh_wt_seq))
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3', seed=seed)
+        model='facebook/esm1v_t33_650M_UR90S_3', seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
@@ -156,28 +164,54 @@ def test_hybrid_model_dca_llm():
     #    train_seqs_aneh, 'prosst', 
     #    pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
     #)
-    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(seed=seed)
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
+        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
+    prosst_base_model
     prosst_base_model.eval()
-    prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_file_aneh, prosst_tokenizer, aneh_wt_seq, device=device)
-    x_prosst, prosst_attention_mask_ = tokenize_sequences(
+    
+    # [ 1, 13, 18,  3, 15,  7,  3, 11,  7, 15, 18, 18,  3, 18, 10, 18, 15, 14,
+    #  ...
+    #  21, 16, 11,  2]
+    print(wt_input_ids.cpu().numpy())
+    seq_tok_sum  = wt_input_ids.cpu().numpy().sum()
+    seq_tok_sha = hashlib.sha256(wt_input_ids.cpu().numpy().tobytes()).hexdigest()
+    assert seq_tok_sum == 4781 and seq_tok_sha == "a18fbcf68f4909d9e25f130a254706f0e8234f171458630e68431d1137e43280"
+
+    # [   1 1940 1537 1776  530  853  497 1227  200 1605 1160  878  473 1902
+    #  ...
+    #  1247  750 1174  531  135 1393  471    2]]
+    print(wt_structure_input_ids.cpu().numpy())
+    struct_tok_sum = wt_structure_input_ids.cpu().numpy().sum()
+    struct_tok_sha = hashlib.sha256(wt_structure_input_ids.cpu().numpy().tobytes()).hexdigest()
+    assert struct_tok_sum == 417050 and struct_tok_sha == "df077674dd7c9054328537c1f7bd9c8e9bf80d59f287216ed3c2eeeeb7b8a39b"
+
+    x_prosst, _prosst_attention_mask = tokenize_sequences(
         sequences=train_seqs_aneh, 
         tokenizer=prosst_tokenizer, 
         max_length=len(aneh_wt_seq) + 2
     )
+
     y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
 
-    # TODO: Check reproducibility on different devices and machines (and different loss methods)
-    #np.testing.assert_almost_equal(
-    #    spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-    #    [-0.5022957688493356, -0.7425657069861902][1], 
-    #    decimal=7
-    #)
-    assert spearmanr(train_ys_aneh, y_pred_prosst)[0] in [-0.5022957688493356, -0.7425657069861902]
+    if torch.__version__.endswith('+cpu'):
+        np.testing.assert_almost_equal(
+            spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+            -0.5022957688493356,  # -0.7425657069861902 
+            decimal=7
+        )
+    elif '+cu' in torch.__version__:
+        np.testing.assert_almost_equal(
+            spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+            -0.7425657069861902,
+            decimal=7
+        )
+    else:
+        raise RuntimeError
 
     x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
     for i, setup in enumerate([esm_setup, prosst_setup]):
@@ -195,7 +229,7 @@ def test_hybrid_model_dca_llm():
             x_wt=g.x_wt,
             seed=42,
             device=device,
-            n_epochs=5
+            n_epochs=50
         )
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
@@ -213,13 +247,25 @@ def test_hybrid_model_dca_llm():
             spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, 
             decimal=7
         )
-        np.testing.assert_almost_equal(
-            spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-            [-0.7704181041760417,        # TODO: Check on different machines (CPU vs CUDA)
-             -0.8330644449247571  # -0.6370803136561448,
-             ][i],    # Use same loss function, e.g. Spearman!
-            decimal=7
-        )  
+        if torch.__version__.endswith('+cpu'):
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
+                [-0.7704181041760417,
+                 -0.24550771221838597  # torch 2.7.1+cpu: -0.24550771221838597; torch 2.7.1+cu128: -0.8330644449247571
+                ][i],    # Use same loss function, e.g., Spearman!
+                decimal=7
+            )
+        elif '+cu' in torch.__version__:
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
+                [-0.7704181041760417,
+                 -0.8330644449247571
+                ][i],
+                decimal=7
+            )
+        else:
+            raise RuntimeError
+
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
         # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
         # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
@@ -312,7 +358,7 @@ def test_plm_corr_blat_ecolx():
     (prosst_base_model, _prosst_lora_model, 
      prosst_tokenizer, _prosst_optimizer) = get_prosst_models(seed=seed)
     prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to("")
+    prosst_base_model = prosst_base_model.to("cuda")
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
     y_true = df['DMS_score'].to_list()
@@ -341,7 +387,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True
-        )
+        ).cpu()
         print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
@@ -357,7 +403,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True
-        )
+        ).cpu()
         print(f'{x}: ESM1v (unsupervised performance wt-marginal): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
@@ -373,7 +419,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True
-        )
+        ).cpu()
         print(f'{x}: ESM1v (unsupervised performance full-sequence): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6400694954450116, decimal=6)
@@ -389,7 +435,7 @@ def test_plm_corr_blat_ecolx():
         #    train=False,
         #    device="cuda",
         #    verbose=True
-        #)
+        #).cpu()
         #print(f'{x}: ESM1v (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
@@ -418,7 +464,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True   
-    )
+    ).cpu()
     print(f'ProSST (unsupervised performance mutation-masking): '  # ProSST not made/trained for MLM: 0.607137337377509
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.607137337377509, decimal=6)
@@ -435,7 +481,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True        
-    )
+    ).cpu()
     print(f'ProSST (unsupervised performance wt-marginal): '  # ProteinGym: ProSST: 0.760
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7430279087189432, decimal=6)
@@ -452,7 +498,7 @@ def test_plm_corr_blat_ecolx():
             train=False,
             device="cuda",
             verbose=True        
-    )
+    ).cpu()
     print(f'ProSST (unsupervised performance full-sequence): '
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
     np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5656131250565296, decimal=6)
@@ -469,7 +515,7 @@ def test_plm_corr_blat_ecolx():
     #        train=False,
     #        device="cuda",
     #        verbose=True        
-    #)
+    #).cpu()
     #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
     #      f'{spearmanr(y_true, y_prosst.cpu())[0]}')
 
@@ -480,7 +526,7 @@ def test_gaussian_process_opt():
     mutants = df['mutant'].to_list()
     sequences = df['mutated_sequence'].to_list()
     y = df['DMS_score'].to_list()
-    m_train, m_test, s_train, s_test, y_train, y_test = train_test_split(
+    _m_train, _m_test, s_train, s_test, y_train, y_test = train_test_split(
         mutants, sequences, y, train_size=400, test_size=400, random_state=42
     )
     print("Getting ProSST models")
@@ -510,7 +556,7 @@ def test_gaussian_process_opt():
         wt_structure_input_ids=wt_structure_input_ids,
         device=device,
         verbose=True
-    ).to(device)
+    )
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train, esm_tokenizer)
     print("Getting ESM embeddings...")
@@ -522,10 +568,10 @@ def test_gaussian_process_opt():
         extract_emb=True,
         device=device,
         verbose=True
-    ).to(device)
+    )
 
-    y_train = torch.tensor(y_train).float()
-    y_test = torch.tensor(y_test).float()
+    y_train = torch.tensor(y_train).float().to(device)
+    y_test = torch.tensor(y_test).float().to(device)
 
     # Test
     # -----------------------------
@@ -568,8 +614,8 @@ def test_gaussian_process_opt():
             pred = likelihood(model(x_test))
             y_pred = pred.mean
 
-        spear_rho = spearmanr(y_test, y_pred.cpu().numpy())[0]
-        pear_r = pearsonr(y_test, y_pred.cpu().numpy())[0]
+        spear_rho = spearmanr(y_test.cpu(), y_pred.cpu().numpy())[0]
+        pear_r = pearsonr(y_test.cpu(), y_pred.cpu().numpy())[0]
         print("Spearman's rho SciPy TEST:                 ", spear_rho)
         print("Correlation loss Spearman TEST:            ", hybrid_corr_mse_loss(y_test, y_pred, method="spearman"))
         print("Pearson's r SciPy TEST:                    ", pear_r)

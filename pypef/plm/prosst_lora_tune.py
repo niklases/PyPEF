@@ -125,10 +125,10 @@ def prosst_infer(
     )
 
 
-def get_prosst_models(seed: None | bool = None):
+def get_prosst_models(seed: None | bool = None, revision: str | None = None):
     if seed is not None:
         _set_seeds(seed)
-    prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048")
+    prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048", revision=revision)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
     optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.01)

@@ -39,6 +39,8 @@ jobs:
     - name: Export Pythonpath and run tests using the main script
       env: 
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        PYTHONHASHSEED: "42"
+        CUBLAS_WORKSPACE_CONFIG: ":4096:8"
       run: |
         export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
     - name: Export Pythonpath and run GUI tests using pip-installation
@@ -75,7 +77,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install flake8 pytest
-        pip install -r requirements.txt
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
@@ -84,6 +86,8 @@ jobs:
       shell: pwsh
       env: 
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        PYTHONHASHSEED: "42"
+        CUBLAS_WORKSPACE_CONFIG: ":4096:8"
       run: |
         $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
     - name: Export Pythonpath and run GUI tests using pip-installation

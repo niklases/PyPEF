@@ -224,7 +224,7 @@ class GREMLIN:
             if i < self.max_msa_seqs:
                 msa_ori.append([self.aa2int(aa.upper()) for aa in seq])
             else:
-                logger.info(f'Reached max. number of MSA sequences ({self.max_msa_seqs})...')
+                logger.info(f'Reached max. number of MSA sequences ({self.max_msa_seqs}), omitting the rest...')
                 break
         msa_ori = np.array(msa_ori)
         return msa_ori
