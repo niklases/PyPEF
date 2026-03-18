@@ -52,6 +52,8 @@ from pypef.utils.helpers import get_device
 
 device = "cpu"  # get_device()
 print(f"Torch version: {torch.__version__}")
+torch_version = [int(i) for i in torch.__version__.split('+')[0].split('.')]
+print(torch_version)
 print(f"Device: {device}")
 
 msa_file_avgfp = os.path.abspath(os.path.join(
@@ -198,21 +200,18 @@ def test_hybrid_model_dca_llm():
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
 
-    if torch.__version__.endswith('+cpu'):
+    if torch_version[0] >= 2 and torch_version[1] > 7:
         np.testing.assert_almost_equal(
             spearmanr(train_ys_aneh, y_pred_prosst)[0], 
             -0.5022957688493356,  # -0.7425657069861902 
             decimal=7
         )
-    elif '+cu' in torch.__version__:
-        assert spearmanr(train_ys_aneh, y_pred_prosst)[0] in [-0.5022957688493356, -0.7425657069861902]
-        #np.testing.assert_almost_equal(
-        #    spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-        #    -0.7425657069861902,
-        #    decimal=7
-        #)
     else:
-        raise RuntimeError
+        np.testing.assert_almost_equal(
+            spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+            -0.7425657069861902,
+            decimal=7
+        )
 
     x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
     for i, setup in enumerate([esm_setup, prosst_setup]):
@@ -248,7 +247,7 @@ def test_hybrid_model_dca_llm():
             spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, 
             decimal=7
         )
-        if torch.__version__.endswith('+cpu'):
+        if torch_version[0] >= 2 and torch_version[1] > 7:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
                 [-0.7704181041760417,
@@ -256,7 +255,7 @@ def test_hybrid_model_dca_llm():
                 ][i],    # Use same loss function, e.g., Spearman!
                 decimal=7
             )
-        elif '+cu' in torch.__version__:
+        else:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
                 [-0.7704181041760417,
@@ -264,8 +263,6 @@ def test_hybrid_model_dca_llm():
                 ][i],
                 decimal=7
             )
-        else:
-            raise RuntimeError
 
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
         # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
