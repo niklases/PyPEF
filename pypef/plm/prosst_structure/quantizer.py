@@ -578,8 +578,7 @@ class PdbQuantizer:
         else:
             self.model_path = model_path
         
-        logger.info(f"Loading PdbQuantizer (structure tokenization) model from {self.model_path}")
-        print(f"Loading PdbQuantizer (structure tokenization) model from {self.model_path}") # TODO: remove
+        logger.info(f"Loading PdbQuantizer (structure tokenization) model from {self.model_path}...")
 
         if cluster_dir is None:
             self.cluster_dir = str(Path(__file__).parent / "static")

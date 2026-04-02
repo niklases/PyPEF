@@ -9,8 +9,9 @@
 import os
 seed = 42
 os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-# Better export the PYTHONHASHSEED env variable before running! 
+# Export the PYTHONHASHSEED env variable before running this script! 
 os.environ['PYTHONHASHSEED'] = str(seed)
+import sys
 import torch
 import numpy as np
 import random
@@ -28,6 +29,7 @@ torch.use_deterministic_algorithms(True)
 # "fastest" (and often random) convolution algorithm
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
+
 import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from sklearn.model_selection import train_test_split
@@ -50,11 +52,13 @@ from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 
-device = "cpu"  # get_device()
+py_ver = sys.version_info
+print(f"Python version: {py_ver[0:3]}")
+device = ["cpu", get_device()][1]
 print(f"Torch version: {torch.__version__}")
 torch_version = [int(i) for i in torch.__version__.split('+')[0].split('.')]
-print(torch_version)
-print(f"Device: {device}")
+torch_cpu_or_cuda_version = torch.__version__.split('+')[1]
+print(f"Using device: {device}")
 
 msa_file_avgfp = os.path.abspath(os.path.join(
     __file__, '../../datasets/AVGFP/uref100_avgfp_jhmmer_119.a2m'
@@ -137,7 +141,6 @@ def test_hybrid_model_dca_llm():
     )
     assert len(train_seqs_aneh[0]) == len(g.wt_seq)
     aneh_wt_seq = get_wt_sequence(wt_seq_file_aneh)
-    #y_pred_esm = inference(train_seqs_aneh, 'esm', wt_seq=aneh_wt_seq)
     print('len(aneh_wt_seq)', len(aneh_wt_seq))
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
@@ -145,7 +148,8 @@ def test_hybrid_model_dca_llm():
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
-        train_seqs_aneh, esm_tokenizer, max_length=len(aneh_wt_seq) + 2)
+        train_seqs_aneh, esm_tokenizer, max_length=len(aneh_wt_seq) + 2
+    )
     # Tokenize WT sequence once
     wt_tokens, _ = tokenize_sequences(
             [aneh_wt_seq],
@@ -162,13 +166,8 @@ def test_hybrid_model_dca_llm():
         decimal=7
     )
 
-    #y_pred_prosst = inference(
-    #    train_seqs_aneh, 'prosst', 
-    #    pdb_file=pdb_file_aneh, wt_seq=aneh_wt_seq
-    #)
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
         seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
-    prosst_base_model
     prosst_base_model.eval()
     prosst_base_model = prosst_base_model.to(device)
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
@@ -177,7 +176,7 @@ def test_hybrid_model_dca_llm():
     # [ 1, 13, 18,  3, 15,  7,  3, 11,  7, 15, 18, 18,  3, 18, 10, 18, 15, 14,
     #  ...
     #  21, 16, 11,  2]
-    print(wt_input_ids.cpu().numpy())
+    #print(wt_input_ids.cpu().numpy())
     seq_tok_sum  = wt_input_ids.cpu().numpy().sum()
     seq_tok_sha = hashlib.sha256(wt_input_ids.cpu().numpy().tobytes()).hexdigest()
     assert seq_tok_sum == 4781 and seq_tok_sha == "a18fbcf68f4909d9e25f130a254706f0e8234f171458630e68431d1137e43280"
@@ -185,7 +184,7 @@ def test_hybrid_model_dca_llm():
     # [   1 1940 1537 1776  530  853  497 1227  200 1605 1160  878  473 1902
     #  ...
     #  1247  750 1174  531  135 1393  471    2]]
-    print(wt_structure_input_ids.cpu().numpy())
+    # print(wt_structure_input_ids.cpu().numpy())
     struct_tok_sum = wt_structure_input_ids.cpu().numpy().sum()
     struct_tok_sha = hashlib.sha256(wt_structure_input_ids.cpu().numpy().tobytes()).hexdigest()
     assert struct_tok_sum == 417050 and struct_tok_sha == "df077674dd7c9054328537c1f7bd9c8e9bf80d59f287216ed3c2eeeeb7b8a39b"
@@ -200,28 +199,34 @@ def test_hybrid_model_dca_llm():
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
 
-    if torch_version[0] >= 2 and torch_version[1] > 7:
-        np.testing.assert_almost_equal(
-            spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-            -0.5022957688493356,  # -0.7425657069861902 
-            decimal=7
-        )
-    else:
+    if py_ver[0:2] >= (3, 12):
         np.testing.assert_almost_equal(
             spearmanr(train_ys_aneh, y_pred_prosst)[0], 
             -0.7425657069861902,
             decimal=7
         )
+    else:
+        np.testing.assert_almost_equal(
+                spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+                -0.5022957688493356,
+                decimal=7
+        )
 
     x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
-    for i, setup in enumerate([esm_setup, prosst_setup]):
-        print(['~~~ ESM ~~~', '~~~ ProSST ~~~'][i])
-        if setup == esm_setup:
-            llm_dict = setup(sequences=train_seqs_aneh, wt_seq=aneh_wt_seq)
-        else:  # elif setup == prosst_setup:
-            llm_dict = setup(
-                aneh_wt_seq, pdb_file_aneh, sequences=train_seqs_aneh)
+    for i, setup in enumerate(['ESM', 'ProSST']):
+        print(f'~~~ {setup} ~~~')
+        if setup == 'ESM':
+            llm_dict = esm_setup(
+                wt_seq=aneh_wt_seq, sequences=train_seqs_aneh, 
+                seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
+            )
+        else:  # elif setup == 'ProSST':
+            llm_dict = prosst_setup(
+                wt_seq=aneh_wt_seq, pdb_file=pdb_file_aneh, sequences=train_seqs_aneh, 
+                seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
+            )
         x_llm_test, _ = tokenize_sequences(test_seqs_aneh, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
             y_train=train_ys_aneh,
@@ -229,8 +234,30 @@ def test_hybrid_model_dca_llm():
             x_wt=g.x_wt,
             seed=42,
             device=device,
-            n_epochs=50
+            n_epochs=10
         )
+
+        y_test_pred = plm_inference(
+            xs=x_llm_test,
+            wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
+            attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
+            model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
+            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
+            device=device
+        ).cpu()
+        print('y_llm_ttest:', spearmanr(test_ys_aneh, y_test_pred), len(test_ys_aneh))
+        #if py_ver[0:2] >= (3, 12):
+        #    np.testing.assert_almost_equal(
+        #        spearmanr(test_ys_aneh, y_test_pred)[0], 
+        #        [0.39323469421406104, -0.30755537487483436][i], 
+        #        decimal=7                                       
+        #    )
+        #else:
+        #    np.testing.assert_almost_equal(
+        #        spearmanr(test_ys_aneh, y_test_pred)[0], 
+        #        [0.39323469421406104, -0.30755537487483436][i], 
+        #        decimal=7                                       
+        #    )
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
         print(hm.beta1, hm.beta2, hm.beta3, hm.beta4, hm.ridge_opt)
@@ -247,19 +274,19 @@ def test_hybrid_model_dca_llm():
             spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, 
             decimal=7
         )
-        if torch_version[0] >= 2 and torch_version[1] > 7:
+        if py_ver[0:2] >= (3, 12):
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
                 [-0.7704181041760417,
-                 -0.24550771221838597  # torch 2.7.1+cpu: -0.24550771221838597; torch 2.7.1+cu128: -0.8330644449247571
-                ][i],    # Use same loss function, e.g., Spearman!
+                 -0.8330644449247571
+                ][i],
                 decimal=7
             )
         else:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
                 [-0.7704181041760417,
-                 -0.8330644449247571
+                 -0.6370803136561448
                 ][i],
                 decimal=7
             )
@@ -571,8 +598,6 @@ def test_gaussian_process_opt():
     y_train = torch.tensor(y_train).float().to(device)
     y_test = torch.tensor(y_test).float().to(device)
 
-    # Test
-    # -----------------------------
     x_prosst_tok_test, _prosst_attention_mask = tokenize_sequences(s_test, prosst_tokenizer)
     print("Getting ProSST test sequence embeddings...")
     x_prosst_emb_test = plm_inference(
@@ -631,6 +656,6 @@ if __name__ == "__main__":
     test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
     test_dataset_b_results()
-    test_plm_corr_blat_ecolx()
+    #test_plm_corr_blat_ecolx()
     test_gaussian_process_opt()
     

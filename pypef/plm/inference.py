@@ -627,13 +627,17 @@ def esm_setup(
         wt_seq, 
         sequences, 
         loss_method: str = "spearman",
+        seed: int | None =None,
+        revision: str | None = None,
         device: str | None = None, 
         verbose: bool = True
 ):
+    if device is None:
+        device = get_device()
     allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(seed=seed, revision=revision)
     esm_base_model = esm_base_model.to(device)
     wt_tokens, _ = tokenize_sequences(
             [wt_seq],
@@ -653,6 +657,7 @@ def esm_setup(
             'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
             'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
             'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
+            'wt_structure_input_ids': None,
             'llm_tokenizer': esm_tokenizer
         }
     }
@@ -664,9 +669,13 @@ def prosst_setup(
         pdb_file, 
         sequences, 
         loss_method: str = "spearman",
+        seed: int | None =None,
+        revision: str | None = None,
         device: str | None = None, 
         verbose: bool = True
 ):
+    if device is None:
+        device = get_device()
     if wt_seq is None:
         raise RuntimeError(
             "Running ProSST requires a wild-type sequence "
@@ -684,18 +693,17 @@ def prosst_setup(
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
 
-
     pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
     assert wt_seq == pdb_seq, (
         f"Wild-type sequence is not matching PDB-extracted sequence:"
         f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
     )
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models(seed=seed, revision=revision)
     prosst_vocab = prosst_tokenizer.get_vocab()
-    prosst_base_model = prosst_base_model.to(device)
+    prosst_base_model, prosst_lora_model = prosst_base_model.to(device), prosst_lora_model.to(device)
     prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
     input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
-        pdb_file, prosst_tokenizer, wt_seq, verbose=verbose
+        pdb_file, prosst_tokenizer, wt_seq, device=device, verbose=verbose
     )
     x_llm_train_prosst, _attention_mask = tokenize_sequences(
         sequences=sequences, tokenizer=prosst_tokenizer, 
@@ -709,7 +717,7 @@ def prosst_setup(
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
             'llm_loss_function': partial(hybrid_corr_mse_loss, method=loss_method),
-            'x_llm' : x_llm_train_prosst,
+            'x_llm': x_llm_train_prosst,
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
             'wt_input_ids': input_ids,
