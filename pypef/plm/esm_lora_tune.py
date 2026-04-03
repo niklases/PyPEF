@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 logger = logging.getLogger('pypef.plm.esm_lora_tune')
 
+import copy
 import torch
 from peft import LoraConfig, get_peft_model
 from transformers import logging as hf_logging
@@ -41,6 +42,10 @@ def get_esm_models(
         # Just sticking to AutoModelForMaskedLM and AutoTokenizer 
         # instead to EsmForMaskedLM and EsmTokenizer
     )  
+    for param in base_model.parameters():
+        param.requires_grad = False
+    base_model.eval()
+    base_model = copy.deepcopy(base_model)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     lora_model = get_peft_model(base_model, peft_config)
     optimizer = torch.optim.Adam(lora_model.parameters(), lr=0.01)

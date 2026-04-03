@@ -64,6 +64,21 @@ def scatter_mean(src: torch.Tensor, index: torch.Tensor, dim: int = -1,
     return out
 
 
+def scatter_mean_simple(src: torch.Tensor, index: torch.Tensor, num_graphs: int):
+    # src: [N, D] (Node Embeddings)
+    # index: [N] (batch.batch Indizes)
+    
+    device = src.device
+    out = torch.zeros((num_graphs, src.size(-1)), device=device)
+    
+    for i in range(num_graphs):
+        mask = (index == i)
+        if mask.any():
+            out[i] = src[mask].mean(dim=0)
+            
+    return out
+
+
 def scatter_max(
         src: torch.Tensor, index: torch.Tensor, dim: int = -1,
         out: Optional[torch.Tensor] = None,

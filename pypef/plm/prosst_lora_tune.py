@@ -13,6 +13,7 @@ import logging
 logger = logging.getLogger('pypef.plm.prosst_lora_tune')
 
 import warnings
+import copy
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -129,6 +130,10 @@ def get_prosst_models(seed: None | bool = None, revision: str | None = None):
     if seed is not None:
         _set_seeds(seed)
     prosst_base_model, tokenizer = load_model_and_tokenizer("AI4Protein/ProSST-2048", revision=revision)
+    for param in prosst_base_model.parameters():
+        param.requires_grad = False
+    prosst_base_model.eval()
+    prosst_base_model = copy.deepcopy(prosst_base_model)
     peft_config = LoraConfig(r=8, target_modules=["query", "value"])
     prosst_lora_model = get_peft_model(prosst_base_model, peft_config)
     optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.01)

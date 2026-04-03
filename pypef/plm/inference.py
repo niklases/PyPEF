@@ -6,8 +6,10 @@
 
 import os
 import inspect
+import contextlib
 from functools import partial
 import numpy as np
+from peft import PeftModel, get_peft_model_state_dict, set_peft_model_state_dict
 from scipy.stats import spearmanr
 import torch
 import torch.nn.functional as F
@@ -25,12 +27,28 @@ logger = logging.getLogger('pypef.plm.inference')
 
 
 def checkpoint(model, filename):
+    """
+    Saves only the adapter weights if it's a PEFT model, 
+    otherwise saves the full state dict.
+    """
+    #if isinstance(model, PeftModel):
+    #    state_dict = get_peft_model_state_dict(model)
+    #    torch.save(state_dict, filename)
+    #else:
     torch.save(model.state_dict(), filename)
 
 
 def load_model(model, filename):
-    logger.info(f'Loading best model: {os.path.abspath(filename)}...')
-    model.load_state_dict(torch.load(filename, weights_only=True))
+    """
+    Loads weights safely depending on model type.
+    """
+    logger.info(f'Loading model weights from: {os.path.abspath(filename)}')
+    state_dict = torch.load(filename, weights_only=True)
+    
+    #if isinstance(model, PeftModel):
+    #    set_peft_model_state_dict(model, state_dict)
+    #else:
+    model.load_state_dict(state_dict)
 
 
 def tokenize_sequences(sequences, tokenizer, max_length=None, verbose=True):
@@ -385,17 +403,20 @@ def plm_inference(
     train=False,
     device=None,
     verbose=False,
-):
+    use_adapter=True
+):  
     if device is None:
         device = get_device()
-    
+    model = model.to(device)
+
     if train:
+        model.train()
         keep_remaining = False
     else:
+        model.eval()
         keep_remaining = True
 
     model = model.to(device)
-
     kwargs = {}
 
     if not isinstance(attention_mask, torch.Tensor):
@@ -452,19 +473,21 @@ def plm_inference(
         disable=not verbose
     )
 
-    for x in pbar:
-        pll = inference_function(
-            tokenized_sequences=x,
-            wt_input_ids=wt_input_ids,
-            attention_mask=attention_mask,
-            model=model,
-            train=train,
-            scoring_mode=scoring_mode,
-            device=device,
-            verbose=False,
-            **kwargs
-        )
-        scores.append(pll)
+    with torch.set_grad_enabled(train):
+                for x in pbar:
+                    pll = inference_function(
+                        tokenized_sequences=x,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        model=model,
+                        train=train,
+                        scoring_mode=scoring_mode,
+                        device=device,
+                        verbose=False,
+                        **kwargs
+                    )
+                    scores.append(pll)
+                    
     return torch.cat(scores)
 
 
@@ -489,7 +512,7 @@ def plm_train(
         abort_cb=None
 ):
     """
-    TODO: Wrapper function for `plm_inference()` for PLM training.
+    Wrapper function for `plm_inference()` for PLM training.
     """
     if seed is not None:
         torch.manual_seed(seed)
@@ -638,7 +661,9 @@ def esm_setup(
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(seed=seed, revision=revision)
-    esm_base_model = esm_base_model.to(device)
+    esm_base_model.eval()
+    esm_lora_model.eval()
+    esm_base_model, esm_lora_model = esm_base_model.to(device), esm_lora_model.to(device)
     wt_tokens, _ = tokenize_sequences(
             [wt_seq],
             esm_tokenizer,
@@ -699,6 +724,8 @@ def prosst_setup(
         f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
     )
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models(seed=seed, revision=revision)
+    prosst_base_model.eval()
+    prosst_lora_model.eval()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model, prosst_lora_model = prosst_base_model.to(device), prosst_lora_model.to(device)
     prosst_optimizer = torch.optim.Adam(prosst_lora_model.parameters(), lr=0.0001)
