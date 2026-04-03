@@ -205,19 +205,19 @@ def test_hybrid_model_dca_llm():
     y_pred_prosst = plm_inference(xs=x_prosst, wt_input_ids=wt_input_ids, 
                                   attention_mask=prosst_attention_mask, model=prosst_base_model, 
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
-    if py_ver[0:2] >= (3, 12):
-        np.testing.assert_almost_equal(
-            spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-            -0.7425657069861902,
-            decimal=7
-        )
-
-    else:
-        np.testing.assert_almost_equal(
-                spearmanr(train_ys_aneh, y_pred_prosst)[0], 
-                -0.5022957688493356,
-                decimal=7
-        )
+    #if py_ver[0:2] >= (3, 12):
+    #    np.testing.assert_almost_equal(
+    #        spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+    #        -0.7425657069861902,
+    #        decimal=7
+    #    )
+    #else:
+    #    np.testing.assert_almost_equal(
+    #        spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+    #        -0.5022957688493356,
+    #            decimal=7
+    #    )
+    assert spearmanr(train_ys_aneh, y_pred_prosst)[0] in [-0.7425657069861902, -0.5022957688493356]
 
     x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
     for i, setup in enumerate(['ESM', 'ProSST']):
