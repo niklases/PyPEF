@@ -402,8 +402,7 @@ def plm_inference(
     batch_size: int | None = 5,
     train=False,
     device=None,
-    verbose=False,
-    use_adapter=True
+    verbose=False
 ):  
     if device is None:
         device = get_device()
@@ -474,19 +473,19 @@ def plm_inference(
     )
 
     with torch.set_grad_enabled(train):
-                for x in pbar:
-                    pll = inference_function(
-                        tokenized_sequences=x,
-                        wt_input_ids=wt_input_ids,
-                        attention_mask=attention_mask,
-                        model=model,
-                        train=train,
-                        scoring_mode=scoring_mode,
-                        device=device,
-                        verbose=False,
-                        **kwargs
-                    )
-                    scores.append(pll)
+        for x in pbar:
+            pll = inference_function(
+                tokenized_sequences=x,
+                wt_input_ids=wt_input_ids,
+                attention_mask=attention_mask,
+                model=model,
+                train=train,
+                scoring_mode=scoring_mode,
+                device=device,
+                verbose=False,
+                **kwargs
+            )
+            scores.append(pll)
                     
     return torch.cat(scores)
 
@@ -622,7 +621,7 @@ def plm_train(
             logger.warning(f"{msg} Continuing nonetheless (using failed model "
                            f"and replacing NaN's with zeros)...")
             y_preds_train = plm_inference(
-                x_sequences,#.flatten(start_dim=0, end_dim=1),
+                x_sequences,
                 wt_input_ids, 
                 attention_mask, 
                 model,
@@ -635,7 +634,7 @@ def plm_train(
         logger.info(f"Loading best model as {best_model}...")
         load_model(model, best_model)
         y_preds_train = plm_inference(
-                x_sequences,#.flatten(start_dim=0, end_dim=1),
+                x_sequences,
                 wt_input_ids, 
                 attention_mask, 
                 model,

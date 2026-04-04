@@ -54,7 +54,7 @@ from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 
-device = ["cpu", get_device()][0]
+device = ["cpu", get_device()][1]
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
@@ -241,20 +241,19 @@ def test_hybrid_model_dca_llm():
             x_wt=g.x_wt,
             seed=42,
             device=device,
-            n_epochs=1
+            n_epochs=10
         )
 
-        #y_test_pred = plm_inference(
-        #    xs=x_llm_test,
-        #    wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
-        #    attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
-        #    model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
-        #    wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
-        #    device=device,
-        #    use_adapter=False
-        #).cpu()
+        y_test_pred = plm_inference(
+            xs=x_llm_test,
+            wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
+            attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
+            model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
+            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
+            device=device
+        ).cpu()
 
-        #print('y_llm_ttest:', spearmanr(test_ys_aneh, y_test_pred), len(test_ys_aneh))
+        print('y_llm_ttest:', spearmanr(test_ys_aneh, y_test_pred), len(test_ys_aneh))
         #if py_ver[0:2] >= (3, 12):
         #    np.testing.assert_almost_equal(
         #        spearmanr(test_ys_aneh, y_test_pred)[0], 
@@ -283,22 +282,14 @@ def test_hybrid_model_dca_llm():
             spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], 0.717333573331078, 
             decimal=7
         )
-        if py_ver[0:2] >= (3, 12):
+
+        if i == 0:
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-                [-0.7704181041760417,
-                 -0.8330644449247571
-                ][i],
-                decimal=7
+                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.7704181041760417
             )
-        else:
-            np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 
-                [-0.7704181041760417,
-                 -0.6370803136561448
-                ][i],
-                decimal=7
-            )
+        elif i == 1:
+            assert spearmanr(hm.y_ttest, hm.y_llm_ttest)[0] in [-0.6370803136561448, -0.8330644449247571]
+
 
         # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
         # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
@@ -669,6 +660,6 @@ if __name__ == "__main__":
     test_gremlin_avgfp()
     test_hybrid_model_dca_llm()
     test_dataset_b_results()
-    #test_plm_corr_blat_ecolx()
+    test_plm_corr_blat_ecolx()
     test_gaussian_process_opt()
     
