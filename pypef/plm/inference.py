@@ -6,10 +6,9 @@
 
 import os
 import inspect
-import contextlib
+
 from functools import partial
 import numpy as np
-from peft import PeftModel, get_peft_model_state_dict, set_peft_model_state_dict
 from scipy.stats import spearmanr
 import torch
 import torch.nn.functional as F

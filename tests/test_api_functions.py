@@ -114,10 +114,16 @@ def test_gremlin_avgfp():
     assert wt_score == g.wt_score == np.sum(g.x_wt)
 
 
-def test_hybrid_model_dca_llm():
+def test_hybrid_model_dca_llm(
+        msa=msa_file_aneh, 
+        train_seqs=train_seqs_aneh, 
+        test_seqs=test_seqs_aneh,
+        y_train=train_ys_aneh,
+        y_test=test_ys_aneh
+):
     print("\ntest_hybrid_model_dca_llm()...")
     g = GREMLIN(
-        alignment=msa_file_aneh,
+        alignment=msa,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
         wt_seq=None,
         optimize=True,
@@ -129,19 +135,19 @@ def test_hybrid_model_dca_llm():
     wt_score = g.get_wt_score()
     np.testing.assert_almost_equal(wt_score, 1743.2087199198131, decimal=1)
     assert wt_score == g.wt_score == np.sum(g.x_wt)
-    y_pred = g.get_scores(np.append(train_seqs_aneh, test_seqs_aneh))
+    y_pred = g.get_scores(np.append(train_seqs, test_seqs))
     np.testing.assert_almost_equal(
-        spearmanr(np.append(train_ys_aneh, test_ys_aneh), y_pred)[0], 
+        spearmanr(np.append(y_train, y_test), y_pred)[0], 
         -0.5528510930046211, 
         decimal=7
     )
-    x_dca_train = g.get_scores(train_seqs_aneh, encode=True)
+    x_dca_train = g.get_scores(train_seqs, encode=True)
     np.testing.assert_almost_equal(
         spearmanr(train_ys_aneh, np.sum(x_dca_train, axis=1))[0],
         -0.5556053466180598,
         decimal=7
     )
-    assert len(train_seqs_aneh[0]) == len(g.wt_seq)
+    assert len(train_seqs[0]) == len(g.wt_seq)
     aneh_wt_seq = get_wt_sequence(wt_seq_file_aneh)
     print('len(aneh_wt_seq)', len(aneh_wt_seq))
 
@@ -152,7 +158,7 @@ def test_hybrid_model_dca_llm():
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
-        train_seqs_aneh, esm_tokenizer, max_length=len(aneh_wt_seq) + 2
+        train_seqs, esm_tokenizer, max_length=len(aneh_wt_seq) + 2
     )
     # Tokenize WT sequence once
     wt_tokens, _ = tokenize_sequences(
@@ -165,7 +171,7 @@ def test_hybrid_model_dca_llm():
                                attention_mask=esm_attention_mask, model=esm_base_model,
                                device=device).cpu()
     np.testing.assert_almost_equal(
-        spearmanr(train_ys_aneh, y_pred_esm)[0], 
+        spearmanr(y_train, y_pred_esm)[0], 
          -0.713214007088901, 
         decimal=7
     )
@@ -197,7 +203,7 @@ def test_hybrid_model_dca_llm():
     assert struct_tok_sum == 417050 and struct_tok_sha == "df077674dd7c9054328537c1f7bd9c8e9bf80d59f287216ed3c2eeeeb7b8a39b"
 
     x_prosst, _prosst_attention_mask = tokenize_sequences(
-        sequences=train_seqs_aneh, 
+        sequences=train_seqs, 
         tokenizer=prosst_tokenizer, 
         max_length=len(aneh_wt_seq) + 2
     )
@@ -207,41 +213,41 @@ def test_hybrid_model_dca_llm():
                                   wt_structure_input_ids=wt_structure_input_ids, device=device).cpu()
     #if py_ver[0:2] >= (3, 12):
     #    np.testing.assert_almost_equal(
-    #        spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+    #        spearmanr(y_train, y_pred_prosst)[0], 
     #        -0.7425657069861902,
     #        decimal=7
     #    )
     #else:
     #    np.testing.assert_almost_equal(
-    #        spearmanr(train_ys_aneh, y_pred_prosst)[0], 
+    #        spearmanr(y_train, y_pred_prosst)[0], 
     #        -0.5022957688493356,
     #            decimal=7
     #    )
-    assert spearmanr(train_ys_aneh, y_pred_prosst)[0] in [-0.7425657069861902, -0.5022957688493356]
+    assert spearmanr(y_train, y_pred_prosst)[0] in [-0.7425657069861902, -0.5022957688493356]
 
-    x_dca_test = g.get_scores(test_seqs_aneh, encode=True)
+    x_dca_test = g.get_scores(test_seqs, encode=True)
     for i, setup in enumerate(['ESM', 'ProSST']):
         print(f'~~~ {setup} ~~~')
         if setup == 'ESM':
             llm_dict = esm_setup(
-                wt_seq=aneh_wt_seq, sequences=train_seqs_aneh, 
+                wt_seq=aneh_wt_seq, sequences=train_seqs, 
                 seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
             )
         else:  # elif setup == 'ProSST':
             llm_dict = prosst_setup(
-                wt_seq=aneh_wt_seq, pdb_file=pdb_file_aneh, sequences=train_seqs_aneh, 
+                wt_seq=aneh_wt_seq, pdb_file=pdb_file_aneh, sequences=train_seqs, 
                 seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
             )
-        x_llm_test, _ = tokenize_sequences(test_seqs_aneh, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+        x_llm_test, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
 
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
-            y_train=train_ys_aneh,
+            y_train=y_train,
             llm_model_input=llm_dict,
             x_wt=g.x_wt,
             seed=42,
             device=device,
-            n_epochs=10
+            n_epochs=50
         )
 
         y_test_pred = plm_inference(
@@ -253,27 +259,27 @@ def test_hybrid_model_dca_llm():
             device=device
         ).cpu()
 
-        print('y_llm_ttest:', spearmanr(test_ys_aneh, y_test_pred), len(test_ys_aneh))
+        print('y_llm_ttest:', spearmanr(y_test, y_test_pred), len(test_ys_aneh))
         #if py_ver[0:2] >= (3, 12):
         #    np.testing.assert_almost_equal(
-        #        spearmanr(test_ys_aneh, y_test_pred)[0], 
+        #        spearmanr(y_test, y_test_pred)[0], 
         #        [0.555914129115294, -0.714142690284619][i], 
         #        decimal=2                                       
         #    )
         #else:
         #    np.testing.assert_almost_equal(
-        #        spearmanr(test_ys_aneh, y_test_pred)[0], 
+        #        spearmanr(y_test, y_test_pred)[0], 
         #        [0.39323469421406104, 0.4731278777018075][i], 
         #        decimal=7                                       
         #    )
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
-        print(hm.beta1, hm.beta2, hm.beta3, hm.beta4, hm.ridge_opt)
+        print(hm.betas, hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
         print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
-        print('Hybrid prediction:', spearmanr(test_ys_aneh, y_pred_test), len(test_ys_aneh))
+        print('Hybrid prediction:', spearmanr(y_test, y_pred_test), len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], -0.5342743713116743, 
             decimal=7
@@ -297,7 +303,7 @@ def test_hybrid_model_dca_llm():
         # https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
         assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
         assert -1.0 <= spearmanr(test_ys_aneh, y_pred_test)[0] <= 1.0
-        #np.testing.assert_almost_equal(spearmanr(test_ys_aneh, y_pred_test)[0], 0.8403249605842074, decimal=7)  # 0.814064805565951
+        #np.testing.assert_almost_equal(spearmanr(y_test, y_pred_test)[0], 0.8403249605842074, decimal=7)  # 0.814064805565951
         # With seed 42 for numpy and torch for implemented LLM's and on local machine:
         if setup == esm_setup:
             continue  # TODO: Make new/overloaded pytest decorator function
@@ -317,12 +323,12 @@ def test_hybrid_model_dca_llm():
             #        )
             #try:
             #    np.testing.assert_almost_equal(
-            #        spearmanr(test_ys_aneh, y_pred_test)[0], 0.8004896406836318, decimal=7
+            #        spearmanr(y_test, y_pred_test)[0], 0.8004896406836318, decimal=7
             #    )
             #except AssertionError as ae1:
             #    try:
             #        np.testing.assert_almost_equal(
-            #            spearmanr(test_ys_aneh, y_pred_test)[0], 0.8338711936729409, decimal=7
+            #            spearmanr(y_test, y_pred_test)[0], 0.8338711936729409, decimal=7
             #        )
             #    except AssertionError as ae2:
             #        raise AssertionError(
@@ -347,7 +353,7 @@ def test_hybrid_model_dca_llm():
             #            f"Second comparison failed:\n{ae2}"
             #        )
             #np.testing.assert_almost_equal(
-            #    spearmanr(test_ys_aneh, y_pred_test)[0], 0.8291977762544377, decimal=7
+            #    spearmanr(y_test, y_pred_test)[0], 0.8291977762544377, decimal=7
             #)
 
 
@@ -613,8 +619,13 @@ def test_gaussian_process_opt():
     x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test, esm_tokenizer)
     print("Getting ESM test sequence embeddings...")
     x_esm_emb_test = plm_inference(
-        x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, 
-        esm_base_model, extract_emb=True, device=device, verbose=True
+        x_esm_tok_test, 
+        wt_esm_input_ids, 
+        esm_attention_mask, 
+        esm_base_model, 
+        extract_emb=True, 
+        device=device, 
+        verbose=True
     )
 
     x_combined_test = torch.cat([x_esm_emb_test, x_prosst_emb_test], dim=-1)  # Pay attention to correct order!
@@ -649,6 +660,7 @@ def test_gaussian_process_opt():
         print("Correlation loss Pearson TEST:             ", hybrid_corr_mse_loss(y_test, y_pred, method="pearson"))
         print("Correlation hybrid MSE-Spearman loss TEST: ", hybrid_corr_mse_loss(y_test, y_pred, method='spearman-hybrid'))
         print("Correlation hybrid MSE-Pearson TEST:       ", hybrid_corr_mse_loss(y_test, y_pred, method='pearson-hybrid'))
+        print("MSE:                                       ", hybrid_corr_mse_loss(y_test, y_pred, alpha=0.0))
         np.testing.assert_almost_equal(
             spear_rho, 
             [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 

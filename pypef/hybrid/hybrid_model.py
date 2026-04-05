@@ -36,6 +36,7 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
+from pypef.plm.utils import hybrid_corr_mse_loss
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
@@ -138,15 +139,12 @@ class DCALLMHybridModel:
         self.verbose = verbose
         (
             self.ridge_opt, 
-            self.beta1, 
-            self.beta2, 
-            self.beta3, 
-            self.beta4,
+            self.betas,
             self.y_dca_ttest,
             self.y_dca_ridge_ttest,
             self.y_llm_ttest,
             self.y_llm_lora_ttest
-        ) = None, None, None, None, None, None, None, None, None
+        ) = None, None, None, None, None, None
         self.progress_cb = progress_cb
         self.abort_cb = abort_cb
         self.train_and_optimize()
@@ -278,74 +276,167 @@ class DCALLMHybridModel:
         )
         grid.fit(x_train, y_train)
         return Ridge(**grid.best_params_).fit(x_train, y_train)
-
-    def _adjust_betas(
+    
+    def optimize_ensemble_weights(
             self,
-            y: np.ndarray,
-            y_dca: np.ndarray,
-            y_ridge: np.ndarray,
-            y_llm: np.ndarray| None = None,
-            y_llm_lora: np.ndarray | None = None
-    ) -> np.ndarray:
+            y_true_np: np.ndarray, 
+            *y_preds_np: np.ndarray | None, 
+            method: str = "spearman-hybrid",
+            alpha: float = 0.5
+        ) -> np.ndarray:
+
+            valid_indices = []
+            valid_preds_list = []
+
+            # Prepare and Flip Predictors
+            for i, p in enumerate(y_preds_np):
+                if p is not None:
+                    # OPTIONAL: If a predictor is naturally anti-correlated, 
+                    # one might want to flip it here: p = -p
+                    p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
+                    valid_preds_list.append(torch.from_numpy(p_std).float())
+                    valid_indices.append(i)
+
+            X = torch.stack(valid_preds_list, dim=-1)
+            y_true_std = torch.from_numpy((y_true_np - np.mean(y_true_np)) / (np.std(y_true_np) + 1e-8)).float()
+
+            # Leaf Tensor initialization
+            betas = torch.ones(X.shape[1], requires_grad=True)
+            with torch.no_grad():
+                betas /= X.shape[1]
+
+            optimizer = torch.optim.LBFGS([betas], lr=0.1, max_iter=20)
+
+            def closure():
+                optimizer.zero_grad()
+                # SOFTPLUS: Forces weights to be positive, but allowed to be > 1
+                weights = torch.nn.functional.softplus(betas)
+                y_hat = X @ weights
+                loss = hybrid_corr_mse_loss(y_true_std, y_hat, method=method, alpha=alpha)
+                loss.backward()
+                return loss
+
+            for _ in range(25): # L-BFGS is efficient, 25 steps is usually plenty
+                optimizer.step(closure)
+
+            # Transform the raw betas into the EFFECTIVE weights
+            with torch.no_grad():
+                # You must apply softplus here too!
+                effective_weights = torch.nn.functional.softplus(betas).numpy()
+
+            # Map back to original predictor slots
+            final_betas = np.zeros(len(y_preds_np))
+            for idx, w in zip(valid_indices, effective_weights):
+                final_betas[idx] = w
+
+            # Internal validation check
+            y_ensemble = np.zeros_like(y_true_np)
+            for i, p in enumerate(y_preds_np):
+                if p is not None:
+                    p_scaled = (p - np.mean(p)) / (np.std(p) + 1e-8)
+                    y_ensemble += final_betas[i] * p_scaled
+                    print(f" Beta {i}: {final_betas[i]}")
+
+            final_corr = self.spearmanr(y_true_np, y_ensemble)
+            print(f"Ensemble Opt. Spearman: {final_corr:.4f} | Weights: {final_betas}")
+            return final_betas
+    
+    def _adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
         """
-        Find parameters that maximize the absolut Spearman rank
-        correlation coefficient using differential evolution.
+        Find parameters that maximize the absolute Spearman rank
+        correlation coefficient using differential evolution 
+        (pos-hoc ensemble weighting).
 
         Parameters
         ----------
         y : np.ndarray
             Array of fitness values.
-        y_dca : np.ndarray
-            Difference of the statistical energies of variants
-            and wild-type.
-        y_ridge : np.ndarray
-            (Ridge) predicted fitness values of the variants.
+        *predictions : np.ndarray | None
+            A variable number of prediction arrays to balance. 
+            None values are safely filtered out.
 
         Returns
         -------
-        'beta_1' and 'beta_2' that maximize the absolut Spearman rank correlation
-        coefficient.
+        np.ndarray
+            Array of beta weights corresponding to each valid prediction input, 
+            maximizing the absolute Spearman rank correlation coefficient.
         """
-        if y_llm is None or y_llm_lora is None:
-            loss = lambda params: -np.abs(
-                self.spearmanr(
-                    y, 
-                    params[0] * y_dca + 
-                    params[1] * y_ridge
-                )
-            )
-        else:
-            if np.any(np.isnan(y_llm_lora)):
-                logger.warning("y_llm_lora contains NaN's, weighting lora llm "
-                               "hybrid model weight parameters with zero...")
-                loss = lambda params: -np.abs(
-                    self.spearmanr(
-                        y, 
-                        params[0] * y_dca + 
-                        params[1] * y_ridge + 
-                        params[2] * y_llm
-                    )
-                )
+        valid_preds = [p for p in predictions if p is not None]
+        if not valid_preds:
+            raise ValueError("At least one valid prediction array must be provided.")
+
+        num_preds = len(valid_preds)
+
+        # Dynamically identify which predictors contain NaNs
+        clean_indices = []
+        clean_preds = []
+
+        for i, p in enumerate(valid_preds):
+            if np.any(np.isnan(p)):
+                logger.warning(f"Predictor at index {i} contains NaNs. Weighting parameter with zero...")
             else:
-                loss = lambda params: -np.abs(
-                    self.spearmanr(
-                        y, 
-                        params[0] * y_dca + 
-                        params[1] * y_ridge + 
-                        params[2] * y_llm + 
-                        params[3] * y_llm_lora 
-                    )
-                )
+                clean_indices.append(i)
+                clean_preds.append(p)
+
+        # If all predictors were full of NaNs, return an array of zeros
+        if not clean_preds:
+            return np.zeros(num_preds)
+
+        # Stack clean predictions into a 2D matrix for fast vectorized multiplication
+        # Shape: (n_samples, n_clean_predictors)
+        X_clean = np.column_stack(clean_preds)
+
+        # 4. Define the objective function using matrix multiplication (@)
+        def loss(params):
+            # This dynamically replaces params[0]*y0 + params[1]*y1 + ...
+            y_pred = X_clean @ params
+            return -np.abs(self.spearmanr(y, y_pred))
+
+        # Handle bounds dynamically to match the number of clean parameters
+        # If self.parameter_range is a list of bounds, map it to the clean indices.
+        # Otherwise, duplicate the base tuple (e.g., (-1, 1)) for each parameter.
+        if isinstance(self.parameter_range, list):
+            bounds = [self.parameter_range[i] for i in clean_indices]
+        else:
+            bounds = [self.parameter_range] * len(clean_indices)
+
+        # Run the optimizer
         try:
             minimizer = differential_evolution(
-                loss, bounds=self.parameter_range, tol=1e-4, rng=self.seed)
+                loss, bounds=bounds, tol=1e-4, rng=self.seed
+            )
         except TypeError:  # SciPy v. 1.15.0 change: `seed` -> `rng` keyword
             minimizer = differential_evolution(
-                loss, bounds=self.parameter_range, tol=1e-4, seed=self.seed)
-        if y_llm is not None or y_llm_lora is not None:
-            if np.any(np.isnan(y_llm_lora)):
-                minimizer.x[-1] = 0.0
-        return minimizer.x
+                loss, bounds=bounds, tol=1e-4, seed=self.seed
+            )
+
+        # Reconstruct the final weights array, leaving NaN predictors as 0.0
+        final_betas = np.zeros(num_preds)
+        for clean_idx, opt_weight in zip(clean_indices, minimizer.x):
+            final_betas[clean_idx] = opt_weight
+        
+        y_ensemble = np.zeros_like(y, dtype=np.float64)
+
+        # Iterate through predictors and apply weights
+        for i, p in enumerate(predictions):
+            if p is not None:
+                # Standardize the predictor to match the scale used during optimization
+                # (Crucial if your loss function used MSE)
+                p_mean = np.mean(p)
+                p_std = np.std(p) + 1e-8
+                p_scaled = (p - p_mean) / p_std
+
+                # Add weighted contribution
+                y_ensemble += final_betas[i] * p_scaled
+                print(f" Beta {i}: {final_betas[i]}")
+
+        # Validate the final ensemble performance
+        final_corr = self.spearmanr(y, y_ensemble)
+        print(f"adjust_betas: Final Ensemble Spearman Train/Opt. Correlation: {final_corr:.4f} (weights: {final_betas})")
+        
+        self.betas = final_betas
+
+        return final_betas
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
         logger.info("Getting subsplits for supervised (re-)training of models "
@@ -444,14 +535,14 @@ class DCALLMHybridModel:
                 model=self.llm_model,
                 device=self.device
             )
-        logger.info(
+        print(
             f"{self.llm_key.upper()} unsupervised performance: "
             f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
             f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttest)})"
         )
-        logger.info('Refining/training the model... gradient calculation adds a computational '
+        print('Refining/training the model... gradient calculation adds a computational '
               'graph that requires quite some memory - if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
@@ -522,7 +613,7 @@ class DCALLMHybridModel:
                 device=self.device,
                 verbose=self.verbose
             )
-        logger.info(
+        print(
             f"{self.llm_key.upper()} supervised tuned performance: "
             f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
@@ -560,19 +651,23 @@ class DCALLMHybridModel:
         self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-        if len(self.parameter_range) == 4:
+        predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
+
+        # 2. Check if LLM should be included based on your parameter_range logic
+        if len(self.parameter_range) >= 4:
             self.train_llm()
-            self.beta1, self.beta2, self.beta3, self.beta4 = self._adjust_betas(
-               self.y_ttest, self.y_dca_ttest, self.y_dca_ridge_ttest, 
-               self.y_llm_ttest, self.y_llm_lora_ttest
-            )
-            return self.beta1, self.beta2, self.beta3, self.beta4, self.ridge_opt
-        
-        else:
-            self.beta1, self.beta2 = self._adjust_betas(self.y_ttest, 
-                self.y_dca_ttest, self.y_dca_ridge_ttest
-            )
-            return self.beta1, self.beta2, self.ridge_opt
+            # Add LLM predictors to the list
+            predictors.extend([self.y_llm_ttest, self.y_llm_lora_ttest])
+    
+        # 3. Call the new dynamic adjustment function
+        # The * syntax "unpacks" the list into individual arguments
+        self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
+        #self.all_betas = self._adjust_betas(self.y_ttest, *predictors)
+        print('self.all_betas:', self.all_betas)
+
+        # 4. Handle the return values dynamically
+        # This returns all optimized betas plus the ridge object
+        return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
             self,
@@ -614,8 +709,6 @@ class DCALLMHybridModel:
                       'Using only DCA for hybridprediction.. This can lead '
                       'to unwanted prediction behavior if the hybrid model '
                       'is trained including an LLM...')
-            return self.beta1 * y_dca + self.beta2 * y_ridge
-        
         else:
             if self.llm_key == 'prosst':
                 y_llm = self.llm_inference_function(
@@ -653,18 +746,32 @@ class DCALLMHybridModel:
                     verbose=verbose,
                     device=self.device
                 ).detach().cpu().numpy()
-            if np.any(np.isnan(y_llm)) or np.any(np.isnan(y_llm_lora)):
-                logger.warning(
-                    f"LLM predictions contains NaN's... replacing NaN's with "
-                    f"zeros (optimized hybrid model weights: "
-                    f"{self.beta1}, {self.beta2}, {self.beta3}, {self.beta4})..."
-                )
-                y_llm = np.nan_to_num(y_llm_lora, nan=0.0)
-                y_llm_lora = np.nan_to_num(y_llm_lora, nan=0.0)
-            return (
-                self.beta1 * y_dca + self.beta2 * y_ridge + 
-                self.beta3 * y_llm + self.beta4 * y_llm_lora
-            )
+        # 1. Collect your predictors in the EXACT same order used during optimization
+        predictors = [y_dca, y_ridge]
+        if hasattr(self, 'y_llm_ttest'): # or whatever condition you use to trigger LLM
+            predictors.extend([y_llm, y_llm_lora])
+        
+        # 2. Handle NaNs dynamically for all predictors
+        cleaned_preds = []
+        for i, p in enumerate(predictors):
+            if p is not None and np.any(np.isnan(p)):
+                logger.warning(f"Predictor at index {i} contains NaNs. Replacing with zeros...")
+                cleaned_preds.append(np.nan_to_num(p, nan=0.0))
+            else:
+                cleaned_preds.append(p)
+        
+        # 3. Calculate final prediction using the betas array
+        # all_betas was the array returned by optimize_ensemble_weights
+        y_final = np.zeros_like(y_dca)
+        print("Hybrid prediction...")
+        for beta, p in zip(self.all_betas, cleaned_preds, strict=True):
+            print(f"beta: {beta}")
+            if p is not None:
+                # Standardize p here if you optimized on standardized values!
+                p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
+                y_final += beta * p_std
+        
+        return y_final
 
     def ls_ts_performance(self):
         beta_1, beta_2, reg = self.settings(

@@ -63,7 +63,8 @@ def hybrid_corr_mse_loss(
         method: "spearman" (uses soft-ranking) or "pearson".
         tau: Temperature for soft-rank approximation.
         alpha: Weight for correlation loss. (1 - alpha) is weight for MSE:
-        alpha=0.0: only consider MSE, in between: hybrid loss).
+        alpha=0.0: only consider MSE, in between: hybrid loss, alpha=1.0: only 
+        consider Spearman correlation/ranking or Pearson correlation).
     """
     if alpha is None:
         if method in ["spearman", "pearson"]:
