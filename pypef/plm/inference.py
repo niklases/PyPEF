@@ -390,7 +390,7 @@ def mutation_all_pos_masked_pll(
 
 
 def plm_inference(
-    xs,
+    tokenized_sequences,
     wt_input_ids,
     attention_mask,
     model,
@@ -445,10 +445,10 @@ def plm_inference(
         
     scores = []
     if batch_size is None:
-        xs_b = torch.atleast_2d(xs)
+        xs_b = torch.atleast_2d(tokenized_sequences,)
     else:
         logger.info(f"Splitting tokenized sequences into batches...")
-        xs_b = get_batches(xs, dtype=int, batch_size=batch_size,
+        xs_b = get_batches(tokenized_sequences, dtype=int, batch_size=batch_size,
                            keep_remaining=keep_remaining, verbose=True)
         xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     if extract_emb:
@@ -551,7 +551,7 @@ def plm_train(
             if seqs_b.dim() == 2:
                 seqs_b = seqs_b.unsqueeze(0)  # e.g., (5, 400)  -> (1, 5 400)
             y_preds_b = plm_inference(
-                xs=seqs_b, 
+                tokenized_sequences=seqs_b, 
                 wt_input_ids=wt_input_ids, 
                 attention_mask=attention_mask,
                 model=model, 

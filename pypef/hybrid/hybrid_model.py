@@ -66,6 +66,8 @@ class DCALLMHybridModel:
             x_wt: np.ndarray | None = None,
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
+            ensemble_func='torch',
+            gauss_opt: bool = False,
             batch_size: int | None = None,
             n_epochs: int | None = None,
             device: str | None = None,
@@ -121,6 +123,8 @@ class DCALLMHybridModel:
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
+        self.ensemble_func = ensemble_func
+        self.gauss_opt = gauss_opt
         self.alphas = alphas
         self.x_train_dca = x_train_dca
         self.y_train = y_train
@@ -341,7 +345,7 @@ class DCALLMHybridModel:
             print(f"Ensemble Opt. Spearman: {final_corr:.4f} | Weights: {final_betas}")
             return final_betas
     
-    def _adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
+    def adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
         """
         Find parameters that maximize the absolute Spearman rank
         correlation coefficient using differential evolution 
@@ -505,7 +509,7 @@ class DCALLMHybridModel:
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
+                tokenized_sequences=self.x_llm_ttest,
                 model=self.llm_base_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -513,7 +517,7 @@ class DCALLMHybridModel:
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
+                tokenized_sequences=self.x_llm_ttrain,
                 model=self.llm_base_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -522,14 +526,14 @@ class DCALLMHybridModel:
             )
         elif self.llm_key == 'esm1v':
             y_llm_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
+                tokenized_sequences=self.x_llm_ttest,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 model=self.llm_model,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
+                tokenized_sequences=self.x_llm_ttrain,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 model=self.llm_model,
@@ -546,8 +550,20 @@ class DCALLMHybridModel:
               'graph that requires quite some memory - if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
-        # void function, training model in place
+        
         if self.llm_key == 'prosst':
+            if self.gauss_opt is True:  # TODO: Add Gauss opt.
+                self.llm_inference_function(
+                    tokenized_sequences=self.x_llm_ttrain,
+                    model=self.llm_model,
+                    wt_input_ids=self.wt_input_ids,
+                    attention_mask=self.llm_attention_mask,
+                    wt_structure_input_ids=self.structure_input_ids,
+                    extract_emb=True,
+                    device=self.device,
+                    verbose=self.verbose
+                )
+            # void function, training model in place
             self.llm_train_function(
                 x_sequences=self.x_llm_ttrain, 
                 scores=self.y_ttrain,
@@ -565,7 +581,7 @@ class DCALLMHybridModel:
                 abort_cb=self.abort_cb
             )
             y_llm_lora_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
+                tokenized_sequences=self.x_llm_ttrain,
                 model=self.llm_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -574,7 +590,7 @@ class DCALLMHybridModel:
                 verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
+                tokenized_sequences=self.x_llm_ttest,
                 model=self.llm_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -598,7 +614,7 @@ class DCALLMHybridModel:
                 abort_cb=self.abort_cb
             )
             y_llm_lora_ttrain = self.llm_inference_function(
-                xs=self.x_llm_ttrain,
+                tokenized_sequences=self.x_llm_ttrain,
                 model=self.llm_model,
                 attention_mask=self.llm_attention_mask,
                 wt_input_ids=self.wt_input_ids,
@@ -606,7 +622,7 @@ class DCALLMHybridModel:
                 verbose=self.verbose
             )
             y_llm_lora_ttest = self.llm_inference_function(
-                xs=self.x_llm_ttest,
+                tokenized_sequences=self.x_llm_ttest,
                 model=self.llm_model,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
@@ -653,20 +669,17 @@ class DCALLMHybridModel:
 
         predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
 
-        # 2. Check if LLM should be included based on your parameter_range logic
         if len(self.parameter_range) >= 4:
             self.train_llm()
             # Add LLM predictors to the list
             predictors.extend([self.y_llm_ttest, self.y_llm_lora_ttest])
     
-        # 3. Call the new dynamic adjustment function
-        # The * syntax "unpacks" the list into individual arguments
-        self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
-        #self.all_betas = self._adjust_betas(self.y_ttest, *predictors)
+        if self.ensemble_func == 'torch':
+            self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
+        else:
+            self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
         print('self.all_betas:', self.all_betas)
 
-        # 4. Handle the return values dynamically
-        # This returns all optimized betas plus the ridge object
         return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
@@ -712,7 +725,7 @@ class DCALLMHybridModel:
         else:
             if self.llm_key == 'prosst':
                 y_llm = self.llm_inference_function(
-                    xs=x_llm, 
+                    tokenized_sequences=x_llm, 
                     wt_input_ids=self.wt_input_ids,
                     attention_mask=self.llm_attention_mask, 
                     model=self.llm_base_model, 
@@ -721,7 +734,7 @@ class DCALLMHybridModel:
                     device=self.device
                 ).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
-                    xs=x_llm, 
+                    tokenized_sequences=x_llm, 
                     wt_input_ids=self.wt_input_ids,
                     attention_mask=self.llm_attention_mask, 
                     model=self.llm_model, 
@@ -731,7 +744,7 @@ class DCALLMHybridModel:
                 ).detach().cpu().numpy()
             elif self.llm_key == 'esm1v':
                 y_llm = self.llm_inference_function(
-                    xs=x_llm, 
+                    tokenized_sequences=x_llm, 
                     wt_input_ids=self.wt_input_ids,
                     attention_mask=self.llm_attention_mask, 
                     model=self.llm_base_model, 
@@ -739,7 +752,7 @@ class DCALLMHybridModel:
                     device=self.device
                 ).detach().cpu().numpy()
                 y_llm_lora = self.llm_inference_function(
-                    xs=x_llm, 
+                    tokenized_sequences=x_llm, 
                     wt_input_ids=self.wt_input_ids,
                     attention_mask=self.llm_attention_mask, 
                     model=self.llm_model, 
@@ -1232,7 +1245,7 @@ def performance_ls_ts(
                 llm_dict = esm_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
                 logger.info("Zero-shot LLM inference on test set using ESM1v...")
                 y_test_pred = plm_inference(
-                    xs = llm_dict['esm1v']['x_llm'],
+                    tokenized_sequences = llm_dict['esm1v']['x_llm'],
                     wt_input_ids=llm_dict['esm1v']['wt_input_ids'],
                     model=llm_dict['esm1v']['llm_base_model']
                 )
@@ -1240,7 +1253,7 @@ def performance_ls_ts(
                 llm_dict = prosst_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
                 logger.info("Zero-shot LLM inference on test set using ProSST...")
                 y_test_pred = plm_inference(
-                    xs = llm_dict['prosst']['x_llm'],
+                    tokenized_sequences = llm_dict['prosst']['x_llm'],
                     wt_input_ids=llm_dict['prosst']['wt_input_ids'],
                     model=llm_dict['prosst']['llm_base_model'],
                     wt_structure_input_ids=llm_dict['prosst']['wt_structure_input_ids']
