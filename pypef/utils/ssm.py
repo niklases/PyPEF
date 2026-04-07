@@ -3,18 +3,17 @@
 
 
 import logging
-
-from pypef.plm.prosst_lora_tune import get_structure_quantizied
 logger = logging.getLogger('pypef.utils.ssm')
 
 import os
 from typing import Literal, Union
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import torch
 
+from pypef.utils.helpers import tqdm
+from pypef.plm.prosst_lora_tune import get_structure_quantizied
 from pypef.hybrid.hybrid_model import get_model_and_type
 from pypef.plm.inference import (
     plm_inference, get_esm_models, get_prosst_models, tokenize_sequences

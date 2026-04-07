@@ -12,9 +12,9 @@ import numpy as np
 from scipy.stats import spearmanr
 import torch
 import torch.nn.functional as F
-from tqdm import tqdm
 from Bio import SeqIO
 
+from pypef.utils.helpers import tqdm
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import hybrid_corr_mse_loss, get_batches

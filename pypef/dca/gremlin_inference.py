@@ -46,9 +46,9 @@ from scipy.spatial.distance import pdist, squareform
 from scipy.special import logsumexp
 from scipy.stats import boxcox
 import pandas as pd
-from tqdm import tqdm
 import torch
 
+from pypef.utils.helpers import tqdm
 from pypef.plm.utils import get_batches
 from pypef.utils.variant_data import get_mismatches
 

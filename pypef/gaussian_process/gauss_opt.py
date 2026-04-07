@@ -17,9 +17,8 @@ Used under MIT license; code available at https://github.com/petergroth/kermut.
 
 import torch
 import gpytorch
-from tqdm import tqdm
 
-from pypef.utils.helpers import get_device
+from pypef.utils.helpers import get_device, tqdm
 
 import logging
 logger = logging.getLogger('pypef.gaussian_process.gauss_opt')

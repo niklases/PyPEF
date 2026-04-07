@@ -11,8 +11,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
 import pickle
-from tqdm import tqdm
 
+from pypef.utils.helpers import tqdm
 from pypef.ml.regression import cv_regression_options
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.utils.variant_data import process_df_encoding, get_basename

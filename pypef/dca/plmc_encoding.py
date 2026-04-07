@@ -34,7 +34,6 @@ logger = logging.getLogger('pypef.dca.encoding')
 import os
 from collections.abc import Iterable
 import numpy as np
-from tqdm import tqdm
 import pickle
 
 from pypef.settings import USE_RAY
@@ -42,7 +41,7 @@ if USE_RAY:
     import ray
 
 from pypef.utils.variant_data import amino_acids
-from pypef.utils.helpers import ray_conditional_decorator
+from pypef.utils.helpers import tqdm, ray_conditional_decorator
 
 _SLICE = np.s_[:]
 

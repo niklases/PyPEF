@@ -16,11 +16,11 @@ import warnings
 import copy
 import torch
 import numpy as np
-from tqdm import tqdm
 from peft import LoraConfig, get_peft_model
 from Bio import BiopythonParserWarning
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
+from pypef.utils.helpers import tqdm
 from pypef.plm.prosst_structure.quantizer import PdbQuantizer
 from pypef.utils.helpers import get_device
 from pypef.plm.utils import _set_seeds, load_model_and_tokenizer
