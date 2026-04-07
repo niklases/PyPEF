@@ -147,8 +147,10 @@ class DCALLMHybridModel:
             self.y_dca_ttest,
             self.y_dca_ridge_ttest,
             self.y_llm_ttest,
-            self.y_llm_lora_ttest
-        ) = None, None, None, None, None, None
+            self.y_llm_lora_ttest,
+            self.y_llm_ttrain,
+            self.y_llm_lora_ttrain
+        ) = None, None, None, None, None, None, None, None
         self.progress_cb = progress_cb
         self.abort_cb = abort_cb
         self.train_and_optimize()
@@ -339,10 +341,10 @@ class DCALLMHybridModel:
                 if p is not None:
                     p_scaled = (p - np.mean(p)) / (np.std(p) + 1e-8)
                     y_ensemble += final_betas[i] * p_scaled
-                    print(f" Beta {i}: {final_betas[i]}")
 
             final_corr = self.spearmanr(y_true_np, y_ensemble)
-            print(f"Ensemble Opt. Spearman: {final_corr:.4f} | Weights: {final_betas}")
+            logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Weights: {final_betas}")
+            self.betas = final_betas
             return final_betas
     
     def adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
@@ -432,14 +434,11 @@ class DCALLMHybridModel:
 
                 # Add weighted contribution
                 y_ensemble += final_betas[i] * p_scaled
-                print(f" Beta {i}: {final_betas[i]}")
 
         # Validate the final ensemble performance
         final_corr = self.spearmanr(y, y_ensemble)
-        print(f"adjust_betas: Final Ensemble Spearman Train/Opt. Correlation: {final_corr:.4f} (weights: {final_betas})")
-        
+        logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Weights: {final_betas}")
         self.betas = final_betas
-
         return final_betas
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
@@ -507,10 +506,11 @@ class DCALLMHybridModel:
 
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
+        # Here, just getting the unsupervised scores and correlations on ttrain and ttest splits
         if self.llm_key == 'prosst':
             y_llm_ttest = self.llm_inference_function(
                 tokenized_sequences=self.x_llm_ttest,
-                model=self.llm_base_model,
+                model=self.llm_base_model,  # Before training, LoRa and Base model (should) yield the same results
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
                 wt_structure_input_ids=self.structure_input_ids,
@@ -529,24 +529,24 @@ class DCALLMHybridModel:
                 tokenized_sequences=self.x_llm_ttest,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                model=self.llm_model,
+                model=self.llm_base_model,
                 device=self.device
             )
             y_llm_ttrain = self.llm_inference_function(
                 tokenized_sequences=self.x_llm_ttrain,
                 wt_input_ids=self.wt_input_ids,
                 attention_mask=self.llm_attention_mask,
-                model=self.llm_model,
+                model=self.llm_base_model,
                 device=self.device
             )
-        print(
+        logger.info(
             f"{self.llm_key.upper()} unsupervised performance: "
             f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
             f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttest)})"
         )
-        print('Refining/training the model... gradient calculation adds a computational '
+        logger.info('Refining/training the model... gradient calculation adds a computational '
               'graph that requires quite some memory - if you are facing an (out of memory) '
               'error, try reducing the batch size or sticking to CPU device...')
         
@@ -563,7 +563,7 @@ class DCALLMHybridModel:
                     device=self.device,
                     verbose=self.verbose
                 )
-            # void function, training model in place
+            # void function, training model (LoRA models) in place
             self.llm_train_function(
                 x_sequences=self.x_llm_ttrain, 
                 scores=self.y_ttrain,
@@ -629,7 +629,7 @@ class DCALLMHybridModel:
                 device=self.device,
                 verbose=self.verbose
             )
-        print(
+        logger.info(
             f"{self.llm_key.upper()} supervised tuned performance: "
             f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
             f" (N={len(self.y_ttrain)}), "
@@ -637,6 +637,8 @@ class DCALLMHybridModel:
             f" (N={len(self.y_ttest)})"
         )
 
+        self.y_llm_ttrain = y_llm_ttrain.detach().cpu().numpy()
+        self.y_llm_lora_ttrain = y_llm_lora_ttrain.detach().cpu().numpy()
         self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
         self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
 
@@ -678,7 +680,6 @@ class DCALLMHybridModel:
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
         else:
             self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
-        print('self.all_betas:', self.all_betas)
 
         return (*self.all_betas, self.ridge_opt)
 
@@ -776,11 +777,9 @@ class DCALLMHybridModel:
         # 3. Calculate final prediction using the betas array
         # all_betas was the array returned by optimize_ensemble_weights
         y_final = np.zeros_like(y_dca)
-        print("Hybrid prediction...")
         for beta, p in zip(self.all_betas, cleaned_preds, strict=True):
-            print(f"beta: {beta}")
             if p is not None:
-                # Standardize p here if you optimized on standardized values!
+                # Standardize p here if optimized on standardized values!
                 p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
                 y_final += beta * p_std
         

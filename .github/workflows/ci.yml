@@ -8,6 +8,12 @@ on: [push]
 permissions:
   contents: read
 
+env: 
+  CI: "true"
+  PYTHONHASHSEED: "42"
+  CUBLAS_WORKSPACE_CONFIG: ":4096:8"
+  TQDM_DISABLE: "1"
+
 jobs:
   ubuntu:
     name: ubuntu
@@ -37,12 +43,11 @@ jobs:
         # stop the build if there are Python syntax errors or undefined names
         flake8 ./pypef --count --select=E9,F63,F7,F82 --show-source --statistics
     - name: Export Pythonpath and run tests using the main script
-      env: 
+      env:
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        PYTHONHASHSEED: "42"
-        CUBLAS_WORKSPACE_CONFIG: ":4096:8"
       run: |
-        export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
+        export PYTHONPATH="${PYTHONPATH}:${PWD}"
+        python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO --capture=tee-sys
     - name: Export Pythonpath and run GUI tests using pip-installation
       run: |
         export PYTHONPATH=""
@@ -54,7 +59,7 @@ jobs:
         sleep 3
         pip install .[gui]
         echo $(which pypef)
-        python -m pytest ./tests/ -v -m "pip_specific" --log-cli-level=INFO
+        python -m pytest ./tests/ -v -m "pip_specific" --log-cli-level=INFO --capture=tee-sys
 
   windows:
     name: windows
@@ -86,14 +91,13 @@ jobs:
       shell: pwsh
       env: 
         HF_TOKEN: ${{ secrets.HF_TOKEN }}
-        PYTHONHASHSEED: "42"
-        CUBLAS_WORKSPACE_CONFIG: ":4096:8"
       run: |
-        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
+        $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}"
+        python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO --capture=tee-sys
     - name: Export Pythonpath and run GUI tests using pip-installation
       shell: pwsh
       run: |
         $env:PYTHONPATH = ""
         pip install .[gui]
         echo (Get-Command pypef).Source
-        python -m pytest .\tests -v -m "pip_specific" --log-cli-level=INFO
+        python -m pytest .\tests -v -m "pip_specific" --log-cli-level=INFO --capture=tee-sys
