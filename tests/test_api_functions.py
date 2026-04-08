@@ -275,6 +275,7 @@ def test_hybrid_model_dca_llm_aneh(
         if i == 1:
             y_test_pred_1 = plm_inference(tokenized_sequences=x_llm_test, wt_input_ids=wt_tokens_prosst, 
                                           attention_mask=prosst_attention_mask, model=prosst_base_model,
+                                          wt_structure_input_ids=wt_structure_tokens_prosst,
                                           device=device).cpu()
 
         # y_test_pred_1: SignificanceResult(statistic=np.float64(-0.7050183991342079), pvalue=np.float64(1.3613669161432091e-05)) 30
@@ -583,10 +584,12 @@ def test_hybrid_model_dca_llm_avgfp(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
         elif i == 1:
-            assert spearmanr(hm.y_ttest, hm.y_llm_ttest)[0] in [0.645973191052021, 0.21670201832455013]
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218  #  ACTUAL: np.float64(0.21670201832455013)
-            #)
+            try:
+                print(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0])
+                np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.645973191052021)
+            except AssertionError:
+                np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.21670201832455013)
+
 
 
 def test_dataset_b_results():
