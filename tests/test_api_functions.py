@@ -124,7 +124,7 @@ test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
 
 
 def test_gremlin_avgfp():
-    print("\ntest_gremlin_avgfp()...")
+    print("\n\ntest_gremlin_avgfp()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
         alignment=msa_file_avgfp,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -149,7 +149,7 @@ def test_hybrid_model_dca_llm_aneh(
         wt_seq=get_wt_sequence(wt_seq_file_aneh),
         pdb_file=pdb_file_aneh
 ):
-    print("\ntest_hybrid_model_dca_llm_aneh()...")
+    print("\n\ntest_hybrid_model_dca_llm_aneh()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
         alignment=msa,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -296,7 +296,7 @@ def test_hybrid_model_dca_llm_aneh(
             wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
             attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
             model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
-            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
+            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
             device=device
         ).cpu()
 
@@ -308,7 +308,7 @@ def test_hybrid_model_dca_llm_aneh(
             wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
             attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
             model=llm_dict[['esm1v', 'prosst'][i]]['llm_model'],
-            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
+            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
             device=device
         ).cpu()
 
@@ -335,8 +335,11 @@ def test_hybrid_model_dca_llm_aneh(
         #        [0.39323469421406104, 0.4731278777018075][i], 
         #        decimal=7                                       
         #    )
+        x_llm_input = {
+                ['esm1v', 'prosst'][i]: x_llm_test,
+            }
 
-        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
+        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
         print(hm.betas, hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
@@ -430,7 +433,7 @@ def test_hybrid_model_dca_llm_avgfp(
         wt_seq=get_wt_sequence(wt_seq_file_avgfp),
         pdb_file=pdb_file_avgfp
 ):
-    print("\ntest_hybrid_model_dca_llm_avgfp()...")
+    print("\n\ntest_hybrid_model_dca_llm_avgfp()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
         alignment=msa,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -524,19 +527,23 @@ def test_hybrid_model_dca_llm_avgfp(
     
 
     x_dca_test = g.get_scores(test_seqs, encode=True)
-    for i, setup in enumerate(['ESM', 'ProSST']):
+    for i, setup in enumerate(['ESM', 'ProSST', 'Ensemble']):
         print(f'~~~ {setup} ~~~')
         if setup == 'ESM':
-            llm_dict = esm_setup(
+            llm_dict_esm = esm_setup(
                 wt_seq=wt_seq, sequences=train_seqs, 
                 seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
             )
-        else:  # elif setup == 'ProSST':
-            llm_dict = prosst_setup(
+            llm_dict = llm_dict_esm
+        elif setup == 'ProSST':  # elif setup == 'ProSST':
+            llm_dict_prosst = prosst_setup(
                 wt_seq=wt_seq, pdb_file=pdb_file, sequences=train_seqs, 
                 seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
             )
-        x_llm_test, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+            llm_dict = llm_dict_prosst
+        else:
+            llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
+            llm_dict = llm_dict_ensemble
 
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
@@ -544,18 +551,36 @@ def test_hybrid_model_dca_llm_avgfp(
             llm_model_input=llm_dict,
             x_wt=g.x_wt,
             seed=42,
-            device=device,
-            n_epochs=25
+            lora_train=True,
+            gauss_opt=True,
+            n_epochs=25,
+            device=device
         )
 
-        y_test_pred = plm_inference(
-            tokenized_sequences=x_llm_test,
-            wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
-            attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
-            model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
-            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('structure_input_ids'),
-            device=device
-        ).cpu()
+        if i == 0:
+            x_llm_test_esm, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+            x_llm_test = x_llm_test_esm
+            x_llm_input = {'esm1v': x_llm_test_esm}
+        elif i == 1:
+            x_llm_test_prosst, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+            x_llm_test = x_llm_test_prosst
+            x_llm_input = {'prosst': x_llm_test_prosst}
+
+        if i in [0, 1]:
+            y_test_pred = plm_inference(
+                tokenized_sequences=x_llm_test,
+                wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
+                attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
+                model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
+                wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
+                device=device
+            ).cpu()
+
+        if i == 2:
+            x_llm_input = {
+                'esm1v': x_llm_test_esm,
+                'prosst': x_llm_test_prosst
+            }
 
         print('y_llm_ttest:', spearmanr(y_test, y_test_pred), len(test_ys_aneh))
         print(f'Train-on-train: {spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0]:.3f} (unsupervised)'
@@ -563,8 +588,8 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
-        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm=x_llm_test)
-        print(hm.betas, hm.ridge_opt)
+        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
+        print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
@@ -585,15 +610,13 @@ def test_hybrid_model_dca_llm_avgfp(
             )
         elif i == 1:
             try:
-                print(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0])
                 np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.645973191052021)
             except AssertionError:
                 np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.21670201832455013)
 
 
-
 def test_dataset_b_results():
-    print("\ntest_dataset_b_results()...")
+    print("\n\ntest_dataset_b_results()..." + "\n" + "=" * 80 + "\n")
     aaindex = "WOLR810101.txt"
     x_fft_train, _ = AAIndexEncoding(
         full_aaidx_txt_path(aaindex), train_seqs_aneh
@@ -619,7 +642,7 @@ def test_dataset_b_results():
 
 @pytest.mark.requires_gpu
 def test_plm_corr_blat_ecolx():
-    print("\ntest_plm_corr_blat_ecolx() [CUDA]...")
+    print("\n\ntest_plm_corr_blat_ecolx() [CUDA]..." + "\n" + "=" * 80 + "\n")
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     (prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer
      ) = get_prosst_models(seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
@@ -791,7 +814,7 @@ def test_plm_corr_blat_ecolx():
 
 
 def test_gaussian_process_opt():
-    print("\ntest_gaussian_process_opt()...")
+    print("\n\ntest_gaussian_process_opt()..." + "\n" + "=" * 80 + "\n")
     print("Getting ProSST models")
     wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     (prosst_base_model, _prosst_lora_model, 
@@ -856,23 +879,29 @@ def test_gaussian_process_opt():
         verbose=True
     )
 
+    assert x_esm_emb_test.shape == (400, 1280)
+    assert x_prosst_emb_test.shape == (400, 768)
     x_combined_test = torch.cat([x_esm_emb_test, x_prosst_emb_test], dim=-1)  # Pay attention to correct order!
-
+    assert x_combined_test.shape == (400, 2048)
     print("Training models...\n-------------------\nESM...")
-    esm_model = get_gp_kernel_model(x_esm_emb_train, y_train, device=device, train=True)
+    esm_model = get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=x_esm_emb_train, device=device, train=True)
     print("ProSST...")
-    prosst_model = get_gp_kernel_model(x_prosst_emb_train, y_train, device=device, train=True)
+    # Using seq kernel 
+    prosst_model_1 = get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=x_prosst_emb_train, device=device, train=True)
+    # Using struct kernel
+    prosst_model_2 = get_gp_kernel_model(y_train, x_tokseqs_struct_kernel_train=x_prosst_emb_train, device=device, train=True)
     print("Combined...")
-    comb_model = get_gp_kernel_model(x_esm_emb_train, y_train, x_train_2=x_prosst_emb_train, 
+    comb_model = get_gp_kernel_model(y_train=y_train, x_tokseqs_seq_kernel_train= x_esm_emb_train, 
+                                     x_tokseqs_struct_kernel_train=x_prosst_emb_train, 
                                      device=device, train=True)
 
     for i, (model, x_test) in enumerate(
         zip(
-            [esm_model, prosst_model, comb_model], 
-            [x_esm_emb_test, x_prosst_emb_test, x_combined_test]
+            [esm_model, prosst_model_1, prosst_model_2, comb_model], 
+            [x_esm_emb_test, x_prosst_emb_test, x_prosst_emb_test, x_combined_test]
         )
     ):
-        print("~~~ " + ["ESM", "ProSST", "ESM + ProSST combined"][i] + " GP Test ~~~")
+        print("~~~ " + ["ESM", "ProSST_1", "ProSST_2", "ESM + ProSST combined"][i] + " GP Test ~~~")
         likelihood = model.likelihood
         model.eval()
         likelihood.eval()
@@ -891,7 +920,7 @@ def test_gaussian_process_opt():
         print("MSE:                                       ", hybrid_corr_mse_loss(y_test, y_pred, alpha=0.0))
         np.testing.assert_almost_equal(
             spear_rho, 
-            [0.7021152007200044, 0.69065778648575, 0.7670016687604297][i], 
+            [0.7021152007200044, 0.69065778648575, 0.6337198357489734, 0.7670016687604297][i], 
             decimal=3
         )
 

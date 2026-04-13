@@ -96,7 +96,7 @@ def sequence_log_likelihood(
         wt_input_ids = wt_input_ids.unsqueeze(0)
     wt_input_ids = wt_input_ids.to(device)
     log_probs = []
-    #structure_input_ids = model_kwargs.get("structure_input_ids", None)
+    #structure_input_ids = model_kwargs.get("wt_structure_input_ids", None)
     if scoring_mode == "wt-marginal":
         attention_masks = torch.Tensor(np.full(
             shape=np.shape(wt_input_ids), fill_value=attention_mask)).to(torch.int64).to(device)
@@ -746,7 +746,7 @@ def prosst_setup(
             'llm_attention_mask': prosst_attention_mask,
             'llm_vocab': prosst_vocab,
             'wt_input_ids': input_ids,
-            'structure_input_ids': structure_input_ids,
+            'wt_structure_input_ids': structure_input_ids,
             'llm_tokenizer': prosst_tokenizer
         }
     }

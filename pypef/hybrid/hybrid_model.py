@@ -8,6 +8,10 @@
 from __future__ import annotations
 
 import logging
+
+import gpytorch
+
+from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 import os
@@ -66,7 +70,8 @@ class DCALLMHybridModel:
             x_wt: np.ndarray | None = None,
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
-            ensemble_func='torch',
+            ensemble_func: str = 'torch',
+            lora_train: bool = True,
             gauss_opt: bool = False,
             batch_size: int | None = None,
             n_epochs: int | None = None,
@@ -77,39 +82,23 @@ class DCALLMHybridModel:
             abort_cb=None
     ):
         if llm_model_input is not None:
-            if type(llm_model_input) is not dict:
-                raise RuntimeError(f"Model input must be in form of a dictionary.")
-            else:
-                logger.info("Using LLM as second model next to DCA for hybrid modeling...")
-                if len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'esm1v':
-                    self.llm_key = 'esm1v'
-                    self.llm_base_model = llm_model_input['esm1v']['llm_base_model']
-                    self.llm_model = llm_model_input['esm1v']['llm_model']
-                    self.llm_optimizer = llm_model_input['esm1v']['llm_optimizer']
-                    self.llm_train_function = llm_model_input['esm1v']['llm_train_function']
-                    self.llm_inference_function = llm_model_input['esm1v']['llm_inference_function']
-                    self.llm_loss_function = llm_model_input['esm1v']['llm_loss_function']
-                    self.x_train_llm = llm_model_input['esm1v']['x_llm']
-                    self.wt_input_ids = llm_model_input['esm1v']['wt_input_ids']
-                    self.llm_attention_mask = llm_model_input['esm1v']['llm_attention_mask']
-                    self.llm_tokenizer = llm_model_input['esm1v']['llm_tokenizer']
-                elif len(list(llm_model_input.keys())) == 1 and list(llm_model_input.keys())[0] == 'prosst':
-                    self.llm_key = 'prosst'
-                    self.llm_base_model = llm_model_input['prosst']['llm_base_model']
-                    self.llm_model = llm_model_input['prosst']['llm_model']
-                    self.llm_optimizer = llm_model_input['prosst']['llm_optimizer']
-                    self.llm_train_function = llm_model_input['prosst']['llm_train_function']
-                    self.llm_inference_function = llm_model_input['prosst']['llm_inference_function']
-                    self.llm_loss_function = llm_model_input['prosst']['llm_loss_function']
-                    self.x_train_llm = llm_model_input['prosst']['x_llm']
-                    self.llm_attention_mask = llm_model_input['prosst']['llm_attention_mask']
-                    self.wt_input_ids = llm_model_input['prosst']['wt_input_ids']
-                    self.structure_input_ids = llm_model_input['prosst']['structure_input_ids']
-                    self.llm_tokenizer = llm_model_input['prosst']['llm_tokenizer']
-                else:
-                    raise RuntimeError("LLM input model dictionary not supported. Currently supported "
-                                      "models are 'esm1v' or 'prosst'")
-                self.llm_model_input = llm_model_input
+            if not isinstance(llm_model_input, dict):
+                raise RuntimeError("Model input must be in form of a dictionary.")
+            
+            # Get the list of provided models
+            self.llm_keys = list(llm_model_input.keys())
+            supported_models = {'esm1v', 'prosst'}
+            
+            # Check for unsupported models
+            unsupported = set(self.llm_keys) - supported_models
+            if unsupported:
+                raise RuntimeError(f"LLM input models {unsupported} not supported. "
+                                   f"Currently supported models are {supported_models}")
+
+            logger.info(f"Using LLM(s) ({', '.join(self.llm_keys)}) next to DCA for hybrid modeling...")
+            
+            # Store the entire dictionary so we can loop through it later
+            self.llm_data = llm_model_input
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         else:
@@ -125,6 +114,7 @@ class DCALLMHybridModel:
         self.parameter_range = parameter_range
         self.ensemble_func = ensemble_func
         self.gauss_opt = gauss_opt
+        self.lora_train = lora_train
         self.alphas = alphas
         self.x_train_dca = x_train_dca
         self.y_train = y_train
@@ -149,8 +139,9 @@ class DCALLMHybridModel:
             self.y_llm_ttest,
             self.y_llm_lora_ttest,
             self.y_llm_ttrain,
-            self.y_llm_lora_ttrain
-        ) = None, None, None, None, None, None, None, None
+            self.y_llm_lora_ttrain,
+            self.y_gp_opt_ttest
+        ) = None, None, None, None, None, None, None, None, None
         self.progress_cb = progress_cb
         self.abort_cb = abort_cb
         self.train_and_optimize()
@@ -464,27 +455,27 @@ class DCALLMHybridModel:
                       f"resulting in {train_size_fit} variants for model "
                       f"tuning and {train_size_beta_adjustment} variants "
                       f"for hybrid model beta adjustment...")
-            (
-                self.x_dca_ttrain, self.x_dca_ttest, 
-                self.x_llm_ttrain, self.x_llm_ttest,
-                self.y_ttrain, self.y_ttest
-            ) = train_test_split(
-                self.x_train_dca, 
-                self.x_train_llm,
-                self.y_train, 
+
+            arrays_to_split = [self.x_train_dca, self.y_train]
+            for llm_name in self.llm_keys:
+                arrays_to_split.append(self.llm_data[llm_name]['x_llm'])
+                
+            splits = train_test_split(
+                *arrays_to_split, 
                 train_size=train_size_fit,
                 random_state=self.seed
             )
-        else:
-            (
-                self.x_dca_ttrain, self.x_dca_ttest, 
-                self.y_ttrain, self.y_ttest
-            ) = train_test_split(
-                self.x_train_dca,
-                self.y_train, 
-                train_size=train_size_fit,
-                random_state=self.seed
-            )
+            
+            self.x_dca_ttrain = splits[0]
+            self.x_dca_ttest = splits[1]
+            self.y_ttrain = splits[2]
+            self.y_ttest = splits[3]
+            
+            current_idx = 4
+            for llm_name in self.llm_keys:
+                self.llm_data[llm_name]['x_llm_ttrain'] = splits[current_idx]
+                self.llm_data[llm_name]['x_llm_ttest'] = splits[current_idx + 1]
+                current_idx += 2
             #except ValueError:
             """
             Not enough sequences to construct a sub-training and sub-testing 
@@ -507,140 +498,222 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         # Here, just getting the unsupervised scores and correlations on ttrain and ttest splits
-        if self.llm_key == 'prosst':
-            y_llm_ttest = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttest,
-                model=self.llm_base_model,  # Before training, LoRa and Base model (should) yield the same results
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                wt_structure_input_ids=self.structure_input_ids,
-                device=self.device
-            )
-            y_llm_ttrain = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttrain,
-                model=self.llm_base_model,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                wt_structure_input_ids=self.structure_input_ids,
-                device=self.device
-            )
-        elif self.llm_key == 'esm1v':
-            y_llm_ttest = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttest,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                model=self.llm_base_model,
-                device=self.device
-            )
-            y_llm_ttrain = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttrain,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                model=self.llm_base_model,
-                device=self.device
-            )
-        logger.info(
-            f"{self.llm_key.upper()} unsupervised performance: "
-            f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
-            f" (N={len(self.y_ttrain)}), "
-            f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
-            f" (N={len(self.y_ttest)})"
-        )
-        logger.info('Refining/training the model... gradient calculation adds a computational '
-              'graph that requires quite some memory - if you are facing an (out of memory) '
-              'error, try reducing the batch size or sticking to CPU device...')
-        
-        
-        if self.llm_key == 'prosst':
-            if self.gauss_opt is True:  # TODO: Add Gauss opt.
-                self.llm_inference_function(
-                    tokenized_sequences=self.x_llm_ttrain,
-                    model=self.llm_model,
-                    wt_input_ids=self.wt_input_ids,
-                    attention_mask=self.llm_attention_mask,
-                    wt_structure_input_ids=self.structure_input_ids,
-                    extract_emb=True,
-                    device=self.device,
-                    verbose=self.verbose
-                )
-            # void function, training model (LoRA models) in place
-            self.llm_train_function(
-                x_sequences=self.x_llm_ttrain, 
-                scores=self.y_ttrain,
-                loss_fn=self.llm_loss_function,
-                model=self.llm_model,
-                optimizer=self.llm_optimizer, 
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                wt_structure_input_ids=self.structure_input_ids,
-                n_epochs=self.n_epochs,
-                device=self.device,
-                verbose=self.verbose,
-                raise_error_on_train_fail=False,
-                progress_cb=self.progress_cb, 
-                abort_cb=self.abort_cb
-            )
-            y_llm_lora_ttrain = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttrain,
-                model=self.llm_model,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                wt_structure_input_ids=self.structure_input_ids,
-                device=self.device,
-                verbose=self.verbose
-            )
-            y_llm_lora_ttest = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttest,
-                model=self.llm_model,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                wt_structure_input_ids=self.structure_input_ids,
-                device=self.device,
-                verbose=self.verbose
-            )
-        elif self.llm_key == 'esm1v':
-            self.llm_train_function( 
-                x_sequences=self.x_llm_ttrain, 
-                scores=self.y_ttrain,
-                loss_fn=self.llm_loss_function,
-                model=self.llm_model,
-                optimizer=self.llm_optimizer, 
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                n_epochs=self.n_epochs, 
-                device=self.device,
-                verbose=self.verbose,
-                progress_cb=self.progress_cb, 
-                abort_cb=self.abort_cb
-            )
-            y_llm_lora_ttrain = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttrain,
-                model=self.llm_model,
-                attention_mask=self.llm_attention_mask,
-                wt_input_ids=self.wt_input_ids,
-                device=self.device,
-                verbose=self.verbose
-            )
-            y_llm_lora_ttest = self.llm_inference_function(
-                tokenized_sequences=self.x_llm_ttest,
-                model=self.llm_model,
-                wt_input_ids=self.wt_input_ids,
-                attention_mask=self.llm_attention_mask,
-                device=self.device,
-                verbose=self.verbose
-            )
-        logger.info(
-            f"{self.llm_key.upper()} supervised tuned performance: "
-            f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
-            f" (N={len(self.y_ttrain)}), "
-            f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f}"
-            f" (N={len(self.y_ttest)})"
-        )
+        self.y_llm_preds = {}       # e.g., {'esm1v': array, 'prosst': array}
+        self.y_llm_lora_preds = {} 
+        self.embeddings = {}        # e.g., {'esm1v': emb, 'prosst': emb}
+        self.all_llm_ttest_scores = []
+        emb_prosst_ttest, emb_prosst_ttrain, emb_esm_ttest, emb_esm_ttrain = None, None, None, None
 
-        self.y_llm_ttrain = y_llm_ttrain.detach().cpu().numpy()
-        self.y_llm_lora_ttrain = y_llm_lora_ttrain.detach().cpu().numpy()
-        self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
-        self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
+        # Loop through whatever models were passed in __init__
+        for llm_name in self.llm_keys:
+            logger.info(f"Processing LLM {llm_name.upper()}...")
+            
+            # Extract this specific model's data
+            current_llm = self.llm_data[llm_name]
+            base_model = current_llm['llm_base_model']
+            lora_model = current_llm['llm_model']
+            inference_fn = current_llm['llm_inference_function']
+            training_fn = current_llm['llm_train_function']
+            loss_fn = current_llm['llm_loss_function']
+            optimizer = current_llm['llm_optimizer']
+            x_llm_ttrain = current_llm['x_llm_ttrain']
+            x_llm_ttest = current_llm['x_llm_ttest']
+            wt_input_ids = current_llm['wt_input_ids']
+            attention_mask = current_llm['llm_attention_mask']
+            wt_struct_ids = current_llm.get('wt_structure_input_ids')
+            if llm_name == 'prosst':
+
+                y_llm_ttest = inference_fn(
+                    tokenized_sequences=x_llm_ttest,
+                    model=base_model,  # Before training, LoRa and Base model (should) yield the same results
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=attention_mask,
+                    wt_structure_input_ids=wt_struct_ids,
+                    device=self.device
+                )
+                y_llm_ttrain = inference_fn(
+                    tokenized_sequences=x_llm_ttrain,
+                    model=base_model,
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=attention_mask,
+                    wt_structure_input_ids=wt_struct_ids,
+                    device=self.device
+                )
+                if self.gauss_opt is True:  # TODO: Add Gauss opt.
+                    emb_prosst_ttest = inference_fn(
+                        tokenized_sequences=x_llm_ttest,
+                        model=base_model,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        wt_structure_input_ids=wt_struct_ids,
+                        extract_emb=True,
+                        device=self.device
+                    )
+                    emb_prosst_ttrain = inference_fn(
+                        tokenized_sequences=x_llm_ttrain,
+                        model=base_model,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        wt_structure_input_ids=wt_struct_ids,
+                        extract_emb=True,
+                        device=self.device
+                    )
+            elif llm_name == 'esm1v':
+                y_llm_ttest = inference_fn(
+                    tokenized_sequences=x_llm_ttest,
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=attention_mask,
+                    model=base_model,
+                    device=self.device
+                )
+                y_llm_ttrain = inference_fn(
+                    tokenized_sequences=x_llm_ttrain,
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=attention_mask,
+                    model=base_model,
+                    device=self.device
+                )
+                if self.gauss_opt is True:  # TODO: Add Gauss opt.
+                    emb_esm_ttest = inference_fn(
+                        tokenized_sequences=x_llm_ttest,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        model=base_model,
+                        extract_emb=True,
+                        device=self.device
+                    )
+                    emb_esm_ttrain = inference_fn(
+                        tokenized_sequences=x_llm_ttrain,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        model=base_model,
+                        extract_emb=True,
+                        device=self.device
+                    )
+            logger.info(
+                f"{llm_name} unsupervised performance: "
+                f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
+                f" (N={len(self.y_ttrain)}), "
+                f"Test set = {spearmanr(self.y_ttest, y_llm_ttest.detach().cpu())[0]:.3f}"
+                f" (N={len(self.y_ttest)})"
+            )
+            self.y_llm_ttrain = y_llm_ttrain.detach().cpu().numpy()
+            self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
+            self.all_llm_ttest_scores.append(self.y_llm_ttest)
+
+            if self.lora_train:
+                logger.info('Refining/training the model... gradient calculation adds a computational '
+                      'graph that requires quite some memory - if you are facing an (out of memory) '
+                      'error, try reducing the batch size or sticking to CPU device...')
+                if llm_name == 'prosst':  # TODO: Remove one function/shrink to only one LLM function
+                    # void function, training model (LoRA models) in place
+                    training_fn(
+                        x_sequences=x_llm_ttrain, 
+                        scores=self.y_ttrain,
+                        loss_fn=loss_fn,
+                        model=lora_model,
+                        optimizer=optimizer, 
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        wt_structure_input_ids=wt_struct_ids,
+                        n_epochs=self.n_epochs,
+                        device=self.device,
+                        verbose=self.verbose,
+                        raise_error_on_train_fail=False,
+                        progress_cb=self.progress_cb, 
+                        abort_cb=self.abort_cb
+                    )
+                    y_llm_lora_ttrain = inference_fn(
+                        tokenized_sequences=x_llm_ttrain,
+                        model=lora_model,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        wt_structure_input_ids=wt_struct_ids,
+                        device=self.device,
+                        verbose=self.verbose
+                    )
+                    y_llm_lora_ttest = inference_fn(
+                        tokenized_sequences=x_llm_ttest,
+                        model=lora_model,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        wt_structure_input_ids=wt_struct_ids,
+                        device=self.device,
+                        verbose=self.verbose
+                    )
+                elif llm_name == 'esm1v':
+                    training_fn( 
+                        x_sequences=x_llm_ttrain, 
+                        scores=self.y_ttrain,
+                        loss_fn=loss_fn,
+                        model=lora_model,
+                        optimizer=optimizer, 
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        n_epochs=self.n_epochs, 
+                        device=self.device,
+                        verbose=self.verbose,
+                        progress_cb=self.progress_cb, 
+                        abort_cb=self.abort_cb
+                    )
+                    y_llm_lora_ttrain = inference_fn(
+                        tokenized_sequences=x_llm_ttrain,
+                        model=lora_model,
+                        attention_mask=attention_mask,
+                        wt_input_ids=wt_input_ids,
+                        device=self.device,
+                        verbose=self.verbose
+                    )
+                    y_llm_lora_ttest = inference_fn(
+                        tokenized_sequences=x_llm_ttest,
+                        model=lora_model,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=attention_mask,
+                        device=self.device,
+                        verbose=self.verbose
+                    )
+                print(
+                    f"{llm_name.upper()} supervised tuned performance: "
+                    f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
+                    f" (N={len(self.y_ttrain)}), "
+                    f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f}"
+                    f" (N={len(self.y_ttest)})"
+                )
+                self.y_llm_lora_ttrain = y_llm_lora_ttrain.detach().cpu().numpy()
+                self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
+                self.all_llm_ttest_scores.append(self.y_llm_lora_ttest)
+        
+        if self.gauss_opt:
+            if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:
+                self.gp_model = get_gp_kernel_model(
+                    y_train=self.y_ttrain, 
+                    x_tokseqs_seq_kernel_train= emb_esm_ttrain, 
+                    x_tokseqs_struct_kernel_train=emb_prosst_ttrain, 
+                    device=self.device, train=True
+                )
+                emb_ttest = torch.cat([emb_esm_ttest, emb_prosst_ttest], dim=-1)
+            elif emb_esm_ttrain is not None:
+                self.gp_model = get_gp_kernel_model(
+                    self.y_ttrain, x_tokseqs_seq_kernel_train=emb_esm_ttrain, 
+                    device=self.device, train=True
+                )
+                emb_ttest = emb_esm_ttest
+            elif emb_prosst_ttrain is not None:
+                self.gp_model = get_gp_kernel_model(  # "Seq. kernel" for ProSST still
+                    self.y_ttrain, x_tokseqs_seq_kernel_train=emb_prosst_ttrain, 
+                    device=self.device, train=True
+                )
+                emb_ttest = emb_prosst_ttest
+                
+            else:
+                raise RuntimeError("No valid embeddings found for GP optimization.")
+            likelihood = self.gp_model.likelihood
+            self.gp_model.eval()
+            likelihood.eval()
+            with torch.no_grad(), gpytorch.settings.fast_pred_var():
+                pred = likelihood(self.gp_model(emb_ttest))
+                self.y_gp_opt_ttest = pred.mean.detach().cpu().numpy()
+            
 
     def train_and_optimize(self) -> tuple:
         """
@@ -674,115 +747,79 @@ class DCALLMHybridModel:
         if len(self.parameter_range) >= 4:
             self.train_llm()
             # Add LLM predictors to the list
-            predictors.extend([self.y_llm_ttest, self.y_llm_lora_ttest])
+            predictors.extend(self.all_llm_ttest_scores)
+            if self.gauss_opt:
+                predictors.append(self.y_gp_opt_ttest)
     
         if self.ensemble_func == 'torch':
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
         else:
             self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
-
         return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
             self,
             x_dca: np.ndarray,
-            x_llm: None | np.ndarray = None,
+            x_llm_dict: dict | None = None,
             verbose: bool = True
     ) -> np.ndarray:
-        """
-        Use the regressor 'reg' and the parameters 'beta_1'
-        and 'beta_2' for constructing a hybrid model and
-        predicting the fitness associates of 'X'.
-
-        Parameters
-        ----------
-        x : np.ndarray
-            Encoded sequences X used for prediction.
-        reg : object
-            Tuned ridge regressor for the hybrid model.
-        beta_1 : float
-            Float for regulating EVmutation model contribution.
-        beta_2 : float
-            Float for regulating Ridge regressor contribution.
-
-        Returns
-        -------
-        Predicted fitness associates of 'X' using the
-        hybrid model.
-        """
+        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {self.betas}...")
         y_dca = self._delta_e(x_dca)
-        if self.ridge_opt is None:
-            y_ridge = np.zeros(len(y_dca))  # in order to suppress error
-        else:
-            y_ridge = self.ridge_opt.predict(x_dca)
+        y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 
-        if x_llm is None:
-            if self.llm_attention_mask is not None:
-                logger.info('No LLM input for hybrid prediction but the model '
-                      'has been trained using an LLM model input.. '
-                      'Using only DCA for hybridprediction.. This can lead '
-                      'to unwanted prediction behavior if the hybrid model '
-                      'is trained including an LLM...')
-        else:
-            if self.llm_key == 'prosst':
-                y_llm = self.llm_inference_function(
-                    tokenized_sequences=x_llm, 
-                    wt_input_ids=self.wt_input_ids,
-                    attention_mask=self.llm_attention_mask, 
-                    model=self.llm_base_model, 
-                    wt_structure_input_ids=self.structure_input_ids,
-                    verbose=verbose,
-                    device=self.device
-                ).detach().cpu().numpy()
-                y_llm_lora = self.llm_inference_function(
-                    tokenized_sequences=x_llm, 
-                    wt_input_ids=self.wt_input_ids,
-                    attention_mask=self.llm_attention_mask, 
-                    model=self.llm_model, 
-                    wt_structure_input_ids=self.structure_input_ids,
-                    verbose=verbose,
-                    device=self.device
-                ).detach().cpu().numpy()
-            elif self.llm_key == 'esm1v':
-                y_llm = self.llm_inference_function(
-                    tokenized_sequences=x_llm, 
-                    wt_input_ids=self.wt_input_ids,
-                    attention_mask=self.llm_attention_mask, 
-                    model=self.llm_base_model, 
-                    verbose=verbose,
-                    device=self.device
-                ).detach().cpu().numpy()
-                y_llm_lora = self.llm_inference_function(
-                    tokenized_sequences=x_llm, 
-                    wt_input_ids=self.wt_input_ids,
-                    attention_mask=self.llm_attention_mask, 
-                    model=self.llm_model, 
-                    verbose=verbose,
-                    device=self.device
-                ).detach().cpu().numpy()
-        # 1. Collect your predictors in the EXACT same order used during optimization
         predictors = [y_dca, y_ridge]
-        if hasattr(self, 'y_llm_ttest'): # or whatever condition you use to trigger LLM
-            predictors.extend([y_llm, y_llm_lora])
-        
-        # 2. Handle NaNs dynamically for all predictors
-        cleaned_preds = []
-        for i, p in enumerate(predictors):
-            if p is not None and np.any(np.isnan(p)):
-                logger.warning(f"Predictor at index {i} contains NaNs. Replacing with zeros...")
-                cleaned_preds.append(np.nan_to_num(p, nan=0.0))
+        llm_embs_ttest = {}
+
+        if hasattr(self, 'llm_keys'):
+            for llm_name in self.llm_keys:
+                current_llm = self.llm_data[llm_name]
+                x_input = x_llm_dict.get(llm_name) if x_llm_dict else None
+
+                # Must append something to keep beta indices correct
+                if x_input is None:
+                    predictors.extend([np.zeros(len(y_dca)), np.zeros(len(y_dca))])
+                    continue
+
+                common_args = {
+                    'tokenized_sequences': x_input,
+                    'wt_input_ids': current_llm['wt_input_ids'],
+                    'attention_mask': current_llm['llm_attention_mask'],
+                    'device': self.device,
+                    'verbose': verbose,
+                    'wt_structure_input_ids': current_llm.get('wt_structure_input_ids')
+                }
+
+                y_base = current_llm['llm_inference_function'](model=current_llm['llm_base_model'], **common_args)
+                y_lora = current_llm['llm_inference_function'](model=current_llm['llm_model'], **common_args)
+                
+                predictors.append(y_base.detach().cpu().numpy())
+                predictors.append(y_lora.detach().cpu().numpy())
+
+                if self.gauss_opt:
+                    emb_args = {**common_args, 'model': current_llm['llm_base_model'], 'extract_emb': True}
+                    llm_embs_ttest[llm_name] = current_llm['llm_inference_function'](**emb_args)
+
+        if self.gauss_opt:
+            self.gp_model.eval()
+            esm_emb = llm_embs_ttest.get('esm1v')
+            prosst_emb = llm_embs_ttest.get('prosst')
+
+            if esm_emb is not None and prosst_emb is not None:
+                gp_input = torch.cat([esm_emb, prosst_emb], dim=-1)
+            elif esm_emb is not None:
+                gp_input = esm_emb
             else:
-                cleaned_preds.append(p)
-        
-        # 3. Calculate final prediction using the betas array
-        # all_betas was the array returned by optimize_ensemble_weights
+                gp_input = prosst_emb
+
+            with torch.no_grad():
+                y_gp = self.gp_model.likelihood(self.gp_model(gp_input)).mean
+                predictors.append(y_gp.detach().cpu().numpy())
+
         y_final = np.zeros_like(y_dca)
-        for beta, p in zip(self.all_betas, cleaned_preds, strict=True):
-            if p is not None:
-                # Standardize p here if optimized on standardized values!
-                p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
-                y_final += beta * p_std
-        
+        for beta, p in zip(self.all_betas, predictors, strict=True):
+            std_val = np.std(p)
+            p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p
+            y_final += beta * p_std
         return y_final
 
     def ls_ts_performance(self):

@@ -115,33 +115,41 @@ class MultiInputGP(gpytorch.models.ExactGP):
         return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
 
 
-def get_gp_kernel_model(x_train, y_train, x_train_2=None, device=None, train: bool = False):
+def get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=None, x_tokseqs_struct_kernel_train=None, 
+                        device=None, opt_steps: int = 100, train: bool = False):
     # Define kernels and model: x_train is by default seq kernel and 
     # x_train_2 struct kernel for now
     if device is None:
         device = get_device()
 
     seq_kernel = gpytorch.kernels.ScaleKernel(gpytorch.kernels.RBFKernel())
-    if x_train_2 is None:
-        print(f"Using only sequence embeddings and kernel ({x_train.shape})")
+    struct_kernel = HellingerRBFKernel()
+    if x_tokseqs_struct_kernel_train is None:
+        logger.info(f"Using only sequence kernel ({x_tokseqs_seq_kernel_train.shape})")
         kernel = seq_kernel
+        x_train = x_tokseqs_seq_kernel_train
+    elif x_tokseqs_seq_kernel_train is None:
+        logger.info(f"Using only structure kernel ({x_tokseqs_struct_kernel_train.shape})")
+        kernel = struct_kernel
+        x_train = x_tokseqs_struct_kernel_train
     else:
         # [ sequence_features | structure_features ]
         #   <---- d_seq -----> 
-        print(
+        logger.info(
             f"Taking first sequence embeddings for sequence kernel and concatenting "
-            f"second sequence embeddings for structure kernel processing ({x_train.shape}"
-            f" + {x_train_2.shape} -> {torch.cat([x_train, x_train_2], dim=-1).shape}; "
-            f"d_seq for split: {x_train.shape[1]})"
+            f"second sequence embeddings for structure kernel processing ({x_tokseqs_seq_kernel_train.shape}"
+            f" + {x_tokseqs_struct_kernel_train.shape} -> "
+            f"{torch.cat([x_tokseqs_seq_kernel_train, x_tokseqs_struct_kernel_train], dim=-1).shape}; "
+            f"d_seq for split: {x_tokseqs_seq_kernel_train.shape[1]})"
         )
-        d_seq = x_train.shape[1]
-        x_train = torch.cat([x_train, x_train_2], dim=-1)
-        
-        struct_kernel = HellingerRBFKernel()
+        d_seq = x_tokseqs_seq_kernel_train.shape[1]
+        x_train = torch.cat([x_tokseqs_seq_kernel_train, x_tokseqs_struct_kernel_train], dim=-1)
         kernel = CombinedKernel(seq_kernel, struct_kernel, d_seq=d_seq)
 
     kernel = kernel.to(device)
     likelihood = gpytorch.likelihoods.GaussianLikelihood()
+    x_train = torch.as_tensor(x_train, dtype=torch.float32).to(device)
+    y_train = torch.as_tensor(y_train, dtype=torch.float32).to(device)
     model = MultiInputGP(x_train, y_train, likelihood, kernel).to(device)
 
     # Train
@@ -151,7 +159,7 @@ def get_gp_kernel_model(x_train, y_train, x_train_2=None, device=None, train: bo
         likelihood.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-        pbar = tqdm(range(100), desc='Training')
+        pbar = tqdm(range(opt_steps), desc='Training')
         for i in pbar:
             optimizer.zero_grad()
             output = model(x_train)

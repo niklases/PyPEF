@@ -375,13 +375,10 @@ class GREMLIN:
         self.mt_v, self.vt_v = torch.zeros_like(self.v), torch.zeros_like(self.v)
         self.mt_w, self.vt_w = torch.zeros_like(self.w), torch.zeros_like(self.w)
         logger.info(f'Initial loss: {self._loss():.5f}')
-        for i in range(self.opt_iter):
+        progress = tqdm(list(range(self.opt_iter)))
+        for i in progress:
             self.opt_adam_step()
-            try:
-                if (i + 1) % int(self.opt_iter / 10) == 0:
-                    logger.info(f'Loss step {i + 1}: {self._loss():.5f}')
-            except ZeroDivisionError:
-                logger.info(f'Loss step {i + 1}: {self._loss():.5f}')
+            progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {self._loss():.5f}')
         
         self.v = self.v.detach().cpu().numpy()
         self.w = self.w.detach().cpu().numpy()
