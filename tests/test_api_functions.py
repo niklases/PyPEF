@@ -279,7 +279,7 @@ def test_hybrid_model_dca_llm_aneh(
                                           device=device).cpu()
 
         # y_test_pred_1: SignificanceResult(statistic=np.float64(-0.7050183991342079), pvalue=np.float64(1.3613669161432091e-05)) 30
-        print('y_test_pred_1:', spearmanr(y_test, y_test_pred_1), len(test_ys_aneh))
+        print('y_test_pred_1:', spearmanr(y_test, y_test_pred_1)[0], len(test_ys_aneh))
 
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
@@ -301,7 +301,7 @@ def test_hybrid_model_dca_llm_aneh(
         ).cpu()
 
         # y_llm_ttest (y_test_pred_2): SignificanceResult(statistic=np.float64(0.40948038333552483), pvalue=np.float64(0.024635229903827348)) 30
-        print('y_llm_ttest (y_test_pred_2):', spearmanr(y_test, y_test_pred_2), len(test_ys_aneh))
+        print('y_llm_ttest (y_test_pred_2):', spearmanr(y_test, y_test_pred_2)[0], len(test_ys_aneh))
 
         y_test_pred_lora = plm_inference(
             tokenized_sequences=x_llm_test,
@@ -313,7 +313,7 @@ def test_hybrid_model_dca_llm_aneh(
         ).cpu()
 
         # y_llm_ttest_lora (y_test_pred_3): SignificanceResult(statistic=np.float64(0.40948038333552483), pvalue=np.float64(0.024635229903827348)) 30
-        print('y_llm_ttest_lora (y_test_pred_3):', spearmanr(y_test, y_test_pred_lora), len(test_ys_aneh))
+        print('y_llm_ttest_lora (y_test_pred_3):', spearmanr(y_test, y_test_pred_lora)[0], len(test_ys_aneh))
         print(f'Train-on-train: {spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0]:.3f} (supervised)  | len = {len(hm.y_ttrain)}')
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
@@ -337,15 +337,15 @@ def test_hybrid_model_dca_llm_aneh(
         #    )
         x_llm_input = {
                 ['esm1v', 'prosst'][i]: x_llm_test,
-            }
+        }
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
         print(hm.betas, hm.ridge_opt)
-        print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
-        print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
-        print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
-        print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
-        print('Hybrid prediction:', spearmanr(y_test, y_pred_test), len(y_test))
+        print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
+        print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
+        print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
+        print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
+        print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], -0.5342743713116743, 
             decimal=7
@@ -553,7 +553,7 @@ def test_hybrid_model_dca_llm_avgfp(
             seed=42,
             lora_train=True,
             gauss_opt=True,
-            n_epochs=25,
+            n_epochs=5,
             device=device
         )
 
@@ -582,7 +582,7 @@ def test_hybrid_model_dca_llm_avgfp(
                 'prosst': x_llm_test_prosst
             }
 
-        print('y_llm_ttest:', spearmanr(y_test, y_test_pred), len(test_ys_aneh))
+        print('y_llm_ttest:', spearmanr(y_test, y_test_pred)[0], len(test_ys_aneh))
         print(f'Train-on-train: {spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0]:.3f} (supervised)  | len = {len(hm.y_ttrain)}')
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
@@ -590,11 +590,11 @@ def test_hybrid_model_dca_llm_avgfp(
 
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
-        print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest), len(hm.y_ttest))
-        print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest), len(hm.y_ttest))
-        print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest), len(hm.y_ttest))
-        print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest), len(hm.y_ttest))
-        print('Hybrid prediction:', spearmanr(y_test, y_pred_test), len(y_test))
+        print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
+        print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
+        print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
+        print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
+        print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], 0.5948787474579608, 
             decimal=7

@@ -334,7 +334,8 @@ class DCALLMHybridModel:
                     y_ensemble += final_betas[i] * p_scaled
 
             final_corr = self.spearmanr(y_true_np, y_ensemble)
-            logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Weights: {final_betas}")
+            logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Ensemble "
+                        f"weights ({len(final_betas)}): {final_betas}")
             self.betas = final_betas
             return final_betas
     
