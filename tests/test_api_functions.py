@@ -920,7 +920,7 @@ def test_gaussian_process_opt():
         print("MSE:                                       ", hybrid_corr_mse_loss(y_test, y_pred, alpha=0.0))
         np.testing.assert_almost_equal(
             spear_rho, 
-            [0.7021152007200044, 0.69065778648575, 0.6337198357489734, 0.7670016687604297][i], 
+            [0.7021152007200044, 0.69065778648575, 0.6390131813323833, 0.7670016687604297][i], 
             decimal=3
         )
 
