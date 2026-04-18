@@ -397,11 +397,11 @@ def plm_inference(
     mask_token_id = None,
     inference_type='wt-marginal-log-likelihood',
     extract_emb: bool = False,
-    wt_structure_input_ids=None,
     batch_size: int | None = 5,
     train=False,
     device=None,
-    verbose=False
+    verbose=False,
+    **kwargs
 ):  
     if device is None:
         device = get_device()
@@ -415,7 +415,7 @@ def plm_inference(
         keep_remaining = True
 
     model = model.to(device)
-    kwargs = {}
+    model_kwargs = {}
 
     if not isinstance(attention_mask, torch.Tensor):
         attention_mask = torch.tensor(attention_mask, dtype=torch.long)
@@ -441,7 +441,7 @@ def plm_inference(
                     f"function. ")
         inference_function = sequence_log_likelihood
         scoring_mode = "full-sequence"
-        kwargs["extract_emb"] = True
+        model_kwargs["extract_emb"] = True
         
     scores = []
     if batch_size is None:
@@ -460,10 +460,11 @@ def plm_inference(
 
 
     if mask_token_id is not None:
-        kwargs["mask_token_id"] = mask_token_id
+        model_kwargs["mask_token_id"] = mask_token_id
 
+    wt_structure_input_ids = kwargs.get('wt_structure_input_ids')
     if wt_structure_input_ids is not None:
-        kwargs["ss_input_ids"] = wt_structure_input_ids.to(device)
+        model_kwargs["ss_input_ids"] = wt_structure_input_ids.to(device)
 
     pbar = tqdm(
         xs_b,
@@ -482,7 +483,7 @@ def plm_inference(
                 scoring_mode=scoring_mode,
                 device=device,
                 verbose=False,
-                **kwargs
+                **model_kwargs
             )
             scores.append(pll)
                     
@@ -503,11 +504,11 @@ def plm_train(
         seed: int | None = None,
         early_stop: int = 50, 
         verbose: bool = True, 
-        wt_structure_input_ids=None,
         n_batch_grad_accumulations: int = 1, 
         raise_error_on_train_fail: bool = True,
         progress_cb=None, 
-        abort_cb=None
+        abort_cb=None,
+        **kwargs
 ):
     """
     Wrapper function for `plm_inference()` for PLM training.
@@ -516,6 +517,7 @@ def plm_train(
         torch.manual_seed(seed)
     if device is None:
         device = get_device()
+    wt_structure_input_ids = kwargs.get('wt_structure_input_ids')
     logger.info(f"Model training using {device.upper()} device "
           f"(N_Train={len(scores)})...")
     scores_batched = torch.from_numpy(
@@ -556,10 +558,10 @@ def plm_train(
                 attention_mask=attention_mask,
                 model=model, 
                 train=True, 
-                wt_structure_input_ids=wt_structure_input_ids, 
                 batch_size=None, 
                 device=device,
-                verbose=False
+                verbose=False,
+                wt_structure_input_ids=wt_structure_input_ids,                 
             )
             y_preds_detached.append(y_preds_b.detach().cpu().numpy().flatten())
             loss = loss_fn(scores_b, y_preds_b) / n_batch_grad_accumulations
