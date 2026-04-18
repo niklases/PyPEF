@@ -429,7 +429,8 @@ class DCALLMHybridModel:
 
         # Validate the final ensemble performance
         final_corr = self.spearmanr(y, y_ensemble)
-        logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Weights: {final_betas}")
+        logger.info(f"Ensemble-optimized Spearman: {final_corr:.3f} (N_opt={len(y)}) "
+                    f"| Weights: {final_betas} (N_predictors={len(predictions)})")
         self.betas = final_betas
         return final_betas
 
@@ -444,7 +445,7 @@ class DCALLMHybridModel:
               f"into {train_size_fit} variants for model tuning and "
               f"{train_size_beta_adjustment} variants for hybrid model "
               f"beta adjustment...")
-        if len(self.parameter_range) == 4:
+        if len(self.parameter_range) >= 4:
             # Reduce sizes by batch modulo
             n_drop = train_size_fit % self.batch_size
             if n_drop > 0:
@@ -673,12 +674,12 @@ class DCALLMHybridModel:
                         device=self.device,
                         verbose=self.verbose
                     )
-                print(
+                logger.info(
                     f"{llm_name.upper()} supervised tuned performance: "
-                    f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f}"
-                    f" (N={len(self.y_ttrain)}), "
-                    f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f}"
-                    f" (N={len(self.y_ttest)})"
+                    f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f} "
+                    f"(N={len(self.y_ttrain)}), "
+                    f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f} "
+                    f"(N={len(self.y_ttest)})"
                 )
                 self.y_llm_lora_ttrain = y_llm_lora_ttrain.detach().cpu().numpy()
                 self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
