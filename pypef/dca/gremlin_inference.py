@@ -42,7 +42,7 @@ import pickle
 import numpy as np
 import matplotlib.pyplot as plt
 from Bio import AlignIO
-from scipy.spatial.distance import pdist, squareform
+from scipy.spatial.distance import squareform
 from scipy.special import logsumexp
 from scipy.stats import boxcox
 import pandas as pd
@@ -50,6 +50,7 @@ import torch
 
 from pypef.utils.helpers import tqdm
 from pypef.plm.utils import get_batches
+from pypef.utils.helpers import get_device
 from pypef.utils.variant_data import get_mismatches
 
 
@@ -81,13 +82,7 @@ class GREMLIN:
         np.log(np.sum(onehot_cat_msa.T * self.msa_weights, -1).T + pseudo_count).
         """
         if device is None:
-            device = (
-                "cuda"
-                if torch.cuda.is_available()
-                else "mps"
-                if torch.backends.mps.is_available()
-                else "cpu"
-            )
+            device = get_device()
         self.device = device    
         logger.info(f'Using {self.device.upper()} device for GREMLIN computations...')   
         self.char_alphabet = char_alphabet
@@ -246,8 +241,11 @@ class GREMLIN:
 
     def get_eff_msa_weights(self, msa):
         """Compute effective weight for each sequence"""
-        # pairwise identity
-        pdistance_msa = pdist(msa, "hamming")  # TODO: to PyTorch?
+        _n, m = msa.shape
+        # p=0 is Hamming dist
+        pdistance_msa = (torch.nn.functional.pdist(
+            torch.tensor(msa, dtype=torch.float32), p=0
+        ).to(self.device) / m).cpu().numpy()
         msa_sm = 1.0 - squareform(pdistance_msa)
         # weight for each sequence
         msa_w = (msa_sm >= self.eff_cutoff).astype(float)
@@ -503,15 +501,17 @@ class GREMLIN:
         function with encode set to True.
         """
         xs = []
+        print(type(seqs))
         sequences_batched = get_batches(
             seqs, batch_size=1000, dtype=str, 
             keep_remaining=True, verbose=True
         )
-        sequences_batched = np.atleast_2d(sequences_batched)
+        if type(sequences_batched[0]) == str:  # Only one input seq
+            sequences_batched = [sequences_batched]
 
         for seq_batch in sequences_batched:
             xs.append(self.get_scores(seq_batch, v, w, v_idx, encode=True))
-        return xs[0]
+        return np.concatenate(xs, axis=0)
 
     @staticmethod
     def normalize(apc_mat):
