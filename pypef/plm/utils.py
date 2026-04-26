@@ -35,13 +35,14 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
         except KeyError:
             rw = True
         if rw:
-            warnings.warn(
-                "'CUBLAS_WORKSPACE_CONFIG' not set, "
-                "will likely face a torch RuntimeError. "
-                "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
-                "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
-                "before running with set seeds and determinism."
-            )
+            pass
+            #warnings.warn(
+            #    "'CUBLAS_WORKSPACE_CONFIG' not set, "
+            #    "will likely face a torch RuntimeError. "
+            #    "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+            #    "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+            #    "before running with set seeds and determinism."
+            #)
         torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
@@ -76,7 +77,7 @@ def hybrid_corr_mse_loss(
                 "Alpha parameter for loss function is not defined. Define alpha or a method "
                 "from within ['spearman', 'pearson', 'spearman-hybrid', 'pearson-hybrid']."
             )
-    # 1. Calculate Correlation Component
+    # Calculate Correlation Component
     if method.startswith("spearman"):
         # Soft rank approximation helper
         def get_soft_ranks(z, t):
@@ -103,11 +104,7 @@ def hybrid_corr_mse_loss(
     # Cosine similarity of centered vectors = Correlation
     corr = F.cosine_similarity(rx_c, ry_c, dim=-1).mean()
     loss_corr = -corr  # We want to maximize correlation, so minimize negative
-
-    # 2. Calculate MSE Component
     loss_mse = F.mse_loss(y_pred, y_true)
-
-    # 3. Combine
     return (alpha * loss_corr) + ((1 - alpha) * loss_mse)
 
 

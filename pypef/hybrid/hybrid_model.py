@@ -104,7 +104,7 @@ class DCALLMHybridModel:
         else:
             logger.info("No LLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
-            self.llm_key = None
+            self.llm_keys = None
             self.llm_model_input = None
             self.llm_attention_mask = None
             if parameter_range is None:
@@ -445,57 +445,61 @@ class DCALLMHybridModel:
               f"into {train_size_fit} variants for model tuning and "
               f"{train_size_beta_adjustment} variants for hybrid model "
               f"beta adjustment...")
-        if len(self.parameter_range) >= 4:
-            # Reduce sizes by batch modulo
-            n_drop = train_size_fit % self.batch_size
-            if n_drop > 0:
-                train_size_fit = train_size_fit - n_drop
-                train_size_beta_adjustment = len(self.y_train) - train_size_fit
-                logger.info(f"Shifting {n_drop} variants from training set to "
-                      f"beta adjustment set to match batch requirements "
-                      f"of batch size {self.batch_size} for LLM retraining "
-                      f"resulting in {train_size_fit} variants for model "
-                      f"tuning and {train_size_beta_adjustment} variants "
-                      f"for hybrid model beta adjustment...")
+        #if len(self.parameter_range) >= 4:
+        # Reduce sizes by batch modulo
+        n_drop = train_size_fit % self.batch_size
+        if n_drop > 0:
+            train_size_fit = train_size_fit - n_drop
+            train_size_beta_adjustment = len(self.y_train) - train_size_fit
+            logger.info(
+                  f"Shifting {n_drop} variants from training set to "
+                  f"beta adjustment set to match batch requirements "
+                  f"of batch size {self.batch_size} for LLM retraining "
+                  f"resulting in {train_size_fit} variants for model "
+                  f"tuning and {train_size_beta_adjustment} variants "
+                  f"for hybrid model beta adjustment..."
+            )
+        arrays_to_split = [self.x_train_dca, self.y_train]
 
-            arrays_to_split = [self.x_train_dca, self.y_train]
+        if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 arrays_to_split.append(self.llm_data[llm_name]['x_llm'])
-                
-            splits = train_test_split(
-                *arrays_to_split, 
-                train_size=train_size_fit,
-                random_state=self.seed
-            )
             
-            self.x_dca_ttrain = splits[0]
-            self.x_dca_ttest = splits[1]
-            self.y_ttrain = splits[2]
-            self.y_ttest = splits[3]
-            
+        splits = train_test_split(
+            *arrays_to_split, 
+            train_size=train_size_fit,
+            random_state=self.seed
+        )
+        
+        self.x_dca_ttrain = splits[0]
+        self.x_dca_ttest = splits[1]
+        self.y_ttrain = splits[2]
+        self.y_ttest = splits[3]
+        
+        if self.llm_keys is not None:
             current_idx = 4
             for llm_name in self.llm_keys:
                 self.llm_data[llm_name]['x_llm_ttrain'] = splits[current_idx]
                 self.llm_data[llm_name]['x_llm_ttest'] = splits[current_idx + 1]
                 current_idx += 2
-            #except ValueError:
-            """
-            Not enough sequences to construct a sub-training and sub-testing 
-            set when splitting the training set.
-            Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
-            possible -> return parameter setting for 'EVmutation/GREMLIN' model.
-            """
-            #return 1.0, 0.0, 1.0, 0.0, None
-            """
-            The sub-training set 'y_ttrain' is subjected to a five-fold cross 
-            validation. This leads to the constraint that at least two sequences
-            need to be in the 20 % of that set in order to allow a ranking. 
-            If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
-            """
-            # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
-            #y_ttrain_min_cv = int(0.2 * len(y_ttrain))
-            #if y_ttrain_min_cv < 5:
-            #    return 1.0, 0.0, 1.0, 0.0, None
+        #except ValueError:
+        """
+        Not enough sequences to construct a sub-training and sub-testing 
+        set when splitting the training set.
+        Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
+        possible -> return parameter setting for 'EVmutation/GREMLIN' model.
+        """
+        #return 1.0, 0.0, 1.0, 0.0, None
+        """
+        The sub-training set 'y_ttrain' is subjected to a five-fold cross 
+        validation. This leads to the constraint that at least two sequences
+        need to be in the 20 % of that set in order to allow a ranking. 
+        If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
+        """
+        # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
+        #y_ttrain_min_cv = int(0.2 * len(y_ttrain))
+        #if y_ttrain_min_cv < 5:
+        #    return 1.0, 0.0, 1.0, 0.0, None
 
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
@@ -510,7 +514,7 @@ class DCALLMHybridModel:
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
-            logger.info(f"Processing LLM {llm_name.upper()}...")
+            print(f"Processing LLM {llm_name.upper()}...")
             
             # Extract this specific model's data
             current_llm = self.llm_data[llm_name]
@@ -660,10 +664,10 @@ class DCALLMHybridModel:
             self.gp_model.eval()
             likelihood.eval()
             with torch.no_grad(), gpytorch.settings.fast_pred_var():
-                gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()
+                gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()  # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches the stored training data. Did you forget to call model.train()?
                 gp_pred_ttest = likelihood(self.gp_model(emb_ttest))
                 self.y_gp_opt_ttest = gp_pred_ttest.mean.detach().cpu().numpy()
-                print(
+                logger.info(
                     f"{llm_name.upper()} supervised Gaussian process optimized performance: "
                     f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
                     f"(N={len(self.y_ttrain)}), "
@@ -727,7 +731,7 @@ class DCALLMHybridModel:
         predictors = [y_dca, y_ridge]
         llm_embs_ttest = {}
 
-        if hasattr(self, 'llm_keys'):
+        if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
                 x_input = x_llm_dict.get(llm_name) if x_llm_dict else None
@@ -773,6 +777,7 @@ class DCALLMHybridModel:
                 predictors.append(y_gp.detach().cpu().numpy())
 
         y_final = np.zeros_like(y_dca)
+        print('len(self.all_betas):', len(self.all_betas), 'len(predictors):', len(predictors))
         for beta, p in zip(self.all_betas, predictors, strict=True):
             std_val = np.std(p)
             p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p

@@ -28,7 +28,7 @@ from pypef.plm.esm_lora_tune import (
     get_esm_models, #tokenize_sequences, 
     #esm_train, esm_infer, corr_loss
 )
-from pypef.plm.inference import plm_inference, tokenize_sequences
+from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer, #prosst_train
@@ -45,6 +45,7 @@ JUST_PLOT_RESULTS = False
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
+    seed = 42
     device = get_device()
     print(f"Using {device.upper()} device")
     get_vram()
@@ -54,7 +55,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models()
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed=42)
     esm_base_model = esm_base_model.to(device)
     get_vram()
     plt.figure(figsize=(40, 12))
@@ -147,9 +148,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             dca_unopt_perf = spearmanr(fitnesses, y_pred_dca)[0]
 
             try:
-                (esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer
-                 ) = get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed=42)
-                esm_base_model = esm_base_model.to("cuda")
+
                 x_esm, esm_attention_mask = tokenize_sequences(
                     sequences, esm_tokenizer, max_length=len(wt_seq) + 2)
                 wt_tokens, _ = tokenize_sequences(
@@ -194,8 +193,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     wt_input_ids=wt_input_ids,
                     attention_mask=prosst_attention_mask,
                     model=prosst_base_model,
-                    mask_token_id=prosst_tokenizer.mask_token_id,
-                    inference_type='mutation-masking',
+                    #mask_token_id=prosst_tokenizer.mask_token_id,
+                    #inference_type='mutation-masking',
                     wt_structure_input_ids=wt_structure_input_ids,
                     batch_size=5,
                     train=False,
@@ -214,25 +213,23 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
-                prosst_lora_model_2 = copy.deepcopy(prosst_lora_model)
-                prosst_optimizer = torch.optim.Adam(prosst_lora_model_2.parameters(), lr=0.0001)
-                esm_lora_model_2 = copy.deepcopy(esm_lora_model)
-                esm_optimizer = torch.optim.Adam(esm_lora_model_2.parameters(), lr=0.0001)
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
                 get_vram()
                 try:
                     (
+                        s_train, s_test,
                         x_dca_train, x_dca_test, 
                         x_llm_train_prosst, x_llm_test_prosst,
                         x_llm_train_esm, x_llm_test_esm, 
                         y_train, y_test
                     ) = train_test_split(
+                        sequences,
                         x_dca,
                         x_prosst,
                         x_esm, 
                         fitnesses, 
                         train_size=train_size, 
-                        random_state=42
+                        random_state=seed
                     )
                 except ValueError as e:
                     print(f"Only {len(fitnesses)} variant-fitness pairs in total, "
@@ -242,43 +239,17 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         hybrid_perfs.append(k)
                     ns_y_test.append(np.nan)
                     continue
-                (
-                    x_dca_train, 
-                    x_llm_train_prosst,
-                    x_llm_train_esm, 
-                    y_train,
-                ) = (
-                    reduce_by_batch_modulo(x_dca_train),  
-                    reduce_by_batch_modulo(x_llm_train_prosst),
-                    reduce_by_batch_modulo(x_llm_train_esm), 
-                    reduce_by_batch_modulo(y_train),
+
+
+                llm_dict_esm = esm_setup(
+                        wt_seq=wt_seq, sequences=s_train, 
+                        seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
                 )
-                llm_dict_prosst = {
-                    'prosst': {
-                        'llm_base_model': prosst_base_model,
-                        'llm_model': prosst_lora_model_2,
-                        'llm_optimizer': prosst_optimizer,
-                        'llm_train_function': prosst_train,
-                        'llm_inference_function': get_logits_from_full_seqs,
-                        'llm_loss_function': corr_loss,
-                        'x_llm' : x_llm_train_prosst,
-                        'llm_attention_mask':  prosst_attention_mask,
-                        'input_ids': input_ids,
-                        'structure_input_ids': structure_input_ids
-                    }
-                }
-                llm_dict_esm = {
-                    'esm1v': {
-                        'llm_base_model': esm_base_model,
-                        'llm_model': esm_lora_model_2,
-                        'llm_optimizer': esm_optimizer,
-                        'llm_train_function': esm_train,
-                        'llm_inference_function': esm_infer,
-                        'llm_loss_function': corr_loss,
-                        'x_llm' : x_llm_train_esm,
-                        'llm_attention_mask':  esm_attention_mask
-                    }
-                }
+                llm_dict_prosst = prosst_setup(
+                        wt_seq=wt_seq, pdb_file=pdb, sequences=s_train, 
+                        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
+                )
+                llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
                 print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                 if len(y_test) <= 50:
                     print(f"Only {len(fitnesses)} in total, splitting the data "
@@ -290,21 +261,30 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     ns_y_test.append(np.nan)
                     continue
                 get_vram()
-                for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
-                    print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m] + ' ~~~')
+                for i_m, llm_dict in enumerate([None, llm_dict_esm, llm_dict_prosst, llm_dict_ensemble]):
+                    print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid', 'DCA+ESM+ProSST hybrid'][i_m] + ' ~~~')
                     try:
+                        if i_m == 0:
+                            lora_train=False
+                            gauss_opt=False
+                        else: 
+                            lora_train=True
+                            gauss_opt=True
                         hm = DCALLMHybridModel(
                             x_train_dca=np.array(x_dca_train), 
                             y_train=y_train,
-                            llm_model_input=method,
-                            x_wt=x_wt
+                            llm_model_input=llm_dict,
+                            x_wt=x_wt,
+                            lora_train=lora_train,
+                            gauss_opt=gauss_opt
                         )
                         y_test_pred = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test), 
                             x_llm_dict=[
                                 None, 
                                 {'esm1v': np.asarray(x_llm_test_esm)}, 
-                                {'prosst': np.asarray(x_llm_test_prosst)}
+                                {'prosst': np.asarray(x_llm_test_prosst)},
+                                {'esm1v': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
                             ][i_m]
                         )
                         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
@@ -313,8 +293,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         # or UnboundLocalError in prosst_lora_tune.py, line 167
                         hybrid_perfs.append(np.nan)
                 ns_y_test.append(len(y_test_pred))
-                del prosst_lora_model_2
-                del esm_lora_model_2
                 torch.cuda.empty_cache()
                 gc.collect()
 
@@ -328,7 +306,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             with open(out_results_csv, 'a') as fh:
                 fh.write(
                     f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
-                    f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n')
+                    f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n'
+                )
                 
 
 def plot_csv_data(csv, plot_name):
@@ -465,8 +444,9 @@ def plot_csv_data(csv, plot_name):
     plt.xlabel('Tested dataset')
     plt.ylabel(r'Spearman $\rho$')
     adjust_text(train_test_size_texts, expand=(1.2, 2))
-    plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}.png'), dpi=300)
-    print('Saved file as ' + os.path.join(os.path.dirname(__file__),  f'{plot_name}.png') + '.')
+    png_plot = os.path.join(os.path.dirname(__file__), f'{plot_name}.png')
+    plt.savefig(png_plot, dpi=300)
+    print(f'Saved file as {png_plot}.')
 
     plt.clf()
     plt.figure(figsize=(24, 12))

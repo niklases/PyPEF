@@ -501,13 +501,12 @@ class GREMLIN:
         function with encode set to True.
         """
         xs = []
-        print(type(seqs))
         sequences_batched = get_batches(
             seqs, batch_size=1000, dtype=str, 
             keep_remaining=True, verbose=True
         )
         if type(sequences_batched[0]) == str:  # Only one input seq
-            sequences_batched = [sequences_batched]
+            sequences_batched = [sequences_batched]  # Ensure 2-dim. without numpy function
 
         for seq_batch in sequences_batched:
             xs.append(self.get_scores(seq_batch, v, w, v_idx, encode=True))
