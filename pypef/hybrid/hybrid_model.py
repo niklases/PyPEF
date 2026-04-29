@@ -514,8 +514,7 @@ class DCALLMHybridModel:
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
-            print(f"Processing LLM {llm_name.upper()}...")
-            
+            logger.info(f"Processing LLM {llm_name.upper()}...")
             # Extract this specific model's data
             current_llm = self.llm_data[llm_name]
             base_model = current_llm['llm_base_model']
@@ -664,7 +663,9 @@ class DCALLMHybridModel:
             self.gp_model.eval()
             likelihood.eval()
             with torch.no_grad(), gpytorch.settings.fast_pred_var():
-                gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()  # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches the stored training data. Did you forget to call model.train()?
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()  # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches the stored training data. Did you forget to call model.train()?
                 gp_pred_ttest = likelihood(self.gp_model(emb_ttest))
                 self.y_gp_opt_ttest = gp_pred_ttest.mean.detach().cpu().numpy()
                 logger.info(
@@ -751,10 +752,10 @@ class DCALLMHybridModel:
                 }
 
                 y_base = current_llm['llm_inference_function'](model=current_llm['llm_base_model'], **common_args)
-                y_lora = current_llm['llm_inference_function'](model=current_llm['llm_model'], **common_args)
-                
                 predictors.append(y_base.detach().cpu().numpy())
-                predictors.append(y_lora.detach().cpu().numpy())
+                if self.lora_train:
+                    y_lora = current_llm['llm_inference_function'](model=current_llm['llm_model'], **common_args)
+                    predictors.append(y_lora.detach().cpu().numpy())
 
                 if self.gauss_opt:
                     emb_args = {**common_args, 'model': current_llm['llm_base_model'], 'extract_emb': True}
@@ -777,7 +778,6 @@ class DCALLMHybridModel:
                 predictors.append(y_gp.detach().cpu().numpy())
 
         y_final = np.zeros_like(y_dca)
-        print('len(self.all_betas):', len(self.all_betas), 'len(predictors):', len(predictors))
         for beta, p in zip(self.all_betas, predictors, strict=True):
             std_val = np.std(p)
             p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p

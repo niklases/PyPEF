@@ -1,6 +1,5 @@
 
 import os
-import copy
 import gc
 import time
 import warnings
@@ -23,39 +22,37 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.plm.utils import get_batches
-from pypef.plm.esm_lora_tune import (
-    get_esm_models, #tokenize_sequences, 
-    #esm_train, esm_infer, corr_loss
-)
+from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import (
     get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_simple_vocab_aa_tokenizer, #prosst_train
+    prosst_simple_vocab_aa_tokenizer
 )
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
-    DCALLMHybridModel, reduce_by_batch_modulo, get_delta_e_statistical_model
+    DCALLMHybridModel, get_delta_e_statistical_model
 )
+from pypef import __version__
 
-
+version = __version__.split('-')[0]
+# e.g., version = '0.4.3'
 JUST_PLOT_RESULTS = False
 
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
+    MAX_WT_SEQUENCE_LENGTH = 1000
     seed = 42
     device = get_device()
     print(f"Using {device.upper()} device")
     get_vram()
-    MAX_WT_SEQUENCE_LENGTH = 1000
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
-    prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models()
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models()
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to(device)
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed=42)
+    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed=42)
     esm_base_model = esm_base_model.to(device)
     get_vram()
     plt.figure(figsize=(40, 12))
@@ -268,7 +265,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             lora_train=False
                             gauss_opt=False
                         else: 
-                            lora_train=True
+                            lora_train=False
                             gauss_opt=True
                         hm = DCALLMHybridModel(
                             x_train_dca=np.array(x_dca_train), 
@@ -276,7 +273,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             llm_model_input=llm_dict,
                             x_wt=x_wt,
                             lora_train=lora_train,
-                            gauss_opt=gauss_opt
+                            gauss_opt=gauss_opt,
+                            n_epochs=50  # Only for LoRA training
                         )
                         y_test_pred = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test), 
@@ -516,7 +514,7 @@ if __name__ == '__main__':
     combined_mut_data.update(h_mut_data)
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
-    out_results_csv = os.path.join(os.path.dirname(__file__), 'results/dca_esm_and_hybrid_opt_results.csv')
+    out_results_csv = os.path.join(os.path.dirname(__file__), f'results/dca_esm_and_hybrid_opt_results_v{version}.csv')
     if os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
@@ -561,10 +559,7 @@ if __name__ == '__main__':
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
-    clean_out_results_csv = os.path.join(
-        os.path.dirname(__file__), 
-        'results/dca_esm_and_hybrid_opt_results_clean.csv'
-    )
+    clean_out_results_csv = os.path.splitext(out_results_csv)[0] + '_clean.csv'
     with open(clean_out_results_csv, 'w') as fh2:
         header = lines[0]
         content = lines[1:]
@@ -583,4 +578,4 @@ if __name__ == '__main__':
             ):
                 fh2.write(line)
     
-    plot_csv_data(csv=clean_out_results_csv, plot_name='mut_performance')
+    plot_csv_data(csv=clean_out_results_csv, plot_name=f'mut_performance_v{version}')
