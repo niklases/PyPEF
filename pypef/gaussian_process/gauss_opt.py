@@ -159,13 +159,13 @@ def get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=None, x_tokseqs_stru
         likelihood.train()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
-        pbar = tqdm(range(opt_steps), desc='Training')
+        pbar = tqdm(range(opt_steps), desc='GP training')
         for i in pbar:
             optimizer.zero_grad()
             output = model(x_train)
             loss = -mll(output, y_train)
             loss.backward()
             optimizer.step()
-            pbar.set_description(f"Training: step {i+1}/{100}, loss: {loss:.4f} "
+            pbar.set_description(f"GP training: step {i+1}/{100}, loss: {loss:.4f} "
                                  f"({device.upper()})")
     return model

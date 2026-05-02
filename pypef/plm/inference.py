@@ -452,10 +452,10 @@ def plm_inference(
                            keep_remaining=keep_remaining, verbose=True)
         xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     if extract_emb:
-        desc = (f"Inference: getting embeddings batch "
+        desc = (f"PLM inference: getting embeddings batch "
                 f"(size={batch_size}) processing ({device.upper()})")
     else:
-        desc = (f"Inference: {inference_type} batch (size={batch_size}) "
+        desc = (f"PLM inference: {inference_type} batch (size={batch_size}) "
                 f"processing ({device.upper()})'")
 
 
