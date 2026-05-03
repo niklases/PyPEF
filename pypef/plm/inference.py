@@ -445,7 +445,7 @@ def plm_inference(
         
     scores = []
     if batch_size is None:
-        xs_b = torch.atleast_2d(tokenized_sequences,)
+        xs_b = torch.atleast_2d(tokenized_sequences)
     else:
         logger.info(f"Splitting tokenized sequences into batches...")
         xs_b = get_batches(tokenized_sequences, dtype=int, batch_size=batch_size,

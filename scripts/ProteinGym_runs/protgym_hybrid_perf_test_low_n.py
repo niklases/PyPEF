@@ -164,7 +164,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 esm_unopt_perf = spearmanr(fitnesses, y_esm)[0]
             except RuntimeError:
                 esm_unopt_perf = np.nan
-            esm_base_model = None
             gc.collect()
             torch.cuda.empty_cache()
 
@@ -194,9 +193,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
             except RuntimeError:
                 prosst_unopt_perf = np.nan
-            prosst_base_model = None
-            gc.collect()
-            torch.cuda.empty_cache()
             
             if np.isnan(esm_unopt_perf) and np.isnan(prosst_unopt_perf):
                 print('Both LLM\'s had RunTimeErrors, skipping dataset...')
@@ -282,11 +278,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                     except RuntimeError as e:  # modeling_prosst.py, line 920, in forward 
                         # or UnboundLocalError in prosst_lora_tune.py, line 167
+                        print(e, '\nAppending performance NaN...')
                         hybrid_perfs.append(np.nan)
                 ns_y_test.append(len(y_test_pred))
-                llm_dict_esm = None
-                llm_dict_prosst = None
-                llm_dict_ensemble = None
                 gc.collect()
                 torch.cuda.empty_cache()
 

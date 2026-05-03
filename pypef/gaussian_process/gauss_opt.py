@@ -56,33 +56,43 @@ class HellingerRBFKernel(gpytorch.kernels.Kernel):
 
     @variance.setter
     def variance(self, value):
-        self._set_variance(value)
-
-    def _set_variance(self, value):
-        # Properly set raw_variance via inverse transform
         self.raw_variance.data = self.raw_variance_constraint.inverse_transform(value)
 
-    def forward(self, x1, x2, **params):
-        """
-        x1: [n1, d] (probabilities)
-        x2: [n2, d]
-        Returns: covariance matrix [n1, n2]
-        """
-        # Ensure probabilities
-        x1 = torch.clamp(x1, min=0)
-        x2 = torch.clamp(x2, min=0)
-        x1 = x1 / x1.sum(dim=1, keepdim=True)
-        x2 = x2 / x2.sum(dim=1, keepdim=True)
-
-        # Hellinger distance
-        x1_sqrt = torch.sqrt(x1)
-        x2_sqrt = torch.sqrt(x2)
-        diff2 = (x1_sqrt.unsqueeze(1) - x2_sqrt.unsqueeze(0))**2
-        H2 = 0.5 * diff2.sum(dim=2)  # [n1, n2]
-
-        # RBF-like kernel
-        K = self.variance * torch.exp(-H2 / (2 * self.lengthscale ** 2))
-        return K
+    def forward(self, x1, x2, diag=False, **params):
+            # Normalize inputs to probabilities
+            x1 = torch.clamp(x1, min=1e-9)
+            x2 = torch.clamp(x2, min=1e-9)
+            x1 = x1 / x1.sum(dim=-1, keepdim=True)
+            x2 = x2 / x2.sum(dim=-1, keepdim=True)
+    
+            # Hellinger square root
+            x1_sqrt = torch.sqrt(x1)
+            x2_sqrt = torch.sqrt(x2)
+    
+            if diag:
+                # Diagonal case is much cheaper: 0.5 * sum((sqrt(p) - sqrt(q))^2)
+                h2 = 0.5 * (x1_sqrt - x2_sqrt).pow(2).sum(dim=-1)
+            else:
+                # 3. Optimized Distance: (a-b)^2 = a^2 + b^2 - 2ab
+                # Since sum(x1) = 1, sum(x1_sqrt^2) is always 1.0
+                # This eliminates the need for broadcasting subtraction!
+                
+                # x1_norm and x2_norm are 1.0 because these are probabilities
+                # but we calculate them for numerical stability/different input types
+                x1_norm = x1_sqrt.pow(2).sum(dim=-1, keepdim=True) # [n1, 1]
+                x2_norm = x2_sqrt.pow(2).sum(dim=-1, keepdim=True).transpose(-1, -2) # [1, n2]
+                
+                # Matrix multiplication: [n1, d] @ [d, n2] -> [n1, n2]
+                # This is the "2ab" part
+                dot_prod = torch.matmul(x1_sqrt, x2_sqrt.transpose(-1, -2))
+                
+                # Hellinger Distance Squared (H2)
+                # The 0.5 factor comes from the Hellinger definition
+                h2 = 0.5 * (x1_norm + x2_norm - 2 * dot_prod)
+                h2 = h2.clamp_min(0.0) # Guard against precision-induced negatives
+    
+            # RBF-like kernel
+            return self.variance * torch.exp(-h2 / (2 * self.lengthscale ** 2))
 
 
 class CombinedKernel(gpytorch.kernels.Kernel):
@@ -160,6 +170,8 @@ def get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=None, x_tokseqs_stru
         optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
         pbar = tqdm(range(opt_steps), desc='GP training')
+        # To save memory but loosing "exactness": Cojugate gradiens instead of massive Cholesky decomposition
+        # with gpytorch.settings.max_cholesky_size(0), gpytorch.settings.max_preconditioner_size(10):
         for i in pbar:
             optimizer.zero_grad()
             output = model(x_train)

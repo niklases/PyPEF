@@ -773,9 +773,19 @@ class DCALLMHybridModel:
             else:
                 gp_input = prosst_emb
 
-            with torch.no_grad():
-                y_gp = self.gp_model.likelihood(self.gp_model(gp_input)).mean
-                predictors.append(y_gp.detach().cpu().numpy())
+            y_gp_list = []
+            predict_batch_size = 100  # Adjust based on VRAM, 100 is very safe
+            
+            gp_input_batches = torch.split(gp_input, predict_batch_size)
+            
+            with torch.no_grad(), gpytorch.settings.fast_pred_var():
+                for batch in gp_input_batches:
+                    batch = batch.to(self.device)
+                    batch_output = self.gp_model.likelihood(self.gp_model(batch))
+                    y_gp_list.append(batch_output.mean.cpu().numpy())
+            
+            y_gp = np.concatenate(y_gp_list)
+            predictors.append(y_gp)
 
         y_final = np.zeros_like(y_dca)
         for beta, p in zip(self.all_betas, predictors, strict=True):
