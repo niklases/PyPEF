@@ -31,6 +31,14 @@ from pypef import __version__
 version = __version__.split('-')[0]
 # e.g., version = '0.4.3'
 
+import logging
+package_logger = logging.getLogger('pypef')
+package_logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+package_logger.addHandler(handler)
+
 
 JUST_PLOT_RESULTS = False
 
@@ -39,6 +47,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     # TODO: Add (R)MSE next to Spearman
     # Get cpu, gpu or mps device for training.
     MAX_WT_SEQUENCE_LENGTH = 500  # TODO: 1000
+    MAX_N_VARIANTS = 4000 # TODO: 1E9
     seed = 42
     device = get_device()
     print(f"Using {device.upper()} device")
@@ -46,11 +55,14 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     get_vram()
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
-    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models()
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
+        seed=42, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_base_model = prosst_base_model.to(device)
-    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(model='facebook/esm1v_t33_650M_UR90S_3', seed=42)
+    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
+        model='facebook/esm1v_t33_650M_UR90S_3', seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model = esm_base_model.to(device)
     get_vram()
+    prosst_unopt_perfs, esm_unopt_perfs = [], []
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
@@ -78,10 +90,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                   f'GB ({psutil.virtual_memory()[2]} %)')
             variant_fitness_data = pd.read_csv(csv_path, sep=',')
             print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
-            #if np.shape(variant_fitness_data)[0] > 400000:
-            #    print('More than 400000 variant-fitness pairs which represents a '
-            #          'potential out-of-memory risk, skipping dataset...')
-            #    continue
+            if np.shape(variant_fitness_data)[0] > MAX_N_VARIANTS:
+                print(f'More than {MAX_N_VARIANTS} variant-fitness pairs which represents a '
+                      f'potential out-of-memory risk, skipping dataset...')
+                continue
             variants = variant_fitness_data['mutant'].to_numpy()
             variants_orig = variants
             fitnesses = variant_fitness_data['DMS_score'].to_numpy()
@@ -197,7 +209,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             if np.isnan(esm_unopt_perf) and np.isnan(prosst_unopt_perf):
                 print('Both LLM\'s had RunTimeErrors, skipping dataset...')
                 continue 
-
+            
+            prosst_unopt_perfs.append(prosst_unopt_perf)
+            esm_unopt_perfs.append(esm_unopt_perf)
+            print('ProSST unsupervised:', len(prosst_unopt_perfs), np.nanmean(prosst_unopt_perfs))
+            print('ESM unsupervised:', len(esm_unopt_perfs), np.nanmean(esm_unopt_perfs))
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
