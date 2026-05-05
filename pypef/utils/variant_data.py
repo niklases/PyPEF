@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import numpy as np
 import pandas as pd
-import warnings
+from Bio import Align
 
 import logging
 logger = logging.getLogger('pypef.utils.variant_data')
@@ -409,6 +409,97 @@ def process_df_encoding(df_encoding) -> tuple[np.ndarray, np.ndarray, np.ndarray
         df_encoding.iloc[:, 2:].to_numpy(),
         df_encoding.iloc[:, 1].to_numpy()
     )
+
+
+def check_alignment(wt_seq, pdb_seq, min_block=3):
+    aligner = Align.PairwiseAligner()
+    aligner.mode = 'global' 
+    
+    # Perform alignment
+    alignments = aligner.align(wt_seq, pdb_seq)
+    best_alignment = alignments[0]
+    
+    # Calculate identity percentage
+    score = best_alignment.score
+    identity = score / max(len(wt_seq), len(pdb_seq))
+
+    # Identify the first and last match columns
+    target_str = best_alignment[0]
+    query_str = best_alignment[1]
+    
+    first_match_col = None
+    last_match_col = None
+
+    # Sliding window to find the robust start
+    for i in range(len(target_str) - min_block):
+        if all(target_str[i+j] == query_str[i+j] and target_str[i+j] != '-' 
+               for j in range(min_block)):
+            first_match_col = i
+            break
+            
+    # Find last match (reverse search)
+    for i in range(len(target_str) - 1, -1, -1):
+        if target_str[i] == query_str[i] and target_str[i] != '-':
+            last_match_col = i
+            break
+
+    if first_match_col is None or last_match_col is None:
+        logger.warning("No significant homology between sequences found!")
+        return None
+
+    # Map alignment columns to sequence indices using .indices
+    coords = best_alignment.indices
+    start_wt = int(coords[0, first_match_col])
+    start_pdb = int(coords[1, first_match_col])
+    
+    # End indices are exclusive
+    end_wt = int(coords[0, last_match_col]) + 1
+    end_pdb = int(coords[1, last_match_col]) + 1
+
+    # Extract the actual common sequence string
+    common_seq = wt_seq[start_wt:end_wt]
+
+    # Output details
+    logger.info(f"--- Alignment Results ---\n"
+        f"Identity: {identity:.2%}\n"
+        f"Common Sequence Start: WT Index {start_wt}, PDB Index {start_pdb}\n"
+        f"Common Sequence: {common_seq[:30]}...{common_seq[-10:]}\n"
+        f"WT Match Range: {start_wt} to {end_wt}\n"
+        f"PDB Match Range: {start_pdb} to {end_pdb}\n"
+        f"{best_alignment}\n"
+    )
+
+    mapping = {
+        "start_wt": start_wt,
+        "end_wt": end_wt,
+        "start_pdb": start_pdb,
+        "end_pdb": end_pdb,
+        "common_seq": common_seq,
+        "identity": identity
+    }
+
+    return mapping
+
+
+def shift_and_trim_vars_seqs(vars, seqs, start, end):
+    # TODO
+    for var, seq in zip(vars, seqs):
+        print(var, seq)
+        trimmed_seq = seq[start:end]
+        logger.info(f"Trimmed sequence:\n{trimmed_seq}")
+        if type(var) is list:
+            for v in var:
+                orig_pos = int(v[1:-1])
+                pos = orig_pos - start - 2
+                if pos >= 0:
+                    assert trimmed_seq[pos] == v[-1], f"{v} {orig_pos} -> {pos} -- {trimmed_seq[pos]} != {v[-1]}: {trimmed_seq[pos-3:pos+4]}"
+        else:
+            v = var
+            orig_pos = int(v[1:-1])
+            pos = orig_pos - start - 2
+            if pos >= 0:
+                assert trimmed_seq[pos] == v[-1], f"{v} {orig_pos} -> {pos} -- {trimmed_seq[pos]} != {v[-1]}: {trimmed_seq[pos-3:pos+4]}"
+
 
 
 def read_csv_and_shift_pos_ints(

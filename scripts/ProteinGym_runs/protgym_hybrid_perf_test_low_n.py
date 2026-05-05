@@ -24,7 +24,7 @@ from pypef.dca.gremlin_inference import GREMLIN
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
-from pypef.utils.variant_data import get_seqs_from_var_name
+from pypef.utils.variant_data import get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, get_delta_e_statistical_model
 from pypef import __version__
@@ -43,11 +43,13 @@ package_logger.addHandler(handler)
 JUST_PLOT_RESULTS = False
 
 
+
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # TODO: Add (R)MSE next to Spearman
     # Get cpu, gpu or mps device for training.
-    MAX_WT_SEQUENCE_LENGTH = 500  # TODO: 1000
-    MAX_N_VARIANTS = 4000 # TODO: 1E9
+    LORA_TRAIN = True
+    MAX_WT_SEQUENCE_LENGTH = 1000
+    MAX_N_VARIANTS = 1E9
     seed = 42
     device = get_device()
     print(f"Using {device.upper()} device")
@@ -55,9 +57,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     get_vram()
     print(f"Maximum sequence length: {MAX_WT_SEQUENCE_LENGTH}")
     print(f"Loading LLM models into {device} device...")
+    print('Getting ProSST models...')
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
         seed=42, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
-    prosst_base_model = prosst_base_model.to(device)
+    prosst_base_model = prosst_base_model.to(device).float()
+    print('Getting ESM models...')
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
         model='facebook/esm1v_t33_650M_UR90S_3', seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model = esm_base_model.to(device)
@@ -130,19 +134,21 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 continue
             _ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
-            try:
-                assert wt_seq == pdb_seq  # pdb_seq.startswith(wt_seq)
-            except AssertionError:
+            if not pdb_seq == wt_seq:
+                # TODO:
+                #mapping = check_alignment(wt_seq, pdb_seq)
+                #shift_and_trim_vars_seqs(vars=variants, seqs=sequences, start=mapping['start_wt'], end=mapping['end_wt'])
                 print(
-                    f"Wild-type sequence is not matching PDB-extracted sequence:"
-                    f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}\nSkipping dataset..."
+                    f"Wild-type sequence is not matching PDB-extracted sequence"
+                    f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}. TODO: Shifting "
+                    f"variants and trimming sequences. Skipping dataset..."
                 )
                 with open(out_results_csv, 'a') as fh:
                     fh.write(
                         f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
                         f'{max_muts},PDBseq neq WTseq\n'
                     )
-                    continue
+                continue
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=1, optimize=True)
@@ -212,8 +218,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             
             prosst_unopt_perfs.append(prosst_unopt_perf)
             esm_unopt_perfs.append(esm_unopt_perf)
-            print('ProSST unsupervised:', len(prosst_unopt_perfs), np.nanmean(prosst_unopt_perfs))
-            print('ESM unsupervised:', len(esm_unopt_perfs), np.nanmean(esm_unopt_perfs))
+            print(f'Current mean ProSST unsupervised: N={len(prosst_unopt_perfs)} SpearCorr.={np.nanmean(prosst_unopt_perfs):.3f}')
+            print(f'Current mean ESM unsupervised: N={len(esm_unopt_perfs)} SpearCorr.={np.nanmean(esm_unopt_perfs):.3f}')
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
@@ -270,7 +276,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             lora_train=False
                             gauss_opt=False
                         else: 
-                            lora_train=False
+                            lora_train=LORA_TRAIN
                             gauss_opt=True
                         hm = DCALLMHybridModel(
                             x_train_dca=np.array(x_dca_train), 

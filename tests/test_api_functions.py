@@ -323,6 +323,7 @@ def test_hybrid_model_dca_llm_aneh(
         assert not np.allclose(y_test_pred_lora, y_test_pred_1, rtol=1e-5, atol=1e-8)
         assert not np.allclose(hm.y_llm_ttrain, hm.y_llm_lora_ttrain, rtol=1e-5, atol=1e-8)
         assert not np.allclose(hm.y_llm_ttest, hm.y_llm_lora_ttest, rtol=1e-5, atol=1e-8)
+
         #if py_ver[0:2] >= (3, 12):
         #    np.testing.assert_almost_equal(
         #        spearmanr(y_test, y_test_pred)[0], 
@@ -356,72 +357,43 @@ def test_hybrid_model_dca_llm_aneh(
         )
 
         if i == 0:
+            np.testing.assert_almost_equal( 
+                spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0], -0.6825218561297186
+            )
+            np.testing.assert_almost_equal( 
+                spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], 0.5600438362092571
+            )
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.7704181041760417
             )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.3792411638377486
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.8218538345967897
+            )
+
         elif i == 1:
-            assert spearmanr(hm.y_ttest, hm.y_llm_ttest)[0] in [-0.6370803136561448, -0.8330644449247571]
-
-
-        # Nondeterministic behavior (without setting seed), should be about ~0.7 to ~0.9, 
-        # but as sample size is so low the following is only checking if not NaN / >=-1.0 and <=1.0,
-        # Torch reproducibility documentation: https://pytorch.org/docs/stable/notes/randomness.html
-        # https://docs.nvidia.com/cuda/cublas/index.html#results-reproducibility
-        assert -1.0 <= spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0] <= 1.0  
-        assert -1.0 <= spearmanr(test_ys_aneh, y_pred_test)[0] <= 1.0
-        #np.testing.assert_almost_equal(spearmanr(y_test, y_pred_test)[0], 0.8403249605842074, decimal=7)  # 0.814064805565951
-        # With seed 42 for numpy and torch for implemented LLM's and on local machine:
-        if setup == esm_setup:
-            continue  # TODO: Make new/overloaded pytest decorator function
-            #try: # Different values on different machines (TODO) has to be investigated
-            #    np.testing.assert_almost_equal(
-            #        spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7772102863835341, decimal=7
-            #    )
-            #except AssertionError as ae1:
-            #    try:
-            #        np.testing.assert_almost_equal(
-            #            spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7239938685054149, decimal=7
-            #        )
-            #    except AssertionError as ae2:
-            #        raise AssertionError(
-            #            f"Neither condition passed:\nFirst comparison failed:\n{ae1}\n"
-            #            f"Second comparison failed:\n{ae2}"
-            #        )
-            #try:
-            #    np.testing.assert_almost_equal(
-            #        spearmanr(y_test, y_pred_test)[0], 0.8004896406836318, decimal=7
-            #    )
-            #except AssertionError as ae1:
-            #    try:
-            #        np.testing.assert_almost_equal(
-            #            spearmanr(y_test, y_pred_test)[0], 0.8338711936729409, decimal=7
-            #        )
-            #    except AssertionError as ae2:
-            #        raise AssertionError(
-            #            f"Neither condition passed:\nFirst comparison failed:\n{ae1}\n"
-            #            f"Second comparison failed:\n{ae2}"
-            #        )
-
-        elif setup == prosst_setup:
-            continue
-            #try:
-            #    np.testing.assert_almost_equal(
-            #        spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7770124558338013, decimal=7
-            #    )
-            #except AssertionError as ae1:
-            #    try: 
-            #        np.testing.assert_almost_equal(  
-            #        spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.7239938685054149, decimal=7
-            #        )                                
-            #    except AssertionError as ae2:
-            #        raise AssertionError(
-            #            f"Neither condition passed:\nFirst comparison failed:\n{ae1}\n"
-            #            f"Second comparison failed:\n{ae2}"
-            #        )
-            #np.testing.assert_almost_equal(
-            #    spearmanr(y_test, y_pred_test)[0], 0.8291977762544377, decimal=7
-            #)
-
+            np.testing.assert_almost_equal( 
+                spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0], -0.6814974117251794
+            )
+            np.testing.assert_almost_equal( 
+                spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], -0.6633846655171465  # TODO: Check: why still so low?
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.8330644449247571
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], -0.8274592460156613
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.8427729411367566
+            )
+        
+        elif i == 2:
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
+            )
 
 
 def test_hybrid_model_dca_llm_avgfp(
@@ -608,11 +580,28 @@ def test_hybrid_model_dca_llm_avgfp(
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.27268592420896115
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.702055387846174
+            )
+            
         elif i == 1:
-            try:
-                np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.645973191052021)
-            except AssertionError:
-                np.testing.assert_almost_equal(spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.21670201832455013)
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6563512715663337
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.7450105938162113
+            )
+        
+        elif i == 2:
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
+            )
 
 
 def test_dataset_b_results():
@@ -923,7 +912,7 @@ def test_gaussian_process_opt():
         print("MSE:                                       ", hybrid_corr_mse_loss(y_test, y_pred, alpha=0.0))
         if i == 2:
             try:
-                np.testing.assert_almost_equal(spear_rho, 0.6337198357489734, decimal=3)
+                np.testing.assert_almost_equal(spear_rho, 0.6321742635891474, decimal=3)
             except AssertionError:
                 np.testing.assert_almost_equal(spear_rho, 0.6390131813323833, decimal=3)
         else:

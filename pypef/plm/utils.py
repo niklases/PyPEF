@@ -187,6 +187,117 @@ def is_model_cached(repo_id: str, cache_dir: str):
 
 
 def load_model_and_tokenizer(
+    model_name: str, 
+    cache_dir: str | os.PathLike | None = None, 
+    model_loader=None, 
+    tokenizer_loader=None,
+    revision: str | None = None
+):
+    """
+    Enhanced loader that bypasses broken Windows symlinks by manually 
+    injecting weights from the HF blob store if ProSST is detected.
+    """
+    from huggingface_hub import hf_hub_download
+    from safetensors.torch import load_file
+    if cache_dir is None:
+        # Assuming you have a helper for this, or use default
+        cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+        
+    if model_loader is None:
+        model_loader = AutoModelForMaskedLM
+    if tokenizer_loader is None:
+        tokenizer_loader = AutoTokenizer
+
+    # Check if model is cached locally
+    # Note: Even if exists=True, Windows symlinks might be broken pointers
+    from pypef.plm.utils import is_model_cached # adjust import based on your structure
+    exists, snapshot_dir, _ = is_model_cached(model_name, cache_dir)
+    is_windows = platform.system() == "Windows"
+
+    # Common loading arguments
+    load_kwargs = {
+        "cache_dir": cache_dir,
+        "trust_remote_code": True,
+        "revision": revision,
+        "local_files_only": exists
+    }
+
+    # 1. LOAD THE MODEL
+    logger.info(f"Loading model architecture for {model_name}...")
+    
+    # We first try a standard load. 
+    # On Windows, we use the model_name (repo_id) rather than snapshot_dir 
+    # to let HF attempt its internal resolution.
+    load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
+    
+    try:
+        model = model_loader.from_pretrained(
+            load_path,
+            use_safetensors=True,
+            **load_kwargs
+        )
+    except Exception as e:
+        # Warning appears too oftne for ESM as no safetensor exists (respectively existed back then)
+        # logger.warning(f"Standard load failed, trying without safetensors: {e}")
+        model = model_loader.from_pretrained(
+            load_path,
+            use_safetensors=False,
+            **load_kwargs
+        )
+
+    # THE WINDOWS SYMLINK BYPASS (Specific for ProSST)
+    # If logits were -210, the weights didn't load. We force them here.
+    if is_windows and "prosst" in model_name.lower():
+        try:
+            logger.info("Windows detected: Forcing manual weight injection from blobs...")
+            
+            # This identifies the actual large binary file in the blobs folder
+            real_weight_path = hf_hub_download(
+                repo_id=model_name,
+                filename="model.safetensors",
+                cache_dir=cache_dir,
+                local_files_only=True
+            )
+            
+            # Load weights manually
+            state_dict = load_file(real_weight_path)
+        
+            # FIX: Handle weight sharing for the decoder if it's missing in the file
+            if 'cls.predictions.decoder.weight' not in state_dict:
+                logger.info("Decoder weight not found in file. Attempting to tie to word embeddings...")
+                if 'prosst.embeddings.word_embeddings.weight' in state_dict:
+                    state_dict['cls.predictions.decoder.weight'] = state_dict['prosst.embeddings.word_embeddings.weight']
+
+            msg = model.load_state_dict(state_dict, strict=False)
+            
+            logger.info(f"Manual injection successful: {msg}")
+            
+            if len(msg.missing_keys) > 0:
+                logger.warning(f"Weights injected, but some keys still missing: {msg.missing_keys}")
+                
+        except Exception as e:
+            logger.error(f"Manual weight injection failed: {e}")
+
+    # Loading the tokenizer
+    logger.info(f"Loading tokenizer for {model_name}...")
+    try:
+        tokenizer = tokenizer_loader.from_pretrained(
+            load_path,
+            use_fast=False, # Avoids the sentencepiece/tiktoken conversion error
+            **load_kwargs
+        )
+    except Exception as e:
+        logger.warning(f"Tokenizer load failed with use_fast=False, trying default: {e}")
+        tokenizer = tokenizer_loader.from_pretrained(
+            load_path,
+            **load_kwargs
+        )
+
+    logger.info(f"Successfully finished loading {model_name}.")
+    return model, tokenizer
+
+
+def load_model_and_tokenizer__(
         model_name: str, 
         cache_dir: str | os.PathLike | None = None, 
         model_loader=None, 
@@ -203,32 +314,40 @@ def load_model_and_tokenizer(
     if tokenizer_loader is None:
         tokenizer_loader = AutoTokenizer
     exists, snapshot_dir, ref_file = is_model_cached(model_name, cache_dir)
-    if exists:
+    print(exists, snapshot_dir, ref_file)
+    # Check for Windows to avoid the 'Snapshot Path' trap
+    is_windows = platform.system().lower() == "windows"
+    if exists and not is_windows:
         try:
             logger.info(f"Loading model and tokenizer from cache {snapshot_dir}...")
             model = model_loader.from_pretrained(
-                snapshot_dir, trust_remote_code=True, revision=revision
+                snapshot_dir, trust_remote_code=True, revision=revision, #use_safetensors=True
             )
             tokenizer = tokenizer_loader.from_pretrained(
-                snapshot_dir, trust_remote_code=True, revision=revision
+                snapshot_dir, trust_remote_code=True, revision=revision, #use_safetensors=True
             )
         except OSError as e:
-            logger.info(f"Faced error \"{e}\": Trying to load with regular cache load path...")
-            model = model_loader.from_pretrained(
-                model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
-            )
-            tokenizer = tokenizer_loader.from_pretrained(
-                model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
-            )
-    else:
-        logger.info(f"Did not find model {model_name} and associated tokenizer in cache directory "
-                    f"(checked for model snapshot reference file {ref_file}), downloading model and tokenizer "
-                    f"from the internet and storing in cache {cache_dir}...")
+            logger.warning(f"Snapshot load failed: {e}. Falling back to repo_id load.")
+            exists = False # Trigger the fallback below
+    if not exists or is_windows:
+        logger.info(f"Loading via repo_id '{model_name}' (safe mode for Windows/missing cache)...")
+        # Using the model_name instead of snapshot_dir allows HF to resolve 
+        # the actual weight blobs even if the symlink structure is broken.
         model = model_loader.from_pretrained(
-            model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
+            model_name, 
+            cache_dir=cache_dir, 
+            trust_remote_code=True, 
+            revision=revision,
+            local_files_only=exists, # Use cache if it's there, but let HF handle the mapping
+            #use_safetensors=True
         )
         tokenizer = tokenizer_loader.from_pretrained(
-            model_name, cache_dir=cache_dir, trust_remote_code=True, revision=revision
+            model_name, 
+            cache_dir=cache_dir, 
+            trust_remote_code=True, 
+            revision=revision,
+            local_files_only=exists,
+            #use_safetensors=True
         )
     logger.info("Model and tokenizer loaded successfully...")
     return model, tokenizer

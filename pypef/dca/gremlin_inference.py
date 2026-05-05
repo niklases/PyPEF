@@ -443,10 +443,10 @@ class GREMLIN:
         for i, seq in enumerate(seqs):
             n_mismatches, mismatches = get_mismatches(self.wt_seq, seq)
             if n_mismatches / wt_seq_len > 0.05:
-                all_mismatches.append(f"  - Seq {i + 1}: {mismatches}")
+                all_mismatches.append(f"Seq {i + 1}: {mismatches}")
         if all_mismatches:
-            summary = "\n".join(all_mismatches)
-            if len(summary) > 500:
+            summary = "; ".join(all_mismatches)
+            if len(summary) > 500: 
                 summary = summary[:500] + '...'
             logger.warning(
                 f"High mismatch rate (>5%) detected in the following sequences:\n{summary}\n"
