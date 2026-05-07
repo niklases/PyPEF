@@ -7,7 +7,8 @@ import torch
 import torch.nn.functional as F
 import platform
 import random
-import warnings
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 from transformers import set_seed
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
@@ -197,8 +198,6 @@ def load_model_and_tokenizer(
     Enhanced loader that bypasses broken Windows symlinks by manually 
     injecting weights from the HF blob store if ProSST is detected.
     """
-    from huggingface_hub import hf_hub_download
-    from safetensors.torch import load_file
     if cache_dir is None:
         # Assuming you have a helper for this, or use default
         cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
@@ -210,8 +209,9 @@ def load_model_and_tokenizer(
 
     # Check if model is cached locally
     # Note: Even if exists=True, Windows symlinks might be broken pointers
-    from pypef.plm.utils import is_model_cached # adjust import based on your structure
     exists, snapshot_dir, _ = is_model_cached(model_name, cache_dir)
+    if exists:
+        logger.info(f"Model snapshot extists at {snapshot_dir}...")
     is_windows = platform.system() == "Windows"
 
     # Common loading arguments
@@ -222,7 +222,7 @@ def load_model_and_tokenizer(
         "local_files_only": exists
     }
 
-    # 1. LOAD THE MODEL
+    # Loading the model
     logger.info(f"Loading model architecture for {model_name}...")
     
     # We first try a standard load. 

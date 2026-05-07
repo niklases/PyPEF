@@ -256,7 +256,6 @@ class GREMLIN:
     def flatten_v_w(v, w):
         return torch.cat((v.flatten(), w.flatten()), 0)
 
-
     def opt_adam_step(self, lr=1.0, b1=0.9, b2=0.999):
         """
         Adam optimizer [https://arxiv.org/abs/1412.6980] with first and second moments
@@ -287,16 +286,14 @@ class GREMLIN:
         self.vt_w = vt_tmp_w
         self.mt_w = mt_tmp_w
 
-    def sym_w(self, w, device: str | None = None):
+    def sym_w(self, w):
         """
         Symmetrize input matrix of shape (x,y,x,y)
         As the full couplings matrix W might/will be slightly "unsymmetrical"
         it will be symmetrized according to one half being "mirrored".
         """
-        if device is None:
-            device = self.device
         x = w.shape[0]
-        w = w * torch.reshape(1 - torch.eye(x), (x, 1, x, 1)).to(device)
+        w = w * torch.reshape(1 - torch.eye(x), (x, 1, x, 1)).to(self.device)
         w = w + torch.permute(w, (2, 3, 0, 1))
         return w
 
@@ -304,23 +301,20 @@ class GREMLIN:
     def l2_reg(x):
         return torch.sum(torch.square(x))
     
-    def loss(self, v, w, device: str | None = None):
+    def loss(self, v, w):
         ##############################################################
         # SETUP COMPUTE GRAPH
         ##############################################################
-        if device is None:
-            device = self.device
-        v, w = v.to(device), w.to(device)
         # symmetrize w
-        w = self.sym_w(w, device).to(torch.float32)
+        w = self.sym_w(w).to(torch.float32)
 
         ########################################
         # Pseudo-Log-Likelihood
         ########################################
-        vw = v + torch.tensordot(self.oh_msa.to(device), w, dims=2)
+        vw = v + torch.tensordot(self.oh_msa, w, dims=2)
 
         # Hamiltonian
-        h = torch.sum(torch.mul(self.oh_msa.to(device), vw), dim=(1, 2))
+        h = torch.sum(torch.mul(self.oh_msa, vw), dim=(1, 2))
         # partition function Z
         z = torch.sum(torch.logsumexp(vw, dim=2), dim=1)
 
@@ -335,17 +329,11 @@ class GREMLIN:
 
         # loss function to minimize
         loss = (
-            -torch.sum(pll * self.msa_weights.to(device)) / 
-            torch.sum(self.msa_weights.to(device))
+            -torch.sum(pll * self.msa_weights) / 
+            torch.sum(self.msa_weights)
         )
         loss = loss + (l2_v + lw_w) / self.n_eff
         return loss
-    
-    def _loss(self, decimals=2):
-        return  torch.round(
-            self.loss(self.v.detach(), self.w.detach(), device='cpu') * self.n_eff, 
-            decimals=decimals
-        )
 
     def run_optimization(self):
         """
@@ -372,11 +360,18 @@ class GREMLIN:
 
         self.mt_v, self.vt_v = torch.zeros_like(self.v), torch.zeros_like(self.v)
         self.mt_w, self.vt_w = torch.zeros_like(self.w), torch.zeros_like(self.w)
-        logger.info(f'Initial loss: {self._loss():.5f}')
+        current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
+        logger.info(f'Initial loss: {current_loss:.5f}')
         progress = tqdm(list(range(self.opt_iter)))
+        progress.set_description(f'MSA-based DCA opt.: Loss step 0: {current_loss:.5f}')
         for i in progress:
             self.opt_adam_step()
-            progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {self._loss():.5f}')
+            # Takes about 30% extra time to calculate current_loss at each step vs not computing it at all
+            if (i + 1) % 10 == 0:
+                current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
+                progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f}')
+        current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
+        progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f}')
         
         self.v = self.v.detach().cpu().numpy()
         self.w = self.w.detach().cpu().numpy()
