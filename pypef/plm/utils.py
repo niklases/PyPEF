@@ -9,7 +9,7 @@ import platform
 import random
 from huggingface_hub import hf_hub_download
 from safetensors.torch import load_file
-from transformers import set_seed
+from transformers import set_seed, AutoConfig
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
 ts_logging.set_verbosity_error()
@@ -214,6 +214,24 @@ def load_model_and_tokenizer(
         logger.info(f"Model snapshot extists at {snapshot_dir}...")
     is_windows = platform.system() == "Windows"
 
+        # Loading the model
+    logger.info(f"Loading model architecture for {model_name}...")
+    
+    # We first try a standard load. 
+    # On Windows, we use the model_name (repo_id) rather than snapshot_dir 
+    # to let HF attempt its internal resolution.
+    load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
+
+    config = AutoConfig.from_pretrained(
+        load_path, 
+        trust_remote_code=True, 
+        revision=revision, 
+        cache_dir=cache_dir
+    )
+
+    # Force the architecture to create a separate decoder layer
+    config.tie_word_embeddings = False
+
     # Common loading arguments
     load_kwargs = {
         "cache_dir": cache_dir,
@@ -222,13 +240,8 @@ def load_model_and_tokenizer(
         "local_files_only": exists
     }
 
-    # Loading the model
-    logger.info(f"Loading model architecture for {model_name}...")
-    
-    # We first try a standard load. 
-    # On Windows, we use the model_name (repo_id) rather than snapshot_dir 
-    # to let HF attempt its internal resolution.
-    load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
+    # Add the config to your load_kwargs
+    load_kwargs["config"] = config
     
     try:
         model = model_loader.from_pretrained(
@@ -246,7 +259,7 @@ def load_model_and_tokenizer(
         )
 
     # THE WINDOWS SYMLINK BYPASS (Specific for ProSST)
-    # If logits were -210, the weights didn't load. We force them here.
+    # If the weights didn't load, they are forced here
     if is_windows and "prosst" in model_name.lower():
         try:
             logger.info("Windows detected: Forcing manual weight injection from blobs...")
@@ -262,15 +275,26 @@ def load_model_and_tokenizer(
             # Load weights manually
             state_dict = load_file(real_weight_path)
         
-            # FIX: Handle weight sharing for the decoder if it's missing in the file
-            if 'cls.predictions.decoder.weight' not in state_dict:
-                logger.info("Decoder weight not found in file. Attempting to tie to word embeddings...")
-                if 'prosst.embeddings.word_embeddings.weight' in state_dict:
-                    state_dict['cls.predictions.decoder.weight'] = state_dict['prosst.embeddings.word_embeddings.weight']
+            # hasattr check will pass because of the config above
+            if hasattr(model.cls.predictions, 'decoder'):
+                pass
+                #logger.info("Model has a decoder layer to hold the weights.")
+            else:
+                # Emergency fallback: Manually attach the layer if the config flag was ignored
+                logger.warning("Missing model layer(s): Manually attaching linear layer...")
+                model.cls.predictions.decoder = torch.nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
-            msg = model.load_state_dict(state_dict, strict=False)
-            
-            logger.info(f"Manual injection successful: {msg}")
+            # Prepare the state_dict (Inject the missing key if it's not there)
+            if 'cls.predictions.decoder.weight' not in state_dict:
+                logger.info("Injecting cloned embedding weights into model state dictionary for decoder.")
+                state_dict['cls.predictions.decoder.weight'] = state_dict['prosst.embeddings.word_embeddings.weight'].clone()
+        
+            # Apply the weights to the model
+            # Use strict=False so it doesn't crash on minor metadata mismatches
+            msg = model.load_state_dict(state_dict, strict=False) 
+            #assert (model.cls.predictions.decoder.weight.sum().item() == 
+            #        model.prosst.embeddings.word_embeddings.weight.sum().item())
+            # DO NOT call model.tie_weights()
             
             if len(msg.missing_keys) > 0:
                 logger.warning(f"Weights injected, but some keys still missing: {msg.missing_keys}")
@@ -314,7 +338,7 @@ def load_model_and_tokenizer__(
     if tokenizer_loader is None:
         tokenizer_loader = AutoTokenizer
     exists, snapshot_dir, ref_file = is_model_cached(model_name, cache_dir)
-    print(exists, snapshot_dir, ref_file)
+
     # Check for Windows to avoid the 'Snapshot Path' trap
     is_windows = platform.system().lower() == "windows"
     if exists and not is_windows:

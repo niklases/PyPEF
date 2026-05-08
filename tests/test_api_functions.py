@@ -54,13 +54,20 @@ from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 
-device = ["cpu", get_device()][1]
+device = ["cpu", get_device()][0]
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
 torch_version = [int(i) for i in torch.__version__.split('+')[0].split('.')]
 torch_cpu_or_cuda_version = torch.__version__.split('+')[1]
 print(f"Using device: {device}")
+print(f"PyTorch Version: {torch.__version__}")
+print(f"CUDA Runtime (used by PyTorch): {torch.version.cuda}")
+print(f"cuDNN Version: {torch.backends.cudnn.version()}")
+print(f"Device Name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+
+# This checks which CUDA version PyTorch was COMPILED against
+print(f"PyTorch Compiled with CUDA: {torch.version.cuda}")
 
 csv_blat_ecolx_avgfp = os.path.abspath(
     os.path.join(__file__, '../../datasets/AVGFP/avGFP.csv'
@@ -121,6 +128,14 @@ _m_train_blat, _m_test_blat, s_train_blat, s_test_blat, y_train_blat, y_test_bla
 
 train_seqs_aneh, _train_vars_aneh, train_ys_aneh = get_sequences_from_file(ls_b)
 test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
+
+
+def get_model_hash(model):
+    hash_gen = hashlib.sha256()
+    for param in model.parameters():
+        hash_gen.update(param.detach().cpu().numpy().tobytes())
+    return hash_gen.hexdigest()
+
 
 
 def test_gremlin_avgfp():
@@ -211,6 +226,16 @@ def test_hybrid_model_dca_llm_aneh(
     )
     prosst_base_model.eval()
     prosst_base_model = prosst_base_model.to(device).float()
+    total_sum = sum(p.sum().item() for p in prosst_base_model.parameters())
+    #for name, param in prosst_base_model.named_parameters():
+    #    s = param.sum().item()
+    #    print(f"{name}: {s:.10f}")
+    print('Total model parameter sum:', total_sum)
+    np.testing.assert_almost_equal(total_sum, -36152.759244292974, decimal=5)
+    model_hash = get_model_hash(prosst_base_model)
+    print(f"Model Hash: {model_hash}")
+    assert model_hash == "f4ad803baa080bf43414365b653ebbf3798826a91c30b268fe97dc810ee2ef45"
+
     wt_tokens_prosst, prosst_attention_mask, wt_structure_tokens_prosst = get_structure_quantizied(
         pdb_file, prosst_tokenizer, wt_seq, device=device)
     
@@ -333,18 +358,6 @@ def test_hybrid_model_dca_llm_aneh(
         assert not np.allclose(hm.y_llm_ttrain, hm.y_llm_lora_ttrain, rtol=1e-5, atol=1e-8)
         assert not np.allclose(hm.y_llm_ttest, hm.y_llm_lora_ttest, rtol=1e-5, atol=1e-8)
 
-        #if py_ver[0:2] >= (3, 12):
-        #    np.testing.assert_almost_equal(
-        #        spearmanr(y_test, y_test_pred)[0], 
-        #        [0.555914129115294, -0.714142690284619][i], 
-        #        decimal=2                                       
-        #    )
-        #else:
-        #    np.testing.assert_almost_equal(
-        #        spearmanr(y_test, y_test_pred)[0], 
-        #        [0.39323469421406104, 0.4731278777018075][i], 
-        #        decimal=7                                       
-        #    )
         x_llm_input = {
                 ['esm1v', 'prosst'][i]: x_llm_test,
         }
@@ -947,6 +960,6 @@ if __name__ == "__main__":
     test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
-    test_plm_corr_blat_ecolx()
+    #test_plm_corr_blat_ecolx()
     test_gaussian_process_opt()
     
