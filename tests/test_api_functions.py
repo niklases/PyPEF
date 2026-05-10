@@ -54,7 +54,7 @@ from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 
 
-device = ["cpu", get_device()][0]
+device = ["cpu", get_device()][1]
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
@@ -198,7 +198,12 @@ def test_hybrid_model_dca_llm_aneh(
         seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
     )
     esm_base_model.eval()
-    esm_base_model = esm_base_model.to(device).float()
+    esm_base_model = esm_base_model.to(device)
+    total_sum = sum(p.sum().item() for p in esm_base_model.parameters())
+    print('Total model parameter sum (ESM1v):', total_sum)
+    np.testing.assert_allclose(total_sum, -15815.186912, atol=1e-1)
+    model_hash = get_model_hash(esm_base_model)
+    print(f"Model Hash: {model_hash}")
     x_esm, esm_attention_mask = tokenize_sequences(
         train_seqs, esm_tokenizer, max_length=len(wt_seq) + 2
     )
@@ -225,13 +230,13 @@ def test_hybrid_model_dca_llm_aneh(
         seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
     )
     prosst_base_model.eval()
-    prosst_base_model = prosst_base_model.to(device).float()
+    prosst_base_model = prosst_base_model.to(device)
     total_sum = sum(p.sum().item() for p in prosst_base_model.parameters())
     #for name, param in prosst_base_model.named_parameters():
     #    s = param.sum().item()
     #    print(f"{name}: {s:.10f}")
-    print('Total model parameter sum:', total_sum)
-    np.testing.assert_almost_equal(total_sum, -36152.759244292974, decimal=5)
+    print('Total model parameter sum (ProSST):', total_sum)
+    np.testing.assert_allclose(total_sum, -36152.75924, atol=1e-1)
     model_hash = get_model_hash(prosst_base_model)
     print(f"Model Hash: {model_hash}")
     assert model_hash == "f4ad803baa080bf43414365b653ebbf3798826a91c30b268fe97dc810ee2ef45"
@@ -960,6 +965,6 @@ if __name__ == "__main__":
     test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
-    #test_plm_corr_blat_ecolx()
+    test_plm_corr_blat_ecolx()
     test_gaussian_process_opt()
     

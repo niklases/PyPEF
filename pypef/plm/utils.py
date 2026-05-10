@@ -212,7 +212,7 @@ def load_model_and_tokenizer(
     exists, snapshot_dir, _ = is_model_cached(model_name, cache_dir)
     if exists:
         logger.info(f"Model snapshot extists at {snapshot_dir}...")
-    is_windows = platform.system() == "Windows"
+    is_windows = platform.system().lower() == "windows"
 
         # Loading the model
     logger.info(f"Loading model architecture for {model_name}...")
@@ -274,15 +274,6 @@ def load_model_and_tokenizer(
             
             # Load weights manually
             state_dict = load_file(real_weight_path)
-        
-            # hasattr check will pass because of the config above
-            if hasattr(model.cls.predictions, 'decoder'):
-                pass
-                #logger.info("Model has a decoder layer to hold the weights.")
-            else:
-                # Emergency fallback: Manually attach the layer if the config flag was ignored
-                logger.warning("Missing model layer(s): Manually attaching linear layer...")
-                model.cls.predictions.decoder = torch.nn.Linear(config.hidden_size, config.vocab_size, bias=False)
 
             # Prepare the state_dict (Inject the missing key if it's not there)
             if 'cls.predictions.decoder.weight' not in state_dict:
@@ -294,13 +285,28 @@ def load_model_and_tokenizer(
             msg = model.load_state_dict(state_dict, strict=False) 
             #assert (model.cls.predictions.decoder.weight.sum().item() == 
             #        model.prosst.embeddings.word_embeddings.weight.sum().item())
-            # DO NOT call model.tie_weights()
             
             if len(msg.missing_keys) > 0:
                 logger.warning(f"Weights injected, but some keys still missing: {msg.missing_keys}")
                 
         except Exception as e:
             logger.error(f"Manual weight injection failed: {e}")
+
+    # GLOBAL PROSST PARITY (Runs on Linux/GitHub and Windows)
+    # This ensures that even on Linux, the decoder is a bit-perfect clone of the embeddings.
+    if "prosst" in model_name.lower():
+        logger.info("Enforcing cross-platform weight parity for ProSST...")
+        
+        # Ensure the decoder layer exists (if not loaded via state_dict)
+        if not hasattr(model.cls.predictions, 'decoder'):
+            logger.info("Manually attaching linear decoder head...")
+            model.cls.predictions.decoder = torch.nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+
+        with torch.no_grad():
+            embedding_weight = model.prosst.embeddings.word_embeddings.weight
+            model.cls.predictions.decoder.weight.copy_(embedding_weight)
+            
+        # Do NOT call model.tie_weights() here, or PyTorch will turn them back into pointers
 
     # Loading the tokenizer
     logger.info(f"Loading tokenizer for {model_name}...")
