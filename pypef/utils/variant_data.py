@@ -413,13 +413,16 @@ def process_df_encoding(df_encoding) -> tuple[np.ndarray, np.ndarray, np.ndarray
 
 def check_alignment(wt_seq, pdb_seq, min_block=3):
     aligner = Align.PairwiseAligner()
-    aligner.mode = 'global' 
+    aligner.mode = 'global'
+    # Higher open/extend gap penalties help prevent "shredding" the alignment
+    aligner.open_gap_score = -10
+    aligner.extend_gap_score = -0.5
     
-    # Perform alignment
     alignments = aligner.align(wt_seq, pdb_seq)
+    if not alignments:
+        return None
+        
     best_alignment = alignments[0]
-    
-    # Calculate identity percentage
     score = best_alignment.score
     identity = score / max(len(wt_seq), len(pdb_seq))
 
@@ -430,14 +433,14 @@ def check_alignment(wt_seq, pdb_seq, min_block=3):
     first_match_col = None
     last_match_col = None
 
-    # Sliding window to find the robust start
-    for i in range(len(target_str) - min_block):
+    # Find the first robust match
+    for i in range(len(target_str) - min_block + 1):
         if all(target_str[i+j] == query_str[i+j] and target_str[i+j] != '-' 
                for j in range(min_block)):
             first_match_col = i
             break
             
-    # Find last match (reverse search)
+    # Find last match
     for i in range(len(target_str) - 1, -1, -1):
         if target_str[i] == query_str[i] and target_str[i] != '-':
             last_match_col = i
@@ -447,59 +450,87 @@ def check_alignment(wt_seq, pdb_seq, min_block=3):
         logger.warning("No significant homology between sequences found!")
         return None
 
-    # Map alignment columns to sequence indices using .indices
+    # Map alignment columns to sequence indices
+    # coords[0] is WT (target), coords[1] is PDB (query)
     coords = best_alignment.indices
     start_wt = int(coords[0, first_match_col])
-    start_pdb = int(coords[1, first_match_col])
-    
-    # End indices are exclusive
     end_wt = int(coords[0, last_match_col]) + 1
+    
+    start_pdb = int(coords[1, first_match_col])
     end_pdb = int(coords[1, last_match_col]) + 1
 
-    # Extract the actual common sequence string
     common_seq = wt_seq[start_wt:end_wt]
-
-    # Output details
-    logger.info(f"--- Alignment Results ---\n"
-        f"Identity: {identity:.2%}\n"
-        f"Common Sequence Start: WT Index {start_wt}, PDB Index {start_pdb}\n"
-        f"Common Sequence: {common_seq[:30]}...{common_seq[-10:]}\n"
-        f"WT Match Range: {start_wt} to {end_wt}\n"
-        f"PDB Match Range: {start_pdb} to {end_pdb}\n"
-        f"{best_alignment}\n"
-    )
 
     mapping = {
         "start_wt": start_wt,
         "end_wt": end_wt,
         "start_pdb": start_pdb,
         "end_pdb": end_pdb,
-        "common_seq": common_seq,
-        "identity": identity
+        "identity": identity,
+        "alignment_obj": best_alignment,
+        "common_seq": common_seq
     }
 
     return mapping
 
 
-def shift_and_trim_vars_seqs(vars, seqs, start, end):
-    # TODO
-    for var, seq in zip(vars, seqs):
-        print(var, seq)
-        trimmed_seq = seq[start:end]
-        logger.info(f"Trimmed sequence:\n{trimmed_seq}")
-        if type(var) is list:
-            for v in var:
-                orig_pos = int(v[1:-1])
-                pos = orig_pos - start - 2
-                if pos >= 0:
-                    assert trimmed_seq[pos] == v[-1], f"{v} {orig_pos} -> {pos} -- {trimmed_seq[pos]} != {v[-1]}: {trimmed_seq[pos-3:pos+4]}"
-        else:
-            v = var
-            orig_pos = int(v[1:-1])
-            pos = orig_pos - start - 2
-            if pos >= 0:
-                assert trimmed_seq[pos] == v[-1], f"{v} {orig_pos} -> {pos} -- {trimmed_seq[pos]} != {v[-1]}: {trimmed_seq[pos-3:pos+4]}"
+def shift_and_trim_vars_seqs(vars_list, seqs_list, alignment_mapping, msa_start):
+    """
+    Returns four lists: 
+    1. pdb_vars: Shifted variant names (PDB-relative)
+    2. orig_vars: Original variant names (MSA-relative)
+    3. gremlin_seqs: Full-length sequences (len 524) for GREMLIN
+    4. trimmed_seqs: Fragment sequences (len 504) for PDB-specific output
+    """
 
+    pdb_vars = []
+    orig_vars = []
+    gremlin_seqs = []
+    trimmed_seqs = []
+
+    
+    start_offset = alignment_mapping['start_wt']
+    end_offset = alignment_mapping['end_wt']
+
+    for var_entry, full_seq in zip(vars_list, seqs_list):
+        is_list = isinstance(var_entry, list)
+        current_vars = var_entry if is_list else [var_entry]
+        
+        pdb_sub_vars = []
+        is_in_pdb_range = True
+
+        for v in current_vars:
+            if v.upper() == "WT":
+                pdb_sub_vars.append("WT")
+                continue
+
+            orig_pos_abs = int(v[1:-1]) 
+            idx_in_msa = orig_pos_abs - msa_start
+            
+            # Check range
+            if start_offset <= idx_in_msa < end_offset:
+                # Calculate PDB-relative position
+                new_pos_pdb = (orig_pos_abs - msa_start) - start_offset + 1
+                
+                # Check mutant AA against the sequence
+                if full_seq[idx_in_msa] == v[-1]:
+                    pdb_sub_vars.append(f"{v[0]}{new_pos_pdb}{v[-1]}")
+                else:
+                    is_in_pdb_range = False
+            else:
+                is_in_pdb_range = False 
+
+        if is_in_pdb_range and pdb_sub_vars:
+            # 1. Shifted names
+            pdb_vars.append(pdb_sub_vars if is_list else pdb_sub_vars[0])
+            # 2. Original names
+            orig_vars.append(var_entry)
+            # 3. Full sequences (GREMLIN compatible)
+            gremlin_seqs.append(full_seq)
+            # 4. Trimmed sequences (PDB compatible)
+            trimmed_seqs.append(full_seq[start_offset:end_offset])
+
+    return pdb_vars, orig_vars, gremlin_seqs, trimmed_seqs
 
 
 def read_csv_and_shift_pos_ints(

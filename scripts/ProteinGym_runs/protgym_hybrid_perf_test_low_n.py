@@ -134,21 +134,36 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 continue
             _ratio_input_vars_at_gaps = count_gap_variants / len(variants)
             pdb_seq = str(list(SeqIO.parse(pdb, "pdb-atom"))[0].seq)
-            if not pdb_seq == wt_seq:
-                # TODO:
-                #mapping = check_alignment(wt_seq, pdb_seq)
-                #shift_and_trim_vars_seqs(vars=variants, seqs=sequences, start=mapping['start_wt'], end=mapping['end_wt'])
-                print(
-                    f"Wild-type sequence is not matching PDB-extracted sequence"
-                    f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}. TODO: Shifting "
-                    f"variants and trimming sequences. Skipping dataset..."
-                )
-                with open(out_results_csv, 'a') as fh:
-                    fh.write(
-                        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
-                        f'{max_muts},PDBseq neq WTseq\n'
+            if pdb_seq != wt_seq:
+                mapping = check_alignment(wt_seq, pdb_seq)
+                wt_seq = mapping['common_seq']  # Use common sequence (WT (MSA-trimmed) seq trimmed to PDB seq)
+                print(f"New WT sequence trimmed to common sequence length (PDB sequence length); {len(wt_seq)}")
+    
+                if mapping and mapping['identity'] > 0.8: # Threshold for safety
+                    # Perform the shift and trim
+                    pdb_vars, orig_vars, gremlin_seqs, trimmed_seqs = shift_and_trim_vars_seqs(
+                        vars_list=variants, 
+                        seqs_list=sequences, 
+                        alignment_mapping=mapping,
+                        msa_start=msa_start
                     )
-                continue
+                    print(pdb_vars[0:3])
+                    print(len(gremlin_seqs[0]))
+                    print(orig_vars[0:3])
+                    print(len(trimmed_seqs[0]))
+                    print(f"Shifted variants relative to PDB start. New length: {len(sequences[0])}")
+                else:
+                    print(
+                        f"Wild-type sequence is not matching PDB-extracted sequence"
+                        f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}. TODO: Shifting "
+                        f"variants and trimming sequences. Skipping dataset..."
+                    )
+                    with open(out_results_csv, 'a') as fh:
+                        fh.write(
+                            f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                            f'{max_muts},PDBseq neq WTseq\n'
+                        )
+                    continue
             
             print('GREMLIN-DCA: optimization...')
             gremlin = GREMLIN(alignment=msa_path, opt_iter=1, optimize=True)
