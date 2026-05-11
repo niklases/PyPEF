@@ -194,9 +194,7 @@ def test_hybrid_model_dca_llm_aneh(
     print('len(aneh_wt_seq)', len(wt_seq))
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3', 
-        seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
-    )
+        model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     total_sum = sum(p.sum().item() for p in esm_base_model.parameters())
@@ -227,8 +225,7 @@ def test_hybrid_model_dca_llm_aneh(
     )
 
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
-        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
-    )
+        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_base_model.eval()
     prosst_base_model = prosst_base_model.to(device)
     total_sum = sum(p.sum().item() for p in prosst_base_model.parameters())
@@ -464,9 +461,7 @@ def test_hybrid_model_dca_llm_avgfp(
     assert len(train_seqs[0]) == len(g.wt_seq)
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3', 
-        seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
-    )
+        model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     x_esm, esm_attention_mask = tokenize_sequences(
@@ -667,16 +662,16 @@ def test_dataset_b_results():
 def test_plm_corr_blat_ecolx():
     print("\n\ntest_plm_corr_blat_ecolx() [CUDA]..." + "\n" + "=" * 80 + "\n")
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
-    (prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer
-     ) = get_prosst_models(seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
+        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to("cuda")
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
     y_true = df['DMS_score'].to_list()
     for x in ['facebook/esm1v_t33_650M_UR90S_3']:
-        (esm_base_model, _esm_lora_model, 
-         esm_tokenizer, _esm_optimizer) = get_esm_models(model=x, seed=seed)
+        esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
+            model=x, seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
         esm_base_model = esm_base_model.to("cuda")
         x_esm, esm_attention_mask = tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
@@ -841,12 +836,12 @@ def test_gaussian_process_opt():
     print("\n\ntest_gaussian_process_opt()..." + "\n" + "=" * 80 + "\n")
     print("Getting ProSST models")
     wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
-    (prosst_base_model, _prosst_lora_model, 
-     prosst_tokenizer, _prosst_optimizer) = get_prosst_models(seed=seed)
+    prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
+        seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_base_model = prosst_base_model.to(device)
 
-    (esm_base_model, _esm_lora_model, 
-     esm_tokenizer, _esm_optimizer) = get_esm_models(seed=seed)
+    esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
+         model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, wt_seq, device=device, verbose=True

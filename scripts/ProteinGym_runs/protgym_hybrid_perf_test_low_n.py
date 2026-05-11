@@ -47,7 +47,10 @@ JUST_PLOT_RESULTS = False
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # TODO: Add (R)MSE next to Spearman
     # Get cpu, gpu or mps device for training.
-    LORA_TRAIN = True
+    # LoRA-training takes a lot of time (e.g for 50 epochs at each step) while not giving better 
+    # results compared to Gaussian optimization or if additive predictor model next to Gaussian optimized 
+    # PLM embeddings.
+    LORA_TRAIN = False  
     MAX_WT_SEQUENCE_LENGTH = 1000
     MAX_N_VARIANTS = 1E9
     seed = 42
@@ -63,7 +66,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_base_model = prosst_base_model.to(device).float()
     print('Getting ESM models...')
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3', seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
+        model="facebook/esm1v_t33_650M_UR90S_3", seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model = esm_base_model.to(device)
     get_vram()
     prosst_unopt_perfs, esm_unopt_perfs = [], []
