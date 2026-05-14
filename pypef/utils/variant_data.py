@@ -188,7 +188,7 @@ def get_seqs_from_var_name(
                 if str(single_var)[0].isalpha(): # Assertion only possible for format AaPosAa, e.g. A123C
                     assert str(single_var)[0] == temp[position_index], f"Input variant: "\
                         f"{str(single_var)[0]}{position_index + 1}{new_amino_acid}, WT amino "\
-                        f"acid variant {temp[position_index]}{position_index + 1}{new_amino_acid}"
+                        f"acid variant: {temp[position_index]}{position_index + 1}{new_amino_acid}"
                 temp[position_index] = new_amino_acid
                 # checking if multiple entries are inside list
                 if separation == 0:
@@ -518,6 +518,12 @@ def shift_and_trim_vars_seqs(vars_list, seqs_list, alignment_mapping, msa_start)
                 else:
                     is_in_pdb_range = False
             else:
+                print('orig_pos_abs:', orig_pos_abs)
+                print('msa_start:', msa_start)
+                print('start_offset:', start_offset)
+                new_pos_pdb = (orig_pos_abs - msa_start) - start_offset + 1
+                print(f"{v} --> {v[0]}{new_pos_pdb}{v[-1]} not in range!")
+                raise RuntimeError
                 is_in_pdb_range = False 
 
         if is_in_pdb_range and pdb_sub_vars:

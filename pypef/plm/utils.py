@@ -2,6 +2,7 @@
 # https://github.com/niklases/PyPEF
 
 import os
+import warnings
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -18,7 +19,11 @@ import logging
 logger = logging.getLogger('pypef.plm.utils')
 
 
+warn_counter = 0
+
+
 def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
+    global warn_counter
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -36,14 +41,15 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
         except KeyError:
             rw = True
         if rw:
-            pass
-            #warnings.warn(
-            #    "'CUBLAS_WORKSPACE_CONFIG' not set, "
-            #    "will likely face a torch RuntimeError. "
-            #    "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
-            #    "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
-            #    "before running with set seeds and determinism."
-            #)
+            if warn_counter == 0:
+                warnings.warn(
+                    "'CUBLAS_WORKSPACE_CONFIG' not set, "
+                    "will likely face a torch RuntimeError. "
+                    "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
+                    "or '$env:CUBLAS_WORKSPACE_CONFIG=\":4096:8\"' (Windows PowerShell) "
+                    "before running with set seeds and determinism."
+                )
+            warn_counter += 1
         torch.use_deterministic_algorithms(True)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False

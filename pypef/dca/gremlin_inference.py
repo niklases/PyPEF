@@ -60,7 +60,8 @@ class GREMLIN:
     """
     def __init__(
             self,
-            alignment: str | PathLike,
+            alignment: str | PathLike | None = None,
+            sequences: list[str] | np.ndarray[str] | None = None,
             char_alphabet: str = "ARNDCQEGHILKMFPSTWYV-",
             wt_seq=None,
             offset=0,
@@ -71,7 +72,6 @@ class GREMLIN:
             max_msa_seqs: int | None = 10000,
             msa_start: None | int = None,
             msa_end: None | int = None,
-            seqs: list[str] | np.ndarray[str] | None =None,
             device: str | None = None
     ):
         """
@@ -103,10 +103,16 @@ class GREMLIN:
             msa_end = None
         self.msa_end = msa_end
         logger.info('Loading MSA...')
-        if seqs is None:
+        if sequences is None:
+            if alignment is None:
+                raise RuntimeError(
+                    "GREMLIN requires input sequences either from given multiple "
+                    "sequence alignment file in FASTA format or from directly provided "
+                    "sequences."
+                )
             self.seqs, self.seq_ids = self.get_sequences_from_msa(alignment)
         else:
-            self.seqs = seqs
+            self.seqs = sequences
             self.seq_ids = np.array([n for n in range(len(self.seqs))])
         self.first_msa_seq = self.seqs[0]
         if self.msa_start is not None or self.msa_end is not None:

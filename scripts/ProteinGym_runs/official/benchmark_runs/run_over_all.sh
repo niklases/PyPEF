@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 # Exit if no arguments provided
 if [ "$#" -eq 0 ]; then
     echo "Error: split_method argument is required (e.g. split_method=fold_random_5)"

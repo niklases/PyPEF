@@ -55,6 +55,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     MAX_N_VARIANTS = 1E9
     seed = 42
     device = get_device()
+
     print(f"Using {device.upper()} device")
 
     get_vram()
@@ -140,7 +141,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             if pdb_seq != wt_seq:
                 mapping = check_alignment(wt_seq, pdb_seq)
                 wt_seq = mapping['common_seq']  # Use common sequence (WT (MSA-trimmed) seq trimmed to PDB seq)
-                print(f"New WT sequence trimmed to common sequence length (PDB sequence length); {len(wt_seq)}")
+                print(f"New WT sequence trimmed to common sequence length (PDB sequence length): {len(wt_seq)}")
     
                 if mapping and mapping['identity'] > 0.8: # Threshold for safety
                     # Perform the shift and trim
@@ -150,11 +151,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         alignment_mapping=mapping,
                         msa_start=msa_start
                     )
-                    print(pdb_vars[0:3])
-                    print(len(gremlin_seqs[0]))
-                    print(orig_vars[0:3])
-                    print(len(trimmed_seqs[0]))
-                    print(f"Shifted variants relative to PDB start. New length: {len(sequences[0])}")
+
+                    print(f"Shifted variants relative to PDB start. New trimmed length: {len(trimmed_seqs[0])} (MSA length: {len(gremlin_seqs[0])})")
                 else:
                     print(
                         f"Wild-type sequence is not matching PDB-extracted sequence"
@@ -167,10 +165,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             f'{max_muts},PDBseq neq WTseq\n'
                         )
                     continue
-            
+
             print('GREMLIN-DCA: optimization...')
-            gremlin = GREMLIN(alignment=msa_path, opt_iter=1, optimize=True)
-            x_dca = gremlin.collect_encoded_sequences(sequences)
+            gremlin = GREMLIN(alignment=msa_path, opt_iter=100, optimize=True)
+            #x_dca = gremlin.collect_encoded_sequences(sequences)
+            x_dca = gremlin.collect_encoded_sequences(gremlin_seqs)
             x_wt = gremlin.x_wt
             y_pred_dca = get_delta_e_statistical_model(x_dca, x_wt)
             print(f'DCA (unsupervised performance): {spearmanr(fitnesses, y_pred_dca)[0]:.3f}') 
@@ -266,7 +265,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     hybrid_perfs.extend([np.nan, np.nan, np.nan, np.nan])
                     ns_y_test.append(np.nan)
                     continue
-
 
                 llm_dict_esm = esm_setup(
                         wt_seq=wt_seq, sequences=s_train, 
@@ -417,8 +415,10 @@ def plot_csv_data(csv, plot_name):
     plot.set_xticklabels(all_column_names, rotation=45, ha='right')
     plt.ylim(-0.09, 1.09)
     plt.tight_layout()
-    plt.savefig(os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png'), dpi=300)
+    plt_location = os.path.join(os.path.dirname(__file__), f'{plot_name}_violin.png')
+    plt.savefig(plt_location, dpi=300)
     plt.close()
+    print(f'Saved plot at {plt_location}.')
 
 
 if __name__ == '__main__':
@@ -450,9 +450,14 @@ if __name__ == '__main__':
         for i in already_tested_is:
             print(f'{i + 1} {list(combined_mut_data.keys())[i]}')
         try:
-            print(f'\nContinuing getting model performances at {start_i + 1} '
-                  f'{list(combined_mut_data.keys())[start_i]} '
-                  f'(last tested dataset: {start_i}, {list(combined_mut_data.keys())[start_i - 1]})')
+            if JUST_PLOT_RESULTS:
+                print(f'Plotting model performance results up to {start_i + 1} '
+                      f'{list(combined_mut_data.keys())[start_i]} '
+                      f'(last tested dataset: {start_i}, {list(combined_mut_data.keys())[start_i - 1]}).')
+            else:
+                print(f'\nContinuing getting model performances at {start_i + 1} '
+                      f'{list(combined_mut_data.keys())[start_i]} '
+                      f'(last tested dataset: {start_i}, {list(combined_mut_data.keys())[start_i - 1]})...')
         except IndexError:
             print('\nComputed all results already?!')
     else:
