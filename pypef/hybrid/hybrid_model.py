@@ -435,9 +435,10 @@ class DCALLMHybridModel:
         return final_betas
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
-        logger.info("Getting subsplits for supervised (re-)training of models "
-              "and for adjustment of hybrid component contribution "
-              "weights (\"beta's\")..."
+        logger.info(
+            "Getting subsplits for supervised (re-)training of models "
+            "and for adjustment of hybrid component contribution "
+            "weights (\"beta's\")..."
         )
         train_size_fit = int(train_size_fit * len(self.y_train))
         train_size_beta_adjustment = len(self.y_train) - train_size_fit
@@ -457,7 +458,8 @@ class DCALLMHybridModel:
                   f"of batch size {self.batch_size} for LLM retraining "
                   f"resulting in {train_size_fit} variants for model "
                   f"tuning and {train_size_beta_adjustment} variants "
-                  f"for hybrid model beta adjustment..."
+                  f"for determination of individual hybrid model weights "
+                  f"(beta adjustment)..."
             )
         arrays_to_split = [self.x_train_dca, self.y_train]
 
@@ -630,7 +632,7 @@ class DCALLMHybridModel:
             emb_esm_ttest = self.embs_ttest.get('esm1v')
             emb_prosst_ttest = self.embs_ttest.get('prosst')
 
-            # 4. Use your original, explicit multi-kernel setup
+            # Use the explicit multi-kernel setup
             if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:
                 self.gp_model = get_gp_kernel_model(
                     y_train=self.y_ttrain, 
@@ -664,8 +666,10 @@ class DCALLMHybridModel:
             likelihood.eval()
             with torch.no_grad(), gpytorch.settings.fast_pred_var():
                 with warnings.catch_warnings():
+                     # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches
+                     # the stored training data. Did you forget to call model.train()?
                     warnings.simplefilter("ignore")
-                    gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()  # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches the stored training data. Did you forget to call model.train()?
+                    gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()
                 gp_pred_ttest = likelihood(self.gp_model(emb_ttest))
                 self.y_gp_opt_ttest = gp_pred_ttest.mean.detach().cpu().numpy()
                 logger.info(
@@ -676,7 +680,6 @@ class DCALLMHybridModel:
                     f"(N={len(self.y_ttest)})"
                 )
             
-
     def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -713,9 +716,9 @@ class DCALLMHybridModel:
             if self.gauss_opt:
                 predictors.append(self.y_gp_opt_ttest)
     
-        if self.ensemble_func == 'torch':
+        if self.ensemble_func == 'torch':  # L-BFGS
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
-        else:
+        else:  # SciPy diff. evo.
             self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
         return (*self.all_betas, self.ridge_opt)
 
@@ -794,17 +797,18 @@ class DCALLMHybridModel:
             y_final += beta * p_std
         return y_final
 
-    def ls_ts_performance(self):
-        beta_1, beta_2, reg = self.settings(
-            x_train=self.x_train,
-            y_train=self.y_traing
-        )
-        spearman_r = self.spearmanr(
-            self.y_test,
-            self.hybrid_prediction(self.x_test, reg, beta_1, beta_2)
-        )
-        self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
-        return spearman_r, reg, beta_1, beta_2
+    # TODO: Remove?!
+    #def ls_ts_performance(self):
+    #    beta_1, beta_2, reg = self.settings(
+    #        x_train=self.x_train,
+    #        y_train=self.y_traing
+    #    )
+    #    spearman_r = self.spearmanr(
+    #        self.y_test,
+    #        self.hybrid_prediction(self.x_test, reg, beta_1, beta_2)
+    #    )
+    #    self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
+    #    return spearman_r, reg, beta_1, beta_2
 
 
 """ 

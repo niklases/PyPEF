@@ -204,7 +204,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             try:
                 wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-                    pdb, prosst_tokenizer, wt_seq)
+                    pdb, prosst_tokenizer, wt_seq
+                )
                 x_prosst, _prosst_attention_mask = tokenize_sequences(
                     sequences=sequences, 
                     tokenizer=prosst_tokenizer, 

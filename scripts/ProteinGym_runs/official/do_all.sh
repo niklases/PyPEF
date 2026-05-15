@@ -1,6 +1,6 @@
 #!/bin/bash
-set -e
 
+set -e
 
 split_method=fold_random_5
  

@@ -7,8 +7,8 @@ from scipy.stats import spearmanr, pearsonr
 file_path = os.path.dirname(__file__)
 
 # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
-target_folds = ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
-llm = 'prosst'
+target_folds = ["fold_random_5"]  # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
+llm = 'prosst+esm1v'
 
 
 def get_target_folder(split_method):
@@ -61,8 +61,8 @@ for tf in target_folds:
         all_spears.append(fold_metrics['Mean_Spearman_corr'])
         all_pears.append(fold_metrics['Mean_Pearson_corr'])
     print('-' * 60 + '\n' +
-          f"Mean Spearman corr. across all datasets={np.mean(all_spears):.3f}\n" +
-          f"Mean Pearson corr. across all datasets={np.mean(all_pears):.3f}\n\n"
+          f"Mean Spearman corr. across all {len(all_spears)} datasets={np.mean(all_spears):.3f}\n" +
+          f"Mean Pearson corr. across all {len(all_spears)} datasets={np.mean(all_pears):.3f}\n\n"
     )
 
 

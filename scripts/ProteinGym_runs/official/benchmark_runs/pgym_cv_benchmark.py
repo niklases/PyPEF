@@ -1,5 +1,5 @@
 """
-Main benchmarking script to evaluate PyPEF hybrid LLM-DCA model on ProteinGym DMS assays.
+Main benchmarking script to evaluate PyPEF hybrid PLM-DCA model on ProteinGym DMS assays.
 Structured based on Kermut run script.
 """
 
@@ -31,13 +31,14 @@ formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
-
+# Make sure to "export CUBLAS_WORKSPACE_CONFIG=:4096:8" first
 @hydra.main(version_base=None, config_path="../configs", config_name="proteingym_data_setup")
 def main(cfg: DictConfig) -> None:
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
+    print("LLM:", llm)
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -67,9 +68,9 @@ def main(cfg: DictConfig) -> None:
     msa_end = df_ref.loc[DMS_idx, "MSA_end"]
     wt_msa_trimmed_sequence = df_ref.loc[DMS_idx, "target_seq"]
     DMS_pdb = df_ref.loc[DMS_idx, "pdb_file"]
-    pdb_range = df_ref.loc[DMS_idx, "pdb_range"]
-    pdb_start = int(pdb_range.split('-')[0])
-    pdb_end = int(pdb_range.split('-')[1])
+    #pdb_range = df_ref.loc[DMS_idx, "pdb_range"]
+    #pdb_start = int(pdb_range.split('-')[0])
+    #pdb_end = int(pdb_range.split('-')[1])
     csv_substitutions_file = (DMS_data_folder / f"{DMS_id}.csv").resolve()
     pdb_file = (DMS_PDB_folder / DMS_pdb).resolve()
     output_path = output_scores_folder / f"{split_method}/pypef_hybrid/{llm}/{DMS_id}.csv"
@@ -79,27 +80,26 @@ def main(cfg: DictConfig) -> None:
     print('MSA path:', msa_file)
     print('MSA start:', msa_start, '- MSA end:', msa_end)
     wt_msa_trimmed_sequence = wt_msa_trimmed_sequence[msa_start - 1:msa_end]
-    print(f'WT sequence (trimmed from MSA start to MSA end), length={len(wt_msa_trimmed_sequence)}:\n{wt_msa_trimmed_sequence}')
+    print(f'WT sequence (trimmed from MSA start to MSA end), length='
+          f'{len(wt_msa_trimmed_sequence)}:\n{wt_msa_trimmed_sequence}')
 
     if output_path.resolve().exists():
         if not cfg.overwrite:
             print(f"Output file already exists: {output_path.resolve()}")
-            return
+            return   # Hydra could overwrite the 0 return later, so the Bash script still faces an error ('set -e')
         else:
             print(f"Overwriting existing output file: {output_path.resolve()}")
     else:
         print("Output does not yet exist")
 
-    if llm == "prosst":
+    if "prosst" in llm:
         _, _, prosst_tokenizer, _ = get_prosst_models(
             seed=42, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
         )
-    elif llm == "esm1v":
+    if "esm" in llm:
         _, _, esm_tokenizer, _ = get_esm_models(
             model="facebook/esm1v_t33_650M_UR90S_3", seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
         )
-    else:
-        raise RuntimeError("Unknown LLM option.")
     df = pd.read_csv(csv_substitutions_file)
     print(df)
     variants = df['mutant']
@@ -145,6 +145,9 @@ def main(cfg: DictConfig) -> None:
                 f"variants and trimming sequences. Skipping dataset..."
             )
             raise RuntimeError
+    else:
+        pdb_trimmed_common_sequence = wt_msa_trimmed_sequence
+        pdb_trimmed_seqs = sequences_msa_trimmed
     
     
     #if DMS_id == "BRCA2_HUMAN_Erwood_2022_HEK293T":
@@ -161,7 +164,6 @@ def main(cfg: DictConfig) -> None:
 
     # Reproducibility
     torch.manual_seed(cfg.seed)
-    #torch.use_deterministic_algorithms(False)  # TODO: Check
     np.random.seed(cfg.seed)
     seed = cfg.seed
 
@@ -175,12 +177,15 @@ def main(cfg: DictConfig) -> None:
     )
 
     if llm == "prosst":
-        assert gremlin.first_msa_seq.upper() == wt_msa_trimmed_sequence, f"{gremlin.first_msa_seq.upper()}\n   !=\n{wt_msa_trimmed_sequence}"
-        n_mismatches, mismatches = get_mismatches(wt_msa_trimmed_sequence, gremlin.first_msa_seq.upper())
-        print(f'Ratio of mismatches: {n_mismatches / len(wt_msa_trimmed_sequence)}, N={n_mismatches}, Mismatches="{mismatches}"')
+        assert gremlin.first_msa_seq.upper() == wt_msa_trimmed_sequence, (
+            f"{gremlin.first_msa_seq.upper()}\n   !=\n{wt_msa_trimmed_sequence}")
+        n_mismatches, mismatches = get_mismatches(
+            wt_msa_trimmed_sequence, gremlin.first_msa_seq.upper())
+        print(f'Ratio of mismatches: {n_mismatches / len(wt_msa_trimmed_sequence)}, '
+              f'N={n_mismatches}, Mismatches="{mismatches}"')
         assert (n_mismatches / len(wt_msa_trimmed_sequence)) <= 0.05
     y_full = df[target_col].values
-    seq_full = df[sequence_col].values
+    #seq_full = df[sequence_col].values
 
     x_dca_full = gremlin.collect_encoded_sequences(sequences_msa_trimmed)
     x_dca_full = np.array(x_dca_full)
@@ -218,11 +223,11 @@ def main(cfg: DictConfig) -> None:
         print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
 
         
-        if df.shape[0] >= 100000:  # Not CV-training the PLM on much data but just relying on DCA
-            llm_kwargs = None      # Datasets: HIS7_YEAST_Pokusaeva_2019.csv
-            x_llm_test = None
-            print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
-                  f'would take up (too) much time...')
+        #if df.shape[0] >= 100000:  # Not CV-training the PLM on much data but just relying on DCA
+        #    llm_kwargs = None      # Datasets: HIS7_YEAST_Pokusaeva_2019.csv
+        #    x_llm_test = None
+        #    print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
+        #          f'would take up (too) much time...')
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
             y_train=y_train,
@@ -265,6 +270,7 @@ def main(cfg: DictConfig) -> None:
             df_predictions = pd.concat([df_predictions, df_pred_fold])
 
     df_predictions.to_csv(output_path, index=False)
+    print(f"Saved prediction CSV to {output_path}.")
 
 
 if __name__ == "__main__":

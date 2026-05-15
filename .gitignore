@@ -502,3 +502,4 @@ scripts/ProteinGym_runs/official/data/DMS_msa_files/*
 scripts/ProteinGym_runs/official/data/ProteinGym_AF2_structures/*
 scripts/ProteinGym_runs/official/data/DMS_substitutions.csv
 scripts/ProteinGym_runs/official/benchmark_runs/output.log
+scripts/ProteinGym_runs/official/benchmark_runs/model_scores/supervised_substitutions/fold_random_5/pypef_hybrid/*

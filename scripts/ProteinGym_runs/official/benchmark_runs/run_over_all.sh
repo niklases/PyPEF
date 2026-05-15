@@ -49,7 +49,7 @@ if [ "$is_valid" = false ]; then
     exit 1
 fi
 
-for llm in prosst esm1v; do
+for llm in prosst+esm1v; do
     # Set max index based on split_method
     if [ "$split_method" = "fold_rand_multiples" ]; then
         max_idx=68
@@ -59,6 +59,6 @@ for llm in prosst esm1v; do
     for ((i=0; i<=max_idx; i++)); do
         echo -e "\n\nRunning DMS_idx=$i with llm=$llm and split_method=$split_method\n-----"
         python pgym_cv_benchmark.py split_method=$split_method DMS_idx=$i llm=$llm
-        find ./model_saves/ -type f -name '*.pt' -delete  # Delete ProSST pt model checkpoints
+        find ./model_saves/ -type f -name '*.pt' | xargs rm -f || true  # Delete ProSST pt model checkpoints
     done
 done

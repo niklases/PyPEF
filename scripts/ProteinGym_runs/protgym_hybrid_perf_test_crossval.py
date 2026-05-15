@@ -15,21 +15,18 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import SeqIO, BiopythonParserWarning
+
+from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.plm.utils import get_batches, pearson_loss
-from pypef.plm.esm_lora_tune import (
-    get_esm_models, tokenize_sequences, 
-    esm_train, esm_infer
-)
+from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import (
-    get_logits_from_full_seqs, get_prosst_models, get_structure_quantizied, 
-    prosst_simple_vocab_aa_tokenizer, prosst_train
+    get_prosst_models, get_structure_quantizied, 
+    prosst_simple_vocab_aa_tokenizer
 )
-from pypef.plm.inference import inference
 from pypef.utils.variant_data import get_seqs_from_var_name
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
@@ -152,9 +149,23 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             # ESM unsupervised
             try:
                 x_esm, esm_attention_mask = tokenize_sequences(
-                    sequences, esm_tokenizer, max_length=len(wt_seq), verbose=False
+                    sequences, esm_tokenizer, max_length=len(wt_seq) + 2)
+                wt_tokens, _ = tokenize_sequences(
+                    [wt_seq],
+                    esm_tokenizer,
+                    max_length=len(wt_seq) + 2
                 )
-                y_esm = inference(sequences, 'esm', model=esm_base_model, verbose=False)
+                wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
+                y_esm = plm_inference(
+                    tokenized_sequences=x_esm,
+                    wt_input_ids=wt_tokens,
+                    attention_mask=esm_attention_mask,
+                    model=esm_base_model,
+                    batch_size=5,
+                    train=False,
+                    device="cuda",
+                    verbose=True
+                ).cpu()
                 print(f'ESM1v (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
@@ -162,11 +173,25 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 esm_unopt_perf = np.nan
             # ProSST unsupervised
             try:
-                input_ids, prosst_attention_mask, structure_input_ids = get_structure_quantizied(
-                    pdb, prosst_tokenizer, wt_seq, verbose=False
-                    )
-                x_prosst = prosst_simple_vocab_aa_tokenizer(sequences=sequences, vocab=prosst_vocab, verbose=False)
-                y_prosst = inference(sequences, 'prosst', pdb_file=pdb, wt_seq=wt_seq, model=prosst_base_model, verbose=False)
+                wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
+                    pdb, prosst_tokenizer, wt_seq
+                )
+                x_prosst, _prosst_attention_mask = tokenize_sequences(
+                    sequences=sequences, 
+                    tokenizer=prosst_tokenizer, 
+                    max_length=len(wt_seq) + 2
+                )
+                y_prosst = plm_inference(
+                    tokenized_sequences=x_prosst,
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=prosst_attention_mask,
+                    model=prosst_base_model,
+                    wt_structure_input_ids=wt_structure_input_ids,
+                    batch_size=5,
+                    train=False,
+                    device="cuda",
+                    verbose=True   
+                ).cpu()
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
@@ -201,7 +226,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 )):
                     print(f'    Split: {i_split + 1}')
                     try:
-                        _train_sequences, test_sequences = np.asarray(sequences)[train_i], np.asarray(sequences)[test_i]
+                        train_sequences, test_sequences = np.asarray(sequences)[train_i], np.asarray(sequences)[test_i]
                         x_dca_train, x_dca_test = np.asarray(x_dca)[train_i], np.asarray(x_dca)[test_i]
                         x_llm_train_prosst, x_llm_test_prosst = np.asarray(x_prosst)[train_i], np.asarray(x_prosst)[test_i]
                         x_llm_train_esm, x_llm_test_esm = np.asarray(x_esm)[train_i], np.asarray(x_esm)[test_i]
@@ -216,43 +241,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"cannot split the data in N_Train = {train_size} and N_Test "
                               f"(N_Total - N_Train) [Excepted error: {e}].")
                         continue
-                    (
-                        x_dca_train, 
-                        x_llm_train_prosst,
-                        x_llm_train_esm, 
-                        y_train,
-                    ) = (
-                        reduce_by_batch_modulo(x_dca_train),  
-                        reduce_by_batch_modulo(x_llm_train_prosst),
-                        reduce_by_batch_modulo(x_llm_train_esm), 
-                        reduce_by_batch_modulo(y_train),
+                    llm_dict_esm = esm_setup(
+                            wt_seq=wt_seq, sequences=train_sequences, 
+                            seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
                     )
-                    llm_dict_esm = {
-                        'esm1v': {
-                            'llm_base_model': esm_base_model,
-                            'llm_model': esm_lora_model_2,
-                            'llm_optimizer': esm_optimizer,
-                            'llm_train_function': esm_train,
-                            'llm_inference_function': esm_infer,
-                            'llm_loss_function': pearson_loss,
-                            'x_llm' : x_llm_train_esm,
-                            'llm_attention_mask':  esm_attention_mask
-                        }
-                    }
-                    llm_dict_prosst = {
-                        'prosst': {
-                            'llm_base_model': prosst_base_model,
-                            'llm_model': prosst_lora_model_2,
-                            'llm_optimizer': prosst_optimizer,
-                            'llm_train_function': prosst_train,
-                            'llm_inference_function': get_logits_from_full_seqs,
-                            'llm_loss_function': pearson_loss,
-                            'x_llm' : x_llm_train_prosst,
-                            'llm_attention_mask':  prosst_attention_mask,
-                            'input_ids': input_ids,
-                            'structure_input_ids': structure_input_ids
-                        }
-                    }
+                    llm_dict_prosst = prosst_setup(
+                            wt_seq=wt_seq, pdb_file=pdb, sequences=train_sequences, 
+                            seed=42, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
+                    )
+                    llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
                     print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 50:
                         print(f"        Only {len(fitnesses)} in total, splitting the data "
@@ -264,15 +261,34 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
                     temp_results[category][f'Split {i_split}'].update({'DCA': spearmanr(y_test, y_test_pred_dca)[0]})
                     print(f'        DCA ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_dca)[0]:.3f}')
-                    y_test_pred_esm = inference(test_sequences, 'esm', model=esm_base_model, verbose=False)
+                    y_test_pred_esm = plm_inference(
+                        tokenized_sequences=x_llm_test_esm,
+                        wt_input_ids=wt_tokens,
+                        attention_mask=esm_attention_mask,
+                        model=esm_base_model,
+                        batch_size=5,
+                        train=False,
+                        device="cuda",
+                        verbose=True
+                    ).cpu()
                     temp_results[category][f'Split {i_split}'].update({'ESM1v': spearmanr(y_test, y_test_pred_esm)[0]})
                     print(f'        ESM1v ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_esm)[0]:.3f}')
-                    y_test_pred_prosst = inference(test_sequences, 'prosst', model=prosst_base_model, pdb_file=pdb, wt_seq=wt_seq, verbose=False)
+                    y_test_pred_prosst = plm_inference(
+                        tokenized_sequences=x_llm_test_prosst,
+                        wt_input_ids=wt_input_ids,
+                        attention_mask=prosst_attention_mask,
+                        model=prosst_base_model,
+                        wt_structure_input_ids=wt_structure_input_ids,
+                        batch_size=5,
+                        train=False,
+                        device="cuda",
+                        verbose=True   
+                    ).cpu()
                     temp_results[category][f'Split {i_split}'].update({'ProSST': spearmanr(y_test, y_test_pred_prosst)[0]})
                     print(f'        ProSST ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_prosst)[0]:.3f}')
 
-                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst]):
-                        m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid'][i_m]
+                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst, llm_dict_ensemble]):
+                        m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid', 'DCA+ESM1v+ProSST hybrid'][i_m]  # TODO: 'DCA+ESM1v+ProSST hybrid'
                         try:
                             hm = DCALLMHybridModel(
                                 x_train_dca=np.array(x_dca_train), 
@@ -283,12 +299,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             )
                             y_test_pred = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test), 
-                                x_llm=[
+                                x_llm_dict=[
                                     None, 
-                                    np.asarray(x_llm_test_esm), 
-                                    np.asarray(x_llm_test_prosst)
-                                ][i_m],
-                                verbose=False
+                                    {'esm1v': np.asarray(x_llm_test_esm)}, 
+                                    {'prosst': np.asarray(x_llm_test_prosst)},
+                                    {'esm1v': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
+                                ][i_m]
                             )
                             print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')
