@@ -43,6 +43,11 @@ def main(cfg: DictConfig) -> None:
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
 
+    # Reproducibility
+    torch.manual_seed(cfg.seed)
+    np.random.seed(cfg.seed)
+    seed = cfg.seed
+
     # Verify input paths
     if use_multiples:
         DMS_data_folder = Path(cfg.DMS_data_folder_multiples)
@@ -94,11 +99,11 @@ def main(cfg: DictConfig) -> None:
 
     if "prosst" in llm:
         _, _, prosst_tokenizer, _ = get_prosst_models(
-            seed=42, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
+            seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
         )
     if "esm" in llm:
         _, _, esm_tokenizer, _ = get_esm_models(
-            model="facebook/esm1v_t33_650M_UR90S_3", seed=42, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
+            model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
         )
     df = pd.read_csv(csv_substitutions_file)
     print(df)
@@ -161,11 +166,6 @@ def main(cfg: DictConfig) -> None:
         f"Using {split_method} split on DMS idx {DMS_idx}: {DMS_id}",
         flush=True,
     )
-
-    # Reproducibility
-    torch.manual_seed(cfg.seed)
-    np.random.seed(cfg.seed)
-    seed = cfg.seed
 
     # Prepare output
     df_predictions = pd.DataFrame(columns=["fold", "mutant", "y", "y_pred", "y_var"])
