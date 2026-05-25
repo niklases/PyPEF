@@ -7,13 +7,6 @@
 
 from __future__ import annotations
 
-import logging
-
-import gpytorch
-
-from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
-logger = logging.getLogger('pypef.hybrid.hybrid_model')
-
 import os
 import pickle
 from os import listdir
@@ -22,7 +15,7 @@ from typing import Union
 import warnings
 import gc
 import torch
-
+import gpytorch
 import numpy as np
 import sklearn.base
 from scipy.stats import spearmanr
@@ -40,16 +33,20 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
-from pypef.plm.utils import hybrid_corr_mse_loss
+from pypef.plm.utils import get_plm_embeddings, hybrid_corr_mse_loss
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.plm.inference import esm_setup, prosst_setup, tokenize_sequences, plm_inference
+from pypef.plm.inference import KNNFitnessRetrieval, esm_setup, prosst_setup, tokenize_sequences, plm_inference
+from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
 # will be removed in 1.7. Use `sklearn.utils.validation.validate_data` instead. This function 
 # becomes public and is part of the scikit-learn developer API.
 warnings.filterwarnings(action='ignore', category=FutureWarning, module='sklearn')
+
+import logging
+logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 
 def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
@@ -61,13 +58,15 @@ def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
 
 
 # TODO: Add meta-learning model (e.g., learn2learn MAML learning option on PGym dataset)?
+# TODO: Add better GP model for PLM embedding fine-tuning?
 class DCALLMHybridModel:
     def __init__(
             self,
             x_train_dca: np.ndarray,
             y_train: np.ndarray,
             llm_model_input: dict | None = None,
-            x_wt: np.ndarray | None = None,
+            x_wt: np.ndarray | None = None,  # DCA WT encoding; TODO: RENAME
+            variants: list[str] | None = None,
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
@@ -95,7 +94,7 @@ class DCALLMHybridModel:
                 raise RuntimeError(f"LLM input models {unsupported} not supported. "
                                    f"Currently supported models are {supported_models}")
 
-            logger.info(f"Using LLM(s) ({', '.join(self.llm_keys)}) next to DCA for hybrid modeling...")
+            logger.info(f"Using PLM(s) ({', '.join(self.llm_keys)}) next to DCA for hybrid modeling...")
             
             # Store the entire dictionary so we can loop through it later
             self.llm_data = llm_model_input
@@ -109,6 +108,7 @@ class DCALLMHybridModel:
             self.llm_attention_mask = None
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
+        self.variants = variants
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
@@ -334,8 +334,10 @@ class DCALLMHybridModel:
                     y_ensemble += final_betas[i] * p_scaled
 
             final_corr = self.spearmanr(y_true_np, y_ensemble)
-            logger.info(f"Ensemble Opt. Spearman: {final_corr:.3f} | Ensemble "
-                        f"weights ({len(final_betas)}): {final_betas}")
+            logger.info(
+                f"Ensemble Opt. Spearman: {final_corr:.3f} (N_test={len(y_ensemble)}) | "
+                f"Ensemble weights ({len(final_betas)}): {final_betas}"
+            )
             self.betas = final_betas
             return final_betas
     
@@ -461,7 +463,13 @@ class DCALLMHybridModel:
                   f"for determination of individual hybrid model weights "
                   f"(beta adjustment)..."
             )
+        # Base arrays that are guaranteed to exist
         arrays_to_split = [self.x_train_dca, self.y_train]
+        
+        # Track if we are splitting variants to handle indexing dynamically
+        has_variants = self.variants is not None
+        if has_variants:
+            arrays_to_split.append(self.variants)  # TODO: Add multi-substituted variant data support
 
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
@@ -478,8 +486,17 @@ class DCALLMHybridModel:
         self.y_ttrain = splits[2]
         self.y_ttest = splits[3]
         
-        if self.llm_keys is not None:
+        # Dynamically set index based on whether variants were included
+        if has_variants:
+            self.variants_ttrain = splits[4]
+            self.variants_ttest = splits[5]
+            current_idx = 6
+        else:
+            self.variants_ttrain = None
+            self.variants_ttest = None
             current_idx = 4
+        
+        if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 self.llm_data[llm_name]['x_llm_ttrain'] = splits[current_idx]
                 self.llm_data[llm_name]['x_llm_ttest'] = splits[current_idx + 1]
@@ -516,7 +533,7 @@ class DCALLMHybridModel:
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
-            logger.info(f"Processing LLM {llm_name.upper()}...")
+            logger.info(f"Processing PLM {llm_name.upper()}...")
             # Extract this specific model's data
             current_llm = self.llm_data[llm_name]
             base_model = current_llm['llm_base_model']
@@ -525,46 +542,30 @@ class DCALLMHybridModel:
             training_fn = current_llm['llm_train_function']
             loss_fn = current_llm['llm_loss_function']
             optimizer = current_llm['llm_optimizer']
-            x_llm_ttrain = current_llm['x_llm_ttrain']
-            x_llm_ttest = current_llm['x_llm_ttest']
+            #tokenizer = current_llm['llm_tokenizer']
+            x_tok_llm_ttrain = current_llm['x_llm_ttrain']
+            x_tok_llm_ttest = current_llm['x_llm_ttest']
             wt_input_ids = current_llm['wt_input_ids']
             attention_mask = current_llm['llm_attention_mask']
             wt_struct_ids = current_llm.get('wt_structure_input_ids')
             y_llm_ttest = inference_fn(
-                tokenized_sequences=x_llm_ttest,
+                tokenized_sequences=x_tok_llm_ttest,
                 model=base_model,  # Before training, LoRa and Base model (should) yield the same results
                 wt_input_ids=wt_input_ids,
                 attention_mask=attention_mask,
                 device=self.device,
-                wt_structure_input_ids=wt_struct_ids
+                wt_structure_input_ids=wt_struct_ids,
+                verbose=True
             )
             y_llm_ttrain = inference_fn(
-                tokenized_sequences=x_llm_ttrain,
+                tokenized_sequences=x_tok_llm_ttrain,
                 model=base_model,
                 wt_input_ids=wt_input_ids,
                 attention_mask=attention_mask,
                 device=self.device,
-                wt_structure_input_ids=wt_struct_ids
+                wt_structure_input_ids=wt_struct_ids,
+                verbose=True
             )
-            if self.gauss_opt is True:
-                self.embs_ttest[llm_name] = inference_fn(
-                    tokenized_sequences=x_llm_ttest,
-                    model=base_model,
-                    wt_input_ids=wt_input_ids,
-                    attention_mask=attention_mask,
-                    extract_emb=True,
-                    device=self.device,
-                    wt_structure_input_ids=wt_struct_ids
-                )
-                self.embs_ttrain[llm_name] = inference_fn(
-                    tokenized_sequences=x_llm_ttrain,
-                    model=base_model,
-                    wt_input_ids=wt_input_ids,
-                    attention_mask=attention_mask,
-                    extract_emb=True,
-                    device=self.device,
-                    wt_structure_input_ids=wt_struct_ids
-                )
             logger.info(
                 f"{llm_name} unsupervised performance: "
                 f"Train set = {spearmanr(self.y_ttrain, y_llm_ttrain.detach().cpu())[0]:.3f}"
@@ -576,12 +577,35 @@ class DCALLMHybridModel:
             self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
             self.all_llm_ttest_scores.append(self.y_llm_ttest)
 
+            if self.gauss_opt is True:
+                self.embs_ttest[llm_name] = get_plm_embeddings(
+                    x_tok_llm_ttest, inference_fn, base_model, wt_input_ids, 
+                    attention_mask, "mean", wt_structure_input_ids=wt_struct_ids
+                )
+
+                #aa_cond_probs = inference_fn(
+                #    attention_mask=attention_mask,
+                #    wt_input_ids=wt_input_ids,
+                #    model=base_model,
+                #    tokenized_sequences = None,
+                #    extract_probs=True, 
+                #    wt_structure_input_ids=wt_struct_ids,
+                #    extract_conditional_aa_prob=True,
+                #    tokenizer=tokenizer
+                #)
+
+                self.embs_ttrain[llm_name] = get_plm_embeddings(
+                    x_tok_llm_ttrain, inference_fn, base_model, wt_input_ids, 
+                    attention_mask, "mean", wt_structure_input_ids=wt_struct_ids
+                )
+
+
             if self.lora_train:
                 logger.info('Refining/training the model... gradient calculation adds a computational '
                       'graph that requires quite some memory - if you are facing an (out of memory) '
                       'error, try reducing the batch size or sticking to CPU device...')
                 training_fn(
-                    x_sequences=x_llm_ttrain, 
+                    x_sequences=x_tok_llm_ttrain, 
                     scores=self.y_ttrain,
                     loss_fn=loss_fn,
                     model=lora_model,
@@ -597,7 +621,7 @@ class DCALLMHybridModel:
                     wt_structure_input_ids=wt_struct_ids
                 )
                 y_llm_lora_ttrain = inference_fn(
-                    tokenized_sequences=x_llm_ttrain,
+                    tokenized_sequences=x_tok_llm_ttrain,
                     model=lora_model,
                     wt_input_ids=wt_input_ids,
                     attention_mask=attention_mask,
@@ -606,7 +630,7 @@ class DCALLMHybridModel:
                     wt_structure_input_ids=wt_struct_ids
                 )
                 y_llm_lora_ttest = inference_fn(
-                    tokenized_sequences=x_llm_ttest,
+                    tokenized_sequences=x_tok_llm_ttest,
                     model=lora_model,
                     wt_input_ids=wt_input_ids,
                     attention_mask=attention_mask,
@@ -634,19 +658,38 @@ class DCALLMHybridModel:
 
             # Use the explicit multi-kernel setup
             if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:
-                self.gp_model = get_gp_kernel_model(
-                    y_train=self.y_ttrain, 
-                    x_tokseqs_seq_kernel_train=emb_esm_ttrain, 
-                    x_tokseqs_struct_kernel_train=emb_prosst_ttrain, 
-                    device=self.device, train=True
-                )
+                llm_name = "ESM1v+ProSST"
                 emb_ttrain = torch.cat([emb_esm_ttrain, emb_prosst_ttrain], dim=-1)
                 emb_ttest = torch.cat([emb_esm_ttest, emb_prosst_ttest], dim=-1)
-            elif emb_esm_ttrain is not None:
+                # Run the Retrieval Layer over the joint space
+                # TODO: Check effect of using KNN (with and without positional (or mean) embeddings)
+                self.knn_retriever = KNNFitnessRetrieval(k=5)
+                self.knn_retriever.fit(emb_ttrain, torch.as_tensor(self.y_ttrain).to(self.device))
+                train_knn_features = self.knn_retriever.retrieve(emb_ttrain)
+                ttest_knn_features = self.knn_retriever.retrieve(emb_ttest)
+                # Group 1 (Sequence Kernel): Pure ESM-1v sequence signal
+                # Group 2 (Structure Kernel): ProSST embeddings + the learned KNN context features
+                struct_features_ttrain = torch.cat([emb_prosst_ttrain, train_knn_features], dim=-1)
+                emb_ttrain = torch.cat([emb_esm_ttrain, struct_features_ttrain], dim=-1).to(
+                    dtype=torch.float32, device=self.device)
+
+                struct_features_ttest = torch.cat([emb_prosst_ttest, ttest_knn_features], dim=-1)
+                emb_ttest = torch.cat([emb_esm_ttest, struct_features_ttest], dim=-1).to(
+                    dtype=torch.float32, device=self.device)
                 self.gp_model = get_gp_kernel_model(
                     y_train=self.y_ttrain, 
                     x_tokseqs_seq_kernel_train=emb_esm_ttrain, 
+                    x_tokseqs_struct_kernel_train=struct_features_ttrain, 
                     device=self.device, train=True
+                )
+            elif emb_esm_ttrain is not None:
+                self.gp_model = get_gp_kernel_model(
+                    y_train=self.y_ttrain,
+                    x_tokseqs_seq_kernel_train=emb_esm_ttrain,
+                    x_tokseqs_struct_kernel_train=emb_prosst_ttrain,
+                    device=self.device,
+                    opt_steps=100,
+                    train=True
                 )
                 emb_ttrain = emb_esm_ttrain
                 emb_ttest = emb_esm_ttest
@@ -673,7 +716,7 @@ class DCALLMHybridModel:
                 gp_pred_ttest = likelihood(self.gp_model(emb_ttest))
                 self.y_gp_opt_ttest = gp_pred_ttest.mean.detach().cpu().numpy()
                 logger.info(
-                    f"{llm_name.upper()} supervised Gaussian process optimized performance: "
+                    f"{llm_name} supervised Gaussian process optimized performance: "
                     f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
                     f"(N={len(self.y_ttrain)}), "
                     f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
@@ -707,15 +750,28 @@ class DCALLMHybridModel:
         self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
+        performance_info_ttest = (
+            f"Performances on beta ensemble optimization set (N_test={len(self.y_dca_ttest)}): "
+            f"DCA unsupervised: {self.spearmanr(self.y_ttest, self.y_dca_ttest):.3f} "
+            f"DCA supervised: {self.spearmanr(self.y_ttest, self.y_dca_ridge_ttest):.3f} || "
+        )
+
         predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
 
         if len(self.parameter_range) >= 4:
             self.train_llm()
             # Add LLM predictors to the list
             predictors.extend(self.all_llm_ttest_scores)
+            performance_info_ttest += f"PLM performances:"
+            for scores in self.all_llm_ttest_scores:
+                performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
+            performance_info_ttest += "|| "
+            
             if self.gauss_opt:
+                performance_info_ttest += f"PLM Gaussian optimization: {self.spearmanr(self.y_ttest, self.y_gp_opt_ttest):.3f}"
                 predictors.append(self.y_gp_opt_ttest)
-    
+
+        logger.info(performance_info_ttest)
         if self.ensemble_func == 'torch':  # L-BFGS
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
         else:  # SciPy diff. evo.
@@ -726,9 +782,10 @@ class DCALLMHybridModel:
             self,
             x_dca: np.ndarray,
             x_llm_dict: dict | None = None,
-            verbose: bool = True
+            variants: list[str] | None = None,
+            verbose: bool = False
     ) -> np.ndarray:
-        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {self.betas}...")
+        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {str(self.betas)}...")
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 
@@ -746,7 +803,7 @@ class DCALLMHybridModel:
                     continue
                 
                 common_args = {
-                    'tokenized_sequences': x_input,
+                    #'tokenized_sequences': x_input,
                     'wt_input_ids': current_llm['wt_input_ids'],
                     'attention_mask': current_llm['llm_attention_mask'],
                     'device': self.device,
@@ -754,15 +811,24 @@ class DCALLMHybridModel:
                     'wt_structure_input_ids': current_llm.get('wt_structure_input_ids')
                 }
 
-                y_base = current_llm['llm_inference_function'](model=current_llm['llm_base_model'], **common_args)
+                y_base = current_llm['llm_inference_function'](
+                    model=current_llm['llm_base_model'], tokenized_sequences=x_input, **common_args
+                )
                 predictors.append(y_base.detach().cpu().numpy())
                 if self.lora_train:
-                    y_lora = current_llm['llm_inference_function'](model=current_llm['llm_model'], **common_args)
+                    y_lora = current_llm['llm_inference_function'](
+                        model=current_llm['llm_model'], tokenized_sequences=x_input, **common_args
+                    )
                     predictors.append(y_lora.detach().cpu().numpy())
 
                 if self.gauss_opt:
-                    emb_args = {**common_args, 'model': current_llm['llm_base_model'], 'extract_emb': True}
-                    llm_embs_ttest[llm_name] = current_llm['llm_inference_function'](**emb_args)
+                    llm_embs_ttest[llm_name] = get_plm_embeddings(
+                        x_input, current_llm['llm_inference_function'], 
+                        current_llm['llm_base_model'], 
+                        current_llm['wt_input_ids'], 
+                        current_llm['llm_attention_mask'], "mean", 
+                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
+                    )
 
         if self.gauss_opt:
             self.gp_model.eval()
@@ -770,12 +836,23 @@ class DCALLMHybridModel:
             prosst_emb = llm_embs_ttest.get('prosst')
 
             if esm_emb is not None and prosst_emb is not None:
-                gp_input = torch.cat([esm_emb, prosst_emb], dim=-1)
+                # 1. Create the joint query space to find structurally & evolutionarily similar training variants
+                joint_query = torch.cat([esm_emb, prosst_emb], dim=-1)
+                
+                # 2. Retrieve KNN features (Ensure self.knn_retriever was saved during training)
+                knn_features = self.knn_retriever.retrieve(joint_query)
+                knn_features = knn_features.to(dtype=torch.float32, device=self.device)
+                
+                # 3. Assemble the exact layout the GP expects: [ ESM | ProSST | KNN ]
+                struct_features = torch.cat([prosst_emb, knn_features], dim=-1)
+                gp_input = torch.cat([esm_emb, struct_features], dim=-1)
             elif esm_emb is not None:
                 gp_input = esm_emb
             else:
                 gp_input = prosst_emb
 
+            gp_input = torch.as_tensor(gp_input, dtype=torch.float32)
+            #gp_input = (gp_input - self.gp_scaler_mean) / self.gp_scaler_std
             y_gp_list = []
             predict_batch_size = 100  # Adjust based on VRAM, 100 is very safe
             
@@ -783,9 +860,9 @@ class DCALLMHybridModel:
             
             with torch.no_grad(), gpytorch.settings.fast_pred_var():
                 for batch in gp_input_batches:
-                    batch = batch.to(self.device)
+                    batch = batch.to(dtype=torch.float32, device=self.device)
                     batch_output = self.gp_model.likelihood(self.gp_model(batch))
-                    y_gp_list.append(batch_output.mean.cpu().numpy())
+                    y_gp_list.append(batch_output.mean.detach().cpu().numpy())
             
             y_gp = np.concatenate(y_gp_list)
             predictors.append(y_gp)
@@ -906,15 +983,15 @@ def get_model_and_type(
         model = model['model']
     if model_type == 'Hybrid':
         if model.llm_key == 'esm1v':
-            logger.info("Found hybrid model with ESM1v LLM model...")
+            logger.info("Found hybrid model with ESM1v PLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
             model_type += '_ESM1v'
         elif model.llm_key == 'prosst':
-            logger.info("Found hybrid model with ProSST LLM model...")
+            logger.info("Found hybrid model with ProSST PLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
             model_type += '_ProSST'
         else:
-            logger.info("Found hybrid model without LLM model...")
+            logger.info("Found hybrid model without PLM model...")
             return model, model_type
         base_model.load_state_dict(model.llm_base_model)
         lora_model.load_state_dict(model.llm_model)

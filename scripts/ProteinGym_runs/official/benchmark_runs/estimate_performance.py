@@ -9,7 +9,7 @@ from sklearn.metrics import mean_squared_error
 file_path = os.path.dirname(__file__)
 
 # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
-target_folds = ["fold_random_5", "fold_contiguous_5"]  # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
+target_folds = ["fold_random_5", "fold_modulo_5", "fold_contiguous_5"]
 llm = 'prosst+esm1v'
 
 
@@ -62,7 +62,7 @@ def get_df_fold_performances(df):
 
 results_across_split_technique_folds = defaultdict(list)
 for tf in target_folds:
-    print(f'~~~ {tf} ~~~')
+    print('\n' + '~' * 60 +  '\n' + f'~~~ {tf} ~~~\n' +'~' * 60)
     target_folder = get_target_folder(tf)
     all_spears, all_pears, all_mses = [], [], []
     all_across_spears, all_across_pears, all_across_mses = [], [], []
@@ -92,8 +92,12 @@ for tf in target_folds:
           f"Mean MSE across all {len(all_mses)} datasets={np.mean(all_mses):.3f} | no folds={np.mean(all_across_mses):.3f}\n"
     )
 
-print('\n\n--- Total performance across split techniques ---\n\n')
+all_means = []
+print(f'\n\n--- Total performance across split techniques ---\n{target_folds}\n\n')
 for k, v in results_across_split_technique_folds.items():
-    print(k, f"{np.mean(v):.3f}")
+    mean = np.mean(v)
+    print(k, f"{mean:.3f}")
+    all_means.append(mean)
+print('-' * 60 + f'\nMean={np.mean(all_means):.3f}')
 
 

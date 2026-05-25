@@ -36,7 +36,7 @@ import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from sklearn.model_selection import train_test_split
 import gpytorch
-from pypef.plm.utils import hybrid_corr_mse_loss
+from pypef.plm.utils import get_plm_embeddings, hybrid_corr_mse_loss
 import pytest
 import hashlib
 
@@ -796,7 +796,7 @@ def test_plm_corr_blat_ecolx():
     ).cpu()
     print(f'ProSST (unsupervised performance wt-marginal): '  # ProteinGym: ProSST: 0.760
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7430279087189432, decimal=6)  # < Py312: 0.031177513628942086
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7438456514605788, decimal=6)
 
     y_prosst = plm_inference(
             tokenized_sequences=x_prosst,
@@ -813,7 +813,7 @@ def test_plm_corr_blat_ecolx():
     ).cpu()
     print(f'ProSST (unsupervised performance full-sequence): '
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5656131250565296, decimal=6)
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5668431301489617, decimal=6)
 
     #y_prosst = plm_inference(
     #        tokenized_sequences=x_prosst,
@@ -852,27 +852,16 @@ def test_gaussian_process_opt():
 
     x_prosst_tok_train, _prosst_attention_mask = tokenize_sequences(s_train_blat, prosst_tokenizer)
     print("Getting ProSST embeddings...")
-    x_prosst_emb_train = plm_inference(
-        x_prosst_tok_train, 
-        wt_prosst_input_ids, 
-        prosst_attention_mask, 
-        prosst_base_model, 
-        extract_emb=True, 
-        wt_structure_input_ids=wt_structure_input_ids,
-        device=device,
-        verbose=True
+    x_prosst_emb_train = get_plm_embeddings(
+        x_prosst_tok_train, plm_inference, prosst_base_model, wt_prosst_input_ids, 
+        prosst_attention_mask, wt_structure_input_ids=wt_structure_input_ids, device=device, verbose=True
     )
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train_blat, esm_tokenizer)
     print("Getting ESM embeddings...")
-    x_esm_emb_train = plm_inference(
-        x_esm_tok_train, 
-        wt_esm_input_ids, 
-        esm_attention_mask, 
-        esm_base_model, 
-        extract_emb=True,
-        device=device,
-        verbose=True
+    x_esm_emb_train = get_plm_embeddings(
+        x_esm_tok_train, plm_inference, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
+        device=device, verbose=True
     )
 
     y_train = torch.tensor(y_train_blat).float().to(device)
@@ -880,29 +869,23 @@ def test_gaussian_process_opt():
 
     x_prosst_tok_test, _prosst_attention_mask = tokenize_sequences(s_test_blat, prosst_tokenizer)
     print("Getting ProSST test sequence embeddings...")
-    x_prosst_emb_test = plm_inference(
-        x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, prosst_base_model, 
-        extract_emb=True, wt_structure_input_ids=wt_structure_input_ids, 
-        device=device, verbose=True
+    x_prosst_emb_test = get_plm_embeddings(
+        x_prosst_tok_test, plm_inference, prosst_base_model, wt_prosst_input_ids, prosst_attention_mask,  
+        wt_structure_input_ids=wt_structure_input_ids, device=device, verbose=True
     )
 
     x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test_blat, esm_tokenizer)
     print("Getting ESM test sequence embeddings...")
-    x_esm_emb_test = plm_inference(
-        x_esm_tok_test, 
-        wt_esm_input_ids, 
-        esm_attention_mask, 
-        esm_base_model, 
-        extract_emb=True, 
-        device=device, 
-        verbose=True
+    x_esm_emb_test = get_plm_embeddings(
+        x_esm_tok_test, plm_inference, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
+        device=device, verbose=True
     )
 
-    assert x_esm_emb_test.shape == (400, 1280)
-    assert x_prosst_emb_test.shape == (400, 768)
+    assert x_esm_emb_test.shape == (400, 1280), x_esm_emb_test.shape
+    assert x_prosst_emb_test.shape == (400, 768), x_prosst_emb_test.shape
     x_combined_test = torch.cat([x_esm_emb_test, x_prosst_emb_test], dim=-1)  # Pay attention to correct order!
     x_combined_train = torch.cat([x_esm_emb_train, x_prosst_emb_train], dim=-1)
-    assert x_combined_test.shape == x_combined_train.shape == (400, 2048)
+    assert x_combined_test.shape == x_combined_train.shape == (400, 2048), (x_combined_test.shape, x_combined_train.shape)
     print("Training models...\n-------------------\nESM...")
     esm_model = get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=x_esm_emb_train, device=device, train=True)
     print("ProSST...")

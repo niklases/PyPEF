@@ -38,7 +38,7 @@ def main(cfg: DictConfig) -> None:
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
-    print("LLM:", llm)
+    print("PLM:", llm)
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -97,11 +97,11 @@ def main(cfg: DictConfig) -> None:
     else:
         print("Output does not yet exist")
 
-    if "prosst" in llm:
+    if "prosst" in llm.lower():
         _, _, prosst_tokenizer, _ = get_prosst_models(
             seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
         )
-    if "esm" in llm:
+    if "esm" in llm.lower():
         _, _, esm_tokenizer, _ = get_esm_models(
             model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
         )
@@ -136,6 +136,8 @@ def main(cfg: DictConfig) -> None:
                 alignment_mapping=mapping,
                 msa_start=msa_start
             )
+            print(f'Shifted variant namings, i.e., mutation positions; e.g., "{variants[0]}" --> "{pdb_vars[0]}"')
+            variants = pdb_vars
             
             print(f"Shifted variants relative to PDB start. New length: {len(pdb_trimmed_seqs[0])}")
             assert len(wt_msa_trimmed_sequence) == len(sequences_msa_trimmed[0]), (
@@ -176,7 +178,7 @@ def main(cfg: DictConfig) -> None:
         alignment=msa_file, opt_iter=100, optimize=True
     )
 
-    if llm == "prosst":
+    if "prosst" in llm.lower():
         assert gremlin.first_msa_seq.upper() == wt_msa_trimmed_sequence, (
             f"{gremlin.first_msa_seq.upper()}\n   !=\n{wt_msa_trimmed_sequence}")
         n_mismatches, mismatches = get_mismatches(
@@ -201,6 +203,8 @@ def main(cfg: DictConfig) -> None:
         # Assign splits
         train_idx = (df[split_method] != test_fold).tolist()
         test_idx = (df[split_method] == test_fold).tolist()
+        v_train = np.asarray(variants)[train_idx]
+        v_test = np.asarray(variants)[train_idx]
         s_train = np.asarray(pdb_trimmed_seqs)[train_idx]
         s_test =  np.asarray(pdb_trimmed_seqs)[test_idx]
         x_dca_train = x_dca_full[train_idx]
@@ -211,15 +215,19 @@ def main(cfg: DictConfig) -> None:
         print(f"    Test fold: {test_fold}: N_Train={len(y_train)}, N_Test={len(y_test)} "
               f"Test proportion: {len(y_test) / (len(y_train) + len(y_test)):.3f}")
         
-        llm_dict_esm = esm_setup(
-            wt_seq=pdb_trimmed_common_sequence, sequences=s_train, 
-            seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device="cuda", verbose=True
-        )
-        llm_dict_prosst = prosst_setup(
-            wt_seq=pdb_trimmed_common_sequence, pdb_file=pdb_file, sequences=s_train, 
-            seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device="cuda", verbose=True
-        )
-        llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
+        llm_dict_train = {}
+        if "esm" in llm.lower():
+            llm_dict_esm = esm_setup(
+                wt_seq=pdb_trimmed_common_sequence, sequences=s_train, 
+                seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device="cuda", verbose=True
+            )
+            llm_dict_train.update(llm_dict_esm)
+        if "prosst" in llm.lower():
+            llm_dict_prosst = prosst_setup(
+                wt_seq=pdb_trimmed_common_sequence, pdb_file=pdb_file, sequences=s_train, 
+                seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device="cuda", verbose=True
+            )
+            llm_dict_train.update(llm_dict_prosst)
         print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
 
         
@@ -231,30 +239,38 @@ def main(cfg: DictConfig) -> None:
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
             y_train=y_train,
-            llm_model_input=llm_dict_ensemble,
+            llm_model_input=llm_dict_train,
             x_wt=gremlin.x_wt,
+            variants=v_train,
             lora_train=False,
             gauss_opt=True,
             n_epochs=50  # Only used if lora_train==True
         )
 
-        x_test_prosst, _prosst_attention_mask = tokenize_sequences(
-            sequences=s_test, 
-            tokenizer=prosst_tokenizer, 
-            max_length=len(pdb_trimmed_common_sequence) + 2
-        )
-        x_test_esm, _prosst_attention_mask = tokenize_sequences(
-            sequences=s_test, 
-            tokenizer=esm_tokenizer, 
-            max_length=len(pdb_trimmed_common_sequence) + 2
-        )
+        x_llm_dict_test = {}
+        if "esm" in llm.lower():
+            x_test_esm, _esm_attention_mask = tokenize_sequences(
+                sequences=s_test, 
+                tokenizer=esm_tokenizer, 
+                max_length=len(pdb_trimmed_common_sequence) + 2
+            )
+            x_llm_dict_test.update({'esm1v': np.asarray(x_test_esm)})
+
+        if "prosst" in llm.lower():
+            x_test_prosst, _prosst_attention_mask = tokenize_sequences(
+                sequences=s_test, 
+                tokenizer=prosst_tokenizer, 
+                max_length=len(pdb_trimmed_common_sequence) + 2
+            )
+            x_llm_dict_test.update({'prosst': np.asarray(x_test_prosst)})
 
         y_test_pred = hm.hybrid_prediction(
             x_dca=np.array(x_dca_test), 
-            x_llm_dict={'esm1v': np.asarray(x_test_esm), 'prosst': np.asarray(x_test_prosst)}
+            x_llm_dict=x_llm_dict_test,
+            variants=v_test
 
         )
-        print(f"    Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}")
+        print(f"====> Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}\n")
 
         df_pred_fold = pd.DataFrame(
             {

@@ -2,6 +2,8 @@
 # https://github.com/niklases/PyPEF
 
 import os
+import re
+from typing import Literal
 import warnings
 import numpy as np
 import torch
@@ -13,6 +15,7 @@ from safetensors.torch import load_file
 from transformers import set_seed, AutoConfig
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
+from pypef.utils.helpers import tqdm
 ts_logging.set_verbosity_error()
 
 import logging
@@ -115,9 +118,13 @@ def hybrid_corr_mse_loss(
     return (alpha * loss_corr) + ((1 - alpha) * loss_mse)
 
 
-def get_batches(a, dtype, batch_size=5,
-                keep_remaining=False, verbose: bool = False
-                ) -> list | list[np.ndarray]:
+def get_batches(
+        a, 
+        dtype, 
+        batch_size=5,
+        keep_remaining=False, 
+        verbose: bool = False
+) -> list | list[np.ndarray]:
     a = np.asarray(a, dtype=dtype)
     a_remaining = None
     orig_shape = np.shape(a)
@@ -148,6 +155,113 @@ def get_batches(a, dtype, batch_size=5,
             a.append(a_remaining)
             a = [np.asarray(it) for it in a]
     return a
+
+
+def parse_mut_position(mut_string: str) -> int:
+    # TODO: Integrate multi-subs splitting
+    """
+    Parses a mutation string (e.g., 'M1A' or 'A140D') 
+    to extract the 1-indexed position and convert it to 0-indexed.
+    """
+    if mut_string == "WT" or str(mut_string).lower() == "nan":
+        return 0 # Default fallback for Wild-Type reference sequences
+        
+    # Regex captures the digits between the wild-type and mutant amino acids
+    match = re.search(r'\d+', str(mut_string))
+    if match:
+        return int(match.group()) - 1
+    else:
+        raise ValueError(f"Could not parse position from mutation string: {mut_string}")
+
+
+def extract_mean_or_pos_embeddings(
+    full_sequence_embeddings: torch.Tensor, 
+    mode: str = "mean",
+    mutation_strings: list | None = None, 
+    verbose: bool = False
+) -> torch.Tensor:
+    assert mode in ["positional", "mean"], "mode must be either 'positional' or 'mean'"
+    
+    num_seqs, seq_len, dim = full_sequence_embeddings.shape
+    
+    if mode == "mean":
+        if verbose:
+            logger.info(f"Global pooling: compressing [{num_seqs}, {seq_len}, {dim}] via mean(dim=1)")
+        return full_sequence_embeddings.mean(dim=1)
+        
+    elif mode == "positional":
+        if verbose:
+            logger.info(f"Site-specific pooling: extracting indices for {num_seqs} variants")
+        
+        # 1. Parse all mutation positions out of the strings
+        mut_indices = [parse_mut_position(mut) for mut in mutation_strings]
+        mut_indices_tensor = torch.tensor(mut_indices, dtype=torch.long, device=full_sequence_embeddings.device)
+        
+        # Safety check: ensure no parsed index falls outside your sequence length
+        if (mut_indices_tensor >= seq_len).any() or (mut_indices_tensor < 0).any():
+            max_idx = mut_indices_tensor.max().item()
+            raise IndexError(
+                f"Parsed a mutation index ({max_idx}) that exceeds the sequence "
+                f"length of your embedding tensor ({seq_len-1}). Check if your sequence length "
+                f"matches the reference used."
+            )
+            
+        # 2. Advanced matrix indexing
+        # Creates an array [0, 1, 2, ..., Num_Sequences-1] to coordinate the rows
+        batch_indices = torch.arange(num_seqs, device=full_sequence_embeddings.device)
+        
+        # Pulls out exactly full_sequence_embeddings[i, mut_indices[i], :] for every row i
+        site_embeddings = full_sequence_embeddings[batch_indices, mut_indices_tensor]
+        return site_embeddings
+
+
+def get_plm_embeddings(
+        tokenized_sequences, 
+        plm_inference_function, 
+        model,
+        wt_input_ids,  # wt seq. token
+        attention_mask,
+        mode: Literal["mean", "positional"] = "mean", 
+        extract_conditional_aa_prob: bool = False,
+        batch_size:int = 250,
+        variants: str | None = None,
+        verbose: bool = True,
+        **embedding_func_kwargs
+):
+    desc=f"Getting PLM embeddings (mode={mode})"
+    if extract_conditional_aa_prob:
+        desc=f"Getting AA cond. probs. from PLM embeddings"
+    pbar = tqdm(range(0, len(tokenized_sequences), batch_size), desc=desc, disable=not verbose)
+    extract_emb = True
+    processed_embs = []
+    for i in pbar:
+        start_idx = i
+        end_idx = min(i + batch_size, len(tokenized_sequences))
+        batch_seqs = tokenized_sequences[start_idx:end_idx]
+        if extract_conditional_aa_prob:
+            extract_emb = False
+
+        full_embs = plm_inference_function(
+            tokenized_sequences=batch_seqs, model=model, wt_input_ids=wt_input_ids, 
+            attention_mask=attention_mask, extract_emb=extract_emb, 
+            extract_conditional_aa_prob=extract_conditional_aa_prob, **embedding_func_kwargs
+        )
+        batch_variants = None
+        if variants is not None:
+            batch_variants = variants[start_idx:end_idx]
+        if extract_conditional_aa_prob:
+            embs = full_embs
+        else:
+            embs = extract_mean_or_pos_embeddings(full_embs, mode=mode, mutation_strings=batch_variants)
+            
+        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)}")
+        processed_embs.append(embs)
+        if end_idx >= len(tokenized_sequences):
+            final_rows = sum(x.shape[0] for x in processed_embs)
+            final_shape = (final_rows, *processed_embs[0].shape[1:])
+            pbar.set_description(f"{desc}: final shape={final_shape}")
+    processed_embs = torch.cat(processed_embs, dim=0)
+    return processed_embs
 
 
 def get_default_cache_dir():
@@ -329,7 +443,7 @@ def load_model_and_tokenizer(
             **load_kwargs
         )
 
-    logger.info(f"Successfully finished loading {model_name}.")
+    logger.info(f"Successfully finished loading {model_name}")
     return model, tokenizer
 
 

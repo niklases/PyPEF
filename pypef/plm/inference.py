@@ -6,7 +6,7 @@
 
 import os
 import inspect
-
+import re  
 from functools import partial
 import numpy as np
 from scipy.stats import spearmanr
@@ -66,11 +66,11 @@ def tokenize_sequences(sequences, tokenizer, max_length=None, verbose=True):
     return tokenized_sequences, attention_mask
 
 
-def sequence_log_likelihood(
-        tokenized_sequences, 
+def sequence_log_likelihood( 
         attention_mask, 
         wt_input_ids,
         model, 
+        tokenized_sequences = None, # Not needed for WT-only extraction
         scoring_mode: str = "wt-marginal",   # "wt-marginal" | "full-sequence"
         train: bool = False,
         cut_special_tokens: bool = True,  # assumption: cut first and last token
@@ -89,6 +89,8 @@ def sequence_log_likelihood(
         torch.Tensor of shape [num_sequences]
     """
     extract_emb = model_kwargs.pop("extract_emb", False)
+    extract_probs = model_kwargs.pop("extract_probs", False) # Extract raw probabilities
+    tokenizer = model_kwargs.pop("tokenizer", None)          # Required if extract_probs=True
     assert scoring_mode in ["wt-marginal", "full-sequence"]
     if device is None:
         device = get_device()
@@ -129,12 +131,41 @@ def sequence_log_likelihood(
 
         logits = outputs.logits
         logits = logits.squeeze(0)   # remove batch dim
-        # Better make sure that special tokens are always removed / masked 
+        # Make sure that special tokens are always removed / masked 
         # and only pure amino acid sequence tokens are present / unmasked
-        tokenized_seq_len = tokenized_sequences.shape[1]
+        if tokenized_sequences is not None:
+            tokenized_seq_len = tokenized_sequences.shape[1]
+        else:
+            tokenized_seq_len = wt_input_ids.shape[1]
         if cut_special_tokens:
             logits = logits[1:-1]        # drop CLS/EOS
             tokenized_seq_len -= 2
+        if extract_probs:
+            if tokenizer is None:
+                raise RuntimeError(
+                    "For getting the conditional amino acid probability, "
+                    "a tokenizer has to be provided to convert tokens into IDs."
+                )
+            aa_conditional_prob_order = model_kwargs.pop("kermut_aa_order", [
+                "A", "C", "D", "E", "F", "G", "H", "I", "K", "L", 
+                "M", "N", "P", "Q", "R", "S", "T", "V", "W", "Y"
+            ])
+            
+            # Map ProSST's internal vocab indices to this explicit layout
+            aa_token_ids = []
+            for aa in aa_conditional_prob_order:
+                token_id = tokenizer.convert_tokens_to_ids(aa)
+                if token_id == tokenizer.unk_token_id or token_id is None:
+                    raise ValueError(f"ProSST Tokenizer failed to locate vocab ID for amino acid '{aa}'.")
+                aa_token_ids.append(token_id)
+            
+            # Filter the raw logits down to these exact 20 matching columns
+            filtered_logits = logits[:, aa_token_ids]  # Shape: [seq_len, 20]
+            
+            # Convert to raw probability space to match 'p_mean = np.exp(log_p_mean)'
+            conditional_probs = F.softmax(filtered_logits, dim=-1) 
+            return conditional_probs
+        
         token_probs = torch.log_softmax(logits, dim=-1)
         assert tokenized_seq_len == token_probs.shape[0], (
             f"{tokenized_seq_len} != {token_probs.shape[0]}")
@@ -149,7 +180,6 @@ def sequence_log_likelihood(
             ].sum(dtype=torch.float64)
 
             log_probs.append(seq_lp)
-
 
     elif scoring_mode == "full-sequence":
         if extract_emb:
@@ -181,9 +211,12 @@ def sequence_log_likelihood(
                             **model_kwargs
                         )
                     if extract_emb:
+                        # extractinf full embeddings here, so batching is 
+                        # required for less memory consumption
+                        # Only returning last hidden layer!
                         token_embeddings = outputs.hidden_states[-1]  # (1, L+2, D)
-                        # Mean pool over residues (exclude CLS/EOS)
-                        seq_embedding = token_embeddings[0, 1:-1].mean(dim=0)
+                        # exclude CLS/EOS
+                        seq_embedding = token_embeddings[0, 1:-1] # (L, D)
                         embeddings.append(seq_embedding)
                         continue
 
@@ -397,6 +430,7 @@ def plm_inference(
     mask_token_id = None,
     inference_type='wt-marginal-log-likelihood',
     extract_emb: bool = False,
+    extract_conditional_aa_prob: bool = False,
     batch_size: int | None = 5,
     train=False,
     device=None,
@@ -437,23 +471,42 @@ def plm_inference(
             f"'full-sequence-log-likelihood', 'mutation-masking', "
             f"and 'full-masking', got {inference_type}.")
     if extract_emb:
-        logger.info(f"Extracting sequence embeddings using the 'full-sequence-log-likelihood' "
-                    f"function. ")
+        if verbose:
+            logger.info(f"Extracting sequence embeddings using the 'full-sequence-log-likelihood' "
+                        f"function")
         inference_function = sequence_log_likelihood
         scoring_mode = "full-sequence"
         model_kwargs["extract_emb"] = True
-        
+        model_kwargs["extract_probs"] = False
+    elif extract_conditional_aa_prob:
+        if verbose:
+            logger.info(f"Extracting conditional amino acid probabilites using the 'wt-marginal-"
+                        f"sequence-log-likelihood' function")
+        inference_function = sequence_log_likelihood
+        scoring_mode = "wt-marginal"
+        model_kwargs["extract_emb"] = False
+        model_kwargs["extract_probs"] = True
+        model_kwargs["tokenizer"] = kwargs["tokenizer"]
+
+
     scores = []
-    if batch_size is None:
+    if batch_size is None and tokenized_sequences is not None:
         xs_b = torch.atleast_2d(tokenized_sequences)
     else:
-        logger.info(f"Splitting tokenized sequences into batches...")
-        xs_b = get_batches(tokenized_sequences, dtype=int, batch_size=batch_size,
-                           keep_remaining=keep_remaining, verbose=True)
-        xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
+        if verbose:
+            logger.info(f"Splitting tokenized sequences into batches...")
+        if extract_conditional_aa_prob and tokenized_sequences is None:
+            xs_b = [None]
+        else:
+            xs_b = get_batches(tokenized_sequences, dtype=int, batch_size=batch_size,
+                               keep_remaining=keep_remaining, verbose=verbose)
+            xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     if extract_emb:
-        desc = (f"PLM inference: getting embeddings batch "
+        desc = (f"PLM inference: embeddings batch "
                 f"(size={batch_size}) processing ({device.upper()})")
+    elif extract_conditional_aa_prob:
+        desc = (f"PLM inference: AA probabilities batch (size={batch_size}) "
+                f"processing ({device.upper()})'")
     else:
         desc = (f"PLM inference: {inference_type} batch (size={batch_size}) "
                 f"processing ({device.upper()})'")
@@ -475,9 +528,9 @@ def plm_inference(
     with torch.set_grad_enabled(train):
         for x in pbar:
             pll = inference_function(
-                tokenized_sequences=x,
-                wt_input_ids=wt_input_ids,
                 attention_mask=attention_mask,
+                wt_input_ids=wt_input_ids,
+                tokenized_sequences=x,
                 model=model,
                 train=train,
                 scoring_mode=scoring_mode,
@@ -753,3 +806,42 @@ def prosst_setup(
         }
     }
     return llm_dict_prosst
+
+
+class KNNFitnessRetrieval:
+    def __init__(self, k=5):
+        self.k = k
+        self.train_embeddings = None
+        self.train_labels = None
+
+    def fit(self, train_embeddings, train_labels):
+        """Stores the training variants' local profiles and fitness scores."""
+        # Ensure tensors are on CPU/GPU consistently
+        self.train_embeddings = F.normalize(train_embeddings, p=2, dim=-1)
+        self.train_labels = train_labels.view(-1, 1)
+
+    def retrieve(self, query_embeddings):
+        """Finds the k-nearest training environments and aggregates their scores."""
+        norm_queries = F.normalize(query_embeddings, p=2, dim=-1)
+        
+        # Compute Cosine Similarity Matrix: [N_query, N_train]
+        similarity_matrix = torch.matmul(norm_queries, self.train_embeddings.T)
+        
+        # Get top-k nearest neighbors in the training set
+        topk_sims, topk_indices = torch.topk(similarity_matrix, k=self.k, dim=-1)
+        
+        # Retrieve their corresponding true fitness scores
+        # Shape: [N_query, k]
+        retrieved_scores = self.train_labels[topk_indices].squeeze(-1)
+        
+        # Softmax weights based on similarities for a weighted average
+        weights = F.softmax(topk_sims, dim=-1)
+        
+        # Compute the weighted features
+        knn_mean_score = torch.sum(weights * retrieved_scores, dim=-1, keepdim=True)
+        knn_max_score = torch.max(retrieved_scores, dim=-1, keepdim=True)[0]
+        knn_min_score = torch.min(retrieved_scores, dim=-1, keepdim=True)[0]
+        
+        # Combine into a descriptive retrieval context vector
+        return torch.cat([knn_mean_score, knn_max_score, knn_min_score], dim=-1)
+    

@@ -128,7 +128,7 @@ class MultiInputGP(gpytorch.models.ExactGP):
 def get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=None, x_tokseqs_struct_kernel_train=None, 
                         device=None, opt_steps: int = 100, train: bool = False):
     # Define kernels and model: x_train is by default seq kernel and 
-    # x_train_2 struct kernel for now
+    # x_train_2 is struct kernel emb for now
     if device is None:
         device = get_device()
 
@@ -170,7 +170,7 @@ def get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=None, x_tokseqs_stru
         optimizer = torch.optim.Adam(model.parameters(), lr=0.05)
         mll = gpytorch.mlls.ExactMarginalLogLikelihood(likelihood, model)
         pbar = tqdm(range(opt_steps), desc='GP training')
-        # To save memory but loosing "exactness": Cojugate gradiens instead of massive Cholesky decomposition
+        # To save memory but loosing "exactness": Conjugate gradients instead of massive Cholesky decomposition
         # with gpytorch.settings.max_cholesky_size(0), gpytorch.settings.max_preconditioner_size(10):
         for i in pbar:
             optimizer.zero_grad()
