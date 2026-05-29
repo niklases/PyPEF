@@ -299,7 +299,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             x_train_dca=np.array(x_dca_train), 
                             y_train=y_train,
                             llm_model_input=llm_dict,
-                            x_wt=x_wt,
+                            x_dca_wt=x_wt,
                             lora_train=lora_train,
                             gauss_opt=gauss_opt,
                             n_epochs=50  # Only if lora_train==True

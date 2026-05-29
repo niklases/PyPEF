@@ -240,11 +240,12 @@ def main(cfg: DictConfig) -> None:
             x_train_dca=np.array(x_dca_train), 
             y_train=y_train,
             llm_model_input=llm_dict_train,
-            x_wt=gremlin.x_wt,
+            x_dca_wt=gremlin.x_wt,
             variants=v_train,
             lora_train=False,
             gauss_opt=True,
-            n_epochs=50  # Only used if lora_train==True
+            pdb_struct=pdb_file,
+            n_epochs=50  # Only used if lora_train==True,
         )
 
         x_llm_dict_test = {}

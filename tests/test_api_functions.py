@@ -36,22 +36,26 @@ import pandas as pd
 from scipy.stats import pearsonr, spearmanr
 from sklearn.model_selection import train_test_split
 import gpytorch
-from pypef.plm.utils import get_plm_embeddings, hybrid_corr_mse_loss
 import pytest
 import hashlib
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.utils.variant_data import get_seqs_from_var_name, get_sequences_from_file, get_wt_sequence, split_variants
-from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, tokenize_sequences
+from pypef.utils.variant_data import extract_pdb_coords, get_seqs_from_var_name, get_sequences_from_file, get_wt_sequence, split_variants
+from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, tokenize_sequences, get_plm_embeddings
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import (
     get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer
 )
+from pypef.plm.utils import KermutFeaturizer, hybrid_corr_mse_loss
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
+from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
+from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
+from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
+from pypef.gaussian_process.kermut.gp.predict import predict
 
 
 device = ["cpu", get_device()][1]
@@ -121,7 +125,7 @@ df = pd.read_csv(csv_blat_ecolx_stiffler2015)
 mutants = df['mutant'].to_list()
 sequences = df['mutated_sequence'].to_list()
 y = df['DMS_score'].to_list()
-_m_train_blat, _m_test_blat, s_train_blat, s_test_blat, y_train_blat, y_test_blat = train_test_split(
+m_train_blat, m_test_blat, s_train_blat, s_test_blat, y_train_blat, y_test_blat = train_test_split(
     mutants, sequences, y, train_size=400, test_size=400, random_state=42
 )
 
@@ -321,7 +325,7 @@ def test_hybrid_model_dca_llm_aneh(
             x_train_dca=np.array(x_dca_train), 
             y_train=y_train,
             llm_model_input=llm_dict,
-            x_wt=g.x_wt,
+            x_dca_wt=g.x_wt,
             seed=42,
             device=device,
             n_epochs=5  # Training (only) the LoRA model
@@ -550,7 +554,7 @@ def test_hybrid_model_dca_llm_avgfp(
             x_train_dca=np.array(x_dca_train), 
             y_train=y_train,
             llm_model_input=llm_dict,
-            x_wt=g.x_wt,
+            x_dca_wt=g.x_wt,
             seed=42,
             lora_train=True,
             gauss_opt=True,
@@ -853,15 +857,16 @@ def test_gaussian_process_opt():
     x_prosst_tok_train, _prosst_attention_mask = tokenize_sequences(s_train_blat, prosst_tokenizer)
     print("Getting ProSST embeddings...")
     x_prosst_emb_train = get_plm_embeddings(
-        x_prosst_tok_train, plm_inference, prosst_base_model, wt_prosst_input_ids, 
-        prosst_attention_mask, wt_structure_input_ids=wt_structure_input_ids, device=device, verbose=True
+        x_prosst_tok_train, prosst_base_model, wt_prosst_input_ids, 
+        prosst_attention_mask, mode="mean", wt_structure_input_ids=wt_structure_input_ids, 
+        device=device, verbose=True
     )
 
     x_esm_tok_train, esm_attention_mask = tokenize_sequences(s_train_blat, esm_tokenizer)
     print("Getting ESM embeddings...")
     x_esm_emb_train = get_plm_embeddings(
-        x_esm_tok_train, plm_inference, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
-        device=device, verbose=True
+        x_esm_tok_train, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
+        mode="mean", device=device, verbose=True
     )
 
     y_train = torch.tensor(y_train_blat).float().to(device)
@@ -870,15 +875,15 @@ def test_gaussian_process_opt():
     x_prosst_tok_test, _prosst_attention_mask = tokenize_sequences(s_test_blat, prosst_tokenizer)
     print("Getting ProSST test sequence embeddings...")
     x_prosst_emb_test = get_plm_embeddings(
-        x_prosst_tok_test, plm_inference, prosst_base_model, wt_prosst_input_ids, prosst_attention_mask,  
-        wt_structure_input_ids=wt_structure_input_ids, device=device, verbose=True
+        x_prosst_tok_test, prosst_base_model, wt_prosst_input_ids, prosst_attention_mask,  
+        mode="mean", wt_structure_input_ids=wt_structure_input_ids, device=device, verbose=True
     )
 
     x_esm_tok_test, esm_attention_mask = tokenize_sequences(s_test_blat, esm_tokenizer)
     print("Getting ESM test sequence embeddings...")
     x_esm_emb_test = get_plm_embeddings(
-        x_esm_tok_test, plm_inference, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
-        device=device, verbose=True
+        x_esm_tok_test, esm_base_model, wt_esm_input_ids, esm_attention_mask, 
+        mode="mean", device=device, verbose=True
     )
 
     assert x_esm_emb_test.shape == (400, 1280), x_esm_emb_test.shape
@@ -936,6 +941,76 @@ def test_gaussian_process_opt():
                 [0.7021152007200044, 0.69065778648575, None, 0.7670016687604297, 0.7773472334202088][i], 
                 decimal=3
             )
+
+
+    #################################################
+    ##################### KERMUT ####################
+    #################################################
+        
+    aa_cond_probs = plm_inference(
+        attention_mask=prosst_attention_mask,
+        wt_input_ids=wt_prosst_input_ids,
+        model=prosst_base_model,
+        tokenized_sequences = None,
+        extract_probs=True, 
+        wt_structure_input_ids=wt_structure_input_ids,
+        extract_conditional_aa_prob=True,
+        tokenizer=prosst_tokenizer
+    )
+
+    struct_coords = extract_pdb_coords(
+        pdb_blat_ecolx,
+        target_len=len(wt_seq)
+    )
+
+    np.testing.assert_almost_equal(np.sum(struct_coords), -2125.667, decimal=2)
+
+    # Run PROSST Inference
+    x_prosst_tok_train = torch.tensor(x_prosst_tok_train)
+    x_prosst_tok_test = torch.tensor(x_prosst_tok_test)
+        
+    x_zero_shot_train = plm_inference(
+        x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, 
+        prosst_base_model, wt_structure_input_ids=wt_structure_input_ids
+    )
+    x_zero_shot_test = plm_inference(
+        x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, 
+        prosst_base_model, wt_structure_input_ids=wt_structure_input_ids
+    )
+    print("Zero-shot ProSST Spearman Train:", spearmanr(y_train.cpu().numpy(), x_zero_shot_train.cpu().numpy()))
+    print("Zero-shot ProSST Spearman Test:", spearmanr(y_test.cpu().numpy(), x_zero_shot_test.cpu().numpy()))
+
+    # Align token dimensions and create positional mapping
+    train_inputs, test_inputs = prepare_kermut_inputs(
+        wt_seq=wt_seq,
+        seqs_train=s_train_blat,
+        seqs_test=s_test_blat,
+        x_embed_train=x_prosst_emb_train,
+        x_embed_test=x_prosst_emb_test,
+        x_zero_shot_train=x_zero_shot_train,
+        x_zero_shot_test=x_zero_shot_test
+    )
+
+    # Option A: Using RBF (Default)
+    gp, likelihood = instantiate_gp(
+        train_inputs=train_inputs,
+        train_targets=y_train.cpu(),
+        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        use_structure_kernel=True,
+        use_sequence_kernel=True,
+        sequence_kernel_type="RBF",
+        use_zero_shot=True,
+        use_gpu=False
+    )
+
+    # Train
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+
+    # Predict
+    test_means_pred, test_variances = predict(gp, likelihood, test_inputs)
+
+    print("Supervised Kermut Spearman Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=5) 
 
 
 if __name__ == "__main__":

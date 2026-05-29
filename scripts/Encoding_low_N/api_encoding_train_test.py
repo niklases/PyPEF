@@ -155,7 +155,7 @@ for i, indices in enumerate(train_val_splits_indices):
     print(f'Split {i + 1}/{len(train_val_splits_indices)}:\nSpearmans rho (ML) = {performances[4]:.3f}')
     # B. Hybrid modeling
     # -------------------------------------------------------------------------------
-    hybrid_model = DCALLMHybridModel(x_train_dca=x_train_val, y_train=y_train_val, x_wt=x_wt)
+    hybrid_model = DCALLMHybridModel(x_train_dca=x_train_val, y_train=y_train_val, x_dca_wt=x_wt)
     y_test_pred = hybrid_model.hybrid_prediction(x_dca=x_test)
     ten_split_performance_hybrid.append(spearmanr(y_test, y_test_pred)[0])
     print(f'Spearmans rho (Hybrid) = {spearmanr(y_test, y_test_pred)[0]:.3f}')
@@ -272,7 +272,7 @@ for n_train in pbar:
         performances_dca_ml.append(get_regressor_performances(
             x_dca_train, x_dca_test, y_train, y_test, regressor='ridge')[4])  # [4] defines spearmanr correlation
 
-        hybrid_model = DCALLMHybridModel(x_train_dca=x_dca_train, y_train=y_train, x_wt=x_wt)
+        hybrid_model = DCALLMHybridModel(x_train_dca=x_dca_train, y_train=y_train, x_dca_wt=x_wt)
         y_hybrid_pred = hybrid_model.hybrid_prediction(x_dca=x_dca_test)
         performances_hybrid.append(spearmanr(y_test, y_hybrid_pred)[0])
 

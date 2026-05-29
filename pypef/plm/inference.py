@@ -8,6 +8,7 @@ import os
 import inspect
 import re  
 from functools import partial
+from typing import Literal
 import numpy as np
 from scipy.stats import spearmanr
 import torch
@@ -17,7 +18,7 @@ from Bio import SeqIO
 from pypef.utils.helpers import tqdm
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.helpers import get_device
-from pypef.plm.utils import hybrid_corr_mse_loss, get_batches
+from pypef.plm.utils import extract_mean_or_pos_embeddings, hybrid_corr_mse_loss, get_batches
 from pypef.plm.esm_lora_tune import get_esm_models
 
 
@@ -697,6 +698,57 @@ def plm_train(
                 verbose=False
             )
     return y_preds_train.cpu()
+
+
+def get_plm_embeddings(
+        tokenized_sequences, 
+        model,
+        wt_input_ids,  # wt seq. token
+        attention_mask,
+        mode: Literal["mean", "positional"] = "mean", 
+        extract_conditional_aa_prob: bool = False,
+        batch_size:int = 250,
+        variants: str | None = None,
+        plm_inference_function=None,
+        verbose: bool = True,
+        **embedding_func_kwargs
+):
+    desc=f"Getting PLM embeddings (mode={mode})"
+    if extract_conditional_aa_prob:
+        desc=f"Getting AA cond. probs. from PLM embeddings"
+    if plm_inference_function is None:
+        plm_inference_function = plm_inference
+    pbar = tqdm(range(0, len(tokenized_sequences), batch_size), desc=desc, disable=not verbose)
+    extract_emb = True
+    processed_embs = []
+    for i in pbar:
+        start_idx = i
+        end_idx = min(i + batch_size, len(tokenized_sequences))
+        batch_seqs = tokenized_sequences[start_idx:end_idx]
+        if extract_conditional_aa_prob:
+            extract_emb = False
+
+        full_embs = plm_inference_function(
+            tokenized_sequences=batch_seqs, model=model, wt_input_ids=wt_input_ids, 
+            attention_mask=attention_mask, extract_emb=extract_emb, 
+            extract_conditional_aa_prob=extract_conditional_aa_prob, **embedding_func_kwargs
+        )
+        batch_variants = None
+        if variants is not None:
+            batch_variants = variants[start_idx:end_idx]
+        if extract_conditional_aa_prob:
+            embs = full_embs
+        else:
+            embs = extract_mean_or_pos_embeddings(full_embs, mode=mode, mutation_strings=batch_variants)
+            
+        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)}")
+        processed_embs.append(embs)
+        if end_idx >= len(tokenized_sequences):
+            final_rows = sum(x.shape[0] for x in processed_embs)
+            final_shape = (final_rows, *processed_embs[0].shape[1:])
+            pbar.set_description(f"{desc}: final shape={final_shape}")
+    processed_embs = torch.cat(processed_embs, dim=0)
+    return processed_embs
 
 
 def esm_setup(

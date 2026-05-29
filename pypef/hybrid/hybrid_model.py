@@ -26,18 +26,21 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 
 from pypef.settings import USE_RAY
-from pypef.utils.variant_data import get_sequences_from_file, remove_nan_encoded_positions
+from pypef.utils.variant_data import extract_pdb_coords, get_sequences_from_file, remove_nan_encoded_positions
 import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out
 from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
-from pypef.plm.utils import get_plm_embeddings, hybrid_corr_mse_loss
+from pypef.plm.utils import hybrid_corr_mse_loss
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.plm.inference import KNNFitnessRetrieval, esm_setup, prosst_setup, tokenize_sequences, plm_inference
+from pypef.plm.inference import (
+    KNNFitnessRetrieval, esm_setup, prosst_setup, 
+    tokenize_sequences, plm_inference, get_plm_embeddings
+)
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 
 # sklearn/base.py:474: FutureWarning: `BaseEstimator._validate_data` is deprecated in 1.6 and 
@@ -65,13 +68,14 @@ class DCALLMHybridModel:
             x_train_dca: np.ndarray,
             y_train: np.ndarray,
             llm_model_input: dict | None = None,
-            x_wt: np.ndarray | None = None,  # DCA WT encoding; TODO: RENAME
+            x_dca_wt: np.ndarray | None = None,
             variants: list[str] | None = None,
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
             lora_train: bool = True,
             gauss_opt: bool = False,
+            pdb_struct: str | os.PathLike | None = None,
             batch_size: int | None = None,
             n_epochs: int | None = None,
             device: str | None = None,
@@ -114,11 +118,12 @@ class DCALLMHybridModel:
         self.parameter_range = parameter_range
         self.ensemble_func = ensemble_func
         self.gauss_opt = gauss_opt
+        self.pdb_struct = pdb_struct
         self.lora_train = lora_train
         self.alphas = alphas
         self.x_train_dca = x_train_dca
         self.y_train = y_train
-        self.x_wild_type = x_wt
+        self.x_wild_type = x_dca_wt
         if device is None:
             device = get_device()
         self.device = device
@@ -542,7 +547,7 @@ class DCALLMHybridModel:
             training_fn = current_llm['llm_train_function']
             loss_fn = current_llm['llm_loss_function']
             optimizer = current_llm['llm_optimizer']
-            #tokenizer = current_llm['llm_tokenizer']
+            tokenizer = current_llm['llm_tokenizer']
             x_tok_llm_ttrain = current_llm['x_llm_ttrain']
             x_tok_llm_ttest = current_llm['x_llm_ttest']
             wt_input_ids = current_llm['wt_input_ids']
@@ -577,26 +582,17 @@ class DCALLMHybridModel:
             self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
             self.all_llm_ttest_scores.append(self.y_llm_ttest)
 
-            if self.gauss_opt is True:
+            if self.gauss_opt:
                 self.embs_ttest[llm_name] = get_plm_embeddings(
-                    x_tok_llm_ttest, inference_fn, base_model, wt_input_ids, 
-                    attention_mask, "mean", wt_structure_input_ids=wt_struct_ids
+                    x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
+                    mode="mean", wt_structure_input_ids=wt_struct_ids
                 )
 
-                #aa_cond_probs = inference_fn(
-                #    attention_mask=attention_mask,
-                #    wt_input_ids=wt_input_ids,
-                #    model=base_model,
-                #    tokenized_sequences = None,
-                #    extract_probs=True, 
-                #    wt_structure_input_ids=wt_struct_ids,
-                #    extract_conditional_aa_prob=True,
-                #    tokenizer=tokenizer
-                #)
+                # TODO: Add/test aa_cond_probs and struct_array_coords
 
                 self.embs_ttrain[llm_name] = get_plm_embeddings(
-                    x_tok_llm_ttrain, inference_fn, base_model, wt_input_ids, 
-                    attention_mask, "mean", wt_structure_input_ids=wt_struct_ids
+                    x_tok_llm_ttrain, base_model, wt_input_ids, 
+                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
                 )
 
 
@@ -823,10 +819,11 @@ class DCALLMHybridModel:
 
                 if self.gauss_opt:
                     llm_embs_ttest[llm_name] = get_plm_embeddings(
-                        x_input, current_llm['llm_inference_function'], 
+                        x_input, 
                         current_llm['llm_base_model'], 
                         current_llm['wt_input_ids'], 
-                        current_llm['llm_attention_mask'], "mean", 
+                        current_llm['llm_attention_mask'], 
+                        mode="mean", 
                         wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
 
@@ -1259,7 +1256,7 @@ def performance_ls_ts(
             x_train_dca=np.array(x_train),
             y_train=np.array(y_train),
             llm_model_input=llm_dict,
-            x_wt=x_wt,
+            x_dca_wt=x_wt,
             device=device,
             progress_cb=progress_cb, 
             abort_cb=abort_cb

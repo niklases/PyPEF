@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 from Bio import Align
+from Bio.PDB import PDBParser
 
 import logging
 logger = logging.getLogger('pypef.utils.variant_data')
@@ -604,3 +605,103 @@ def get_mismatches(seq_a: str, seq_b: str):
             mismatches += f"{aa}{i_a + 1}{seq_b[i_a]},"
             n += 1
     return n, mismatches[:-1]
+
+
+def extract_pdb_coords(pdb_path, target_len=None, chain_id="A", atom_type="CA"):
+    """
+    Extracts 3D coordinates from a PDB file to create the structural prior array. 
+    Aligns directly to the target sequence length.
+    
+    Args:
+        pdb_path (str): Path to the input PDB or CIF structure file.
+        target_len (int): The absolute expected sequence length (e.g., 506).
+        chain_id (str): The specific target chain to extract. Default is "A".
+        atom_type (str): The specific atom to track. "CA" (Alpha Carbon) is the 
+                         standard for distance-dependent structural kernels.
+                         
+    Returns:
+        np.ndarray: A coordinate array of shape (target_len, 3)
+    """
+    parser = PDBParser(QUIET=True)
+    structure = parser.get_structure("protein_target", pdb_path)
+    
+    # Isolate specified model and chain
+    model = structure[0]
+    if chain_id not in model:
+        available_chains = [c.id for c in model.get_chains()]
+        raise KeyError(f"Chain '{chain_id}' not found in PDB. Available: {available_chains}")
+    
+    chain = model[chain_id]
+    
+    coords = []
+    skipped_residues = 0
+    
+    for residue in chain.get_residues():
+        # Filter out heteroatoms (water molecules, ligands, etc.)
+        if residue.id[0] != " ":
+            continue
+            
+        if atom_type in residue:
+            atom = residue[atom_type]
+            # Use .get_coord() to automatically resolve alternative conformations (altloc)
+            coords.append(atom.get_coord())
+        else:
+            # Fallback: If a CA is missing (rare but happens in low-res experimental loops)
+            # Fill with a dummy coordinate to preserve absolute index alignment
+            coords.append([np.nan, np.nan, np.nan])
+            skipped_residues += 1
+
+    coord_array = np.array(coords, dtype=np.float32)
+    
+    # Handle structural discrepancies vs. sequence models
+    if target_len is None:
+        logger.warning(
+            f"Did not receive PDB `target_len` information and thus can't check for "
+            f"matching sequence lengths."
+        )
+    else:
+        if len(coord_array) != target_len:
+            logger.warning(
+                f"PDB residue count ({len(coord_array)}) mismatches "
+                f"target sequence length ({target_len})."
+            )
+
+            if len(coord_array) > target_len:
+                # Truncate if PDB contains expression tags or trailing unmodeled regions
+                coord_array = coord_array[:target_len]
+            else:
+                # Pad with NaNs if the PDB structure drops unresolved terminal tails
+                padding = np.full((target_len - len(coord_array), 3), np.nan)
+                coord_array = np.vstack([coord_array, padding])
+            
+    # Impute any localized missing residues using nearby neighbors so kernel math doesn't fail
+    if np.isnan(coord_array).any():
+        coord_array = impute_missing_coordinates(coord_array)
+    return coord_array
+
+
+def impute_missing_coordinates(coord_array):
+    """Linearly interpolates isolated NaN coordinates to prevent matrix failures."""
+    n_positions = coord_array.shape[0]
+    collection = []
+    for i in range(n_positions):
+        if np.isnan(coord_array[i]).any():
+            collection.append(i + 1)
+            # Look for the closest valid preceding and succeeding coordinates
+            prev_idx = next((j for j in range(i - 1, -1, -1) if not np.isnan(coord_array[j]).any()), None)
+            next_idx = next((j for j in range(i + 1, n_positions) if not np.isnan(coord_array[j]).any()), None)
+            
+            if prev_idx is not None and next_idx is not None:
+                coord_array[i] = (
+                    coord_array[prev_idx] + 
+                    (coord_array[next_idx] - coord_array[prev_idx]) * 
+                    ((i - prev_idx) / (next_idx - prev_idx))
+                )
+            elif prev_idx is not None:
+                coord_array[i] = coord_array[prev_idx]
+            elif next_idx is not None:
+                coord_array[i] = coord_array[next_idx]
+    if collection:
+        logger.info(f"Found NaN in PDB coordinates at residue(s) {collection} (1-indexed)")
+    return coord_array
+

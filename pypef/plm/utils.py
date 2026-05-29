@@ -3,7 +3,6 @@
 
 import os
 import re
-from typing import Literal
 import warnings
 import numpy as np
 import torch
@@ -15,7 +14,6 @@ from safetensors.torch import load_file
 from transformers import set_seed, AutoConfig
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
-from pypef.utils.helpers import tqdm
 ts_logging.set_verbosity_error()
 
 import logging
@@ -213,55 +211,6 @@ def extract_mean_or_pos_embeddings(
         # Pulls out exactly full_sequence_embeddings[i, mut_indices[i], :] for every row i
         site_embeddings = full_sequence_embeddings[batch_indices, mut_indices_tensor]
         return site_embeddings
-
-
-def get_plm_embeddings(
-        tokenized_sequences, 
-        plm_inference_function, 
-        model,
-        wt_input_ids,  # wt seq. token
-        attention_mask,
-        mode: Literal["mean", "positional"] = "mean", 
-        extract_conditional_aa_prob: bool = False,
-        batch_size:int = 250,
-        variants: str | None = None,
-        verbose: bool = True,
-        **embedding_func_kwargs
-):
-    desc=f"Getting PLM embeddings (mode={mode})"
-    if extract_conditional_aa_prob:
-        desc=f"Getting AA cond. probs. from PLM embeddings"
-    pbar = tqdm(range(0, len(tokenized_sequences), batch_size), desc=desc, disable=not verbose)
-    extract_emb = True
-    processed_embs = []
-    for i in pbar:
-        start_idx = i
-        end_idx = min(i + batch_size, len(tokenized_sequences))
-        batch_seqs = tokenized_sequences[start_idx:end_idx]
-        if extract_conditional_aa_prob:
-            extract_emb = False
-
-        full_embs = plm_inference_function(
-            tokenized_sequences=batch_seqs, model=model, wt_input_ids=wt_input_ids, 
-            attention_mask=attention_mask, extract_emb=extract_emb, 
-            extract_conditional_aa_prob=extract_conditional_aa_prob, **embedding_func_kwargs
-        )
-        batch_variants = None
-        if variants is not None:
-            batch_variants = variants[start_idx:end_idx]
-        if extract_conditional_aa_prob:
-            embs = full_embs
-        else:
-            embs = extract_mean_or_pos_embeddings(full_embs, mode=mode, mutation_strings=batch_variants)
-            
-        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)}")
-        processed_embs.append(embs)
-        if end_idx >= len(tokenized_sequences):
-            final_rows = sum(x.shape[0] for x in processed_embs)
-            final_shape = (final_rows, *processed_embs[0].shape[1:])
-            pbar.set_description(f"{desc}: final shape={final_shape}")
-    processed_embs = torch.cat(processed_embs, dim=0)
-    return processed_embs
 
 
 def get_default_cache_dir():
@@ -501,3 +450,53 @@ def load_model_and_tokenizer__(
         )
     logger.info("Model and tokenizer loaded successfully...")
     return model, tokenizer
+
+
+class KermutFeaturizer:
+    def __init__(self, aa_cond_probs, struct_coords, wt_seq):
+        """
+        Direct API connector for Kermut without disk writes.
+        
+        Args:
+            aa_cond_probs (Tensor): Shape [L, 20] (conditional probabilities)
+            struct_coords (NDArray/Tensor): Shape [L, 3] (3D coordinates)
+            wt_seq (str): The raw wild-type sequence string (length L)
+        """
+        self.wt_seq = wt_seq
+        self.device = aa_cond_probs.device
+        
+        # Ensure everything is a PyTorch tensor on the same device for fast kernel math
+        self.aa_cond_probs = aa_cond_probs.float()
+        self.struct_coords = torch.tensor(struct_coords, device=self.device).float() if isinstance(struct_coords, np.ndarray) else struct_coords.float()
+        
+        # Standard Amino Acid alphabet map used by Kermut/ProteinMPNN
+        self.aa_alphabet = "ACDEFGHIKLMNPQRSTVWY"
+        self.aa_to_idx = {aa: idx for idx, aa in enumerate(self.aa_alphabet)}
+
+    def featurize_variant(self, mutation_str):
+        """
+        Converts a mutation string like 'M1A' into its respective matrix features.
+        Supports single or multiple mutations.
+        """
+        if mutation_str == "WT" or mutation_str == "wildtype":
+            # For WT, return dummy/neutral values or standard base tokens
+            return {"prob_vectors": torch.zeros((1, 20), device=self.device), 
+                    "coords": torch.zeros((1, 3), device=self.device)}
+        
+        mutations = mutation_str.split(":") # Handles multi-mutants separated by colons
+        prob_vectors = []
+        coords = []
+        
+        for mut in mutations:
+            wt_aa = mut[0]
+            pos = int(mut[1:-1]) - 1 # Convert 1-based PDB index to 0-based matrix index
+            mut_aa = mut[-1]
+            
+            # Fetch the precise row belonging to this residue position
+            prob_vectors.append(self.aa_cond_probs[pos])
+            coords.append(self.struct_coords[pos])
+            
+        return {
+            "prob_vectors": torch.stack(prob_vectors), # Shape [num_mutations, 20]
+            "coords": torch.stack(coords)             # Shape [num_mutations, 3]
+        }
