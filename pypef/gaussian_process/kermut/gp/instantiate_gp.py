@@ -8,7 +8,6 @@ from typing import Dict, Tuple, Any, Optional
 import torch
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import HalfCauchyPrior
-from omegaconf import DictConfig
 
 from pypef.gaussian_process.kermut.gp.kermut_gp import KermutGP
 from pypef.gaussian_process.kermut.kernels.structure_kernel import StructureKernel

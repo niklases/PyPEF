@@ -9,7 +9,6 @@ from typing import Literal, Tuple, Optional
 from gpytorch.models import ExactGP
 from gpytorch.means import ConstantMean, LinearMean
 from gpytorch.distributions import MultivariateNormal
-from omegaconf import DictConfig
 from gpytorch.likelihoods import GaussianLikelihood
 
 from pypef.gaussian_process.kermut.kernels.composite_kernel import CompositeKernel
