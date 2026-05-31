@@ -14,6 +14,10 @@ from os.path import isfile, join
 from typing import Union
 import warnings
 import gc
+from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
+from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
+from pypef.gaussian_process.kermut.gp.predict import predict
+from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
 import torch
 import gpytorch
 import numpy as np
@@ -535,6 +539,9 @@ class DCALLMHybridModel:
         # Initialize dictionaries for embeddings
         self.embs_ttrain = {}
         self.embs_ttest = {}
+        self.zero_shot_ttrain = {}
+        self.zero_shot_ttest = {}
+        self.aa_cond_probs = {}
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
@@ -583,18 +590,36 @@ class DCALLMHybridModel:
             self.all_llm_ttest_scores.append(self.y_llm_ttest)
 
             if self.gauss_opt:
-                self.embs_ttest[llm_name] = get_plm_embeddings(
-                    x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
-                    mode="mean", wt_structure_input_ids=wt_struct_ids
-                )
-
-                # TODO: Add/test aa_cond_probs and struct_array_coords
-
                 self.embs_ttrain[llm_name] = get_plm_embeddings(
                     x_tok_llm_ttrain, base_model, wt_input_ids, 
                     attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
                 )
 
+                self.embs_ttest[llm_name] = get_plm_embeddings(
+                    x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
+                    mode="mean", wt_structure_input_ids=wt_struct_ids
+                )
+
+                self.aa_cond_probs[llm_name] = plm_inference(
+                    attention_mask=attention_mask,
+                    wt_input_ids=wt_input_ids,
+                    model=base_model,
+                    tokenized_sequences = None,
+                    extract_probs=True, 
+                    wt_structure_input_ids=wt_struct_ids,
+                    extract_conditional_aa_prob=True,
+                    tokenizer=tokenizer
+                )
+
+                self.zero_shot_ttrain[llm_name] = plm_inference(
+                    x_tok_llm_ttrain, wt_input_ids, attention_mask, 
+                    base_model, wt_structure_input_ids=wt_struct_ids
+                )
+
+                self.zero_shot_ttest[llm_name] = plm_inference(
+                    x_tok_llm_ttest, wt_input_ids, attention_mask, 
+                    base_model, wt_structure_input_ids=wt_struct_ids
+                )
 
             if self.lora_train:
                 logger.info('Refining/training the model... gradient calculation adds a computational '
@@ -652,72 +677,63 @@ class DCALLMHybridModel:
             emb_esm_ttest = self.embs_ttest.get('esm1v')
             emb_prosst_ttest = self.embs_ttest.get('prosst')
 
-            # Use the explicit multi-kernel setup
-            if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:
-                llm_name = "ESM1v+ProSST"
-                emb_ttrain = torch.cat([emb_esm_ttrain, emb_prosst_ttrain], dim=-1)
-                emb_ttest = torch.cat([emb_esm_ttest, emb_prosst_ttest], dim=-1)
-                # Run the Retrieval Layer over the joint space
-                # TODO: Check effect of using KNN (with and without positional (or mean) embeddings)
-                self.knn_retriever = KNNFitnessRetrieval(k=5)
-                self.knn_retriever.fit(emb_ttrain, torch.as_tensor(self.y_ttrain).to(self.device))
-                train_knn_features = self.knn_retriever.retrieve(emb_ttrain)
-                ttest_knn_features = self.knn_retriever.retrieve(emb_ttest)
-                # Group 1 (Sequence Kernel): Pure ESM-1v sequence signal
-                # Group 2 (Structure Kernel): ProSST embeddings + the learned KNN context features
-                struct_features_ttrain = torch.cat([emb_prosst_ttrain, train_knn_features], dim=-1)
-                emb_ttrain = torch.cat([emb_esm_ttrain, struct_features_ttrain], dim=-1).to(
-                    dtype=torch.float32, device=self.device)
+            zs_prosst_ttrain = self.zero_shot_ttrain.get('prosst')
+            zs_prosst_ttest = self.zero_shot_ttest.get('prosst')
 
-                struct_features_ttest = torch.cat([emb_prosst_ttest, ttest_knn_features], dim=-1)
-                emb_ttest = torch.cat([emb_esm_ttest, struct_features_ttest], dim=-1).to(
-                    dtype=torch.float32, device=self.device)
-                self.gp_model = get_gp_kernel_model(
-                    y_train=self.y_ttrain, 
-                    x_tokseqs_seq_kernel_train=emb_esm_ttrain, 
-                    x_tokseqs_struct_kernel_train=struct_features_ttrain, 
-                    device=self.device, train=True
+            aa_cond_probs_prosst = self.aa_cond_probs.get('prosst')
+
+            # Use the explicit multi-kernel setup
+            if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:  # TOFO: See/add multi PLM usage
+                llm_name = "ESM1v+ProSST"
+
+                train_inputs = prepare_kermut_inputs(
+                    seqs=None,  # TODO: add sequences as input
+                    x_embed=emb_prosst_ttrain,
+                    x_zero_shot=zs_prosst_ttrain
                 )
-            elif emb_esm_ttrain is not None:
-                self.gp_model = get_gp_kernel_model(
-                    y_train=self.y_ttrain,
-                    x_tokseqs_seq_kernel_train=emb_esm_ttrain,
-                    x_tokseqs_struct_kernel_train=emb_prosst_ttrain,
-                    device=self.device,
-                    opt_steps=100,
-                    train=True
+
+                struct_coords = extract_pdb_coords(
+                    self.pdb_struct,
+                    target_len=None  # TODO: len(wt_seq)
                 )
-                emb_ttrain = emb_esm_ttrain
-                emb_ttest = emb_esm_ttest
-            elif emb_prosst_ttrain is not None:
-                self.gp_model = get_gp_kernel_model(
-                    y_train=self.y_ttrain, 
-                    x_tokseqs_seq_kernel_train=emb_prosst_ttrain, 
-                    device=self.device, train=True
+
+                # Option A: Using RBF (Default)
+                gp, likelihood = instantiate_gp(
+                    train_inputs=train_inputs,
+                    train_targets=self.y_ttrain.cpu(),
+                    gp_inputs={"aa_cond_probs": aa_cond_probs_prosst.cpu(), "struct_coords": struct_coords, "wt_seq": None},  # TODO: Add WT seq
+                    use_structure_kernel=True,
+                    use_sequence_kernel=True,
+                    sequence_kernel_type="RBF",
+                    use_zero_shot=True,
+                    use_gpu=False
                 )
-                emb_ttrain = emb_prosst_ttrain
-                emb_ttest = emb_prosst_ttest
+
+                # Train
+                gp, likelihood = optimize_gp(gp, likelihood, train_inputs, self.y_ttrain.cpu(), lr=0.05, n_steps=150)
+
+                # Predict
+
+                gp_pred_ttrain, _test_variances = predict(gp, likelihood, train_inputs)
+
+                test_inputs = prepare_kermut_inputs(
+                    seqs=None,
+                    x_embed=emb_prosst_ttest,
+                    x_zero_shot=zs_prosst_ttest
+                )
+
+                self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
+
             else:
                 raise RuntimeError("No valid embeddings found for GP optimization.")
                 
-            likelihood = self.gp_model.likelihood
-            self.gp_model.eval()
-            likelihood.eval()
-            with torch.no_grad(), gpytorch.settings.fast_pred_var():
-                with warnings.catch_warnings():
-                     # site-packages\gpytorch\models\exact_gp.py:299: GPInputWarning: The input matches
-                     # the stored training data. Did you forget to call model.train()?
-                    warnings.simplefilter("ignore")
-                    gp_pred_ttrain = likelihood(self.gp_model(emb_ttrain)).mean.detach().cpu().numpy()
-                gp_pred_ttest = likelihood(self.gp_model(emb_ttest))
-                self.y_gp_opt_ttest = gp_pred_ttest.mean.detach().cpu().numpy()
-                logger.info(
+            logger.info(
                     f"{llm_name} supervised Gaussian process optimized performance: "
                     f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
                     f"(N={len(self.y_ttrain)}), "
                     f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
                     f"(N={len(self.y_ttest)})"
-                )
+            )
             
     def train_and_optimize(self) -> tuple:
         """

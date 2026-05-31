@@ -981,14 +981,10 @@ def test_gaussian_process_opt():
     print("Zero-shot ProSST Spearman Test:", spearmanr(y_test.cpu().numpy(), x_zero_shot_test.cpu().numpy()))
 
     # Align token dimensions and create positional mapping
-    train_inputs, test_inputs = prepare_kermut_inputs(
-        wt_seq=wt_seq,
-        seqs_train=s_train_blat,
-        seqs_test=s_test_blat,
-        x_embed_train=x_prosst_emb_train,
-        x_embed_test=x_prosst_emb_test,
-        x_zero_shot_train=x_zero_shot_train,
-        x_zero_shot_test=x_zero_shot_test
+    train_inputs = prepare_kermut_inputs(
+        seqs=s_train_blat,
+        x_embed=x_prosst_emb_train,
+        x_zero_shot=x_zero_shot_train
     )
 
     # Option A: Using RBF (Default)
@@ -1007,7 +1003,12 @@ def test_gaussian_process_opt():
     gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
 
     # Predict
-    test_means_pred, test_variances = predict(gp, likelihood, test_inputs)
+    test_inputs = prepare_kermut_inputs(
+        seqs=s_test_blat,
+        x_embed=x_prosst_emb_test,
+        x_zero_shot=x_zero_shot_test
+    )
+    test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
 
     print("Supervised Kermut Spearman Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3) 
