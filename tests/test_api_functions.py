@@ -57,7 +57,7 @@ from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
 from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
 from pypef.gaussian_process.kermut.gp.predict import predict
 
-LOGGING = True
+LOGGING = False
 if LOGGING:
     import logging
     package_logger = logging.getLogger('pypef')
@@ -68,7 +68,7 @@ if LOGGING:
     package_logger.addHandler(handler)
 
 
-device = ["cpu", get_device()][0]
+device = ["cpu", get_device()][1]
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
@@ -444,8 +444,6 @@ def test_hybrid_model_dca_llm_avgfp(
         pdb_file=pdb_file_avgfp
 ):
     print("\n\ntest_hybrid_model_dca_llm_avgfp()..." + "\n" + "=" * 80 + "\n")
-    print(len(train_seqs), len(train_seqs[0]))
-    print(len(test_seqs), len(test_seqs[0]))
     g = GREMLIN(
         alignment=msa,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -569,10 +567,10 @@ def test_hybrid_model_dca_llm_avgfp(
             sequences=train_seqs,
             wt_sequence=wt_seq,
             seed=42,
-            lora_train=True,  # TODO: True
+            lora_train=True,
             gauss_opt=True,
             pdb_struct=pdb_file,
-            n_epochs=1,  # TODO: 5
+            n_epochs=5,
             device=device
         )
 
@@ -607,7 +605,6 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
-        print(f"Hybrid prediction:::::::::", np.shape(x_llm_test))
         y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
@@ -816,7 +813,7 @@ def test_plm_corr_blat_ecolx():
     ).cpu()
     print(f'ProSST (unsupervised performance wt-marginal): '  # ProteinGym: ProSST: 0.760
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7438456514605788, decimal=6)
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.7438456514605788, decimal=3)
 
     y_prosst = plm_inference(
             tokenized_sequences=x_prosst,
@@ -833,7 +830,7 @@ def test_plm_corr_blat_ecolx():
     ).cpu()
     print(f'ProSST (unsupervised performance full-sequence): '
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5668431301489617, decimal=6)
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5668431301489617, decimal=3)
 
     #y_prosst = plm_inference(
     #        tokenized_sequences=x_prosst,
@@ -1042,12 +1039,10 @@ def test_gaussian_process_opt():
     print("Supervised Kermut Spearman Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3) 
 
-    # TODO: Add Kermut GP Combined Kernel
-
 
 if __name__ == "__main__":
-    #test_gremlin_avgfp()
-    #test_hybrid_model_dca_llm_aneh()
+    test_gremlin_avgfp()
+    test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()

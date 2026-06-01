@@ -19,14 +19,12 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from pypef.gaussian_process.kermut.tokenizer import Tokenizer
 
 
-
 def prepare_kermut_inputs(
     seqs: List[str],
     x_embed: torch.Tensor,
     x_zero_shot: torch.Tensor
 ) -> Tuple[torch.Tensor, ...]:
     """Generates the properly routed and structured tensor tuples for training and testing.
-    
     Handles internal structural alignment constraints using Kermut's specific Tokenizer.
     """
     tokenizer = Tokenizer()

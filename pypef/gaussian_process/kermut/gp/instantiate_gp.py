@@ -29,7 +29,10 @@ def instantiate_gp(
     sequence_kernel_kwargs: Optional[Dict[str, Any]] = None,
     structure_kernel_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Tuple[KermutGP, GaussianLikelihood]:
-    """Instantiates a KermutGP model by explicitly constructing sequence and structural kernels."""
+    """Instantiates a KermutGP model by explicitly constructing sequence and structural kernels.
+    Sequence and structure kernels can be used providing two different model inputs (e.g. sequence 
+    kernel input information from ESM and structure kernel information from ProSST or PMPNN). 
+    """
     
     train_inputs = tuple(
         x.float() if (isinstance(x, torch.Tensor) and torch.is_floating_point(x)) else x 
