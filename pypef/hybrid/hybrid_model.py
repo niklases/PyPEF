@@ -73,7 +73,8 @@ class DCALLMHybridModel:
             y_train: np.ndarray,
             llm_model_input: dict | None = None,
             x_dca_wt: np.ndarray | None = None,
-            variants: list[str] | None = None,
+            sequences: list[str] | None = None,
+            wt_sequence: str | None = None,
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
@@ -116,7 +117,8 @@ class DCALLMHybridModel:
             self.llm_attention_mask = None
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1)]
-        self.variants = variants
+        self.sequences = sequences
+        self.wt_sequence = wt_sequence
         if alphas is None:
             alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
@@ -153,6 +155,15 @@ class DCALLMHybridModel:
         ) = None, None, None, None, None, None, None, None, None
         self.progress_cb = progress_cb
         self.abort_cb = abort_cb
+        if self.gauss_opt and (
+            self.sequences is None or self.wt_sequence is None or 
+            self.pdb_struct is None
+        ):
+            raise RuntimeError(
+                "Gaussian optimization requires variant and wt "
+                "sequence inputs (`sequences` and `wt_sequence`) "
+                "as well as the path to the wild-type protein "
+                "structure file in PDB format (`pdb_struct`).")
         self.train_and_optimize()
 
     @staticmethod
@@ -343,11 +354,12 @@ class DCALLMHybridModel:
                     y_ensemble += final_betas[i] * p_scaled
 
             final_corr = self.spearmanr(y_true_np, y_ensemble)
+            self.betas = final_betas
+            self.betas_str = f"[{', '.join(f'{x:.2e}' for x in self.betas)}]"
             logger.info(
                 f"Ensemble Opt. Spearman: {final_corr:.3f} (N_test={len(y_ensemble)}) | "
-                f"Ensemble weights ({len(final_betas)}): {final_betas}"
+                f"Ensemble weights ({len(final_betas)}): {self.betas_str}"
             )
-            self.betas = final_betas
             return final_betas
     
     def adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
@@ -443,6 +455,7 @@ class DCALLMHybridModel:
         logger.info(f"Ensemble-optimized Spearman: {final_corr:.3f} (N_opt={len(y)}) "
                     f"| Weights: {final_betas} (N_predictors={len(predictions)})")
         self.betas = final_betas
+        self.betas_str = f"[{', '.join(f'{x:.2e}' for x in self.betas)}]"
         return final_betas
 
     def get_subsplits_train(self, train_size_fit: float = 0.66):
@@ -476,9 +489,9 @@ class DCALLMHybridModel:
         arrays_to_split = [self.x_train_dca, self.y_train]
         
         # Track if we are splitting variants to handle indexing dynamically
-        has_variants = self.variants is not None
-        if has_variants:
-            arrays_to_split.append(self.variants)  # TODO: Add multi-substituted variant data support
+        has_sequences = self.sequences is not None
+        if has_sequences:
+            arrays_to_split.append(self.sequences)
 
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
@@ -496,13 +509,13 @@ class DCALLMHybridModel:
         self.y_ttest = splits[3]
         
         # Dynamically set index based on whether variants were included
-        if has_variants:
-            self.variants_ttrain = splits[4]
-            self.variants_ttest = splits[5]
+        if has_sequences:
+            self.sequences_ttrain = splits[4]
+            self.sequences_ttest = splits[5]
             current_idx = 6
         else:
-            self.variants_ttrain = None
-            self.variants_ttest = None
+            self.sequences_ttrain = None
+            self.sequences_ttest = None
             current_idx = 4
         
         if self.llm_keys is not None:
@@ -671,37 +684,54 @@ class DCALLMHybridModel:
                 self.all_llm_ttest_scores.append(self.y_llm_lora_ttest)
         
         if self.gauss_opt:
-            emb_esm_ttrain = self.embs_ttrain.get('esm1v')
-            emb_prosst_ttrain = self.embs_ttrain.get('prosst')
+            # TODO: Add both PLM options for GP and LoRA training
+            emb_ttrain = self.embs_ttrain.get('prosst')
+            if emb_ttrain is None:
+                emb_ttrain = self.embs_ttrain.get('esm1v')
             
-            emb_esm_ttest = self.embs_ttest.get('esm1v')
-            emb_prosst_ttest = self.embs_ttest.get('prosst')
+            emb_ttest = self.embs_ttest.get('prosst')
+            if emb_ttest is None:
+                emb_ttest = self.embs_ttest.get('esm1v')
 
-            zs_prosst_ttrain = self.zero_shot_ttrain.get('prosst')
-            zs_prosst_ttest = self.zero_shot_ttest.get('prosst')
+            zs_ttrain = self.zero_shot_ttrain.get('prosst')
+            if zs_ttrain is None:
+                zs_ttrain = self.zero_shot_ttrain.get('esm1v')
 
-            aa_cond_probs_prosst = self.aa_cond_probs.get('prosst')
+            zs_ttest = self.zero_shot_ttest.get('prosst')
+            if zs_ttest is None:
+                zs_ttest = self.zero_shot_ttest.get('esm1v')
+
+            aa_cond_probs = self.aa_cond_probs.get('prosst')
+            if aa_cond_probs is None:
+                aa_cond_probs = self.aa_cond_probs.get('esm1v')
 
             # Use the explicit multi-kernel setup
-            if emb_esm_ttrain is not None and emb_prosst_ttrain is not None:  # TOFO: See/add multi PLM usage
+            if True:  # emb_esm_ttrain is not None and emb_prosst_ttrain is not None:  # TOFO: See/add multi PLM usage
                 llm_name = "ESM1v+ProSST"
 
                 train_inputs = prepare_kermut_inputs(
-                    seqs=None,  # TODO: add sequences as input
-                    x_embed=emb_prosst_ttrain,
-                    x_zero_shot=zs_prosst_ttrain
+                    seqs=self.sequences_ttrain,
+                    x_embed=emb_ttrain,
+                    x_zero_shot=zs_ttrain
                 )
 
+                if self.wt_sequence is None:
+                    target_len = len(self.sequences[0])
+                else:
+                    target_len = len(self.wt_sequence)
                 struct_coords = extract_pdb_coords(
                     self.pdb_struct,
-                    target_len=None  # TODO: len(wt_seq)
+                    target_len=target_len
                 )
 
-                # Option A: Using RBF (Default)
-                gp, likelihood = instantiate_gp(
+                self.gp, self.likelihood = instantiate_gp(
                     train_inputs=train_inputs,
-                    train_targets=self.y_ttrain.cpu(),
-                    gp_inputs={"aa_cond_probs": aa_cond_probs_prosst.cpu(), "struct_coords": struct_coords, "wt_seq": None},  # TODO: Add WT seq
+                    train_targets=torch.tensor(self.y_ttrain).cpu(),
+                    gp_inputs={
+                        "aa_cond_probs": aa_cond_probs.cpu(), 
+                        "struct_coords": struct_coords, 
+                        "wt_seq": self.wt_sequence
+                    },
                     use_structure_kernel=True,
                     use_sequence_kernel=True,
                     sequence_kernel_type="RBF",
@@ -710,27 +740,30 @@ class DCALLMHybridModel:
                 )
 
                 # Train
-                gp, likelihood = optimize_gp(gp, likelihood, train_inputs, self.y_ttrain.cpu(), lr=0.05, n_steps=150)
-
-                # Predict
-
-                gp_pred_ttrain, _test_variances = predict(gp, likelihood, train_inputs)
-
-                test_inputs = prepare_kermut_inputs(
-                    seqs=None,
-                    x_embed=emb_prosst_ttest,
-                    x_zero_shot=zs_prosst_ttest
+                self.gp, self.likelihood = optimize_gp(
+                    self.gp, self.likelihood, train_inputs, torch.tensor(self.y_ttrain).cpu(), 
+                    lr=0.05, n_steps=150
                 )
 
-                self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
+                # Predict
+                #gp_pred_ttrain, _test_variances = predict(gp, likelihood, train_inputs)
+
+                test_inputs = prepare_kermut_inputs(
+                    seqs=self.sequences_ttest,
+                    x_embed=emb_ttest,
+                    x_zero_shot=zs_ttest
+                )
+
+                self.y_gp_opt_ttest, _test_variances = predict(self.gp, self.likelihood, test_inputs)
+                self.y_gp_opt_ttest = self.y_gp_opt_ttest.detach().cpu().numpy()
 
             else:
                 raise RuntimeError("No valid embeddings found for GP optimization.")
                 
             logger.info(
                     f"{llm_name} supervised Gaussian process optimized performance: "
-                    f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
-                    f"(N={len(self.y_ttrain)}), "
+                    #f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
+                    #f"(N={len(self.y_ttrain)}), "
                     f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
                     f"(N={len(self.y_ttest)})"
             )
@@ -774,7 +807,7 @@ class DCALLMHybridModel:
             self.train_llm()
             # Add LLM predictors to the list
             predictors.extend(self.all_llm_ttest_scores)
-            performance_info_ttest += f"PLM performances:"
+            performance_info_ttest += f"PLM performances: "
             for scores in self.all_llm_ttest_scores:
                 performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
             performance_info_ttest += "|| "
@@ -794,15 +827,16 @@ class DCALLMHybridModel:
             self,
             x_dca: np.ndarray,
             x_llm_dict: dict | None = None,
-            variants: list[str] | None = None,
+            sequences: list[str] | None = None,
             verbose: bool = False
     ) -> np.ndarray:
-        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {str(self.betas)}...")
+        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {self.betas_str}...")
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 
         predictors = [y_dca, y_ridge]
-        llm_embs_ttest = {}
+        llm_embs_pred, zero_shot_pred = {}, {}
+        y_gp_list = []
 
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
@@ -834,7 +868,7 @@ class DCALLMHybridModel:
                     predictors.append(y_lora.detach().cpu().numpy())
 
                 if self.gauss_opt:
-                    llm_embs_ttest[llm_name] = get_plm_embeddings(
+                    llm_embs_pred[llm_name] = get_plm_embeddings(
                         x_input, 
                         current_llm['llm_base_model'], 
                         current_llm['wt_input_ids'], 
@@ -843,39 +877,25 @@ class DCALLMHybridModel:
                         wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
 
+                    zero_shot_pred[llm_name] = plm_inference(
+                        x_input, current_llm['wt_input_ids'], current_llm['llm_attention_mask'], 
+                        current_llm['llm_base_model'], wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
+                    )
+
+                    pred_inputs = prepare_kermut_inputs(
+                        seqs=sequences,
+                        x_embed=llm_embs_pred[llm_name],
+                        x_zero_shot=zero_shot_pred[llm_name]
+                    )
+
+                    y_gp_opt_pred, _test_variances = predict(self.gp, self.likelihood, pred_inputs)
+                    y_gp_opt_pred = y_gp_opt_pred.detach().cpu().numpy()
+
+                    y_gp_list.append(y_gp_opt_pred)
+
+                    # TODO: Add both PLM integrations
+
         if self.gauss_opt:
-            self.gp_model.eval()
-            esm_emb = llm_embs_ttest.get('esm1v')
-            prosst_emb = llm_embs_ttest.get('prosst')
-
-            if esm_emb is not None and prosst_emb is not None:
-                # 1. Create the joint query space to find structurally & evolutionarily similar training variants
-                joint_query = torch.cat([esm_emb, prosst_emb], dim=-1)
-                
-                # 2. Retrieve KNN features (Ensure self.knn_retriever was saved during training)
-                knn_features = self.knn_retriever.retrieve(joint_query)
-                knn_features = knn_features.to(dtype=torch.float32, device=self.device)
-                
-                # 3. Assemble the exact layout the GP expects: [ ESM | ProSST | KNN ]
-                struct_features = torch.cat([prosst_emb, knn_features], dim=-1)
-                gp_input = torch.cat([esm_emb, struct_features], dim=-1)
-            elif esm_emb is not None:
-                gp_input = esm_emb
-            else:
-                gp_input = prosst_emb
-
-            gp_input = torch.as_tensor(gp_input, dtype=torch.float32)
-            #gp_input = (gp_input - self.gp_scaler_mean) / self.gp_scaler_std
-            y_gp_list = []
-            predict_batch_size = 100  # Adjust based on VRAM, 100 is very safe
-            
-            gp_input_batches = torch.split(gp_input, predict_batch_size)
-            
-            with torch.no_grad(), gpytorch.settings.fast_pred_var():
-                for batch in gp_input_batches:
-                    batch = batch.to(dtype=torch.float32, device=self.device)
-                    batch_output = self.gp_model.likelihood(self.gp_model(batch))
-                    y_gp_list.append(batch_output.mean.detach().cpu().numpy())
             
             y_gp = np.concatenate(y_gp_list)
             predictors.append(y_gp)

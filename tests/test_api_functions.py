@@ -49,7 +49,7 @@ from pypef.plm.prosst_lora_tune import (
     get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer
 )
-from pypef.plm.utils import KermutFeaturizer, hybrid_corr_mse_loss
+from pypef.plm.utils import hybrid_corr_mse_loss
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
 from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
@@ -57,8 +57,18 @@ from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
 from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
 from pypef.gaussian_process.kermut.gp.predict import predict
 
+LOGGING = True
+if LOGGING:
+    import logging
+    package_logger = logging.getLogger('pypef')
+    package_logger.setLevel(logging.INFO)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(filename)s:%(lineno)d -- %(message)s")
+    handler.setFormatter(formatter)
+    package_logger.addHandler(handler)
 
-device = ["cpu", get_device()][1]
+
+device = ["cpu", get_device()][0]
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
@@ -95,7 +105,6 @@ _m_train_avgfp, _m_test_avgfp, s_train_avgfp, s_test_avgfp, y_train_avgfp, y_tes
     mutants, sequences, y, train_size=400, test_size=400, random_state=42
 )
 
-
 msa_file_aneh = os.path.abspath(
     os.path.join(__file__, '../../datasets/ANEH/ANEH_jhmmer.a2m'
 ))
@@ -129,7 +138,6 @@ m_train_blat, m_test_blat, s_train_blat, s_test_blat, y_train_blat, y_test_blat 
     mutants, sequences, y, train_size=400, test_size=400, random_state=42
 )
 
-
 train_seqs_aneh, _train_vars_aneh, train_ys_aneh = get_sequences_from_file(ls_b)
 test_seqs_aneh, _test_vars_aneh, test_ys_aneh = get_sequences_from_file(ts_b)
 
@@ -139,7 +147,6 @@ def get_model_hash(model):
     for param in model.parameters():
         hash_gen.update(param.detach().cpu().numpy().tobytes())
     return hash_gen.hexdigest()
-
 
 
 def test_gremlin_avgfp():
@@ -437,6 +444,8 @@ def test_hybrid_model_dca_llm_avgfp(
         pdb_file=pdb_file_avgfp
 ):
     print("\n\ntest_hybrid_model_dca_llm_avgfp()..." + "\n" + "=" * 80 + "\n")
+    print(len(train_seqs), len(train_seqs[0]))
+    print(len(test_seqs), len(test_seqs[0]))
     g = GREMLIN(
         alignment=msa,
         char_alphabet="ARNDCQEGHILKMFPSTWYV-",
@@ -478,9 +487,11 @@ def test_hybrid_model_dca_llm_avgfp(
             max_length=len(wt_seq) + 2
     )
     wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
-    y_pred_esm = plm_inference(tokenized_sequences=x_esm, wt_input_ids=wt_tokens, 
-                               attention_mask=esm_attention_mask, model=esm_base_model,
-                               device=device).cpu()
+    y_pred_esm = plm_inference(
+        tokenized_sequences=x_esm, wt_input_ids=wt_tokens, 
+        attention_mask=esm_attention_mask, model=esm_base_model,
+        device=device
+    ).cpu()
     np.testing.assert_almost_equal(
         spearmanr(y_train, y_pred_esm)[0], 
         0.5294118088238051, 
@@ -555,10 +566,13 @@ def test_hybrid_model_dca_llm_avgfp(
             y_train=y_train,
             llm_model_input=llm_dict,
             x_dca_wt=g.x_wt,
+            sequences=train_seqs,
+            wt_sequence=wt_seq,
             seed=42,
-            lora_train=True,
+            lora_train=True,  # TODO: True
             gauss_opt=True,
-            n_epochs=5,
+            pdb_struct=pdb_file,
+            n_epochs=1,  # TODO: 5
             device=device
         )
 
@@ -593,12 +607,14 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
-        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
+        print(f"Hybrid prediction:::::::::", np.shape(x_llm_test))
+        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
+        print('hm.y_gp_opt_ttest:', spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], len(hm.y_ttest))
         print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], 0.5948787474579608, 
@@ -890,21 +906,34 @@ def test_gaussian_process_opt():
     assert x_prosst_emb_test.shape == (400, 768), x_prosst_emb_test.shape
     x_combined_test = torch.cat([x_esm_emb_test, x_prosst_emb_test], dim=-1)  # Pay attention to correct order!
     x_combined_train = torch.cat([x_esm_emb_train, x_prosst_emb_train], dim=-1)
-    assert x_combined_test.shape == x_combined_train.shape == (400, 2048), (x_combined_test.shape, x_combined_train.shape)
+    assert x_combined_test.shape == x_combined_train.shape == (400, 2048), (
+        x_combined_test.shape, x_combined_train.shape)
     print("Training models...\n-------------------\nESM...")
-    esm_model = get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=x_esm_emb_train, device=device, train=True)
+    esm_model = get_gp_kernel_model(
+        y_train, x_tokseqs_seq_kernel_train=x_esm_emb_train, 
+        device=device, train=True
+    )
     print("ProSST...")
     # Using seq kernel 
-    prosst_model_1 = get_gp_kernel_model(y_train, x_tokseqs_seq_kernel_train=x_prosst_emb_train, device=device, train=True)
+    prosst_model_1 = get_gp_kernel_model(
+        y_train, x_tokseqs_seq_kernel_train=x_prosst_emb_train, 
+        device=device, train=True
+    )
     # Using struct kernel
-    prosst_model_2 = get_gp_kernel_model(y_train, x_tokseqs_struct_kernel_train=x_prosst_emb_train, device=device, train=True)
+    prosst_model_2 = get_gp_kernel_model(
+        y_train, x_tokseqs_struct_kernel_train=x_prosst_emb_train, 
+        device=device, train=True
+    )
     print("Combined...")
     comb_model = get_gp_kernel_model(
         y_train=y_train, x_tokseqs_seq_kernel_train=x_esm_emb_train, 
         x_tokseqs_struct_kernel_train=x_prosst_emb_train, 
         device=device, train=True
     )
-    comb_model_2 = get_gp_kernel_model(y_train=y_train, x_tokseqs_seq_kernel_train=x_combined_train, device=device, train=True)
+    comb_model_2 = get_gp_kernel_model(
+        y_train=y_train, x_tokseqs_seq_kernel_train=x_combined_train, 
+        device=device, train=True
+    )
 
     for i, (model, x_test) in enumerate(
         zip(
@@ -1013,10 +1042,12 @@ def test_gaussian_process_opt():
     print("Supervised Kermut Spearman Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3) 
 
+    # TODO: Add Kermut GP Combined Kernel
+
 
 if __name__ == "__main__":
-    test_gremlin_avgfp()
-    test_hybrid_model_dca_llm_aneh()
+    #test_gremlin_avgfp()
+    #test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()

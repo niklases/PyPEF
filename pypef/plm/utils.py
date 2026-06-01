@@ -346,7 +346,7 @@ def load_model_and_tokenizer(
 
             # Prepare the state_dict (Inject the missing key if it's not there)
             if 'cls.predictions.decoder.weight' not in state_dict:
-                logger.info("Injecting cloned embedding weights into model state dictionary for decoder.")
+                logger.info("Injecting cloned embedding weights into model state dictionary for decoder...")
                 state_dict['cls.predictions.decoder.weight'] = state_dict['prosst.embeddings.word_embeddings.weight'].clone()
         
             # Apply the weights to the model
