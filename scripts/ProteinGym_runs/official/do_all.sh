@@ -15,3 +15,5 @@ cd benchmark_runs
 for split_method in "${split_methods[@]}"; do
     ./run_over_all.sh split_method=$split_method # > output.log 2>&1 &
     done
+
+python estimate_performance.py

@@ -49,7 +49,7 @@ if [ "$is_valid" = false ]; then
     exit 1
 fi
 
-for llm in esm1v; do
+for llm in prosst+esm1v; do
     # Set max index based on split_method
     if [ "$split_method" = "fold_rand_multiples" ]; then
         max_idx=68

@@ -241,7 +241,8 @@ def main(cfg: DictConfig) -> None:
             y_train=y_train,
             llm_model_input=llm_dict_train,
             x_dca_wt=gremlin.x_wt,
-            variants=v_train,
+            sequences=s_train,
+            wt_sequence=pdb_trimmed_common_sequence,
             lora_train=False,
             gauss_opt=True,
             pdb_struct=pdb_file,
@@ -268,7 +269,7 @@ def main(cfg: DictConfig) -> None:
         y_test_pred = hm.hybrid_prediction(
             x_dca=np.array(x_dca_test), 
             x_llm_dict=x_llm_dict_test,
-            variants=v_test
+            sequences=s_test
 
         )
         print(f"====> Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}\n")
