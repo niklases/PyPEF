@@ -54,7 +54,7 @@ for llm in prosst+esm1v; do
     if [ "$split_method" = "fold_rand_multiples" ]; then
         max_idx=68
     else   # "fold_random_5", "fold_modulo_5", "fold_contiguous_5"
-        max_idx=0 #216
+        max_idx=216
     fi
     for ((i=0; i<=max_idx; i++)); do
         echo -e "\n\nRunning DMS_idx=$i with llm=$llm and split_method=$split_method\n-----"

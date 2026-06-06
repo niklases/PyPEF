@@ -289,15 +289,14 @@ def load_model_and_tokenizer(
     # We first try a standard load. 
     # On Windows, we use the model_name (repo_id) rather than snapshot_dir 
     # to let HF attempt its internal resolution.
-    # Update same for Linux, just use model name, so commented: 
-    # load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
-    load_path = model_name
+    load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
 
     config = AutoConfig.from_pretrained(
         load_path, 
         trust_remote_code=True, 
         revision=revision, 
-        cache_dir=cache_dir
+        cache_dir=cache_dir,
+        local_files_only=exists
     )
 
     # Force the architecture to create a separate decoder layer
