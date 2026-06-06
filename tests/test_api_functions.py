@@ -375,7 +375,7 @@ def test_hybrid_model_dca_llm_aneh(
                 ['esm1v', 'prosst'][i]: x_llm_test,
         }
 
-        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
+        y_pred_test, _individual_predictions = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
         print(hm.betas, hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
@@ -605,7 +605,7 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
-        y_pred_test = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
+        y_pred_test, _ = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
@@ -995,22 +995,27 @@ def test_gaussian_process_opt():
     x_prosst_tok_train = torch.tensor(x_prosst_tok_train)
     x_prosst_tok_test = torch.tensor(x_prosst_tok_test)
         
-    x_zero_shot_train = plm_inference(
+    x_zero_shot_train_prosst = plm_inference(
         x_prosst_tok_train, wt_prosst_input_ids, prosst_attention_mask, 
         prosst_base_model, wt_structure_input_ids=wt_structure_input_ids
     )
-    x_zero_shot_test = plm_inference(
+    x_zero_shot_train_esm = plm_inference(x_esm_tok_train, wt_esm_input_ids, esm_attention_mask, esm_base_model)
+    x_zero_shot_test_prosst = plm_inference(
         x_prosst_tok_test, wt_prosst_input_ids, prosst_attention_mask, 
         prosst_base_model, wt_structure_input_ids=wt_structure_input_ids
     )
-    print("Zero-shot ProSST Spearman Train:", spearmanr(y_train.cpu().numpy(), x_zero_shot_train.cpu().numpy()))
-    print("Zero-shot ProSST Spearman Test:", spearmanr(y_test.cpu().numpy(), x_zero_shot_test.cpu().numpy()))
+    x_zero_shot_test_esm = plm_inference(x_esm_tok_test, wt_esm_input_ids, esm_attention_mask, esm_base_model)
 
-    # Align token dimensions and create positional mapping
+    print("Zero-shot ProSST Spearman Train:", spearmanr(y_train.cpu().numpy(), x_zero_shot_train_prosst.cpu().numpy()))
+    print("Zero-shot ProSST Spearman Test:", spearmanr(y_test.cpu().numpy(), x_zero_shot_test_prosst.cpu().numpy()))
+
+
+    # Only ProSST
+    #############
     train_inputs = prepare_kermut_inputs(
         seqs=s_train_blat,
         x_embed=x_prosst_emb_train,
-        x_zero_shot=x_zero_shot_train
+        x_zero_shot=x_zero_shot_train_prosst
     )
 
     # Option A: Using RBF (Default)
@@ -1032,12 +1037,138 @@ def test_gaussian_process_opt():
     test_inputs = prepare_kermut_inputs(
         seqs=s_test_blat,
         x_embed=x_prosst_emb_test,
-        x_zero_shot=x_zero_shot_test
+        x_zero_shot=x_zero_shot_test_prosst
+    )
+    test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
+    print("Supervised Kermut Spearman ProSST Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3)
+
+    # Only ESM
+    ##########
+    train_inputs = prepare_kermut_inputs(
+        seqs=s_train_blat,
+        x_embed=x_esm_emb_train,
+        x_zero_shot=x_zero_shot_train_esm
+    )
+
+    # Option A: Using RBF (Default)
+    gp, likelihood = instantiate_gp(
+        train_inputs=train_inputs,
+        train_targets=y_train.cpu(),
+        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        use_structure_kernel=True,
+        use_sequence_kernel=True,
+        sequence_kernel_type="RBF",
+        use_zero_shot=True,
+        use_gpu=False
+    )
+
+    # Train
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+
+    # Predict
+    test_inputs = prepare_kermut_inputs(
+        seqs=s_test_blat,
+        x_embed=x_esm_emb_test,
+        x_zero_shot=x_zero_shot_test_esm
+    )
+    test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
+    print("Supervised Kermut Spearman ESM1v Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+
+    # ESM(Seq.) + PROSST(Struct.)
+    train_inputs = prepare_kermut_inputs(
+        seqs=s_train_blat,
+        x_embed=x_esm_emb_train,
+        x_zero_shot=x_zero_shot_train_prosst
+    )
+
+    # Option A: Using RBF (Default)
+    gp, likelihood = instantiate_gp(
+        train_inputs=train_inputs,
+        train_targets=y_train.cpu(),
+        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        use_structure_kernel=True,
+        use_sequence_kernel=True,
+        sequence_kernel_type="RBF",
+        use_zero_shot=True,
+        use_gpu=False
+    )
+
+    # Train
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+
+    # Predict
+    test_inputs = prepare_kermut_inputs(
+        seqs=s_test_blat,
+        x_embed=x_esm_emb_test,
+        x_zero_shot=x_zero_shot_test_prosst
+    )
+    test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
+    print("Supervised Kermut Spearman ESM1v-Seq. + ProSST-Struct. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+
+    ######## Concat. Combined
+
+    # Align token dimensions and create positional mapping
+    x_combined_embeddings_train = torch.cat(
+        (x_prosst_emb_train, x_esm_emb_train), 
+        dim=-1
+    )
+
+    x_combined_embeddings_test = torch.cat(
+        (x_prosst_emb_test, x_esm_emb_test), 
+        dim=-1
+    )
+
+    # 2. FIX: Safely expand 1D zero-shot vectors to 2D [400, 1] matrices before combining
+    x_zs_train_prosst = x_zero_shot_train_prosst.unsqueeze(-1) if x_zero_shot_train_prosst.dim() == 1 else x_zero_shot_train_prosst
+    x_zs_train_esm = x_zero_shot_train_esm.unsqueeze(-1) if x_zero_shot_train_esm.dim() == 1 else x_zero_shot_train_esm
+
+    x_combined_zs_train = torch.cat(
+        (x_zs_train_prosst, x_zs_train_esm), 
+        dim=-1
+    ) # Vertically aligned columns -> Shape: [400, 2]
+
+    x_zs_test_prosst = x_zero_shot_test_prosst.unsqueeze(-1) if x_zero_shot_test_prosst.dim() == 1 else x_zero_shot_test_prosst
+    x_zs_test_esm = x_zero_shot_test_esm.unsqueeze(-1) if x_zero_shot_test_esm.dim() == 1 else x_zero_shot_test_esm
+
+    x_combined_zs_test = torch.cat(
+        (x_zs_test_prosst, x_zs_test_esm), 
+        dim=-1
+    ) # Vertically aligned columns -> Shape: [test_samples, 2]
+
+    train_inputs = prepare_kermut_inputs(
+        seqs=s_train_blat,
+        x_embed=x_combined_embeddings_train,
+        x_zero_shot=x_combined_zs_train
+    )
+
+    # Option A: Using RBF (Default)
+    gp, likelihood = instantiate_gp(
+        train_inputs=train_inputs,
+        train_targets=y_train.cpu(),
+        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        use_structure_kernel=True,
+        use_sequence_kernel=True,
+        sequence_kernel_type="RBF",
+        use_zero_shot=True,
+        use_gpu=False
+    )
+
+    # Train
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+
+    # Predict
+    test_inputs = prepare_kermut_inputs(
+        seqs=s_test_blat,
+        x_embed=x_combined_embeddings_test,
+        x_zero_shot=x_combined_zs_test
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
 
-    print("Supervised Kermut Spearman Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
-    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3) 
+    print("Supervised Kermut Spearman ESM1v + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8664669154182213, decimal=3)
+
+
 
 
 if __name__ == "__main__":

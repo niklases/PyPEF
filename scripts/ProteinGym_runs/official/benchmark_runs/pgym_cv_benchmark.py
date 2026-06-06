@@ -266,13 +266,14 @@ def main(cfg: DictConfig) -> None:
             )
             x_llm_dict_test.update({'prosst': np.asarray(x_test_prosst)})
 
-        y_test_pred = hm.hybrid_prediction(
+        y_test_pred, predictors = hm.hybrid_prediction(
             x_dca=np.array(x_dca_test), 
             x_llm_dict=x_llm_dict_test,
             sequences=s_test
-
         )
-        print(f"====> Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}\n")
+        for k, v in predictors.items():
+            print(f"{k}: {spearmanr(y_test, v)[0]:.3f}")
+        print(f"====> Hybrid Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}\n")
 
         df_pred_fold = pd.DataFrame(
             {

@@ -54,7 +54,15 @@ class KermutGP(ExactGP):
 
         self.use_zero_shot_mean = use_zero_shot_mean
         if self.use_zero_shot_mean:
-            self.mean_module = LinearMean(input_size=1, bias=True)
+            # Dynamically read feature width from the 3rd element of train_inputs
+            zero_shot_dim = 1
+            if train_inputs is not None and len(train_inputs) >= 3:
+                x_zero_train = train_inputs[2]
+                if isinstance(x_zero_train, torch.Tensor):
+                    # If it's a 2D matrix [samples, features], grab features - otherwise default to 1.
+                    zero_shot_dim = x_zero_train.size(-1) if x_zero_train.dim() > 1 else 1
+
+            self.mean_module = LinearMean(input_size=zero_shot_dim, bias=True)
         else:
             self.mean_module = ConstantMean()
 

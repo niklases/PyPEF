@@ -297,7 +297,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 x_dca_wt=x_wt,
                                 verbose=False
                             )
-                            y_test_pred = hm.hybrid_prediction(
+                            y_test_pred, _ = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test), 
                                 x_llm_dict=[
                                     None, 

@@ -304,7 +304,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             gauss_opt=gauss_opt,
                             n_epochs=50  # Only if lora_train==True
                         )
-                        y_test_pred = hm.hybrid_prediction(
+                        y_test_pred, _ = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test), 
                             x_llm_dict=[
                                 None, 

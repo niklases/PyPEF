@@ -550,6 +550,8 @@ class DCALLMHybridModel:
         self.all_llm_ttest_scores = []
         # Initialize dictionaries for embeddings
         self.all_gp_ttest_scores = []
+        self.embs_ttrain, self.scores_ttrain = {}, {}
+        self.embs_ttest, self.scores_ttest = {}, {}
         self.gp_models = {}
         self.gp_likelihoods = {}
         self.betas_str =  "DCA, DCA-Ridge, "
@@ -601,37 +603,6 @@ class DCALLMHybridModel:
             self.all_llm_ttest_scores.append(self.y_llm_ttest)
             self.betas_str += f"{llm_name}-ZS, "
 
-            if self.gauss_opt:
-                embs_ttrain = get_plm_embeddings(
-                    x_tok_llm_ttrain, base_model, wt_input_ids, 
-                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
-                )
-
-                embs_ttest = get_plm_embeddings(
-                    x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
-                    mode="mean", wt_structure_input_ids=wt_struct_ids
-                )
-
-                aa_cond_probs = plm_inference(
-                    attention_mask=attention_mask,
-                    wt_input_ids=wt_input_ids,
-                    model=base_model,
-                    tokenized_sequences = None,
-                    extract_probs=True, 
-                    wt_structure_input_ids=wt_struct_ids,
-                    extract_conditional_aa_prob=True,
-                    tokenizer=tokenizer
-                )
-
-                zero_shot_ttrain = plm_inference(
-                    x_tok_llm_ttrain, wt_input_ids, attention_mask, 
-                    base_model, wt_structure_input_ids=wt_struct_ids
-                )
-
-                zero_shot_ttest = plm_inference(
-                    x_tok_llm_ttest, wt_input_ids, attention_mask, 
-                    base_model, wt_structure_input_ids=wt_struct_ids
-                )
 
             if self.lora_train:
                 logger.info('Refining/training the model... gradient calculation adds a computational '
@@ -684,10 +655,122 @@ class DCALLMHybridModel:
                 self.betas_str += f"{llm_name}-LoRA, "
         
             if self.gauss_opt:
+                embs_ttrain = get_plm_embeddings(
+                    x_tok_llm_ttrain, base_model, wt_input_ids, 
+                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
+                )
+
+                embs_ttest = get_plm_embeddings(
+                    x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
+                    mode="mean", wt_structure_input_ids=wt_struct_ids
+                )
+
+                aa_cond_probs = plm_inference(
+                    attention_mask=attention_mask,
+                    wt_input_ids=wt_input_ids,
+                    model=base_model,
+                    tokenized_sequences = None,
+                    extract_probs=True, 
+                    wt_structure_input_ids=wt_struct_ids,
+                    extract_conditional_aa_prob=True,
+                    tokenizer=tokenizer
+                )
+
+                self.embs_ttrain[llm_name] = embs_ttrain
+                self.embs_ttest[llm_name] = embs_ttest
+                self.scores_ttrain[llm_name] = y_llm_ttrain.cpu()
+                self.scores_ttest[llm_name] = y_llm_ttest.cpu()
+
                 train_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttrain,
                     x_embed=embs_ttrain,
-                    x_zero_shot=zero_shot_ttrain
+                    x_zero_shot=y_llm_ttrain
+                )
+
+                struct_coords = extract_pdb_coords(
+                    self.pdb_struct,
+                    target_len=len(self.wt_sequence)
+                )
+
+                gp, likelihood = instantiate_gp(
+                    train_inputs=train_inputs,
+                    train_targets=torch.tensor(self.y_ttrain).cpu(),
+                    gp_inputs={
+                        "aa_cond_probs": aa_cond_probs.cpu(), 
+                        "struct_coords": struct_coords, 
+                        "wt_seq": self.wt_sequence
+                    },
+                    use_structure_kernel=True,
+                    use_sequence_kernel=True,
+                    sequence_kernel_type="RBF",
+                    use_zero_shot=True,
+                    use_gpu=False
+                )
+
+                # Train
+                gp, likelihood = optimize_gp(
+                    gp, likelihood, train_inputs, torch.tensor(self.y_ttrain).cpu(), 
+                    lr=0.05, n_steps=150
+                )
+                self.gp_models[llm_name] = gp
+                self.gp_likelihoods[llm_name] = likelihood
+
+                # Predict
+                #gp_pred_ttrain, _test_variances = predict(gp, likelihood, train_inputs)
+
+                test_inputs = prepare_kermut_inputs(
+                    seqs=self.sequences_ttest,
+                    x_embed=embs_ttest,
+                    x_zero_shot=y_llm_ttest
+                )
+
+                self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
+                self.y_gp_opt_ttest = self.y_gp_opt_ttest.detach().cpu().numpy()
+
+                self.all_gp_ttest_scores.append(self.y_gp_opt_ttest)
+
+                logger.info(
+                        f"{llm_name} supervised Gaussian process optimized performance: "
+                        f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
+                        f"(N={len(self.y_ttest)})"
+                )
+                self.betas_str += f"{llm_name}-GP, "
+        
+        if self.gauss_opt:
+            if len(self.llm_keys) >= 2:
+                # Extract and concatenate all embedding tensors along the feature dimension
+                # dict.values() extracts just the underlying tensors
+                x_combined_embeddings_train = torch.cat(
+                    list(self.embs_ttrain.values()), 
+                    dim=-1
+                )
+                
+                x_combined_embeddings_test = torch.cat(
+                    list(self.embs_ttest.values()), 
+                    dim=-1
+                )
+
+
+                # Extract, unsqueeze 1D vectors to 2D columns, and concatenate zero-shot scores
+                # Using a list comprehension to safely sanitize dimensions on the fly
+                zs_train_tensors = [
+                    v.unsqueeze(-1) if v.dim() == 1 else v 
+                    for v in self.scores_ttrain.values()
+                ]
+                x_combined_zs_train = torch.cat(zs_train_tensors, dim=-1)
+
+                zs_test_tensors = [
+                    v.unsqueeze(-1) if v.dim() == 1 else v 
+                    for v in self.scores_ttest.values()
+                ]
+                x_combined_zs_test = torch.cat(zs_test_tensors, dim=-1)
+                
+
+
+                train_inputs = prepare_kermut_inputs(
+                    seqs=self.sequences_ttrain,
+                    x_embed=x_combined_embeddings_train,
+                    x_zero_shot=x_combined_zs_train
                 )
 
                 struct_coords = extract_pdb_coords(
@@ -716,31 +799,27 @@ class DCALLMHybridModel:
                     lr=0.05, n_steps=150
                 )
 
-                self.gp_models[llm_name] = gp
-                self.gp_likelihoods[llm_name] = likelihood
-
-                # Predict
-                #gp_pred_ttrain, _test_variances = predict(gp, likelihood, train_inputs)
+                self.gp_models["combined"] = gp
+                self.gp_likelihoods["combined"] = likelihood
 
                 test_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttest,
-                    x_embed=embs_ttest,
-                    x_zero_shot=zero_shot_ttest
+                    x_embed=x_combined_embeddings_test,
+                    x_zero_shot=x_combined_zs_test
                 )
 
-                self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
-                self.y_gp_opt_ttest = self.y_gp_opt_ttest.detach().cpu().numpy()
-
-                self.all_gp_ttest_scores.append(self.y_gp_opt_ttest)
+                combined_pred_ttest, _test_variances = predict(gp, likelihood, test_inputs)
+                combined_pred_ttest = combined_pred_ttest.detach().cpu().numpy()
+                self.all_gp_ttest_scores.append(combined_pred_ttest)
 
                 logger.info(
-                        f"{llm_name} supervised Gaussian process optimized performance: "
-                        #f"Train = {spearmanr(self.y_ttrain, gp_pred_ttrain)[0]:.3f} "
-                        #f"(N={len(self.y_ttrain)}), "
-                        f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
+                        f"Combined supervised Gaussian process optimized performance: "
+                        f"Test = {spearmanr(self.y_ttest, combined_pred_ttest)[0]:.3f} "
                         f"(N={len(self.y_ttest)})"
                 )
-                self.betas_str += f"{llm_name}-GP, "
+
+                self.betas_str += "Combined-GP, "
+                
         self.betas_str = self.betas_str[:-2] + ':'
         
             
@@ -767,8 +846,10 @@ class DCALLMHybridModel:
         as well as the tuned regressor of the hybrid model.
         """
         self.get_subsplits_train()
+        self.y_dca_ttrain = self._delta_e(self.x_dca_ttrain)
         self.y_dca_ttest = self._delta_e(self.x_dca_ttest)
         self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
+        self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
         performance_info_ttest = (
@@ -799,6 +880,9 @@ class DCALLMHybridModel:
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
         else:  # SciPy diff. evo.
             self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
+        
+        logger.info(f"Hybrid optimization done.")
+
         return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
@@ -812,17 +896,15 @@ class DCALLMHybridModel:
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 
-        predictors = [y_dca, y_ridge]
+        self.embs_pred = {}
+        self.zs_scores_pred = {}
+
+        self.hybrid_preds = {"y_dca": y_dca, "y_ridge": y_ridge}
 
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
-                x_input = x_llm_dict.get(llm_name) if x_llm_dict else None
-
-                # Must append something to keep beta indices correct
-                if x_input is None:
-                    predictors.extend([np.zeros(len(y_dca)), np.zeros(len(y_dca))])
-                    continue
+                x_input = x_llm_dict.get(llm_name)
                 
                 common_args = {
                     #'tokenized_sequences': x_input,
@@ -836,12 +918,12 @@ class DCALLMHybridModel:
                 y_base = current_llm['llm_inference_function'](
                     model=current_llm['llm_base_model'], tokenized_sequences=x_input, **common_args
                 )
-                predictors.append(y_base.detach().cpu().numpy())
+                self.hybrid_preds.update({f"{llm_name}_base": y_base.detach().cpu().numpy()})
                 if self.lora_train:
                     y_lora = current_llm['llm_inference_function'](
                         model=current_llm['llm_model'], tokenized_sequences=x_input, **common_args
                     )
-                    predictors.append(y_lora.detach().cpu().numpy())
+                    self.hybrid_preds.update({f"{llm_name}_lora": y_lora.detach().cpu().numpy()})
 
                 if self.gauss_opt:
                     llm_embs_pred = get_plm_embeddings(
@@ -853,28 +935,52 @@ class DCALLMHybridModel:
                         wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
 
-                    zero_shot_pred = plm_inference(
-                        x_input, current_llm['wt_input_ids'], current_llm['llm_attention_mask'], 
-                        current_llm['llm_base_model'], wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
-                    )
+                    self.embs_pred[llm_name] = llm_embs_pred.cpu()
+                    self.zs_scores_pred[llm_name] = y_base.cpu()
 
                     pred_inputs = prepare_kermut_inputs(
                         seqs=sequences,
                         x_embed=llm_embs_pred,
-                        x_zero_shot=zero_shot_pred
+                        x_zero_shot=y_base.cpu()
                     )
 
                     y_gp_opt_pred, _test_variances = predict(self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs)
                     y_gp_opt_pred = y_gp_opt_pred.detach().cpu().numpy()
 
-                    predictors.append(y_gp_opt_pred)
+                    self.hybrid_preds.update({f"{llm_name}_gp": y_gp_opt_pred})
+        
+        if self.gauss_opt:
+            if len(self.llm_keys) >= 2:
+                x_combined_embeddings_pred = torch.cat(
+                    list(self.embs_pred.values()), 
+                    dim=-1
+                )
+                # Extract, unsqueeze 1D vectors to 2D columns, and concatenate zero-shot scores
+                # Using a list comprehension to safely sanitize dimensions on the fly
+                zs_pred_tensors = [
+                    v.unsqueeze(-1) if v.dim() == 1 else v 
+                    for v in self.zs_scores_pred.values()
+                ]
+                x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
 
-        y_final = np.zeros_like(y_dca)
-        for beta, p in zip(self.all_betas, predictors, strict=True):
+                pred_inputs = prepare_kermut_inputs(
+                    seqs=sequences,
+                    x_embed=x_combined_embeddings_pred,
+                    x_zero_shot=x_combined_zs_pred
+                )
+                combined_gp_pred_mean, _test_variances = predict(
+                    self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
+                )
+                self.hybrid_preds.update({"combined_gp": combined_gp_pred_mean.detach().cpu().numpy()})
+        
+        predictions = list(self.hybrid_preds.values())
+        logger.info(f"Running hybrid prediction in order: {self.hybrid_preds.keys()}")
+        self.y_hybrid = np.zeros_like(y_dca)
+        for beta, p in zip(self.all_betas, predictions, strict=True):
             std_val = np.std(p)
             p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p
-            y_final += beta * p_std
-        return y_final
+            self.y_hybrid += beta * p_std
+        return self.y_hybrid, self.hybrid_preds
 
     # TODO: Remove?!
     #def ls_ts_performance(self):
