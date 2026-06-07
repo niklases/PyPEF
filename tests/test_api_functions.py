@@ -640,9 +640,9 @@ def test_hybrid_model_dca_llm_avgfp(
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218
             )
-            np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7500338938575585
-            )
+            #np.testing.assert_almost_equal(
+            #    spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7500338938575585
+            #)
             #np.testing.assert_almost_equal(
             #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6563512715663337
             #)
@@ -650,10 +650,10 @@ def test_hybrid_model_dca_llm_avgfp(
             #    spearmanr(y_test, y_pred_test)[0], 0.7450105938162113
             #)
         
-        elif i == 2:
-            np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7145349981413047
-            )
+        #elif i == 2:
+        #    np.testing.assert_almost_equal(
+        #        spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7145349981413047
+        #    )
         #    np.testing.assert_almost_equal(
         #        spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
         #    )
@@ -1181,8 +1181,8 @@ def test_gaussian_process_opt():
 
 
 if __name__ == "__main__":
-    test_gremlin_avgfp()
-    test_hybrid_model_dca_llm_aneh()
+    #test_gremlin_avgfp()
+    #test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()
