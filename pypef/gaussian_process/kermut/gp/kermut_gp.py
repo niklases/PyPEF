@@ -5,7 +5,7 @@
 # available at https://github.com/petergroth/kermut
 
 import torch
-from typing import Literal, Tuple, Optional
+from typing import Tuple, Optional
 from gpytorch.models import ExactGP
 from gpytorch.means import ConstantMean, LinearMean
 from gpytorch.distributions import MultivariateNormal

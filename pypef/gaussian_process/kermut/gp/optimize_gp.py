@@ -10,7 +10,8 @@ import torch
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.models import ExactGP
-from tqdm import trange
+
+from pypef.utils.helpers import tqdm
 
 
 def optimize_gp(
@@ -37,11 +38,14 @@ def optimize_gp(
 
     gp.set_train_data(inputs=x_train, targets=y_train, strict=True)
 
-    for _ in trange(n_steps, disable=not progress_bar):
+
+    pbar = tqdm(range(n_steps), desc='GP training', disable=not progress_bar)
+    for i in pbar:
         optimizer.zero_grad()
         output = gp(*x_train)
         loss = -mll(output, y_train)
         loss.backward()
         optimizer.step()
+        pbar.set_description(f"GP training: step {i+1}/{100}, loss: {loss:.4f}")
         
     return gp, likelihood

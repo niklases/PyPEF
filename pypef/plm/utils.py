@@ -129,13 +129,19 @@ def get_batches(
     remaining = len(a) % batch_size
     if remaining != 0:
         if len(a) > batch_size:
-            a = a[:-remaining]
+            # Capture remaining elements before truncating 'a'
             a_remaining = a[-remaining:]
+            a = a[:-remaining]
         else:
             logger.info(f"Batch size greater than or equal to total array length: "
                         f"returning full array (of shape: {np.shape(a)})...")
             if keep_remaining:
-                return a.tolist()
+                return [a]
+            else:
+                raise RuntimeError(
+                    "To return the full list of arrays that is smaller than the batch "
+                    "size, set `keep_remaining=True`."
+                )
     if len(orig_shape) == 2:
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size, np.shape(a)[1])
     else: # elif len(orig_shape) == 1:
@@ -155,21 +161,37 @@ def get_batches(
     return a
 
 
-def parse_mut_position(mut_string: str) -> int:
-    # TODO: Integrate multi-subs splitting
+def parse_mut_position(mut_string: str | list | tuple, mut_separator: str = '/') -> list[int]:
     """
-    Parses a mutation string (e.g., 'M1A' or 'A140D') 
-    to extract the 1-indexed position and convert it to 0-indexed.
+    Parses single or multi-substitution mutations to extract 1-indexed 
+    positions and convert them to 0-indexed positions.
+    
+    Supports:
+      - Slash-separated strings: 'A123C/F429G'
+      - Iterables/Lists of strings: ['A123C', 'F429G']
+      - Single point mutations: 'M1A'
+      - Wild-type flags: 'WT' or NaN
     """
-    if mut_string == "WT" or str(mut_string).lower() == "nan":
-        return 0 # Default fallback for Wild-Type reference sequences
+    # Standardize fallbacks for Wild-Type reference sequences
+    if mut_string is None or str(mut_string).lower() in ["wt", "nan", ""]:
+        return [0] 
         
-    # Regex captures the digits between the wild-type and mutant amino acids
-    match = re.search(r'\d+', str(mut_string))
-    if match:
-        return int(match.group()) - 1
+    # Extract substitution tokens depending on input type
+    if isinstance(mut_string, (list, tuple)):
+        substitutions = [str(s).strip() for s in mut_string]
     else:
-        raise ValueError(f"Could not parse position from mutation string: {mut_string}")
+        substitutions = [s.strip() for s in str(mut_string).split(mut_separator)]
+        
+    positions = []
+    for sub in substitutions:
+        # Regex captures the digits representing the sequence position
+        match = re.search(r'\d+', sub)
+        if match:
+            positions.append(int(match.group()) - 1)
+        else:
+            raise ValueError(f"Could not parse position from mutation component: '{sub}' inside '{mut_string}'")
+            
+    return positions
 
 
 def extract_mean_or_pos_embeddings(
