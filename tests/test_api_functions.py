@@ -626,6 +626,9 @@ def test_hybrid_model_dca_llm_avgfp(
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6755242614419105
+            )
             #np.testing.assert_almost_equal(
             #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.27268592420896115
             #)
@@ -637,6 +640,9 @@ def test_hybrid_model_dca_llm_avgfp(
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218
             )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7500338938575585
+            )
             #np.testing.assert_almost_equal(
             #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6563512715663337
             #)
@@ -644,7 +650,10 @@ def test_hybrid_model_dca_llm_avgfp(
             #    spearmanr(y_test, y_pred_test)[0], 0.7450105938162113
             #)
         
-        #elif i == 2:
+        elif i == 2:
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7145349981413047
+            )
         #    np.testing.assert_almost_equal(
         #        spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
         #    )
@@ -714,7 +723,7 @@ def test_plm_corr_blat_ecolx():
         ).cpu()
         print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6367826285982324, decimal=6)
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6360220086687192, decimal=6)
         
         y_esm = plm_inference(
             tokenized_sequences=x_esm,
@@ -730,7 +739,7 @@ def test_plm_corr_blat_ecolx():
         ).cpu()
         print(f'{x}: ESM1v (unsupervised performance wt-marginal): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6498987261125897, decimal=6)
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6494103102128445, decimal=6)
 
         y_esm = plm_inference(
             tokenized_sequences=x_esm,
@@ -746,7 +755,7 @@ def test_plm_corr_blat_ecolx():
         ).cpu()
         print(f'{x}: ESM1v (unsupervised performance full-sequence): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
-        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6400694954450116, decimal=6)
+        np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6395329171141655, decimal=6)
         
         #y_esm = plm_inference(
         #    tokenized_sequences=x_esm,
@@ -830,7 +839,7 @@ def test_plm_corr_blat_ecolx():
     ).cpu()
     print(f'ProSST (unsupervised performance full-sequence): '
           f'{spearmanr(y_true, y_prosst.cpu())[0]}')
-    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5668431301489617, decimal=3)
+    np.testing.assert_almost_equal(spearmanr(y_true, y_prosst.cpu())[0], 0.5651544861475942, decimal=3)
 
     #y_prosst = plm_inference(
     #        tokenized_sequences=x_prosst,

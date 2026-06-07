@@ -46,6 +46,6 @@ def optimize_gp(
         loss = -mll(output, y_train)
         loss.backward()
         optimizer.step()
-        pbar.set_description(f"GP training: step {i+1}/{100}, loss: {loss:.4f}")
+        pbar.set_description(f"GP training: step {i+1}/{n_steps}, loss: {loss:.4f}")
         
     return gp, likelihood
