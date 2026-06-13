@@ -30,7 +30,10 @@ from sklearn.model_selection import GridSearchCV, train_test_split
 from scipy.optimize import differential_evolution
 
 from pypef.settings import USE_RAY
-from pypef.utils.variant_data import extract_pdb_coords, get_sequences_from_file, remove_nan_encoded_positions
+from pypef.utils.variant_data import (
+    extract_pdb_coords, get_sequences_from_file, positional_train_test_split, 
+    remove_nan_encoded_positions
+)
 import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
 from pypef.utils.to_file import predictions_out
@@ -56,14 +59,6 @@ import logging
 logger = logging.getLogger('pypef.hybrid.hybrid_model')
 
 
-def reduce_by_batch_modulo(a: np.ndarray, batch_size=5) -> np.ndarray:
-    """
-    Cuts input array by batch size modulo.
-    """
-    reduce = len(a) - (len(a) % batch_size)
-    return a[:reduce]
-
-
 # TODO: Add meta-learning model (e.g., learn2learn MAML learning option on PGym dataset)?
 class DCALLMHybridModel:
     def __init__(
@@ -77,6 +72,7 @@ class DCALLMHybridModel:
             alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
+            splitting_scheme: str = 'random',
             lora_train: bool = True,
             gauss_opt: bool = False,
             pdb_struct: str | os.PathLike | None = None,
@@ -94,7 +90,7 @@ class DCALLMHybridModel:
             
             # Get the list of provided models
             self.llm_keys = list(llm_model_input.keys())
-            supported_models = {'esm1v', 'prosst'}
+            supported_models = {'esm', 'prosst'}
             
             # Check for unsupported models
             unsupported = set(self.llm_keys) - supported_models
@@ -122,6 +118,7 @@ class DCALLMHybridModel:
             alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
         self.ensemble_func = ensemble_func
+        self.splitting_scheme = splitting_scheme
         self.gauss_opt = gauss_opt
         self.pdb_struct = pdb_struct
         self.lora_train = lora_train
@@ -495,12 +492,27 @@ class DCALLMHybridModel:
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 arrays_to_split.append(self.llm_data[llm_name]['x_llm'])
-            
-        splits = train_test_split(
-            *arrays_to_split, 
-            train_size=train_size_fit,
-            random_state=self.seed
-        )
+        
+        if self.splitting_scheme == "random":
+            splits = train_test_split(
+                *arrays_to_split, 
+                train_size=train_size_fit,
+                random_state=self.seed
+            )
+        elif self.splitting_scheme == "positional":
+            splits = positional_train_test_split(
+                *arrays_to_split,
+                wt_sequence=self.wt_sequence,
+                variant_sequences=self.sequences,
+                train_size=train_size_fit,
+                random_state=self.seed,
+                verbose=self.verbose
+            )
+        else:
+            raise RuntimeError(
+                f"Unknown splitting scheme '{self.splitting_scheme}' - "
+                f"splitting scheme has to be 'positional' or 'random'."
+            )
         
         self.x_dca_ttrain = splits[0]
         self.x_dca_ttest = splits[1]
@@ -544,9 +556,9 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         # Here, just getting the unsupervised scores and correlations on ttrain and ttest splits
-        self.y_llm_preds = {}       # e.g., {'esm1v': array, 'prosst': array}
+        self.y_llm_preds = {}       # e.g., {'esm': array, 'prosst': array}
         self.y_llm_lora_preds = {} 
-        self.embeddings = {}        # e.g., {'esm1v': emb, 'prosst': emb}
+        self.embeddings = {}        # e.g., {'esm': emb, 'prosst': emb}
         self.all_llm_ttest_scores = []
         # Initialize dictionaries for embeddings
         self.all_gp_ttest_scores = []
@@ -554,7 +566,6 @@ class DCALLMHybridModel:
         self.embs_ttest, self.scores_ttest = {}, {}
         self.gp_models = {}
         self.gp_likelihoods = {}
-        self.betas_str =  "DCA, DCA-Ridge, "
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
@@ -580,6 +591,7 @@ class DCALLMHybridModel:
                 attention_mask=attention_mask,
                 device=self.device,
                 wt_structure_input_ids=wt_struct_ids,
+                batch_size=self.batch_size,
                 verbose=True
             )
             y_llm_ttrain = inference_fn(
@@ -589,6 +601,7 @@ class DCALLMHybridModel:
                 attention_mask=attention_mask,
                 device=self.device,
                 wt_structure_input_ids=wt_struct_ids,
+                batch_size=self.batch_size,
                 verbose=True
             )
             logger.info(
@@ -622,7 +635,8 @@ class DCALLMHybridModel:
                     raise_error_on_train_fail=False,
                     progress_cb=self.progress_cb, 
                     abort_cb=self.abort_cb,
-                    wt_structure_input_ids=wt_struct_ids
+                    wt_structure_input_ids=wt_struct_ids,
+                    batch_size=self.batch_size,
                 )
                 y_llm_lora_ttrain = inference_fn(
                     tokenized_sequences=x_tok_llm_ttrain,
@@ -631,7 +645,8 @@ class DCALLMHybridModel:
                     attention_mask=attention_mask,
                     device=self.device,
                     verbose=self.verbose,
-                    wt_structure_input_ids=wt_struct_ids
+                    wt_structure_input_ids=wt_struct_ids,
+                    batch_size=self.batch_size,
                 )
                 y_llm_lora_ttest = inference_fn(
                     tokenized_sequences=x_tok_llm_ttest,
@@ -640,7 +655,8 @@ class DCALLMHybridModel:
                     attention_mask=attention_mask,
                     device=self.device,
                     verbose=self.verbose,
-                    wt_structure_input_ids=wt_struct_ids
+                    wt_structure_input_ids=wt_struct_ids,
+                    batch_size=self.batch_size,
                 )
                 logger.info(
                     f"{llm_name.upper()} supervised tuned performance: "
@@ -657,12 +673,14 @@ class DCALLMHybridModel:
             if self.gauss_opt:
                 embs_ttrain = get_plm_embeddings(
                     x_tok_llm_ttrain, base_model, wt_input_ids, 
-                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
+                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids,
+                    #batch_size=self.batch_size
                 )
 
                 embs_ttest = get_plm_embeddings(
                     x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
-                    mode="mean", wt_structure_input_ids=wt_struct_ids
+                    mode="mean", wt_structure_input_ids=wt_struct_ids,
+                    #batch_size=self.batch_size
                 )
 
                 aa_cond_probs = plm_inference(
@@ -819,10 +837,7 @@ class DCALLMHybridModel:
                 )
 
                 self.betas_str += "Combined-GP, "
-                
-        self.betas_str = self.betas_str[:-2] + ':'
         
-            
     def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -859,6 +874,7 @@ class DCALLMHybridModel:
         )
 
         predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
+        self.betas_str =  "DCA, DCA-Ridge, "
 
         if len(self.parameter_range) >= 4:
             self.train_llm()
@@ -874,7 +890,7 @@ class DCALLMHybridModel:
                 performance_info_ttest += f"PLM Gaussian optimization: "
                 for scores in self.all_gp_ttest_scores:
                     performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
-
+        self.betas_str = self.betas_str[:-2] + ':'
         logger.info(performance_info_ttest)
         if self.ensemble_func == 'torch':  # L-BFGS
             self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
@@ -1090,10 +1106,10 @@ def get_model_and_type(
     else:  # --> elif model_type in ['PLMC', 'GREMLIN', 'Hybrid']:
         model = model['model']
     if model_type == 'Hybrid':
-        if model.llm_key == 'esm1v':
-            logger.info("Found hybrid model with ESM1v PLM model...")
+        if model.llm_key == 'esm':
+            logger.info("Found hybrid model with ESM PLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
-            model_type += '_ESM1v'
+            model_type += '_ESM'
         elif model.llm_key == 'prosst':
             logger.info("Found hybrid model with ProSST PLM model...")
             base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
@@ -1354,7 +1370,7 @@ def performance_ls_ts(
         if llm is not None:
             if llm.lower().startswith('esm'):
                 llm_dict = esm_setup(train_sequences)
-                x_llm_test = tokenize_sequences(test_sequences, llm_dict['esm1v']['llm_tokenizer'])
+                x_llm_test = tokenize_sequences(test_sequences, llm_dict['esm']['llm_tokenizer'])
             elif llm.lower() == 'prosst':
                 llm_dict = prosst_setup(
                     wt_seq, pdb_file, sequences=train_sequences)
@@ -1440,11 +1456,11 @@ def performance_ls_ts(
             model_type = 'LLM'
             if llm == 'esm':
                 llm_dict = esm_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
-                logger.info("Zero-shot LLM inference on test set using ESM1v...")
+                logger.info("Zero-shot LLM inference on test set using ESM...")
                 y_test_pred = plm_inference(
-                    tokenized_sequences = llm_dict['esm1v']['x_llm'],
-                    wt_input_ids=llm_dict['esm1v']['wt_input_ids'],
-                    model=llm_dict['esm1v']['llm_base_model']
+                    tokenized_sequences = llm_dict['esm']['x_llm'],
+                    wt_input_ids=llm_dict['esm']['wt_input_ids'],
+                    model=llm_dict['esm']['llm_base_model']
                 )
             elif llm == 'prosst':
                 llm_dict = prosst_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
@@ -1600,8 +1616,8 @@ def predict_ps(
             # *No hybrid model* and no DCA params provided:
             # Zero-shot LLM predictions
             if llm == 'esm':
-                model_type = 'LLM_ESM1v'
-                logger.info("Zero-shot LLM inference on test set using ESM1v...")
+                model_type = 'LLM_ESM'
+                logger.info("Zero-shot LLM inference on test set using ESM...")
                 ys_pred = plm_inference(sequences, llm)  # TODO
             elif llm == 'prosst':
                 model_type = 'LLM_ProSST'

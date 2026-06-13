@@ -298,6 +298,8 @@ def load_model_and_tokenizer(
     if tokenizer_loader is None:
         tokenizer_loader = AutoTokenizer
 
+    hf_token = os.environ.get("HF_TOKEN", None)
+
     # Check if model is cached locally
     # Note: Even if exists=True, Windows symlinks might be broken pointers
     exists, snapshot_dir, _ = is_model_cached(model_name, cache_dir)
@@ -314,43 +316,78 @@ def load_model_and_tokenizer(
     # Update same for Linux, just use model name, so commented: 
     # load_path = model_name if is_windows else (snapshot_dir if exists else model_name)
     load_path = model_name
+    use_local_files = exists
 
-    config = AutoConfig.from_pretrained(
-        load_path, 
-        trust_remote_code=True, 
-        revision=revision, 
-        cache_dir=cache_dir,
-        local_files_only=exists
-    )
+    try:
+        config = AutoConfig.from_pretrained(
+            load_path, 
+            trust_remote_code=True, 
+            revision=revision, 
+            cache_dir=cache_dir,
+            local_files_only=use_local_files,
+            token=hf_token
+        )
+    except Exception as e:
+        logger.warning(f"Failed to load config for {model_name} locally ({e}). Forcing online repair...")
+        use_local_files = False
+        config = AutoConfig.from_pretrained(
+            load_path, 
+            trust_remote_code=True, 
+            revision=revision, 
+            cache_dir=cache_dir,
+            local_files_only=False,
+            force_download=True, # Nuke corrupted config.json
+            token=hf_token
+        )
 
     # Force the architecture to create a separate decoder layer
     config.tie_word_embeddings = False
 
-    # Common loading arguments
+    # Common arguments for Model and Tokenizer
     load_kwargs = {
         "cache_dir": cache_dir,
         "trust_remote_code": True,
         "revision": revision,
-        "local_files_only": exists
+        "local_files_only": use_local_files, # Will be False if repair was needed
+        "token": hf_token,
+        "config": config
     }
 
     # Add the config to your load_kwargs
     load_kwargs["config"] = config
     
     try:
+        # Attempt 1: Prioritize SafeTensors
         model = model_loader.from_pretrained(
             load_path,
-            use_safetensors=True,
+            use_safetensors=True, 
             **load_kwargs
         )
     except Exception as e:
-        # Warning appears too oftne for ESM as no safetensor exists (respectively existed back then)
-        # logger.warning(f"Standard load failed, trying without safetensors: {e}")
-        model = model_loader.from_pretrained(
-            load_path,
-            use_safetensors=False,
-            **load_kwargs
-        )
+        # If it fails, check if we need to drop offline mode and go online
+        if use_local_files:
+            logger.warning(f"Local weight load failed ({type(e).__name__}). Falling back to online mode...")
+            load_kwargs["local_files_only"] = False
+            
+        try:
+            # Attempt 2: Try online with SafeTensors
+            model = model_loader.from_pretrained(
+                load_path,
+                use_safetensors=True,
+                **load_kwargs
+            )
+        except Exception as e2:
+            # Attempt 3: If it strictly complains about missing SafeTensors, drop to .bin
+            if "safetensors" in str(e2).lower():
+                logger.info(f"{model_name} lacks SafeTensors format. Falling back to legacy .bin weights...")
+                model = model_loader.from_pretrained(
+                    load_path,
+                    use_safetensors=False, # Explicitly disable to stop background ghost threads
+                    **load_kwargs
+                )
+            else:
+                # If it's a completely different error (like out of memory), crash normally
+                raise e2
 
     # THE WINDOWS SYMLINK BYPASS (Specific for ProSST)
     # If the weights didn't load, they are forced here
@@ -359,6 +396,9 @@ def load_model_and_tokenizer(
             logger.info("Windows detected: Forcing manual weight injection from blobs...")
             
             # This identifies the actual large binary file in the blobs folder
+            # NOTE: If ProSST ever becomes a 3B+ parameter model, this will crash because 
+            # of sharding. Currently safe only for single-file safetensor models (e.g., 
+            # model-00001-of-00002.safetensors).
             real_weight_path = hf_hub_download(
                 repo_id=model_name,
                 filename="model.safetensors",

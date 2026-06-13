@@ -2,11 +2,13 @@
 # https://github.com/niklases/PyPEF
 
 from __future__ import annotations
+import collections
 import os
 import numpy as np
 import pandas as pd
 from Bio import Align
 from Bio.PDB import PDBParser
+from sklearn.model_selection import GroupShuffleSplit
 
 import logging
 logger = logging.getLogger('pypef.utils.variant_data')
@@ -605,6 +607,70 @@ def get_mismatches(seq_a: str, seq_b: str):
             mismatches += f"{aa}{i_a + 1}{seq_b[i_a]},"
             n += 1
     return n, mismatches[:-1]
+
+
+def extract_positions_from_sequences(wt_seq, variant_seqs):
+    """
+    Extracts mutated positions by comparing variant sequences to a WT reference.
+    Returns an array of tuples representing the mutated indices for grouping.
+    """
+    groups = []
+    
+    for seq in variant_seqs:
+        # Compare character by character. 
+        # Using 0-based indexing here, which is perfectly fine for grouping purposes.
+        mutated_positions = tuple(
+            i for i, (wt_aa, mut_aa) in enumerate(zip(wt_seq, seq)) 
+            if wt_aa != mut_aa
+        )
+        
+        # If the sequence is identical to WT (no mutations), it gets an empty tuple `()`
+        groups.append(mutated_positions)
+        
+    # dtype=object is critical here so numpy doesn't crash if you have 
+    # a mix of single-site (length 1 tuple) and multi-site (length >1 tuple) mutants.
+    return np.array(groups, dtype=object)
+
+
+def positional_train_test_split(*arrays, wt_sequence, variant_sequences, train_size, random_state, verbose=False):
+    """
+    Splits data based on mutated positions derived from sequence comparison.
+    """
+    groups = extract_positions_from_sequences(wt_sequence, variant_sequences)
+
+    if isinstance(train_size, int):
+        train_ratio = train_size / len(variant_sequences)
+    else:
+        train_ratio = float(train_size)
+
+    gss = GroupShuffleSplit(n_splits=1, train_size=train_ratio, random_state=random_state)
+    all_splits = list(gss.split(variant_sequences, groups=groups))
+    train_idx, test_idx = all_splits[0]
+
+    if verbose:
+        # FIX: Force elements to be tuples so Python sets can hash them
+        train_groups = set(tuple(g) for g in groups[train_idx])
+        test_groups = set(tuple(g) for g in groups[test_idx])
+        all_unique_groups = set(tuple(g) for g in groups)
+        logger.info(
+            f"Positional split summary:\nTarget Train Ratio:  {train_ratio:.1%} "
+            f"Total Sequences: {len(variant_sequences)} Total Unique Groups: {len(all_unique_groups)}\n"
+            f"Train set: Sequences: {len(train_idx)} ({(len(train_idx)/len(variant_sequences)):.1%}) "
+            f"Groups (Positions): {len(train_groups)}\n"
+            f"Test set: Sequences: {len(test_idx)} ({(len(test_idx)/len(variant_sequences)):.1%}) "
+            f"Groups (Positions):    {len(test_groups)}"
+        )
+
+    splits = []
+    for arr in arrays:
+        if isinstance(arr, np.ndarray):
+            splits.extend([arr[train_idx], arr[test_idx]])
+        elif hasattr(arr, 'iloc'): 
+            splits.extend([arr.iloc[train_idx], arr.iloc[test_idx]])
+        else:
+            splits.extend([[arr[i] for i in train_idx], [arr[i] for i in test_idx]])
+            
+    return splits
 
 
 def extract_pdb_coords(pdb_path, target_len=None, chain_id="A", atom_type="CA"):

@@ -741,7 +741,8 @@ def get_plm_embeddings(
         else:
             embs = extract_mean_or_pos_embeddings(full_embs, mode=mode, mutation_strings=batch_variants)
             
-        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)}")
+        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)} "
+                             f"({str(full_embs.device).upper().split(':')[0]})")
         processed_embs.append(embs)
         if end_idx >= len(tokenized_sequences):
             final_rows = sum(x.shape[0] for x in processed_embs)
@@ -754,6 +755,7 @@ def get_plm_embeddings(
 def esm_setup(
         wt_seq, 
         sequences, 
+        model: str = "facebook/esm1v_t33_650M_UR90S_3",
         loss_method: str = "spearman",
         seed: int | None =None,
         revision: str | None = None,
@@ -765,7 +767,7 @@ def esm_setup(
     allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
-    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(seed=seed, revision=revision)
+    esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=model, seed=seed, revision=revision)
     esm_base_model.eval()
     esm_lora_model.eval()
     esm_base_model, esm_lora_model = esm_base_model.to(device), esm_lora_model.to(device)
@@ -777,7 +779,7 @@ def esm_setup(
     x_esm, esm_attention_mask = tokenize_sequences(
         sequences, esm_tokenizer, max_length=len(wt_seq) + 2, verbose=verbose)
     llm_dict_esm = {
-        'esm1v': {
+        'esm': {
             'llm_base_model': esm_base_model,
             'llm_model': esm_lora_model,
             'llm_optimizer': esm_optimizer,

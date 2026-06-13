@@ -166,7 +166,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     device="cuda",
                     verbose=True
                 ).cpu()
-                print(f'ESM1v (unsupervised performance): '
+                print(f'ESM (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
             except RuntimeError:
@@ -215,7 +215,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 temp_results.update({c: {}})
                 for s in range(N_CV):
                     temp_results[c].update({f'Split {s}': {}})
-                    for m in ['DCA', 'ESM1v', 'ProSST', 'DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid']:
+                    for m in ['DCA', 'ESM', 'ProSST', 'DCA hybrid', 'DCA+ESM hybrid', 'DCA+ProSST hybrid']:
                         # Prefill with NaN's
                         temp_results[c][f'Split {s}'].update({m: np.nan})
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
@@ -271,8 +271,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         device="cuda",
                         verbose=True
                     ).cpu()
-                    temp_results[category][f'Split {i_split}'].update({'ESM1v': spearmanr(y_test, y_test_pred_esm)[0]})
-                    print(f'        ESM1v ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_esm)[0]:.3f}')
+                    temp_results[category][f'Split {i_split}'].update({'ESM': spearmanr(y_test, y_test_pred_esm)[0]})
+                    print(f'        ESM ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_esm)[0]:.3f}')
                     y_test_pred_prosst = plm_inference(
                         tokenized_sequences=x_llm_test_prosst,
                         wt_input_ids=wt_input_ids,
@@ -288,7 +288,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     print(f'        ProSST ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_prosst)[0]:.3f}')
 
                     for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst, llm_dict_ensemble]):
-                        m_str = ['DCA hybrid', 'DCA+ESM1v hybrid', 'DCA+ProSST hybrid', 'DCA+ESM1v+ProSST hybrid'][i_m]  # TODO: 'DCA+ESM1v+ProSST hybrid'
+                        m_str = ['DCA hybrid', 'DCA+ESM hybrid', 'DCA+ProSST hybrid', 'DCA+ESM+ProSST hybrid'][i_m]
                         try:
                             hm = DCALLMHybridModel(
                                 x_train_dca=np.array(x_dca_train), 
@@ -301,9 +301,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 x_dca=np.array(x_dca_test), 
                                 x_llm_dict=[
                                     None, 
-                                    {'esm1v': np.asarray(x_llm_test_esm)}, 
+                                    {'esm': np.asarray(x_llm_test_esm)}, 
                                     {'prosst': np.asarray(x_llm_test_prosst)},
-                                    {'esm1v': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
+                                    {'esm': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
                                 ][i_m]
                             )
                             print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
@@ -325,7 +325,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     f'{temp_results['Random']['Split 0']['DCA hybrid']},{temp_results['Random']['Split 1']['DCA hybrid']},'
                     f'{temp_results['Random']['Split 2']['DCA hybrid']},{temp_results['Random']['Split 3']['DCA hybrid']},'
                     f'{temp_results['Random']['Split 4']['DCA hybrid']},'
-                    f'{temp_results['Random']['Split 0']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 1']['DCA+ESM1v hybrid']},'
+                    f'{temp_results['Random']['Split 0']['DCA+ hybrid']},{temp_results['Random']['Split 1']['DCA+ hybrid']},'
                     f'{temp_results['Random']['Split 2']['DCA+ESM1v hybrid']},{temp_results['Random']['Split 3']['DCA+ESM1v hybrid']},'
                     f'{temp_results['Random']['Split 4']['DCA+ESM1v hybrid']},'
                     f'{temp_results['Random']['Split 0']['DCA+ProSST hybrid']},{temp_results['Random']['Split 1']['DCA+ProSST hybrid']},'

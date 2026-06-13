@@ -31,7 +31,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 - One-hot encoding
 - Amino acid descriptor sets (taken from AAindex database) encoding
 - Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) based encoding
-- LLM embeddings (currently, [ESM1v](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
+- LLM embeddings (currently, [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
 
 <p align="center">
     <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
@@ -498,7 +498,7 @@ using the plmc parameters.
 Other well-performing zero-shot prediction methods with available source code can be obtained from the ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) that provide a more detailed overview of available methods and achieved performances (as well as many benchmark data sets).
 
 The performance of the GREMLIN model used is shown in the following for predicting single substitution effects (blue), including Hybrid model performances with N_Train = {100, 200, 1000}.
-Hybrid GREMLIN-LLM low-N-tuned models using [ESM1v](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
+Hybrid GREMLIN-LLM low-N-tuned models using [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
 
 <p align="center">
     <img src=".github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>

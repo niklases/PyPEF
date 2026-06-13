@@ -27,13 +27,19 @@ import logging
 package_logger = logging.getLogger('pypef')
 package_logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(filename)s:%(lineno)d -- %(message)s')
 handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
 # Make sure to "export CUBLAS_WORKSPACE_CONFIG=:4096:8" first
 @hydra.main(version_base=None, config_path="../configs", config_name="proteingym_data_setup")
 def main(cfg: DictConfig) -> None:
+    ESM_MODEL = "facebook/esm2_t33_650M_UR50D"   # "facebook/esm2_t36_3B_UR50D"  "facebook/esm2_t33_650M_UR50D"  "facebook/esm1v_t33_650M_UR90S_3"
+    if ESM_MODEL == "facebook/esm1v_t33_650M_UR90S_3":
+        ESM_REVISION = "0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
+    else:
+        ESM_REVISION = None
+    PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
@@ -99,11 +105,11 @@ def main(cfg: DictConfig) -> None:
 
     if "prosst" in llm.lower():
         _, _, prosst_tokenizer, _ = get_prosst_models(
-            seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
+            seed=seed, revision=PROSST_REVISION
         )
     if "esm" in llm.lower():
         _, _, esm_tokenizer, _ = get_esm_models(
-            model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
+            model=ESM_MODEL, seed=seed, revision=ESM_REVISION
         )
     df = pd.read_csv(csv_substitutions_file)
     print(df)
@@ -130,7 +136,7 @@ def main(cfg: DictConfig) -> None:
         print(mapping['alignment_obj'])
         if mapping and mapping['identity']:
             # Perform the shift and trim
-            pdb_vars, orig_vars, sequences_msa_trimmed, pdb_trimmed_seqs = shift_and_trim_vars_seqs(
+            pdb_vars, _orig_vars, sequences_msa_trimmed, pdb_trimmed_seqs = shift_and_trim_vars_seqs(
                 vars_list=variants, 
                 seqs_list=sequences_msa_trimmed, 
                 alignment_mapping=mapping,
@@ -173,9 +179,24 @@ def main(cfg: DictConfig) -> None:
     df_predictions = pd.DataFrame(columns=["fold", "mutant", "y", "y_pred", "y_var"])
 
     df = df.reset_index(drop=True)
-    print('GREMLIN DCA (MSA optimization)...')
+    if len(pdb_trimmed_common_sequence) > 2500:  # "BRCA2_HUMAN_Erwood_2022_HEK293T"
+        gremlin_opt = False
+        print('NOT OPTIMIZING DUE TO HIGH SEQUENCE LENGTH! [GREMLIN DCA (MSA optimization)]...')
+    elif len(pdb_trimmed_common_sequence) > 1024:  
+        # Unlike ESM-1v, ESM-2 models (like facebook/esm2_t33_650M_UR90S_1 
+        # or the larger 3B variant) use RoPE (Rotary Position Embeddings).
+        # RoPE does away with absolute position tables, allowing the 
+        # model to dynamically extrapolate and process sequences longer 
+        # than 1024 without throwing CUDA out-of-bounds errors.
+        # Or run ProSST solo...
+        gremlin_opt = True
+        batch_size = 1
+    else:
+        gremlin_opt = True
+        batch_size = 5
+        print('GREMLIN DCA (MSA optimization)...')
     gremlin = GREMLIN(
-        alignment=msa_file, opt_iter=100, optimize=True
+        alignment=msa_file, opt_iter=100, optimize=gremlin_opt
     )
 
     if "prosst" in llm.lower():
@@ -203,8 +224,8 @@ def main(cfg: DictConfig) -> None:
         # Assign splits
         train_idx = (df[split_method] != test_fold).tolist()
         test_idx = (df[split_method] == test_fold).tolist()
-        v_train = np.asarray(variants)[train_idx]
-        v_test = np.asarray(variants)[train_idx]
+        _v_train = np.asarray(variants)[train_idx]
+        _v_test = np.asarray(variants)[train_idx]
         s_train = np.asarray(pdb_trimmed_seqs)[train_idx]
         s_test =  np.asarray(pdb_trimmed_seqs)[test_idx]
         x_dca_train = x_dca_full[train_idx]
@@ -218,17 +239,21 @@ def main(cfg: DictConfig) -> None:
         llm_dict_train = {}
         if "esm" in llm.lower():
             llm_dict_esm = esm_setup(
-                wt_seq=pdb_trimmed_common_sequence, sequences=s_train, 
-                seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device="cuda", verbose=True
+                wt_seq=pdb_trimmed_common_sequence, sequences=s_train, model=ESM_MODEL,
+                seed=seed, revision=ESM_REVISION, device="cuda", verbose=True
             )
             llm_dict_train.update(llm_dict_esm)
         if "prosst" in llm.lower():
             llm_dict_prosst = prosst_setup(
                 wt_seq=pdb_trimmed_common_sequence, pdb_file=pdb_file, sequences=s_train, 
-                seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device="cuda", verbose=True
+                seed=seed, revision=PROSST_REVISION, device="cuda", verbose=True
             )
             llm_dict_train.update(llm_dict_prosst)
         print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
+        gauss_opt = True
+        if len(pdb_trimmed_common_sequence) > 1500:
+            llm_dict_train = None
+            gauss_opt = False
 
         
         #if df.shape[0] >= 100000:  # Not CV-training the PLM on much data but just relying on DCA
@@ -243,32 +268,36 @@ def main(cfg: DictConfig) -> None:
             x_dca_wt=gremlin.x_wt,
             sequences=s_train,
             wt_sequence=pdb_trimmed_common_sequence,
+            splitting_scheme='positional',
             lora_train=False,
-            gauss_opt=True,
+            gauss_opt=gauss_opt,
             pdb_struct=pdb_file,
+            batch_size=batch_size,
             n_epochs=50  # Only used if lora_train==True,
         )
-
-        x_llm_dict_test = {}
-        if "esm" in llm.lower():
-            x_test_esm, _esm_attention_mask = tokenize_sequences(
-                sequences=s_test, 
-                tokenizer=esm_tokenizer, 
-                max_length=len(pdb_trimmed_common_sequence) + 2
-            )
-            x_llm_dict_test.update({'esm1v': np.asarray(x_test_esm)})
-
-        if "prosst" in llm.lower():
-            x_test_prosst, _prosst_attention_mask = tokenize_sequences(
-                sequences=s_test, 
-                tokenizer=prosst_tokenizer, 
-                max_length=len(pdb_trimmed_common_sequence) + 2
-            )
-            x_llm_dict_test.update({'prosst': np.asarray(x_test_prosst)})
+        if len(pdb_trimmed_common_sequence) > 1500:
+            llm_dict_test = None
+        else:
+            llm_dict_test = {}
+            if "esm" in llm.lower():
+                x_test_esm, _esm_attention_mask = tokenize_sequences(
+                    sequences=s_test, 
+                    tokenizer=esm_tokenizer, 
+                    max_length=len(pdb_trimmed_common_sequence) + 2
+                )
+                llm_dict_test.update({'esm': np.asarray(x_test_esm)})
+    
+            if "prosst" in llm.lower():
+                x_test_prosst, _prosst_attention_mask = tokenize_sequences(
+                    sequences=s_test, 
+                    tokenizer=prosst_tokenizer, 
+                    max_length=len(pdb_trimmed_common_sequence) + 2
+                )
+                llm_dict_test.update({'prosst': np.asarray(x_test_prosst)})
 
         y_test_pred, predictors = hm.hybrid_prediction(
             x_dca=np.array(x_dca_test), 
-            x_llm_dict=x_llm_dict_test,
+            x_llm_dict=llm_dict_test,
             sequences=s_test
         )
         for k, v in predictors.items():

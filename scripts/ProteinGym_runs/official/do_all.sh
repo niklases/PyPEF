@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e
 
+# Pre-download models from HuggingFace
+#hf download facebook/esm1v_t33_650M_UR90S_3
+#hf download facebook/esm2_t33_650M_UR50D
+#hf download AI4Protein/ProSST-2048
+
 # "fold_rand_multiples" "fold_random_5" "fold_modulo_5" "fold_contiguous_5"
 split_methods=("fold_random_5" "fold_modulo_5" "fold_contiguous_5")
  

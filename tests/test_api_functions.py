@@ -209,7 +209,7 @@ def test_hybrid_model_dca_llm_aneh(
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     total_sum = sum(p.sum().item() for p in esm_base_model.parameters())
-    print('Total model parameter sum (ESM1v):', total_sum)
+    print('Total model parameter sum (ESM):', total_sum)
     np.testing.assert_allclose(total_sum, -15815.186912, atol=1e-1)
     model_hash = get_model_hash(esm_base_model)
     print(f"Model Hash: {model_hash}")
@@ -309,7 +309,7 @@ def test_hybrid_model_dca_llm_aneh(
                 wt_seq=wt_seq, pdb_file=pdb_file, sequences=train_seqs, 
                 seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
             )
-        x_llm_test, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+        x_llm_test, _ = tokenize_sequences(test_seqs, llm_dict[['esm', 'prosst'][i]]['llm_tokenizer'])
 
         if i == 0:
             y_test_pred_1 = plm_inference(
@@ -340,10 +340,10 @@ def test_hybrid_model_dca_llm_aneh(
 
         y_test_pred_2 = plm_inference(
             tokenized_sequences=x_llm_test,
-            wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
-            attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
-            model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
-            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
+            wt_input_ids=llm_dict[['esm', 'prosst'][i]]['wt_input_ids'],
+            attention_mask=llm_dict[['esm', 'prosst'][i]]['llm_attention_mask'],
+            model=llm_dict[['esm', 'prosst'][i]]['llm_base_model'],
+            wt_structure_input_ids=llm_dict.get(['esm', 'prosst'][i], {}).get('wt_structure_input_ids'),
             device=device
         ).cpu()
 
@@ -352,10 +352,10 @@ def test_hybrid_model_dca_llm_aneh(
 
         y_test_pred_lora = plm_inference(
             tokenized_sequences=x_llm_test,
-            wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
-            attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
-            model=llm_dict[['esm1v', 'prosst'][i]]['llm_model'],
-            wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
+            wt_input_ids=llm_dict[['esm', 'prosst'][i]]['wt_input_ids'],
+            attention_mask=llm_dict[['esm', 'prosst'][i]]['llm_attention_mask'],
+            model=llm_dict[['esm', 'prosst'][i]]['llm_model'],
+            wt_structure_input_ids=llm_dict.get(['esm', 'prosst'][i], {}).get('wt_structure_input_ids'),
             device=device
         ).cpu()
 
@@ -372,7 +372,7 @@ def test_hybrid_model_dca_llm_aneh(
         assert not np.allclose(hm.y_llm_ttest, hm.y_llm_lora_ttest, rtol=1e-5, atol=1e-8)
 
         x_llm_input = {
-                ['esm1v', 'prosst'][i]: x_llm_test,
+                ['esm', 'prosst'][i]: x_llm_test,
         }
 
         y_pred_test, _individual_predictions = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input)
@@ -575,27 +575,27 @@ def test_hybrid_model_dca_llm_avgfp(
         )
 
         if i == 0:
-            x_llm_test_esm, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+            x_llm_test_esm, _ = tokenize_sequences(test_seqs, llm_dict[['esm', 'prosst'][i]]['llm_tokenizer'])
             x_llm_test = x_llm_test_esm
-            x_llm_input = {'esm1v': x_llm_test_esm}
+            x_llm_input = {'esm': x_llm_test_esm}
         elif i == 1:
-            x_llm_test_prosst, _ = tokenize_sequences(test_seqs, llm_dict[['esm1v', 'prosst'][i]]['llm_tokenizer'])
+            x_llm_test_prosst, _ = tokenize_sequences(test_seqs, llm_dict[['esm', 'prosst'][i]]['llm_tokenizer'])
             x_llm_test = x_llm_test_prosst
             x_llm_input = {'prosst': x_llm_test_prosst}
 
         if i in [0, 1]:
             y_test_pred = plm_inference(
                 tokenized_sequences=x_llm_test,
-                wt_input_ids=llm_dict[['esm1v', 'prosst'][i]]['wt_input_ids'],
-                attention_mask=llm_dict[['esm1v', 'prosst'][i]]['llm_attention_mask'],
-                model=llm_dict[['esm1v', 'prosst'][i]]['llm_base_model'],
-                wt_structure_input_ids=llm_dict.get(['esm1v', 'prosst'][i], {}).get('wt_structure_input_ids'),
+                wt_input_ids=llm_dict[['esm', 'prosst'][i]]['wt_input_ids'],
+                attention_mask=llm_dict[['esm', 'prosst'][i]]['llm_attention_mask'],
+                model=llm_dict[['esm', 'prosst'][i]]['llm_base_model'],
+                wt_structure_input_ids=llm_dict.get(['esm', 'prosst'][i], {}).get('wt_structure_input_ids'),
                 device=device
             ).cpu()
 
         if i == 2:
             x_llm_input = {
-                'esm1v': x_llm_test_esm,
+                'esm': x_llm_test_esm,
                 'prosst': x_llm_test_prosst
             }
 
@@ -721,7 +721,7 @@ def test_plm_corr_blat_ecolx():
             device="cuda",
             verbose=True
         ).cpu()
-        print(f'{x}: ESM1v (unsupervised performance mutation-masking): '  
+        print(f'{x}: ESM (unsupervised performance mutation-masking): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6360220086687192, decimal=6)
         
@@ -737,7 +737,7 @@ def test_plm_corr_blat_ecolx():
             device="cuda",
             verbose=True
         ).cpu()
-        print(f'{x}: ESM1v (unsupervised performance wt-marginal): '  
+        print(f'{x}: ESM (unsupervised performance wt-marginal): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6494103102128445, decimal=6)
 
@@ -753,7 +753,7 @@ def test_plm_corr_blat_ecolx():
             device="cuda",
             verbose=True
         ).cpu()
-        print(f'{x}: ESM1v (unsupervised performance full-sequence): '  
+        print(f'{x}: ESM (unsupervised performance full-sequence): '  
               f'{spearmanr(y_true, y_esm.cpu())[0]}')
         np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.6395329171141655, decimal=6)
         
@@ -769,7 +769,7 @@ def test_plm_corr_blat_ecolx():
         #    device="cuda",
         #    verbose=True
         #).cpu()
-        #print(f'{x}: ESM1v (unsupervised performance): '  
+        #print(f'{x}: ESM (unsupervised performance): '  
         #      f'{spearmanr(y_true, y_esm.cpu())[0]}')
         #np.testing.assert_almost_equal(spearmanr(y_true, y_esm.cpu())[0], 0.666666666666666, decimal=6)
 
@@ -1082,7 +1082,7 @@ def test_gaussian_process_opt():
         x_zero_shot=x_zero_shot_test_esm
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
-    print("Supervised Kermut Spearman ESM1v Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    print("Supervised Kermut Spearman ESM Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
 
     # ESM(Seq.) + PROSST(Struct.)
     train_inputs = prepare_kermut_inputs(
@@ -1113,7 +1113,7 @@ def test_gaussian_process_opt():
         x_zero_shot=x_zero_shot_test_prosst
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
-    print("Supervised Kermut Spearman ESM1v-Seq. + ProSST-Struct. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    print("Supervised Kermut Spearman ESM-Seq. + ProSST-Struct. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
 
     ######## Concat. Combined
 
@@ -1174,7 +1174,7 @@ def test_gaussian_process_opt():
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
 
-    print("Supervised Kermut Spearman ESM1v + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    print("Supervised Kermut Spearman ESM + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8664669154182213, decimal=3)
 
 
