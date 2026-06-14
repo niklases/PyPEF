@@ -334,8 +334,9 @@ def test_hybrid_model_dca_llm_aneh(
             llm_model_input=llm_dict,
             x_dca_wt=g.x_wt,
             seed=42,
+            lora_train=True,
+            n_epochs=5,  # Training (only) the LoRA model
             device=device,
-            n_epochs=5  # Training (only) the LoRA model
         )
 
         y_test_pred_2 = plm_inference(
