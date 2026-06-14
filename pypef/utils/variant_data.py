@@ -653,12 +653,12 @@ def positional_train_test_split(*arrays, wt_sequence, variant_sequences, train_s
         test_groups = set(tuple(g) for g in groups[test_idx])
         all_unique_groups = set(tuple(g) for g in groups)
         logger.info(
-            f"Positional split summary:\nTarget Train Ratio:  {train_ratio:.1%} "
-            f"Total Sequences: {len(variant_sequences)} Total Unique Groups: {len(all_unique_groups)}\n"
+            f"Positional split summary: Target Train Ratio:  {train_ratio:.1%} "
+            f"Total Sequences: {len(variant_sequences)} Total Unique Groups: {len(all_unique_groups)}. "
             f"Train set: Sequences: {len(train_idx)} ({(len(train_idx)/len(variant_sequences)):.1%}) "
-            f"Groups (Positions): {len(train_groups)}\n"
+            f"Groups (Positions): {len(train_groups)}. "
             f"Test set: Sequences: {len(test_idx)} ({(len(test_idx)/len(variant_sequences)):.1%}) "
-            f"Groups (Positions):    {len(test_groups)}"
+            f"Groups (Positions): {len(test_groups)}"
         )
 
     splits = []

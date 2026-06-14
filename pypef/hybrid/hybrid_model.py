@@ -73,7 +73,7 @@ class DCALLMHybridModel:
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
             splitting_scheme: str = 'random',
-            lora_train: bool = True,
+            lora_train: bool = False,
             gauss_opt: bool = False,
             pdb_struct: str | os.PathLike | None = None,
             batch_size: int | None = None,

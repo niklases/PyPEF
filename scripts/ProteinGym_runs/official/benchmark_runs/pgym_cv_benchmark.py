@@ -179,22 +179,27 @@ def main(cfg: DictConfig) -> None:
     df_predictions = pd.DataFrame(columns=["fold", "mutant", "y", "y_pred", "y_var"])
 
     df = df.reset_index(drop=True)
+    gremlin_opt = True
     if len(pdb_trimmed_common_sequence) > 2500:  # "BRCA2_HUMAN_Erwood_2022_HEK293T"
         gremlin_opt = False
-        print('NOT OPTIMIZING DUE TO HIGH SEQUENCE LENGTH! [GREMLIN DCA (MSA optimization)]...')
-    elif len(pdb_trimmed_common_sequence) > 1024:  
-        # Unlike ESM-1v, ESM-2 models (like facebook/esm2_t33_650M_UR90S_1 
-        # or the larger 3B variant) use RoPE (Rotary Position Embeddings).
-        # RoPE does away with absolute position tables, allowing the 
-        # model to dynamically extrapolate and process sequences longer 
-        # than 1024 without throwing CUDA out-of-bounds errors.
-        # Or run ProSST solo...
-        gremlin_opt = True
-        batch_size = 1
-    else:
-        gremlin_opt = True
-        batch_size = 5
-        print('GREMLIN DCA (MSA optimization)...')
+        print(
+            f'NOT RUNNING DCA-OPTIMIZATION DUE TO HIGH SEQUENCE LENGTH '
+            f'(Length={len(pdb_trimmed_common_sequence)})! [GREMLIN DCA (MSA optimization)]...'
+        )
+    batch_size = 5
+    #elif len(pdb_trimmed_common_sequence) > 1024:  
+    #    # Unlike ESM-1v, ESM-2 models (like facebook/esm2_t33_650M_UR90S_1 
+    #    # or the larger 3B variant) use RoPE (Rotary Position Embeddings).
+    #    # RoPE does away with absolute position tables, allowing the 
+    #    # model to dynamically extrapolate and process sequences longer 
+    #    # than 1024 without throwing CUDA out-of-bounds errors.
+    #    # Or run ProSST solo...
+    #    gremlin_opt = True
+    #    batch_size = 1
+    #else:
+    #    gremlin_opt = True
+    #    batch_size = 5
+    #    print('GREMLIN DCA (MSA optimization)...')
     gremlin = GREMLIN(
         alignment=msa_file, opt_iter=100, optimize=gremlin_opt
     )
