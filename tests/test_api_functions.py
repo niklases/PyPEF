@@ -57,6 +57,7 @@ from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
 from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
 from pypef.gaussian_process.kermut.gp.predict import predict
 
+os.environ["TQDM_DISABLE"] = "0"  # "0": show tqdm progress bars, "1": disable progress bars
 LOGGING = False
 if LOGGING:
     import logging
@@ -1025,96 +1026,114 @@ def test_gaussian_process_opt():
     train_inputs = prepare_kermut_inputs(
         seqs=s_train_blat,
         x_embed=x_prosst_emb_train,
-        x_zero_shot=x_zero_shot_train_prosst
+        x_zero_shot=x_zero_shot_train_prosst,
+        device=device
     )
 
     # Option A: Using RBF (Default)
     gp, likelihood = instantiate_gp(
         train_inputs=train_inputs,
-        train_targets=y_train.cpu(),
-        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        train_targets=y_train,
+        gp_inputs={
+            "aa_cond_probs": aa_cond_probs, 
+            "struct_coords": struct_coords, 
+            "wt_seq": wt_seq
+        },
         use_structure_kernel=True,
         use_sequence_kernel=True,
         sequence_kernel_type="RBF",
         use_zero_shot=True,
-        use_gpu=False
+        device=device
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
 
     # Predict
     test_inputs = prepare_kermut_inputs(
         seqs=s_test_blat,
         x_embed=x_prosst_emb_test,
-        x_zero_shot=x_zero_shot_test_prosst
+        x_zero_shot=x_zero_shot_test_prosst,
+        device=device
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
-    print("Supervised Kermut Spearman ProSST Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
-    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8460823505146906, decimal=3)
+    print("Supervised Kermut Spearman ProSST Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
+    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred.cpu())[0], 0.8460823505146906, decimal=3)
 
     # Only ESM
     ##########
     train_inputs = prepare_kermut_inputs(
         seqs=s_train_blat,
         x_embed=x_esm_emb_train,
-        x_zero_shot=x_zero_shot_train_esm
+        x_zero_shot=x_zero_shot_train_esm,
+        device=device
     )
 
     # Option A: Using RBF (Default)
     gp, likelihood = instantiate_gp(
         train_inputs=train_inputs,
-        train_targets=y_train.cpu(),
-        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        train_targets=y_train,
+        gp_inputs={
+            "aa_cond_probs": aa_cond_probs, 
+            "struct_coords": struct_coords, 
+            "wt_seq": wt_seq
+        },
         use_structure_kernel=True,
         use_sequence_kernel=True,
         sequence_kernel_type="RBF",
         use_zero_shot=True,
-        use_gpu=False
+        device=device
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
 
     # Predict
     test_inputs = prepare_kermut_inputs(
         seqs=s_test_blat,
         x_embed=x_esm_emb_test,
-        x_zero_shot=x_zero_shot_test_esm
+        x_zero_shot=x_zero_shot_test_esm,
+        device=device
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
-    print("Supervised Kermut Spearman ESM Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    print("Supervised Kermut Spearman ESM Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
 
     # ESM(Seq.) + PROSST(Struct.)
     train_inputs = prepare_kermut_inputs(
         seqs=s_train_blat,
         x_embed=x_esm_emb_train,
-        x_zero_shot=x_zero_shot_train_prosst
+        x_zero_shot=x_zero_shot_train_prosst,
+        device=device
     )
 
     # Option A: Using RBF (Default)
     gp, likelihood = instantiate_gp(
         train_inputs=train_inputs,
-        train_targets=y_train.cpu(),
-        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        train_targets=y_train,
+        gp_inputs={
+            "aa_cond_probs": aa_cond_probs, 
+            "struct_coords": struct_coords, 
+            "wt_seq": wt_seq
+        },
         use_structure_kernel=True,
         use_sequence_kernel=True,
         sequence_kernel_type="RBF",
         use_zero_shot=True,
-        use_gpu=False
+        device=device
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
 
     # Predict
     test_inputs = prepare_kermut_inputs(
         seqs=s_test_blat,
         x_embed=x_esm_emb_test,
-        x_zero_shot=x_zero_shot_test_prosst
+        x_zero_shot=x_zero_shot_test_prosst,
+        device=device
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
-    print("Supervised Kermut Spearman ESM-Seq. + ProSST-Struct. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
+    print("Supervised Kermut Spearman ESM-Seq. + ProSST-Struct. Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
 
     ######## Concat. Combined
 
@@ -1149,41 +1168,47 @@ def test_gaussian_process_opt():
     train_inputs = prepare_kermut_inputs(
         seqs=s_train_blat,
         x_embed=x_combined_embeddings_train,
-        x_zero_shot=x_combined_zs_train
+        x_zero_shot=x_combined_zs_train,
+        device=device
     )
 
     # Option A: Using RBF (Default)
     gp, likelihood = instantiate_gp(
         train_inputs=train_inputs,
-        train_targets=y_train.cpu(),
-        gp_inputs={"aa_cond_probs": aa_cond_probs.cpu(), "struct_coords": struct_coords, "wt_seq": wt_seq},
+        train_targets=y_train,
+        gp_inputs={
+            "aa_cond_probs": aa_cond_probs, 
+            "struct_coords": struct_coords, 
+            "wt_seq": wt_seq
+        },
         use_structure_kernel=True,
         use_sequence_kernel=True,
         sequence_kernel_type="RBF",
         use_zero_shot=True,
-        use_gpu=False
+        device=device
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train.cpu(), lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
 
     # Predict
     test_inputs = prepare_kermut_inputs(
         seqs=s_test_blat,
         x_embed=x_combined_embeddings_test,
-        x_zero_shot=x_combined_zs_test
+        x_zero_shot=x_combined_zs_test,
+        device=device
     )
     test_means_pred, _test_variances = predict(gp, likelihood, test_inputs)
 
-    print("Supervised Kermut Spearman ESM + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred)[0])
-    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred)[0], 0.8664669154182213, decimal=3)
+    print("Supervised Kermut Spearman ESM + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
+    np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred.cpu())[0], 0.8664669154182213, decimal=3)
 
 
 
 
 if __name__ == "__main__":
-    #test_gremlin_avgfp()
-    #test_hybrid_model_dca_llm_aneh()
+    test_gremlin_avgfp()
+    test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
     test_plm_corr_blat_ecolx()

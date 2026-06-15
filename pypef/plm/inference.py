@@ -664,7 +664,7 @@ def plm_train(
         )
         pbar_epochs.set_description(
             f'Epoch {epoch}/{n_epochs} [SpearCorr: {epoch_spearman_2:.3f}, Loss: {loss_total:.3f}] '
-            f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f})')
+            f'(Best epoch: {best_model_epoch}: {best_model_perf:.3f}) ({device.upper()})')
     if progress_cb:
         progress_cb(epoch, batch + 1, len(pbar_epochs), len(pbar_batches), loss)
     if best_model is None:
@@ -711,8 +711,11 @@ def get_plm_embeddings(
         variants: str | None = None,
         plm_inference_function=None,
         verbose: bool = True,
+        device: str | None = None,
         **embedding_func_kwargs
 ):
+    if device is None:
+        device = get_device()
     desc=f"Getting PLM embeddings (mode={mode})"
     if extract_conditional_aa_prob:
         desc=f"Getting AA cond. probs. from PLM embeddings"
@@ -731,7 +734,8 @@ def get_plm_embeddings(
         full_embs = plm_inference_function(
             tokenized_sequences=batch_seqs, model=model, wt_input_ids=wt_input_ids, 
             attention_mask=attention_mask, extract_emb=extract_emb, 
-            extract_conditional_aa_prob=extract_conditional_aa_prob, **embedding_func_kwargs
+            extract_conditional_aa_prob=extract_conditional_aa_prob, 
+            device= device, **embedding_func_kwargs
         )
         batch_variants = None
         if variants is not None:
@@ -747,7 +751,10 @@ def get_plm_embeddings(
         if end_idx >= len(tokenized_sequences):
             final_rows = sum(x.shape[0] for x in processed_embs)
             final_shape = (final_rows, *processed_embs[0].shape[1:])
-            pbar.set_description(f"{desc}: final shape={final_shape}")
+            pbar.set_description(
+                f"{desc}: final shape={final_shape} "
+                f"({str(full_embs.device).upper().split(':')[0]})"
+            )
     processed_embs = torch.cat(processed_embs, dim=0)
     return processed_embs
 

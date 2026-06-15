@@ -9,6 +9,7 @@ import torch
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import HalfCauchyPrior
 
+from pypef.utils.helpers import get_device
 from pypef.gaussian_process.kermut.gp.kermut_gp import KermutGP
 from pypef.gaussian_process.kermut.kernels.structure_kernel import StructureKernel
 from pypef.gaussian_process.kermut.kernels.sequence_kernel import SequenceKernel
@@ -24,8 +25,8 @@ def instantiate_gp(
     use_zero_shot: bool = True,
     use_prior: bool = True,
     noise_prior_scale: float = 0.1,
-    use_gpu: bool = False,
     sequence_kernel_type: str = "RBF",
+    device: str | None = None,
     sequence_kernel_kwargs: Optional[Dict[str, Any]] = None,
     structure_kernel_kwargs: Optional[Dict[str, Any]] = None,
 ) -> Tuple[KermutGP, GaussianLikelihood]:
@@ -33,6 +34,9 @@ def instantiate_gp(
     Sequence and structure kernels can be used providing two different model inputs (e.g. sequence 
     kernel input information from ESM and structure kernel information from ProSST or PMPNN). 
     """
+
+    if device is None:
+        device = get_device()
     
     train_inputs = tuple(
         x.float() if (isinstance(x, torch.Tensor) and torch.is_floating_point(x)) else x 
@@ -73,10 +77,10 @@ def instantiate_gp(
         
         if isinstance(wt_sequence, str):
             tokenizer = Tokenizer()
-            wt_sequence_tensor = tokenizer(wt_sequence).float().cpu()
+            wt_sequence_tensor = tokenizer(wt_sequence).float()
         else:
-            wt_sequence_tensor = wt_sequence
-        struct_kwargs.setdefault("wt_sequence", wt_sequence_tensor)
+            wt_sequence_tensor = wt_sequence.float()
+        struct_kwargs.setdefault("wt_sequence", wt_sequence_tensor.to(device))
 
         # Safe extraction of Conditional Probabilities (prevents multi-element array crashes)
         cond_probs = gp_inputs.get("conditional_probs")
@@ -85,7 +89,7 @@ def instantiate_gp(
             
         if cond_probs is None:
             raise ValueError("StructureKernel requires 'conditional_probs' or 'aa_cond_probs' inside gp_inputs.")
-        struct_kwargs.setdefault("conditional_probs", cond_probs)
+        struct_kwargs.setdefault("conditional_probs", cond_probs.to(device))
         
         # Extract coordinates and assign to the exact key 'coords' that the kernel requires
         coords = gp_inputs.get("coords") 
@@ -97,7 +101,7 @@ def instantiate_gp(
             raise ValueError("StructureKernel requires 'coords', 'struct_coords', or 'structure_coords' inside gp_inputs.")
         if not isinstance(coords, torch.Tensor):
             coords = torch.as_tensor(coords)
-        struct_kwargs.setdefault("coords", coords)
+        struct_kwargs.setdefault("coords", coords.to(device))
 
         struct_kernel = StructureKernel(**struct_kwargs)
 
@@ -113,8 +117,7 @@ def instantiate_gp(
         **gp_inputs,
     )
     
-    if use_gpu and torch.cuda.is_available():
-        gp = gp.cuda()
-        likelihood = likelihood.cuda()
+    gp = gp.to(device)
+    likelihood = likelihood.to(device)
 
     return gp, likelihood

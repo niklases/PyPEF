@@ -358,26 +358,35 @@ class GREMLIN:
         self.v = torch.from_numpy(v_ini).to(torch.float32).requires_grad_(True).to(self.device)
         self.w = torch.zeros(
             size=(self.n_col, self.states, self.n_col, self.states)
-            ).to(torch.float32).requires_grad_(True).to(self.device)
+        ).to(torch.float32).requires_grad_(True).to(self.device)
 
         self.msa = torch.Tensor(self.msa_trimmed).to(torch.int64).to(self.device)
-        self.oh_msa = torch.nn.functional.one_hot(self.msa, self.states).to(torch.float32).to(self.device)
-        self.msa_weights = torch.from_numpy(self.msa_weights).to(torch.float32).to(self.device)
+        self.oh_msa = torch.nn.functional.one_hot(
+            self.msa, self.states
+        ).to(torch.float32).to(self.device)
+        self.msa_weights = torch.from_numpy(
+            self.msa_weights
+        ).to(torch.float32).to(self.device)
 
         self.mt_v, self.vt_v = torch.zeros_like(self.v), torch.zeros_like(self.v)
         self.mt_w, self.vt_w = torch.zeros_like(self.w), torch.zeros_like(self.w)
         current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
         logger.info(f'Initial loss: {current_loss:.5f}')
         progress = tqdm(list(range(self.opt_iter)))
-        progress.set_description(f'MSA-based DCA opt.: Loss step 0: {current_loss:.5f}')
+        device = str(self.v.device).split(':')[0].upper()
+        progress.set_description(f'MSA-based DCA opt.: Loss step 0: {current_loss:.5f} ({device})')
         for i in progress:
             self.opt_adam_step()
             # Takes about 30% extra time to calculate current_loss at each step vs not computing it at all
             if (i + 1) % 10 == 0:
                 current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
-                progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f}')
+                progress.set_description(
+                    f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f} ({device})'
+                )
         current_loss = self.loss(self.v, self.w).item() * self.n_eff.item()
-        progress.set_description(f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f}')
+        progress.set_description(
+            f'MSA-based DCA opt.: Loss step {i + 1}: {current_loss:.5f} ({device})'
+        )
         
         self.v = self.v.detach().cpu().numpy()
         self.w = self.w.detach().cpu().numpy()

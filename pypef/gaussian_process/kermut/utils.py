@@ -16,18 +16,22 @@ from gpytorch.means import ConstantMean, LinearMean
 from gpytorch.distributions import MultivariateNormal
 from gpytorch.mlls import ExactMarginalLogLikelihood
 
+from pypef.utils.helpers import get_device
 from pypef.gaussian_process.kermut.tokenizer import Tokenizer
 
 
 def prepare_kermut_inputs(
     seqs: List[str],
     x_embed: torch.Tensor,
-    x_zero_shot: torch.Tensor
+    x_zero_shot: torch.Tensor,
+    device: str | None = None
 ) -> Tuple[torch.Tensor, ...]:
     """Generates the properly routed and structured tensor tuples for training and testing.
     Handles internal structural alignment constraints using Kermut's specific Tokenizer.
     """
+    if device is None:
+        device == get_device()
     tokenizer = Tokenizer()
-    x_kermut_toks = torch.stack([tokenizer(seq) for seq in seqs]).float().cpu()
-    inputs = (x_kermut_toks, x_embed.cpu(), x_zero_shot.cpu())
+    x_kermut_toks = torch.stack([tokenizer(seq) for seq in seqs]).float()
+    inputs = (x_kermut_toks.to(device), x_embed.to(device), x_zero_shot.to(device))
     return inputs

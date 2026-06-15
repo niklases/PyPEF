@@ -696,13 +696,14 @@ class DCALLMHybridModel:
 
                 self.embs_ttrain[llm_name] = embs_ttrain
                 self.embs_ttest[llm_name] = embs_ttest
-                self.scores_ttrain[llm_name] = y_llm_ttrain.cpu()
-                self.scores_ttest[llm_name] = y_llm_ttest.cpu()
+                self.scores_ttrain[llm_name] = y_llm_ttrain
+                self.scores_ttest[llm_name] = y_llm_ttest
 
                 train_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttrain,
                     x_embed=embs_ttrain,
-                    x_zero_shot=y_llm_ttrain
+                    x_zero_shot=y_llm_ttrain,
+                    device=self.device
                 )
 
                 struct_coords = extract_pdb_coords(
@@ -712,22 +713,22 @@ class DCALLMHybridModel:
 
                 gp, likelihood = instantiate_gp(
                     train_inputs=train_inputs,
-                    train_targets=torch.tensor(self.y_ttrain).cpu(),
+                    train_targets=torch.tensor(self.y_ttrain).to(self.device),
                     gp_inputs={
-                        "aa_cond_probs": aa_cond_probs.cpu(), 
-                        "struct_coords": struct_coords, 
+                        "aa_cond_probs": aa_cond_probs, 
+                        "struct_coords": torch.tensor(struct_coords).to(self.device), 
                         "wt_seq": self.wt_sequence
                     },
                     use_structure_kernel=True,
                     use_sequence_kernel=True,
                     sequence_kernel_type="RBF",
                     use_zero_shot=True,
-                    use_gpu=False
+                    device=self.device
                 )
 
                 # Train
                 gp, likelihood = optimize_gp(
-                    gp, likelihood, train_inputs, torch.tensor(self.y_ttrain).cpu(), 
+                    gp, likelihood, train_inputs, torch.tensor(self.y_ttrain).to(self.device), 
                     lr=0.05, n_steps=150
                 )
                 self.gp_models[llm_name] = gp
@@ -739,7 +740,8 @@ class DCALLMHybridModel:
                 test_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttest,
                     x_embed=embs_ttest,
-                    x_zero_shot=y_llm_ttest
+                    x_zero_shot=y_llm_ttest,
+                    device=self.device
                 )
 
                 self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
@@ -754,7 +756,7 @@ class DCALLMHybridModel:
                 )
                 self.betas_str += f"{llm_name}-GP, "
         
-        if self.gauss_opt:
+        if self.gauss_opt:  # Combined (two PLM) GP kernel approach
             if len(self.llm_keys) >= 2:
                 # Extract and concatenate all embedding tensors along the feature dimension
                 # dict.values() extracts just the underlying tensors
@@ -767,7 +769,6 @@ class DCALLMHybridModel:
                     list(self.embs_ttest.values()), 
                     dim=-1
                 )
-
 
                 # Extract, unsqueeze 1D vectors to 2D columns, and concatenate zero-shot scores
                 # Using a list comprehension to safely sanitize dimensions on the fly
@@ -783,12 +784,11 @@ class DCALLMHybridModel:
                 ]
                 x_combined_zs_test = torch.cat(zs_test_tensors, dim=-1)
                 
-
-
                 train_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttrain,
                     x_embed=x_combined_embeddings_train,
-                    x_zero_shot=x_combined_zs_train
+                    x_zero_shot=x_combined_zs_train,
+                    device=self.device
                 )
 
                 struct_coords = extract_pdb_coords(
@@ -798,22 +798,23 @@ class DCALLMHybridModel:
 
                 gp, likelihood = instantiate_gp(
                     train_inputs=train_inputs,
-                    train_targets=torch.tensor(self.y_ttrain).cpu(),
+                    train_targets=torch.tensor(self.y_ttrain).to(self.device),
                     gp_inputs={
-                        "aa_cond_probs": aa_cond_probs.cpu(), 
-                        "struct_coords": struct_coords, 
+                        "aa_cond_probs": aa_cond_probs.to(self.device), 
+                        "struct_coords": torch.tensor(struct_coords).to(self.device), 
                         "wt_seq": self.wt_sequence
                     },
                     use_structure_kernel=True,
                     use_sequence_kernel=True,
                     sequence_kernel_type="RBF",
                     use_zero_shot=True,
-                    use_gpu=False
+                    device=self.device
                 )
 
                 # Train
                 gp, likelihood = optimize_gp(
-                    gp, likelihood, train_inputs, torch.tensor(self.y_ttrain).cpu(), 
+                    gp, likelihood, train_inputs, 
+                    torch.tensor(self.y_ttrain).to(self.device), 
                     lr=0.05, n_steps=150
                 )
 
@@ -823,7 +824,8 @@ class DCALLMHybridModel:
                 test_inputs = prepare_kermut_inputs(
                     seqs=self.sequences_ttest,
                     x_embed=x_combined_embeddings_test,
-                    x_zero_shot=x_combined_zs_test
+                    x_zero_shot=x_combined_zs_test,
+                    device=self.device
                 )
 
                 combined_pred_ttest, _test_variances = predict(gp, likelihood, test_inputs)
@@ -951,13 +953,14 @@ class DCALLMHybridModel:
                         wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
 
-                    self.embs_pred[llm_name] = llm_embs_pred.cpu()
-                    self.zs_scores_pred[llm_name] = y_base.cpu()
+                    self.embs_pred[llm_name] = llm_embs_pred
+                    self.zs_scores_pred[llm_name] = y_base
 
                     pred_inputs = prepare_kermut_inputs(
                         seqs=sequences,
                         x_embed=llm_embs_pred,
-                        x_zero_shot=y_base.cpu()
+                        x_zero_shot=y_base,
+                        device=self.device
                     )
 
                     y_gp_opt_pred, _test_variances = predict(self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs)
@@ -982,7 +985,8 @@ class DCALLMHybridModel:
                 pred_inputs = prepare_kermut_inputs(
                     seqs=sequences,
                     x_embed=x_combined_embeddings_pred,
-                    x_zero_shot=x_combined_zs_pred
+                    x_zero_shot=x_combined_zs_pred,
+                    device=self.device
                 )
                 combined_gp_pred_mean, _test_variances = predict(
                     self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs

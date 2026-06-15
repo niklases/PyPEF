@@ -301,7 +301,7 @@ def _hellinger_distance(p: torch.tensor, q: torch.tensor) -> torch.Tensor:
         hellinger_tril = torch.sqrt(
             0.5 * torch.sum((torch.sqrt(p[tril_i]) - torch.sqrt(q[tril_j])) ** 2, dim=1)
         )
-        hellinger_matrix = torch.zeros((batch_size, batch_size))
+        hellinger_matrix = torch.zeros((batch_size, batch_size), device=p.device, dtype=p.dtype)
         hellinger_matrix[tril_i, tril_j] = hellinger_tril
         hellinger_matrix[tril_j, tril_i] = hellinger_tril
     else:
