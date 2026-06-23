@@ -10,7 +10,7 @@ file_path = os.path.dirname(__file__)
 
 # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
 target_folds = ["fold_random_5", "fold_modulo_5", "fold_contiguous_5"]
-llm = 'prosst+esm1v'
+llm = 'prosst+esm'
 
 
 def get_target_folder(split_method):

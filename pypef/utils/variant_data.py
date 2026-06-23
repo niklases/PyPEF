@@ -632,35 +632,261 @@ def extract_positions_from_sequences(wt_seq, variant_seqs):
     return np.array(groups, dtype=object)
 
 
-def positional_train_test_split(*arrays, wt_sequence, variant_sequences, train_size, random_state, verbose=False):
+def positional_train_test_split(
+        *arrays, 
+        wt_sequence, 
+        variant_sequences, 
+        train_size, 
+        random_state, 
+        shared_fraction=0.0, 
+        verbose=False
+):
     """
     Splits data based on mutated positions derived from sequence comparison.
+    
+    Parameters:
+    -----------
+    shared_fraction : float, default=0.0
+        The fraction (0.0 to 1.0) of unique biological positions that are allowed 
+        to bleed/integrate into both training and testing sets.
     """
+    # Extract true biological mutation positions
     groups = extract_positions_from_sequences(wt_sequence, variant_sequences)
+    raw_groups = groups.copy() # Backup copy for accurate positional statistics
 
+    # Identify all unique biological positions across the dataset
+    all_positions = sorted(list(set(p for g in groups for p in g)))
+    total_unique_positions = len(all_positions)
+
+    # Randomly sample a fraction of positions to be shared
+    shared_set = set()
+    if shared_fraction > 0.0 and total_unique_positions > 0:
+        # Determine how many positions match the requested fraction
+        num_to_share = int(np.round(total_unique_positions * shared_fraction))
+        
+        # Use a localized RandomState tied to self.seed for reproducible sampling
+        rng = np.random.RandomState(random_state)
+        shared_sampled = rng.choice(all_positions, size=num_to_share, replace=False)
+        shared_set = set(shared_sampled)
+
+    # Inject dummy groups for positions allowed to bypass strict grouping
+    if shared_set:
+        modified_groups = []
+        for idx, g in enumerate(groups):
+            # If a variant contains any mutation at a chosen shared position, 
+            # bypass strict group containment by giving it a totally unique ID.
+            if any(pos in shared_set for pos in g):
+                modified_groups.append(f"shared_row_{idx}")
+            else:
+                modified_groups.append(f"pos_{'_'.join(map(str, g))}" if g else "wt")
+        groups = np.array(modified_groups, dtype=str)
+
+    # Calculate train ratio
     if isinstance(train_size, int):
         train_ratio = train_size / len(variant_sequences)
     else:
         train_ratio = float(train_size)
 
+    # Perform the split
     gss = GroupShuffleSplit(n_splits=1, train_size=train_ratio, random_state=random_state)
     all_splits = list(gss.split(variant_sequences, groups=groups))
     train_idx, test_idx = all_splits[0]
 
+    # Enhanced Logging
     if verbose:
-        # FIX: Force elements to be tuples so Python sets can hash them
-        train_groups = set(tuple(g) for g in groups[train_idx])
-        test_groups = set(tuple(g) for g in groups[test_idx])
-        all_unique_groups = set(tuple(g) for g in groups)
+        # Extract underlying biological positions actually used in each set
+        train_positions = set(p for g in raw_groups[train_idx] for p in g)
+        test_positions = set(p for g in raw_groups[test_idx] for p in g)
+        
+        # Cross-contamination metrics
+        actual_overlapping = train_positions.intersection(test_positions)
+        
         logger.info(
-            f"Positional split summary: target train ratio: {train_ratio:.1%}, "
-            f"total sequences: {len(variant_sequences)}, total unique groups: {len(all_unique_groups)}. "
-            f"Train set: sequences: {len(train_idx)} ({(len(train_idx)/len(variant_sequences)):.1%}) "
-            f"groups (positions): {len(train_groups)}. "
-            f"Test set: sequences: {len(test_idx)} ({(len(test_idx)/len(variant_sequences)):.1%}), "
-            f"groups (positions): {len(test_groups)}"
+            f"Positional Split Summary (Shared Fraction: {shared_fraction:.1%}): "
+            f" - Target Train Ratio: {train_ratio:.1%}  "
+            f" - Total Sequences: {len(variant_sequences)}  "
+            f" - Total Bio Positions: {total_unique_positions}  "
+            f" - Intentionally Shared: {len(shared_set)} positions  "
+            f" - Train Set Size: {len(train_idx)} sequences "
+            f"({(len(train_idx)/len(variant_sequences)):.1%})  "
+            f" - Test Set Size: {len(test_idx)} sequences "
+            f"({(len(test_idx)/len(variant_sequences)):.1%})  "
+            f" - Actual Position Overlap between sets: {len(actual_overlapping)} positions"
         )
 
+    # Reconstruct flat array layout
+    splits = []
+    for arr in arrays:
+        if isinstance(arr, np.ndarray):
+            splits.extend([arr[train_idx], arr[test_idx]])
+        elif hasattr(arr, 'iloc'): 
+            splits.extend([arr.iloc[train_idx], arr.iloc[test_idx]])
+        else:
+            splits.extend([[arr[i] for i in train_idx], [arr[i] for i in test_idx]])
+
+    return splits
+
+
+def contiguous_train_test_split(*arrays, wt_sequence, variant_sequences, train_size, random_state, verbose=False):
+    """
+    Splits data by holding out a single continuous block of mutated positions.
+    """
+    groups = extract_positions_from_sequences(wt_sequence, variant_sequences)
+    all_positions = sorted(list(set(p for g in groups for p in g)))
+    
+    if isinstance(train_size, int):
+        train_ratio = train_size / len(variant_sequences)
+    else:
+        train_ratio = float(train_size)
+        
+    test_ratio = 1.0 - train_ratio
+    
+    # 1. Determine how wide the continuous test block should be
+    num_test_positions = max(1, int(round(len(all_positions) * test_ratio)))
+    
+    # 2. Pick a random starting point for the continuous block
+    rng = np.random.RandomState(random_state)
+    max_start_idx = max(0, len(all_positions) - num_test_positions)
+    start_idx = rng.randint(0, max_start_idx + 1)
+    
+    # 3. Define the contiguous test block
+    test_positions = set(all_positions[start_idx : start_idx + num_test_positions])
+    
+    # 4. Assign sequences
+    train_idx, test_idx = [], []
+    for i, g in enumerate(groups):
+        if any(p in test_positions for p in g):
+            test_idx.append(i)
+        else:
+            train_idx.append(i)
+            
+    if verbose:
+        logger.info(
+            f"Contiguous Split Summary: Holding out {num_test_positions} contiguous "
+            f"positions starting at idx {start_idx}. Train seqs: {len(train_idx)}, "
+            f"Test seqs: {len(test_idx)}"
+        )
+        
+    # 5. Reconstruct arrays
+    splits = []
+    for arr in arrays:
+        if isinstance(arr, np.ndarray):
+            splits.extend([arr[train_idx], arr[test_idx]])
+        elif hasattr(arr, 'iloc'): 
+            splits.extend([arr.iloc[train_idx], arr.iloc[test_idx]])
+        else:
+            splits.extend([[arr[i] for i in train_idx], [arr[i] for i in test_idx]])
+            
+    return splits
+
+
+def modulo_train_test_split(*arrays, wt_sequence, variant_sequences, train_size, random_state, verbose=False):
+    """
+    Splits data by holding out every N-th mutated position (Modulo split).
+    """
+    groups = extract_positions_from_sequences(wt_sequence, variant_sequences)
+    
+    # 1. Get strictly sorted unique biological positions
+    all_positions = sorted(list(set(p for g in groups for p in g)))
+    
+    # 2. Calculate the modulo step based on requested train ratio
+    if isinstance(train_size, int):
+        train_ratio = train_size / len(variant_sequences)
+    else:
+        train_ratio = float(train_size)
+        
+    test_ratio = 1.0 - train_ratio
+    
+    # E.g., if test_ratio is 0.2 (20%), we want every 5th position (1 / 0.2 = 5)
+    modulo_step = max(2, int(round(1.0 / test_ratio)) if test_ratio > 0 else 1)
+    
+    # 3. Use random_state to pick where the modulo counting starts
+    rng = np.random.RandomState(random_state)
+    offset = rng.randint(0, modulo_step)
+    
+    # 4. Define test positions
+    test_positions = set(all_positions[offset::modulo_step])
+    
+    # 5. Assign sequences to train/test based on their mutated positions
+    train_idx, test_idx = [], []
+    for i, g in enumerate(groups):
+        # If any mutation in the sequence hits a modulo test position, hold it out
+        if any(p in test_positions for p in g):
+            test_idx.append(i)
+        else:
+            train_idx.append(i)
+            
+    if verbose:
+        logger.info(
+            f"Modulo Split Summary: Holding out every {modulo_step}th position "
+            f"(offset={offset}). Train seqs: {len(train_idx)}, Test seqs: {len(test_idx)}"
+        )
+        
+    # 6. Reconstruct arrays
+    splits = []
+    for arr in arrays:
+        if isinstance(arr, np.ndarray):
+            splits.extend([arr[train_idx], arr[test_idx]])
+        elif hasattr(arr, 'iloc'): 
+            splits.extend([arr.iloc[train_idx], arr.iloc[test_idx]])
+        else:
+            splits.extend([[arr[i] for i in train_idx], [arr[i] for i in test_idx]])
+            
+    return splits
+
+
+def block_random_train_test_split(*arrays, wt_sequence, variant_sequences, train_size, random_state, block_size=3, verbose=False):
+    """
+    Splits data by grouping mutated positions into continuous blocks (chunks) 
+    and randomly assigning those blocks to train or test sets. 
+    Acts as a hybrid of random and contiguous splitting.
+    """
+    groups = extract_positions_from_sequences(wt_sequence, variant_sequences)
+    
+    # 1. Get strictly sorted unique biological positions
+    all_positions = sorted(list(set(p for g in groups for p in g)))
+    
+    # 2. Group the positions into continuous chunks
+    chunks = [all_positions[i:i + block_size] for i in range(0, len(all_positions), block_size)]
+    
+    # 3. Calculate target ratios
+    if isinstance(train_size, int):
+        train_ratio = train_size / len(variant_sequences)
+    else:
+        train_ratio = float(train_size)
+        
+    # 4. Determine how many chunks go to the training set
+    num_train_chunks = int(round(len(chunks) * train_ratio))
+    
+    # 5. Randomly shuffle the chunks
+    rng = np.random.RandomState(random_state)
+    shuffled_chunks = chunks.copy()
+    rng.shuffle(shuffled_chunks)
+    
+    # 6. Assign chunks to sets
+    train_chunks = shuffled_chunks[:num_train_chunks]
+    test_chunks = shuffled_chunks[num_train_chunks:]
+    
+    # Flatten the test chunks back into a set of distinct positions
+    test_positions = set(p for chunk in test_chunks for p in chunk)
+    
+    # 7. Assign sequences based on their mutated positions
+    train_idx, test_idx = [], []
+    for i, g in enumerate(groups):
+        # If any mutation hits a blocked test position, hold out the variant
+        if any(p in test_positions for p in g):
+            test_idx.append(i)
+        else:
+            train_idx.append(i)
+            
+    if verbose:
+        logger.info(
+            f"Block-Random Split Summary (Block Size: {block_size}): "
+            f"Total distinct positions: {len(all_positions)} split into {len(chunks)} blocks. "
+            f"Train seqs: {len(train_idx)}, Test seqs: {len(test_idx)}"
+        )
+        
+    # 8. Reconstruct flat array layout
     splits = []
     for arr in arrays:
         if isinstance(arr, np.ndarray):

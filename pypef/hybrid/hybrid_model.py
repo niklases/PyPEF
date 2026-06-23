@@ -31,7 +31,8 @@ from scipy.optimize import differential_evolution
 
 from pypef.settings import USE_RAY
 from pypef.utils.variant_data import (
-    extract_pdb_coords, get_sequences_from_file, positional_train_test_split, 
+    block_random_train_test_split, contiguous_train_test_split, extract_pdb_coords, 
+    get_sequences_from_file, modulo_train_test_split, positional_train_test_split, 
     remove_nan_encoded_positions
 )
 import pypef.dca.plmc_encoding
@@ -73,6 +74,7 @@ class DCALLMHybridModel:
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
             splitting_scheme: str = 'random',
+            shared_fraction: float | None = None,
             lora_train: bool = False,
             gauss_opt: bool = False,
             pdb_struct: str | os.PathLike | None = None,
@@ -119,6 +121,9 @@ class DCALLMHybridModel:
         self.parameter_range = parameter_range
         self.ensemble_func = ensemble_func
         self.splitting_scheme = splitting_scheme
+        if shared_fraction is None:
+            shared_fraction = 0.0
+        self.shared_fraction = shared_fraction
         self.gauss_opt = gauss_opt
         self.pdb_struct = pdb_struct
         self.lora_train = lora_train
@@ -462,11 +467,13 @@ class DCALLMHybridModel:
         )
         train_size_fit = int(train_size_fit * len(self.y_train))
         train_size_beta_adjustment = len(self.y_train) - train_size_fit
-        logger.info(f"Splitting training data of size {len(self.y_train)} "
-              f"into {train_size_fit} variants for model tuning and "
-              f"{train_size_beta_adjustment} variants for hybrid model "
-              f"beta adjustment...")
-        #if len(self.parameter_range) >= 4:
+        logger.info(
+            f"Splitting training data of size {len(self.y_train)} "
+            f"into {train_size_fit} variants for model tuning and "
+            f"{train_size_beta_adjustment} variants for hybrid model "
+            f"beta adjustment using the {self.splitting_scheme} "
+            f"splitting scheme..."
+        )
         # Reduce sizes by batch modulo
         n_drop = train_size_fit % self.batch_size
         if n_drop > 0:
@@ -475,7 +482,7 @@ class DCALLMHybridModel:
             logger.info(
                   f"Shifting {n_drop} variants from training set to "
                   f"beta adjustment set to match batch requirements "
-                  f"of batch size {self.batch_size} for LLM retraining "
+                  f"of batch size {self.batch_size} for PLM retraining "
                   f"resulting in {train_size_fit} variants for model "
                   f"tuning and {train_size_beta_adjustment} variants "
                   f"for determination of individual hybrid model weights "
@@ -492,7 +499,6 @@ class DCALLMHybridModel:
         if self.llm_keys is not None:
             for llm_name in self.llm_keys:
                 arrays_to_split.append(self.llm_data[llm_name]['x_llm'])
-        
         if self.splitting_scheme == "random":
             splits = train_test_split(
                 *arrays_to_split, 
@@ -501,6 +507,34 @@ class DCALLMHybridModel:
             )
         elif self.splitting_scheme == "positional":
             splits = positional_train_test_split(
+                *arrays_to_split,
+                wt_sequence=self.wt_sequence,
+                variant_sequences=self.sequences,
+                train_size=train_size_fit,
+                random_state=self.seed,
+                shared_fraction=self.shared_fraction,
+                verbose=self.verbose
+            )
+        elif self.splitting_scheme == "modulo":
+            splits = modulo_train_test_split(
+                *arrays_to_split,
+                wt_sequence=self.wt_sequence,
+                variant_sequences=self.sequences,
+                train_size=train_size_fit,
+                random_state=self.seed,
+                verbose=self.verbose
+            )
+        elif self.splitting_scheme == "contiguous":
+            splits = contiguous_train_test_split(
+                *arrays_to_split,
+                wt_sequence=self.wt_sequence,
+                variant_sequences=self.sequences,
+                train_size=train_size_fit,
+                random_state=self.seed,
+                verbose=self.verbose
+            )
+        elif self.splitting_scheme == "block-random":
+            splits = block_random_train_test_split(
                 *arrays_to_split,
                 wt_sequence=self.wt_sequence,
                 variant_sequences=self.sequences,
@@ -889,7 +923,7 @@ class DCALLMHybridModel:
             
             if self.gauss_opt:
                 predictors.extend(self.all_gp_ttest_scores)
-                performance_info_ttest += f"PLM Gaussian optimization: "
+                performance_info_ttest += f"PLM GaussProc opt.: "
                 for scores in self.all_gp_ttest_scores:
                     performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
         self.betas_str = self.betas_str[:-2] + ':'

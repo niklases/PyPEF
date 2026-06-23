@@ -76,13 +76,13 @@ print(f"Torch version: {torch.__version__}")
 torch_version = [int(i) for i in torch.__version__.split('+')[0].split('.')]
 torch_cpu_or_cuda_version = torch.__version__.split('+')[1]
 print(f"Using device: {device}")
-print(f"PyTorch Version: {torch.__version__}")
-print(f"CUDA Runtime (used by PyTorch): {torch.version.cuda}")
-print(f"cuDNN Version: {torch.backends.cudnn.version()}")
-print(f"Device Name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
+print(f"PyTorch version: {torch.__version__}")
+print(f"CUDA runtime (used by PyTorch): {torch.version.cuda}")
+print(f"cuDNN version: {torch.backends.cudnn.version()}")
+print(f"Device name: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}")
 
 # This checks which CUDA version PyTorch was COMPILED against
-print(f"PyTorch Compiled with CUDA: {torch.version.cuda}")
+print(f"PyTorch compiled with CUDA: {torch.version.cuda}")
 
 csv_blat_ecolx_avgfp = os.path.abspath(
     os.path.join(__file__, '../../datasets/AVGFP/avGFP.csv'
@@ -1148,7 +1148,7 @@ def test_gaussian_process_opt():
         dim=-1
     )
 
-    # 2. FIX: Safely expand 1D zero-shot vectors to 2D [400, 1] matrices before combining
+    # Safely expand 1D zero-shot vectors to 2D [400, 1] matrices before combining
     x_zs_train_prosst = x_zero_shot_train_prosst.unsqueeze(-1) if x_zero_shot_train_prosst.dim() == 1 else x_zero_shot_train_prosst
     x_zs_train_esm = x_zero_shot_train_esm.unsqueeze(-1) if x_zero_shot_train_esm.dim() == 1 else x_zero_shot_train_esm
 
@@ -1202,8 +1202,6 @@ def test_gaussian_process_opt():
 
     print("Supervised Kermut Spearman ESM + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred.cpu())[0], 0.8664669154182213, decimal=3)
-
-
 
 
 if __name__ == "__main__":

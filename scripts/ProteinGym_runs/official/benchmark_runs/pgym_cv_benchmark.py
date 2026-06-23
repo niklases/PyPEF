@@ -40,11 +40,12 @@ def main(cfg: DictConfig) -> None:
     else:
         ESM_REVISION = None
     PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
+    hybrid_model_split_scheme = cfg.hybrid_model_split_scheme   # 'random' or 'positional'
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
-    print("PLM:", llm)
+    print(f"PLM(s): {llm}, internal hybrid model split scheme {hybrid_model_split_scheme}")
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -273,7 +274,7 @@ def main(cfg: DictConfig) -> None:
             x_dca_wt=gremlin.x_wt,
             sequences=s_train,
             wt_sequence=pdb_trimmed_common_sequence,
-            splitting_scheme='positional',
+            splitting_scheme=hybrid_model_split_scheme,  # "block-random",
             lora_train=False,
             gauss_opt=gauss_opt,
             pdb_struct=pdb_file,

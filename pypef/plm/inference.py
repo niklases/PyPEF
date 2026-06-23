@@ -707,7 +707,7 @@ def get_plm_embeddings(
         attention_mask,
         mode: Literal["mean", "positional"] = "mean", 
         extract_conditional_aa_prob: bool = False,
-        batch_size:int = 250,
+        batch_size: int = 100,
         variants: str | None = None,
         plm_inference_function=None,
         verbose: bool = True,
@@ -735,7 +735,7 @@ def get_plm_embeddings(
             tokenized_sequences=batch_seqs, model=model, wt_input_ids=wt_input_ids, 
             attention_mask=attention_mask, extract_emb=extract_emb, 
             extract_conditional_aa_prob=extract_conditional_aa_prob, 
-            device= device, **embedding_func_kwargs
+            device=device, **embedding_func_kwargs
         )
         batch_variants = None
         if variants is not None:
