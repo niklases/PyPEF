@@ -545,7 +545,8 @@ class DCALLMHybridModel:
         else:
             raise RuntimeError(
                 f"Unknown splitting scheme '{self.splitting_scheme}' - "
-                f"splitting scheme has to be 'positional' or 'random'."
+                f"splitting scheme has to be 'random', 'block-random', "
+                f"'positional', 'modulo', or 'contiguous'."
             )
         
         self.x_dca_ttrain = splits[0]

@@ -50,15 +50,15 @@ if [ "$is_valid" = false ]; then
 fi
 
 for llm in prosst+esm; do
-    # Set max index based on split_method
+    # Set max index based on split_method and optionally try different hybrid_model_split_scheme's for internal data train -> val
     if [ "$split_method" = "fold_rand_multiples" ]; then
         max_idx=68
-        hybrid_model_split_scheme="random"
+        hybrid_model_split_scheme="block-random"  # "random", "block-random", "positional", "modulo", or "contiguous"
     else   # "fold_random_5", "fold_modulo_5", "fold_contiguous_5"
         if [ "$split_method" = "fold_random_5" ]; then
-            hybrid_model_split_scheme="random"
+            hybrid_model_split_scheme="block-random"
         else
-            hybrid_model_split_scheme="positional"
+            hybrid_model_split_scheme="block-random"
         fi
         max_idx=5
     fi

@@ -274,12 +274,13 @@ def main(cfg: DictConfig) -> None:
             x_dca_wt=gremlin.x_wt,
             sequences=s_train,
             wt_sequence=pdb_trimmed_common_sequence,
-            splitting_scheme=hybrid_model_split_scheme,  # "block-random",
+            splitting_scheme=hybrid_model_split_scheme,
             lora_train=False,
             gauss_opt=gauss_opt,
             pdb_struct=pdb_file,
             batch_size=batch_size,
-            n_epochs=50  # Only used if lora_train==True,
+            seed=seed,
+            n_epochs=None  # Only used if lora_train==True,
         )
         if len(pdb_trimmed_common_sequence) > 1500:
             llm_dict_test = None

@@ -11,7 +11,8 @@ DMS_MSA_data_path: ../data/DMS_msa_files
 DMS_PDB_data_path: ../data/ProteinGym_AF2_structures
 output_scores_folder: model_scores/supervised_substitutions
 
-seed: 2024
+hybrid_model_split_scheme: "block-random"
+seed: 2026
 progress_bar: false
 overwrite: false
 
@@ -24,5 +25,3 @@ hydra:
     dir: .
   job_logging:
     disable_existing_loggers: False
-
-  
