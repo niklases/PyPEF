@@ -57,61 +57,71 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
 
 
 def hybrid_corr_mse_loss(
-    y_true: torch.Tensor, 
-    y_pred: torch.Tensor, 
-    method: str = "spearman", 
-    tau: float = 0.1, 
-    alpha: float| None = None
+    y_true: torch.Tensor,
+    y_pred: torch.Tensor,
+    method: str = "spearman",
+    tau: float = 0.1,
+    alpha: float | None = None,
+    margin: float = 1.0
 ) -> torch.Tensor:
     """
-    Hybrid differentiable loss combining correlation (Spearman/Pearson) and MSE.
-    
+    Hybrid differentiable loss combining a ranking/correlation component and MSE.
+
     Args:
         y_true: Ground truth tensor.
         y_pred: Predicted tensor.
-        method: "spearman" (uses soft-ranking) or "pearson".
-        tau: Temperature for soft-rank approximation.
-        alpha: Weight for correlation loss. (1 - alpha) is weight for MSE:
-        alpha=0.0: only consider MSE, in between: hybrid loss, alpha=1.0: only 
-        consider Spearman correlation/ranking or Pearson correlation).
+        method: Loss method. Base methods: "spearman" (soft-ranking), "pearson",
+            "listMLE" (ListMLE ranking), "pairwise-margin" (pairwise hinge).
+            Append "-hybrid" for 50/50 mix with MSE.
+        tau: Temperature for soft-rank approximation (spearman only).
+        alpha: Weight for ranking/correlation loss component.
+            (1 - alpha) weights MSE. None auto-sets: 1.0 for base, 0.5 for hybrid.
+        margin: Margin for pairwise-margin loss (default 1.0).
     """
+    base_methods = ["spearman", "pearson", "listMLE", "pairwise-margin"]
+    hybrid_methods = [f"{m}-hybrid" for m in base_methods]
     if alpha is None:
-        if method in ["spearman", "pearson"]:
-            alpha=1.0
-        elif method in ["spearman-hybrid", "pearson-hybrid"]:
-            alpha=0.5
+        if method in base_methods:
+            alpha = 1.0
+        elif method in hybrid_methods:
+            alpha = 0.5
         else:
             raise RuntimeError(
                 "Alpha parameter for loss function is not defined. Define alpha or a method "
-                "from within ['spearman', 'pearson', 'spearman-hybrid', 'pearson-hybrid']."
+                f"from within {base_methods + hybrid_methods}."
             )
-    # Calculate Correlation Component
-    if method.startswith("spearman"):
-        # Soft rank approximation helper
+
+    if method.startswith("listMLE"):
+        _, indices = torch.sort(y_true, descending=True, dim=-1)
+        y_pred_sorted = y_pred[indices]
+        log_cumsum = torch.logcumsumexp(y_pred_sorted.flip(-1), dim=-1).flip(-1)
+        loss_corr = -(y_pred_sorted - log_cumsum).mean()
+    elif method.startswith("pairwise-margin"):
+        y_true_col = y_true.unsqueeze(-1)
+        y_pred_col = y_pred.unsqueeze(-1)
+        diff_true = y_true_col - y_true_col.transpose(-1, -2)
+        diff_pred = y_pred_col - y_pred_col.transpose(-1, -2)
+        mask = (diff_true > 0).float()
+        losses = torch.relu(margin - diff_pred) * mask
+        loss_corr = losses.sum() / mask.sum().clamp(min=1)
+    elif method.startswith("spearman"):
         def get_soft_ranks(z, t):
-            # z: (batch, n) -> (batch, n, 1)
             z_expanded = z.unsqueeze(-1)
-            # pairwise differences: (batch, n, n)
             diff = z_expanded - z_expanded.transpose(-1, -2)
-            # sigmoid approximation of indicator function
             P = torch.sigmoid(diff / t)
             return P.sum(dim=-1) + 0.5
-        
         rx = get_soft_ranks(y_true, tau)
         ry = get_soft_ranks(y_pred, tau)
+        rx_c = rx - rx.mean(dim=-1, keepdim=True)
+        ry_c = ry - ry.mean(dim=-1, keepdim=True)
+        loss_corr = -F.cosine_similarity(rx_c, ry_c, dim=-1).mean()
     elif method.startswith("pearson"):
-        rx = y_true
-        ry = y_pred
+        rx_c = y_true - y_true.mean(dim=-1, keepdim=True)
+        ry_c = y_pred - y_pred.mean(dim=-1, keepdim=True)
+        loss_corr = -F.cosine_similarity(rx_c, ry_c, dim=-1).mean()
     else:
         raise ValueError(f"Method {method} not supported.")
 
-    # Centering and Normalizing for Cosine Similarity (Correlation)
-    rx_c = rx - rx.mean(dim=-1, keepdim=True)
-    ry_c = ry - ry.mean(dim=-1, keepdim=True)
-    
-    # Cosine similarity of centered vectors = Correlation
-    corr = F.cosine_similarity(rx_c, ry_c, dim=-1).mean()
-    loss_corr = -corr  # We want to maximize correlation, so minimize negative
     loss_mse = F.mse_loss(y_pred, y_true)
     return (alpha * loss_corr) + ((1 - alpha) * loss_mse)
 

@@ -41,11 +41,14 @@ def main(cfg: DictConfig) -> None:
         ESM_REVISION = None
     PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
     hybrid_model_split_scheme = cfg.hybrid_model_split_scheme   # 'random' or 'positional'
+    loss_method = cfg.loss_method
+    n_ensemble_splits = cfg.n_ensemble_splits
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
-    print(f"PLM(s): {llm}, internal hybrid model split scheme {hybrid_model_split_scheme}")
+    print(f"PLM(s): {llm}, internal hybrid model split scheme {hybrid_model_split_scheme}, "
+          f"loss_method={loss_method}, n_ensemble_splits={n_ensemble_splits}")
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -246,12 +249,14 @@ def main(cfg: DictConfig) -> None:
         if "esm" in llm.lower():
             llm_dict_esm = esm_setup(
                 wt_seq=pdb_trimmed_common_sequence, sequences=s_train, model=ESM_MODEL,
+                loss_method=loss_method,
                 seed=seed, revision=ESM_REVISION, device="cuda", verbose=True
             )
             llm_dict_train.update(llm_dict_esm)
         if "prosst" in llm.lower():
             llm_dict_prosst = prosst_setup(
-                wt_seq=pdb_trimmed_common_sequence, pdb_file=pdb_file, sequences=s_train, 
+                wt_seq=pdb_trimmed_common_sequence, pdb_file=pdb_file, sequences=s_train,
+                loss_method=loss_method,
                 seed=seed, revision=PROSST_REVISION, device="cuda", verbose=True
             )
             llm_dict_train.update(llm_dict_prosst)
@@ -268,7 +273,7 @@ def main(cfg: DictConfig) -> None:
         #    print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
         #          f'would take up (too) much time...')
         hm = DCALLMHybridModel(
-            x_train_dca=np.array(x_dca_train), 
+            x_train_dca=np.array(x_dca_train),
             y_train=y_train,
             llm_model_input=llm_dict_train,
             x_dca_wt=gremlin.x_wt,
@@ -280,6 +285,7 @@ def main(cfg: DictConfig) -> None:
             pdb_struct=pdb_file,
             batch_size=batch_size,
             seed=seed,
+            n_ensemble_splits=n_ensemble_splits,
             n_epochs=None  # Only used if lora_train==True,
         )
         if len(pdb_trimmed_common_sequence) > 1500:

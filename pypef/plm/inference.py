@@ -771,7 +771,11 @@ def esm_setup(
 ):
     if device is None:
         device = get_device()
-    allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
+    allowed_methods = [
+        "spearman", "pearson", "listMLE", "pairwise-margin",
+        "spearman-hybrid", "pearson-hybrid", "listMLE-hybrid", 
+        "pairwise-margin-hybrid"
+    ]
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
     esm_base_model, esm_lora_model, esm_tokenizer, esm_optimizer = get_esm_models(model=model, seed=seed, revision=revision)
@@ -828,7 +832,10 @@ def prosst_setup(
             "with the --pdb flag."
         )
     
-    allowed_methods = ["spearman", "pearson", "spearman-hybrid", "pearson-hybrid"]
+    allowed_methods = [
+        "spearman", "pearson", "listMLE", "pairwise-margin",
+        "spearman-hybrid", "pearson-hybrid", "listMLE-hybrid", "pairwise-margin-hybrid"
+    ]
     if loss_method not in allowed_methods:
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
 

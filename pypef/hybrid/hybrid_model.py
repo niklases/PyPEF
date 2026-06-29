@@ -82,6 +82,7 @@ class DCALLMHybridModel:
             n_epochs: int | None = None,
             device: str | None = None,
             seed: int | None = None,
+            n_ensemble_splits: int = 1,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -136,6 +137,7 @@ class DCALLMHybridModel:
         self.device = device
         logger.info(f'Using device {device.upper()} for hybrid modeling...')
         self.seed = seed
+        self.n_ensemble_splits = n_ensemble_splits
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
@@ -356,7 +358,7 @@ class DCALLMHybridModel:
 
             final_corr = self.spearmanr(y_true_np, y_ensemble)
             self.betas = final_betas
-            self.betas_str += f"[{', '.join(f'{x:.2e}' for x in self.betas)}]"
+            self.betas_str += f" [{', '.join(f'{x:.2e}' for x in self.betas)}]"
             logger.info(
                 f"Ensemble Opt. Spearman: {final_corr:.3f} (N_test={len(y_ensemble)}) | "
                 f"Ensemble weights ({len(final_betas)}): {self.betas_str}"
@@ -874,7 +876,185 @@ class DCALLMHybridModel:
                 )
 
                 self.betas_str += "Combined-GP, "
-        
+
+    def _predict_on_current_split(self):
+        """Compute all predictor scores on the current subsplit without
+        retraining LoRA. Retrains Ridge and GP (if enabled) on the new
+        ttrain; reuses already-trained LoRA models for inference only.
+        Returns (y_ttest, predictors) matching the beta ordering."""
+        y_dca_ttest = self._delta_e(self.x_dca_ttest)
+        ridge = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
+        y_ridge_ttest = ridge.predict(self.x_dca_ttest)
+        predictors = [y_dca_ttest, y_ridge_ttest]
+
+        if self.llm_keys is not None and len(self.parameter_range) >= 4:
+            all_llm_scores = []
+            all_gp_scores = []
+            embs_ttrain_dict, embs_ttest_dict = {}, {}
+            scores_ttrain_dict, scores_ttest_dict = {}, {}
+            aa_cond_probs, struct_coords = None, None
+
+            for llm_name in self.llm_keys:
+                current_llm = self.llm_data[llm_name]
+                base_model = current_llm['llm_base_model']
+                lora_model = current_llm['llm_model']
+                inference_fn = current_llm['llm_inference_function']
+                tokenizer = current_llm['llm_tokenizer']
+                x_tok_ttrain = current_llm['x_llm_ttrain']
+                x_tok_ttest = current_llm['x_llm_ttest']
+                wt_input_ids = current_llm['wt_input_ids']
+                attention_mask = current_llm['llm_attention_mask']
+                wt_struct_ids = current_llm.get('wt_structure_input_ids')
+
+                common_args = dict(
+                    wt_input_ids=wt_input_ids,
+                    attention_mask=attention_mask,
+                    device=self.device,
+                    wt_structure_input_ids=wt_struct_ids,
+                    batch_size=self.batch_size,
+                    verbose=False
+                )
+
+                y_base_ttest = inference_fn(
+                    tokenized_sequences=x_tok_ttest,
+                    model=base_model, **common_args
+                )
+                all_llm_scores.append(y_base_ttest.detach().cpu().numpy())
+
+                if self.lora_train:
+                    y_lora_ttest = inference_fn(
+                        tokenized_sequences=x_tok_ttest,
+                        model=lora_model, **common_args
+                    )
+                    all_llm_scores.append(y_lora_ttest.detach().cpu().numpy())
+
+                if self.gauss_opt:
+                    embs_ttrain = get_plm_embeddings(
+                        x_tok_ttrain, base_model, wt_input_ids,
+                        attention_mask, mode="mean",
+                        wt_structure_input_ids=wt_struct_ids
+                    )
+                    embs_ttest = get_plm_embeddings(
+                        x_tok_ttest, base_model, wt_input_ids,
+                        attention_mask, mode="mean",
+                        wt_structure_input_ids=wt_struct_ids
+                    )
+                    y_base_ttrain = inference_fn(
+                        tokenized_sequences=x_tok_ttrain,
+                        model=base_model, **common_args
+                    )
+
+                    embs_ttrain_dict[llm_name] = embs_ttrain
+                    embs_ttest_dict[llm_name] = embs_ttest
+                    scores_ttrain_dict[llm_name] = y_base_ttrain
+                    scores_ttest_dict[llm_name] = y_base_ttest
+
+                    aa_cond_probs = plm_inference(
+                        attention_mask=attention_mask,
+                        wt_input_ids=wt_input_ids,
+                        model=base_model,
+                        tokenized_sequences=None,
+                        extract_probs=True,
+                        wt_structure_input_ids=wt_struct_ids,
+                        extract_conditional_aa_prob=True,
+                        tokenizer=tokenizer
+                    )
+                    struct_coords = extract_pdb_coords(
+                        self.pdb_struct,
+                        target_len=len(self.wt_sequence)
+                    )
+
+                    train_inputs = prepare_kermut_inputs(
+                        seqs=self.sequences_ttrain,
+                        x_embed=embs_ttrain,
+                        x_zero_shot=y_base_ttrain,
+                        device=self.device
+                    )
+                    gp, likelihood = instantiate_gp(
+                        train_inputs=train_inputs,
+                        train_targets=torch.tensor(self.y_ttrain).to(self.device),
+                        gp_inputs={
+                            "aa_cond_probs": aa_cond_probs,
+                            "struct_coords": torch.tensor(struct_coords).to(self.device),
+                            "wt_seq": self.wt_sequence
+                        },
+                        use_structure_kernel=True,
+                        use_sequence_kernel=True,
+                        sequence_kernel_type="RBF",
+                        use_zero_shot=True,
+                        device=self.device
+                    )
+                    gp, likelihood = optimize_gp(
+                        gp, likelihood, train_inputs,
+                        torch.tensor(self.y_ttrain).to(self.device),
+                        lr=0.05, n_steps=150, progress_bar=False
+                    )
+
+                    test_inputs = prepare_kermut_inputs(
+                        seqs=self.sequences_ttest,
+                        x_embed=embs_ttest,
+                        x_zero_shot=y_base_ttest,
+                        device=self.device
+                    )
+                    y_gp_ttest, _ = predict(gp, likelihood, test_inputs)
+                    all_gp_scores.append(y_gp_ttest.detach().cpu().numpy())
+
+            predictors.extend(all_llm_scores)
+
+            if self.gauss_opt:
+                if len(self.llm_keys) >= 2:
+                    x_comb_emb_train = torch.cat(list(embs_ttrain_dict.values()), dim=-1)
+                    x_comb_emb_test = torch.cat(list(embs_ttest_dict.values()), dim=-1)
+                    zs_train = [
+                        v.unsqueeze(-1) if v.dim() == 1 else v
+                        for v in scores_ttrain_dict.values()
+                    ]
+                    x_comb_zs_train = torch.cat(zs_train, dim=-1)
+                    zs_test = [
+                        v.unsqueeze(-1) if v.dim() == 1 else v
+                        for v in scores_ttest_dict.values()
+                    ]
+                    x_comb_zs_test = torch.cat(zs_test, dim=-1)
+
+                    train_inputs = prepare_kermut_inputs(
+                        seqs=self.sequences_ttrain,
+                        x_embed=x_comb_emb_train,
+                        x_zero_shot=x_comb_zs_train,
+                        device=self.device
+                    )
+                    gp, likelihood = instantiate_gp(
+                        train_inputs=train_inputs,
+                        train_targets=torch.tensor(self.y_ttrain).to(self.device),
+                        gp_inputs={
+                            "aa_cond_probs": aa_cond_probs.to(self.device),
+                            "struct_coords": torch.tensor(struct_coords).to(self.device),
+                            "wt_seq": self.wt_sequence
+                        },
+                        use_structure_kernel=True,
+                        use_sequence_kernel=True,
+                        sequence_kernel_type="RBF",
+                        use_zero_shot=True,
+                        device=self.device
+                    )
+                    gp, likelihood = optimize_gp(
+                        gp, likelihood, train_inputs,
+                        torch.tensor(self.y_ttrain).to(self.device),
+                        lr=0.05, n_steps=150, progress_bar=False
+                    )
+
+                    test_inputs = prepare_kermut_inputs(
+                        seqs=self.sequences_ttest,
+                        x_embed=x_comb_emb_test,
+                        x_zero_shot=x_comb_zs_test,
+                        device=self.device
+                    )
+                    comb_pred, _ = predict(gp, likelihood, test_inputs)
+                    all_gp_scores.append(comb_pred.detach().cpu().numpy())
+
+                predictors.extend(all_gp_scores)
+
+        return self.y_ttest, predictors
+
     def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
@@ -929,11 +1109,39 @@ class DCALLMHybridModel:
                     performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
         self.betas_str = self.betas_str[:-2] + ':'
         logger.info(performance_info_ttest)
-        if self.ensemble_func == 'torch':  # L-BFGS
-            self.all_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
-        else:  # SciPy diff. evo.
-            self.all_betas = self.adjust_betas(self.y_ttest, *predictors)
-        
+
+        if self.ensemble_func == 'torch':
+            first_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
+        else:
+            first_betas = self.adjust_betas(self.y_ttest, *predictors)
+
+        if self.n_ensemble_splits <= 1:
+            self.all_betas = first_betas
+        else:
+            all_split_betas = [first_betas]
+            original_seed = self.seed
+            for split_i in range(1, self.n_ensemble_splits):
+                self.seed = (original_seed + split_i) if original_seed is not None else split_i
+                logger.info(
+                    f"Multi-split ensemble: computing weights on split "
+                    f"{split_i + 1}/{self.n_ensemble_splits} and splitting "
+                    f"scheme {self.splitting_scheme} with new seed {self.seed}..."
+                )
+                self.get_subsplits_train()
+                y_ttest, split_predictors = self._predict_on_current_split()
+                if self.ensemble_func == 'torch':
+                    split_betas = self.optimize_ensemble_weights(y_ttest, *split_predictors)
+                else:
+                    split_betas = self.adjust_betas(y_ttest, *split_predictors)
+                all_split_betas.append(split_betas)
+
+            self.seed = original_seed
+            self.all_betas = np.mean(all_split_betas, axis=0)
+            logger.info(
+                f"Averaged ensemble weights across {self.n_ensemble_splits} splits: "
+                f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
+            )
+
         logger.info(f"Hybrid optimization done.")
 
         return (*self.all_betas, self.ridge_opt)
@@ -945,7 +1153,9 @@ class DCALLMHybridModel:
             sequences: list[str] | None = None,
             verbose: bool = False
     ) -> np.ndarray:
-        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = {self.betas_str}...")
+        betas_used = f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
+        logger.info(f"Hybrid prediction with N_individual model weights ('betas') = "
+                    f"{self.betas_str} --> used: {betas_used}...")
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 

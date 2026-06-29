@@ -12,6 +12,8 @@ DMS_PDB_data_path: ../data/ProteinGym_AF2_structures
 output_scores_folder: model_scores/supervised_substitutions
 
 hybrid_model_split_scheme: "block-random"
+loss_method: "spearman-hybrid"
+n_ensemble_splits: 1
 seed: 2026
 progress_bar: false
 overwrite: false
