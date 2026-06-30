@@ -57,6 +57,10 @@ for llm in prosst+esm; do
     else   # "fold_random_5", "fold_modulo_5", "fold_contiguous_5"
         if [ "$split_method" = "fold_random_5" ]; then
             hybrid_model_split_scheme="block-random"
+        elif [ "$split_method" = "fold_modulo_5" ]; then
+            hybrid_model_split_scheme="modulo"
+        elif [ "$split_method" = "fold_contiguous_5" ]; then
+            hybrid_model_split_scheme="contiguous"            
         else
             hybrid_model_split_scheme="block-random"
         fi

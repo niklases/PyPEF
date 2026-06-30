@@ -5,7 +5,6 @@ import time
 import warnings
 import psutil
 import json
-from tqdm import tqdm
 import pandas as pd
 import numpy as np
 import torch
@@ -29,7 +28,9 @@ from pypef.hybrid.hybrid_model import (
     DCALLMHybridModel, get_delta_e_statistical_model
 )
 from pypef.utils.split import DatasetSplitter
-
+from pypef import __version__
+version = __version__.split('-')[0]
+# e.g., version = '0.4.3'
 
 JUST_PLOT_RESULTS = False
 
@@ -431,7 +432,7 @@ if __name__ == '__main__':
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
     out_results_csv = os.path.join(
-        os.path.dirname(__file__), 'results/dca_esm_and_hybrid_5cv-split_results.csv'
+        os.path.dirname(__file__), f'results/dca_esm_and_hybrid_5cv-split_results_v{version}.csv'
     )
     if os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
