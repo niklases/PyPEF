@@ -77,6 +77,7 @@ class DCALLMHybridModel:
             shared_fraction: float | None = None,
             lora_train: bool = False,
             gauss_opt: bool = False,
+            gauss_comb_plm_emb: bool = False,
             pdb_struct: str | os.PathLike | None = None,
             batch_size: int | None = None,
             n_epochs: int | None = None,
@@ -126,6 +127,7 @@ class DCALLMHybridModel:
             shared_fraction = 0.0
         self.shared_fraction = shared_fraction
         self.gauss_opt = gauss_opt
+        self.gauss_comb_plm_emb = gauss_comb_plm_emb
         self.pdb_struct = pdb_struct
         self.lora_train = lora_train
         self.alphas = alphas
@@ -295,9 +297,9 @@ class DCALLMHybridModel:
             cv=5
         )
         grid.fit(x_train, y_train)
-        return Ridge(**grid.best_params_).fit(x_train, y_train)
+        return grid.best_estimator_
     
-    def optimize_ensemble_weights(
+    def optimize_ensemble_weights_torch(
             self,
             y_true_np: np.ndarray, 
             *y_preds_np: np.ndarray | None, 
@@ -365,7 +367,7 @@ class DCALLMHybridModel:
             )
             return final_betas
     
-    def adjust_betas(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
+    def optimize_ensemble_weights(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
         """
         Find parameters that maximize the absolute Spearman rank
         correlation coefficient using differential evolution 
@@ -593,16 +595,17 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         # Here, just getting the unsupervised scores and correlations on ttrain and ttest splits
+        self.betas_str = "DCA, Ridge, "
         self.y_llm_preds = {}       # e.g., {'esm': array, 'prosst': array}
         self.y_llm_lora_preds = {} 
         self.embeddings = {}        # e.g., {'esm': emb, 'prosst': emb}
-        self.all_llm_ttest_scores = []
         # Initialize dictionaries for embeddings
-        self.all_gp_ttest_scores = []
         self.embs_ttrain, self.scores_ttrain = {}, {}
         self.embs_ttest, self.scores_ttest = {}, {}
         self.gp_models = {}
         self.gp_likelihoods = {}
+
+        self.fold_predictions = {}
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
@@ -650,7 +653,7 @@ class DCALLMHybridModel:
             )
             self.y_llm_ttrain = y_llm_ttrain.detach().cpu().numpy()
             self.y_llm_ttest = y_llm_ttest.detach().cpu().numpy()
-            self.all_llm_ttest_scores.append(self.y_llm_ttest)
+            self.fold_predictions[f"{llm_name}_base"] = self.y_llm_ttest
             self.betas_str += f"{llm_name}-ZS, "
 
 
@@ -704,7 +707,7 @@ class DCALLMHybridModel:
                 )
                 self.y_llm_lora_ttrain = y_llm_lora_ttrain.detach().cpu().numpy()
                 self.y_llm_lora_ttest = y_llm_lora_ttest.detach().cpu().numpy()
-                self.all_llm_ttest_scores.append(self.y_llm_lora_ttest)
+                self.fold_predictions[f"{llm_name}_lora"] = self.y_llm_lora_ttest
                 self.betas_str += f"{llm_name}-LoRA, "
         
             if self.gauss_opt:
@@ -783,17 +786,16 @@ class DCALLMHybridModel:
 
                 self.y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
                 self.y_gp_opt_ttest = self.y_gp_opt_ttest.detach().cpu().numpy()
-
-                self.all_gp_ttest_scores.append(self.y_gp_opt_ttest)
+                self.fold_predictions[f"{llm_name}_gp"] = self.y_gp_opt_ttest
+                self.betas_str += f"{llm_name}-GP, "
 
                 logger.info(
                         f"{llm_name} supervised Gaussian process optimized performance: "
                         f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
                         f"(N={len(self.y_ttest)})"
                 )
-                self.betas_str += f"{llm_name}-GP, "
         
-        if self.gauss_opt:  # Combined (two PLM) GP kernel approach
+        if self.gauss_opt and self.gauss_comb_plm_emb:  # Combined (two PLM) GP kernel approach
             if len(self.llm_keys) >= 2:
                 # Extract and concatenate all embedding tensors along the feature dimension
                 # dict.values() extracts just the underlying tensors
@@ -867,7 +869,8 @@ class DCALLMHybridModel:
 
                 combined_pred_ttest, _test_variances = predict(gp, likelihood, test_inputs)
                 combined_pred_ttest = combined_pred_ttest.detach().cpu().numpy()
-                self.all_gp_ttest_scores.append(combined_pred_ttest)
+                self.fold_predictions["combined_gp"] = combined_pred_ttest
+                self.betas_str += "Combined-GP, "
 
                 logger.info(
                         f"Combined supervised Gaussian process optimized performance: "
@@ -875,208 +878,127 @@ class DCALLMHybridModel:
                         f"(N={len(self.y_ttest)})"
                 )
 
-                self.betas_str += "Combined-GP, "
-
-    def _predict_on_current_split(self):
-        """Compute all predictor scores on the current subsplit without
-        retraining LoRA. Retrains Ridge and GP (if enabled) on the new
-        ttrain; reuses already-trained LoRA models for inference only.
-        Returns (y_ttest, predictors) matching the beta ordering."""
+    def _predict_on_current_split(self) -> tuple[np.ndarray, list]:
+        """
+        Generate predictions for all sub-components on the current cross-validation sub-split.
+        Crucial for calculating multi-split ensemble weights (betas) without alignment drift.
+        """
+        # Base Unsupervised and Supervised Predictors
         y_dca_ttest = self._delta_e(self.x_dca_ttest)
-        ridge = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
-        y_ridge_ttest = ridge.predict(self.x_dca_ttest)
-        predictors = [y_dca_ttest, y_ridge_ttest]
+        
+        # Also fixed the triple 't' typo here: self.x_dca_tttest -> self.x_dca_ttest
+        y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-        if self.llm_keys is not None and len(self.parameter_range) >= 4:
-            all_llm_scores = []
-            all_gp_scores = []
-            embs_ttrain_dict, embs_ttest_dict = {}, {}
-            scores_ttrain_dict, scores_ttest_dict = {}, {}
-            aa_cond_probs, struct_coords = None, None
+        split_predictors = [y_dca_ttest, y_dca_ridge_ttest]
 
+        embs_pred = {}
+        zs_scores_pred = {}
+
+        if self.llm_keys is not None:
+            # Process all Base and LoRA LLM variants first
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
-                base_model = current_llm['llm_base_model']
-                lora_model = current_llm['llm_model']
                 inference_fn = current_llm['llm_inference_function']
-                tokenizer = current_llm['llm_tokenizer']
-                x_tok_ttrain = current_llm['x_llm_ttrain']
-                x_tok_ttest = current_llm['x_llm_ttest']
-                wt_input_ids = current_llm['wt_input_ids']
-                attention_mask = current_llm['llm_attention_mask']
-                wt_struct_ids = current_llm.get('wt_structure_input_ids')
+                
+                # Read directly from the nested model data dict ---
+                x_input = current_llm['x_llm_ttest']
+                
+                if isinstance(x_input, dict):
+                    x_input_ids = x_input.get('input_ids', x_input)
+                    x_attention_mask = x_input.get('attention_mask', current_llm['llm_attention_mask'])
+                else:
+                    x_input_ids = x_input
+                    x_attention_mask = current_llm['llm_attention_mask']
 
-                common_args = dict(
-                    wt_input_ids=wt_input_ids,
-                    attention_mask=attention_mask,
-                    device=self.device,
-                    wt_structure_input_ids=wt_struct_ids,
-                    batch_size=self.batch_size,
-                    verbose=False
-                )
+                common_args = {
+                    'wt_input_ids': current_llm['wt_input_ids'],
+                    'attention_mask': x_attention_mask,
+                    'device': self.device,
+                    'verbose': False,
+                    'wt_structure_input_ids': current_llm.get('wt_structure_input_ids')
+                }
 
                 y_base_ttest = inference_fn(
-                    tokenized_sequences=x_tok_ttest,
-                    model=base_model, **common_args
+                    model=current_llm['llm_base_model'], 
+                    tokenized_sequences=x_input_ids, 
+                    **common_args
                 )
-                all_llm_scores.append(y_base_ttest.detach().cpu().numpy())
-
+                split_predictors.append(y_base_ttest.detach().cpu().numpy())
+                
                 if self.lora_train:
                     y_lora_ttest = inference_fn(
-                        tokenized_sequences=x_tok_ttest,
-                        model=lora_model, **common_args
+                        model=current_llm['llm_model'], 
+                        tokenized_sequences=x_input_ids, 
+                        **common_args
                     )
-                    all_llm_scores.append(y_lora_ttest.detach().cpu().numpy())
+                    split_predictors.append(y_lora_ttest.detach().cpu().numpy())
 
+                # Cache embedding dimensions if Gaussian Process optimization is enabled
                 if self.gauss_opt:
-                    embs_ttrain = get_plm_embeddings(
-                        x_tok_ttrain, base_model, wt_input_ids,
-                        attention_mask, mode="mean",
-                        wt_structure_input_ids=wt_struct_ids
+                    llm_embs_pred = get_plm_embeddings(
+                        x_input_ids, 
+                        current_llm['llm_base_model'], 
+                        current_llm['wt_input_ids'], 
+                        x_attention_mask, 
+                        mode="mean", 
+                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
-                    embs_ttest = get_plm_embeddings(
-                        x_tok_ttest, base_model, wt_input_ids,
-                        attention_mask, mode="mean",
-                        wt_structure_input_ids=wt_struct_ids
-                    )
-                    y_base_ttrain = inference_fn(
-                        tokenized_sequences=x_tok_ttrain,
-                        model=base_model, **common_args
-                    )
+                    embs_pred[llm_name] = llm_embs_pred
+                    zs_scores_pred[llm_name] = y_base_ttest
 
-                    embs_ttrain_dict[llm_name] = embs_ttrain
-                    embs_ttest_dict[llm_name] = embs_ttest
-                    scores_ttrain_dict[llm_name] = y_base_ttrain
-                    scores_ttest_dict[llm_name] = y_base_ttest
-
-                    aa_cond_probs = plm_inference(
-                        attention_mask=attention_mask,
-                        wt_input_ids=wt_input_ids,
-                        model=base_model,
-                        tokenized_sequences=None,
-                        extract_probs=True,
-                        wt_structure_input_ids=wt_struct_ids,
-                        extract_conditional_aa_prob=True,
-                        tokenizer=tokenizer
-                    )
-                    struct_coords = extract_pdb_coords(
-                        self.pdb_struct,
-                        target_len=len(self.wt_sequence)
-                    )
-
-                    train_inputs = prepare_kermut_inputs(
-                        seqs=self.sequences_ttrain,
-                        x_embed=embs_ttrain,
-                        x_zero_shot=y_base_ttrain,
-                        device=self.device
-                    )
-                    gp, likelihood = instantiate_gp(
-                        train_inputs=train_inputs,
-                        train_targets=torch.tensor(self.y_ttrain).to(self.device),
-                        gp_inputs={
-                            "aa_cond_probs": aa_cond_probs,
-                            "struct_coords": torch.tensor(struct_coords).to(self.device),
-                            "wt_seq": self.wt_sequence
-                        },
-                        use_structure_kernel=True,
-                        use_sequence_kernel=True,
-                        sequence_kernel_type="RBF",
-                        use_zero_shot=True,
-                        device=self.device
-                    )
-                    gp, likelihood = optimize_gp(
-                        gp, likelihood, train_inputs,
-                        torch.tensor(self.y_ttrain).to(self.device),
-                        lr=0.05, n_steps=150, progress_bar=False
-                    )
-
-                    test_inputs = prepare_kermut_inputs(
-                        seqs=self.sequences_ttest,
-                        x_embed=embs_ttest,
-                        x_zero_shot=y_base_ttest,
-                        device=self.device
-                    )
-                    y_gp_ttest, _ = predict(gp, likelihood, test_inputs)
-                    all_gp_scores.append(y_gp_ttest.detach().cpu().numpy())
-
-            predictors.extend(all_llm_scores)
-
+            # Process localized Gaussian Processes sequentially
             if self.gauss_opt:
-                if len(self.llm_keys) >= 2:
-                    x_comb_emb_train = torch.cat(list(embs_ttrain_dict.values()), dim=-1)
-                    x_comb_emb_test = torch.cat(list(embs_ttest_dict.values()), dim=-1)
-                    zs_train = [
-                        v.unsqueeze(-1) if v.dim() == 1 else v
-                        for v in scores_ttrain_dict.values()
+                # Dynamic fallback tracking for active sub-split string sequences
+                sequences_subsplit = getattr(self, 'sequences_ttest', getattr(self, 'seqs_ttest', None))
+                
+                for llm_name in self.llm_keys:
+                    pred_inputs = prepare_kermut_inputs(
+                        seqs=sequences_subsplit,
+                        x_embed=embs_pred[llm_name],
+                        x_zero_shot=zs_scores_pred[llm_name],
+                        device=self.device
+                    )
+                    y_gp_opt_pred, _ = predict(
+                        self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs
+                    )
+                    split_predictors.append(y_gp_opt_pred.detach().cpu().numpy())
+                
+                # Process the Combined Multi-LLM Gaussian Process
+                if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
+                    x_combined_embeddings_pred = torch.cat(
+                        list(embs_pred.values()), 
+                        dim=-1
+                    )
+                    zs_pred_tensors = [
+                        v.unsqueeze(-1) if v.dim() == 1 else v 
+                        for v in zs_scores_pred.values()
                     ]
-                    x_comb_zs_train = torch.cat(zs_train, dim=-1)
-                    zs_test = [
-                        v.unsqueeze(-1) if v.dim() == 1 else v
-                        for v in scores_ttest_dict.values()
-                    ]
-                    x_comb_zs_test = torch.cat(zs_test, dim=-1)
+                    x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
 
-                    train_inputs = prepare_kermut_inputs(
-                        seqs=self.sequences_ttrain,
-                        x_embed=x_comb_emb_train,
-                        x_zero_shot=x_comb_zs_train,
+                    pred_inputs = prepare_kermut_inputs(
+                        seqs=sequences_subsplit,
+                        x_embed=x_combined_embeddings_pred,
+                        x_zero_shot=x_combined_zs_pred,
                         device=self.device
                     )
-                    gp, likelihood = instantiate_gp(
-                        train_inputs=train_inputs,
-                        train_targets=torch.tensor(self.y_ttrain).to(self.device),
-                        gp_inputs={
-                            "aa_cond_probs": aa_cond_probs.to(self.device),
-                            "struct_coords": torch.tensor(struct_coords).to(self.device),
-                            "wt_seq": self.wt_sequence
-                        },
-                        use_structure_kernel=True,
-                        use_sequence_kernel=True,
-                        sequence_kernel_type="RBF",
-                        use_zero_shot=True,
-                        device=self.device
+                    combined_gp_pred_mean, _ = predict(
+                        self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
                     )
-                    gp, likelihood = optimize_gp(
-                        gp, likelihood, train_inputs,
-                        torch.tensor(self.y_ttrain).to(self.device),
-                        lr=0.05, n_steps=150, progress_bar=False
-                    )
+                    split_predictors.append(combined_gp_pred_mean.detach().cpu().numpy())
 
-                    test_inputs = prepare_kermut_inputs(
-                        seqs=self.sequences_ttest,
-                        x_embed=x_comb_emb_test,
-                        x_zero_shot=x_comb_zs_test,
-                        device=self.device
-                    )
-                    comb_pred, _ = predict(gp, likelihood, test_inputs)
-                    all_gp_scores.append(comb_pred.detach().cpu().numpy())
-
-                predictors.extend(all_gp_scores)
-
-        return self.y_ttest, predictors
+        return self.y_ttest, split_predictors
 
     def train_and_optimize(self) -> tuple:
         """
         Get the adjusted parameters 'beta_1', 'beta_2', and the
         tuned regressor of the hybrid model.
 
-        Parameters
-        ----------
-        x_train : np.ndarray
-            Encoded sequences of the variants in the training set.
-        y_train : np.ndarray
-            Fitness values of the variants in the training set.
-        train_size_fit : float [0,1] (default 0.66)
-            Fraction to split training set into another
-            training and testing set.
-        random_state : int (default=224)
-            Random state used to split.
-
         Returns
         -------
-        Tuple containing the adjusted parameters 'beta_1' and 'beta_2',
+        Tuple containing the adjusted ensemble parameters (betas)
         as well as the tuned regressor of the hybrid model.
         """
+        # Base Setup: Compute DCA and DCA-Ridge predictions
         self.get_subsplits_train()
         self.y_dca_ttrain = self._delta_e(self.x_dca_ttrain)
         self.y_dca_ttest = self._delta_e(self.x_dca_ttest)
@@ -1084,42 +1006,82 @@ class DCALLMHybridModel:
         self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-        performance_info_ttest = (
-            f"Performances on beta ensemble optimization set (N_test={len(self.y_dca_ttest)}): "
-            f"DCA unsupervised: {self.spearmanr(self.y_ttest, self.y_dca_ttest):.3f} "
-            f"DCA supervised: {self.spearmanr(self.y_ttest, self.y_dca_ridge_ttest):.3f} || "
+        # Start predictors list with baseline DCA models
+        predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
+
+        # Print baseline Spearman correlations
+        logger.info(
+            f"DCA unsupervised 'ttest' performance: "
+            f"Test set = {spearmanr(self.y_ttest, self.y_dca_ttest)[0]:.3f} (N={len(self.y_ttest)})"
+        )
+        logger.info(
+            f"DCA-Ridge supervised 'ttest' performance: "
+            f"Test set = {spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
 
-        predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
-        self.betas_str =  "DCA, DCA-Ridge, "
-
+        # Train and extract PLM predictions if applicable
         if len(self.parameter_range) >= 4:
+            # Executes your custom train_llm routine
             self.train_llm()
-            # Add LLM predictors to the list
-            predictors.extend(self.all_llm_ttest_scores)
-            performance_info_ttest += f"PLM performances: "
-            for scores in self.all_llm_ttest_scores:
-                performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
-            performance_info_ttest += "|| "
             
-            if self.gauss_opt:
-                predictors.extend(self.all_gp_ttest_scores)
-                performance_info_ttest += f"PLM GaussProc opt.: "
-                for scores in self.all_gp_ttest_scores:
-                    performance_info_ttest += f"{self.spearmanr(self.y_ttest, scores):.3f} "
-        self.betas_str = self.betas_str[:-2] + ':'
-        logger.info(performance_info_ttest)
+            # Unpack predictions from self.fold_predictions in the EXACT order 
+            # they were processed and appended to self.betas_str inside train_llm()
+            if self.llm_keys:
+                for llm_name in self.llm_keys:
+                    # Unsupervised Base / Zero-Shot PLM
+                    if f"{llm_name}_base" in self.fold_predictions:
+                        base_preds = self.fold_predictions[f"{llm_name}_base"]
+                        predictors.append(base_preds)
+                        logger.info(
+                            f"{llm_name.upper()} zero-shot 'ttest' performance: "
+                            f"Test set = {spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                        )
+                    
+                    # Supervised LoRA Fine-tuned PLM
+                    if self.lora_train and f"{llm_name}_lora" in self.fold_predictions:
+                        lora_preds = self.fold_predictions[f"{llm_name}_lora"]
+                        predictors.append(lora_preds)
+                        logger.info(
+                            f"{llm_name.upper()} LoRA tuned 'ttest' performance: "
+                            f"Test set = {spearmanr(self.y_ttest, lora_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                        )
+                    
+                    # Supervised Gaussian Process Optimized PLM
+                    if self.gauss_opt and f"{llm_name}_gp" in self.fold_predictions:
+                        gp_preds = self.fold_predictions[f"{llm_name}_gp"]
+                        predictors.append(gp_preds)
+                        logger.info(
+                            f"{llm_name.upper()} Gaussian process 'ttest' performance: "
+                            f"Test set = {spearmanr(self.y_ttest, gp_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                        )
+                
+                # Combined Multi-PLM Gaussian Process
+                if self.gauss_opt and self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
+                    if "combined_gp" in self.fold_predictions:
+                        comb_preds = self.fold_predictions["combined_gp"]
+                        predictors.append(comb_preds)
+                        logger.info(
+                            f"Combined Gaussian process 'ttest' performance: "
+                            f"Test set = {spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                        )
 
+        # Clean up the trailing comma left behind by train_llm() on self.betas_str
+        if hasattr(self, 'betas_str'):
+            self.betas_str = self.betas_str.rstrip(", ") + ":"
+
+        # Optimize ensemble weights on the initial split
         if self.ensemble_func == 'torch':
-            first_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
+            first_betas = self.optimize_ensemble_weights_torch(self.y_ttest, *predictors)
         else:
-            first_betas = self.adjust_betas(self.y_ttest, *predictors)
+            first_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
 
+        # Handle Cross-Validation Multi-Split Routine
         if self.n_ensemble_splits <= 1:
             self.all_betas = first_betas
         else:
             all_split_betas = [first_betas]
             original_seed = self.seed
+            
             for split_i in range(1, self.n_ensemble_splits):
                 self.seed = (original_seed + split_i) if original_seed is not None else split_i
                 logger.info(
@@ -1128,11 +1090,13 @@ class DCALLMHybridModel:
                     f"scheme {self.splitting_scheme} with new seed {self.seed}..."
                 )
                 self.get_subsplits_train()
-                y_ttest, split_predictors = self._predict_on_current_split()
+                
+                y_ttest_split, split_predictors = self._predict_on_current_split()
+                
                 if self.ensemble_func == 'torch':
-                    split_betas = self.optimize_ensemble_weights(y_ttest, *split_predictors)
+                    split_betas = self.optimize_ensemble_weights_torch(y_ttest_split, *split_predictors)
                 else:
-                    split_betas = self.adjust_betas(y_ttest, *split_predictors)
+                    split_betas = self.optimize_ensemble_weights(y_ttest_split, *split_predictors)
                 all_split_betas.append(split_betas)
 
             self.seed = original_seed
@@ -1143,7 +1107,6 @@ class DCALLMHybridModel:
             )
 
         logger.info(f"Hybrid optimization done.")
-
         return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
@@ -1156,21 +1119,25 @@ class DCALLMHybridModel:
         betas_used = f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
         logger.info(f"Hybrid prediction with N_individual model weights ('betas') = "
                     f"{self.betas_str} --> used: {betas_used}...")
+        
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
 
         self.embs_pred = {}
         self.zs_scores_pred = {}
 
-        self.hybrid_preds = {"y_dca": y_dca, "y_ridge": y_ridge}
+        # Intermediate storage maps
+        base_ridge_preds = {"y_dca": y_dca, "y_ridge": y_ridge}
+        llm_preds = {}
+        gp_preds = {}
 
         if self.llm_keys is not None:
+            # Complete all Base and LoRA LLM variants first
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
-                x_input = x_llm_dict.get(llm_name)
+                x_input = x_llm_dict.get(llm_name) if x_llm_dict else None
                 
                 common_args = {
-                    #'tokenized_sequences': x_input,
                     'wt_input_ids': current_llm['wt_input_ids'],
                     'attention_mask': current_llm['llm_attention_mask'],
                     'device': self.device,
@@ -1181,13 +1148,15 @@ class DCALLMHybridModel:
                 y_base = current_llm['llm_inference_function'](
                     model=current_llm['llm_base_model'], tokenized_sequences=x_input, **common_args
                 )
-                self.hybrid_preds.update({f"{llm_name}_base": y_base.detach().cpu().numpy()})
+                llm_preds[f"{llm_name}_base"] = y_base.detach().cpu().numpy()
+                
                 if self.lora_train:
                     y_lora = current_llm['llm_inference_function'](
                         model=current_llm['llm_model'], tokenized_sequences=x_input, **common_args
                     )
-                    self.hybrid_preds.update({f"{llm_name}_lora": y_lora.detach().cpu().numpy()})
+                    llm_preds[f"{llm_name}_lora"] = y_lora.detach().cpu().numpy()
 
+                # Extract and store embedding dimensions if Gaussian optimization is active
                 if self.gauss_opt:
                     llm_embs_pred = get_plm_embeddings(
                         x_input, 
@@ -1197,54 +1166,83 @@ class DCALLMHybridModel:
                         mode="mean", 
                         wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
                     )
-
                     self.embs_pred[llm_name] = llm_embs_pred
                     self.zs_scores_pred[llm_name] = y_base
 
+            # Complete all localized Gaussian Processes
+            if self.gauss_opt:
+                for llm_name in self.llm_keys:
                     pred_inputs = prepare_kermut_inputs(
                         seqs=sequences,
-                        x_embed=llm_embs_pred,
-                        x_zero_shot=y_base,
+                        x_embed=self.embs_pred[llm_name],
+                        x_zero_shot=self.zs_scores_pred[llm_name],
                         device=self.device
                     )
 
-                    y_gp_opt_pred, _test_variances = predict(self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs)
-                    y_gp_opt_pred = y_gp_opt_pred.detach().cpu().numpy()
+                    y_gp_opt_pred, _test_variances = predict(
+                        self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs
+                    )
+                    gp_preds[f"{llm_name}_gp"] = y_gp_opt_pred.detach().cpu().numpy()
+                
+                # Complete the Multi-LLM combined Gaussian Process
+                if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
+                    x_combined_embeddings_pred = torch.cat(
+                        list(self.embs_pred.values()), 
+                        dim=-1
+                    )
+                    zs_pred_tensors = [
+                        v.unsqueeze(-1) if v.dim() == 1 else v 
+                        for v in self.zs_scores_pred.values()
+                    ]
+                    x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
 
-                    self.hybrid_preds.update({f"{llm_name}_gp": y_gp_opt_pred})
-        
-        if self.gauss_opt:
-            if len(self.llm_keys) >= 2:
-                x_combined_embeddings_pred = torch.cat(
-                    list(self.embs_pred.values()), 
-                    dim=-1
-                )
-                # Extract, unsqueeze 1D vectors to 2D columns, and concatenate zero-shot scores
-                # Using a list comprehension to safely sanitize dimensions on the fly
-                zs_pred_tensors = [
-                    v.unsqueeze(-1) if v.dim() == 1 else v 
-                    for v in self.zs_scores_pred.values()
-                ]
-                x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
+                    pred_inputs = prepare_kermut_inputs(
+                        seqs=sequences,
+                        x_embed=x_combined_embeddings_pred,
+                        x_zero_shot=x_combined_zs_pred,
+                        device=self.device
+                    )
+                    combined_gp_pred_mean, _test_variances = predict(
+                        self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
+                    )
+                    gp_preds["combined_gp"] = combined_gp_pred_mean.detach().cpu().numpy()
 
-                pred_inputs = prepare_kermut_inputs(
-                    seqs=sequences,
-                    x_embed=x_combined_embeddings_pred,
-                    x_zero_shot=x_combined_zs_pred,
-                    device=self.device
-                )
-                combined_gp_pred_mean, _test_variances = predict(
-                    self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
-                )
-                self.hybrid_preds.update({"combined_gp": combined_gp_pred_mean.detach().cpu().numpy()})
+        self.hybrid_preds = {}
         
+        # Add baselines
+        self.hybrid_preds["y_dca"] = base_ridge_preds["y_dca"]
+        self.hybrid_preds["y_ridge"] = base_ridge_preds["y_ridge"]
+        
+        # Interleave variants per PLM key sequentially
+        if self.llm_keys is not None:
+            for llm_name in self.llm_keys:
+                # Base
+                if f"{llm_name}_base" in llm_preds:
+                    self.hybrid_preds[f"{llm_name}_base"] = llm_preds[f"{llm_name}_base"]
+                
+                # LoRA
+                if self.lora_train and f"{llm_name}_lora" in llm_preds:
+                    self.hybrid_preds[f"{llm_name}_lora"] = llm_preds[f"{llm_name}_lora"]
+                
+                # GP
+                if self.gauss_opt and f"{llm_name}_gp" in gp_preds:
+                    self.hybrid_preds[f"{llm_name}_gp"] = gp_preds[f"{llm_name}_gp"]
+            
+            # Add Combined GP at the very end of the sequence
+            if self.gauss_opt and self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
+                if "combined_gp" in gp_preds:
+                    self.hybrid_preds["combined_gp"] = gp_preds["combined_gp"]
+
         predictions = list(self.hybrid_preds.values())
-        logger.info(f"Running hybrid prediction in order: {self.hybrid_preds.keys()}")
+        logger.info(f"Running hybrid prediction with: {list(self.hybrid_preds.keys())}")
+        
+        # Enforce Z-score standardizations and compute total ensemble weight outputs
         self.y_hybrid = np.zeros_like(y_dca)
         for beta, p in zip(self.all_betas, predictions, strict=True):
             std_val = np.std(p)
             p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p
             self.y_hybrid += beta * p_std
+            
         return self.y_hybrid, self.hybrid_preds
 
     # TODO: Remove?!

@@ -315,7 +315,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             lora_train=lora_train,
                             gauss_opt=gauss_opt,
                             pdb_struct=pdb,
-                            splitting_scheme='block-random',
+                            splitting_scheme='random',
                             batch_size=5,
                             seed=seed,
                             n_epochs=50,  # Only if lora_train==True
