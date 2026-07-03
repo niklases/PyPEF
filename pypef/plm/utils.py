@@ -158,7 +158,7 @@ def get_batches(
         a = a.reshape(np.shape(a)[0] // batch_size, batch_size)
     new_shape = np.shape(a)
     if verbose:
-        logger.info(f'Batch reshape:{orig_shape} -> {new_shape} (dropped {remaining})')
+        logger.info(f'Batch reshape:{orig_shape} -> {new_shape} (dropped {remaining})...')
     if keep_remaining: 
         if a_remaining is not None:
             logger.info(f'Appending remaining to collected batches as last batch '

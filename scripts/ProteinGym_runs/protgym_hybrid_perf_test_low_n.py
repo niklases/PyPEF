@@ -245,8 +245,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             prosst_unopt_perfs.append(prosst_unopt_perf)
             esm_unopt_perfs.append(esm_unopt_perf)
-            print(f'Current mean ProSST unsupervised: N={len(prosst_unopt_perfs)} SpearCorr.={np.nanmean(prosst_unopt_perfs):.3f}')
-            print(f'Current mean ESM unsupervised: N={len(esm_unopt_perfs)} SpearCorr.={np.nanmean(esm_unopt_perfs):.3f}')
+            print(f'Current mean ProSST unsupervised: N={len(prosst_unopt_perfs)} SpearCorr={np.nanmean(prosst_unopt_perfs):.3f}')
+            print(f'Current mean ESM unsupervised: N={len(esm_unopt_perfs)} SpearCorr={np.nanmean(esm_unopt_perfs):.3f}')
             ns_y_test = [len(variants)]
             for i_t, train_size in enumerate([100, 200, 1000]):
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')

@@ -745,7 +745,7 @@ def get_plm_embeddings(
         else:
             embs = extract_mean_or_pos_embeddings(full_embs, mode=mode, mutation_strings=batch_variants)
             
-        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}-->{tuple(embs.shape)} "
+        pbar.set_description(f"{desc}: {tuple(full_embs.shape)}->{tuple(embs.shape)} "
                              f"({str(full_embs.device).upper().split(':')[0]})")
         processed_embs.append(embs)
         if end_idx >= len(tokenized_sequences):

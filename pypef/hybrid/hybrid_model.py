@@ -19,7 +19,6 @@ from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
 from pypef.gaussian_process.kermut.gp.predict import predict
 from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
 import torch
-import gpytorch
 import numpy as np
 import sklearn.base
 from scipy.stats import spearmanr
@@ -46,7 +45,7 @@ from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
 from pypef.plm.inference import (
-    KNNFitnessRetrieval, esm_setup, prosst_setup, 
+    esm_setup, prosst_setup, 
     tokenize_sequences, plm_inference, get_plm_embeddings
 )
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
@@ -92,9 +91,9 @@ class DCALLMHybridModel:
             if not isinstance(llm_model_input, dict):
                 raise RuntimeError("Model input must be in form of a dictionary.")
             
-            # Get the list of provided models
-            self.llm_keys = list(llm_model_input.keys())
-            supported_models = {'esm', 'prosst'}
+            # Get the list of provided models (normalized to uppercase)
+            self.llm_keys = [k.upper() for k in llm_model_input.keys()]
+            supported_models = {'ESM', 'PROSST'}
             
             # Check for unsupported models
             unsupported = set(self.llm_keys) - supported_models
@@ -104,8 +103,8 @@ class DCALLMHybridModel:
 
             logger.info(f"Using PLM(s) ({', '.join(self.llm_keys)}) next to DCA for hybrid modeling...")
             
-            # Store the entire dictionary so we can loop through it later
-            self.llm_data = llm_model_input
+            # Store the entire dictionary (re-keyed to uppercase) so we can loop through it later
+            self.llm_data = {k.upper(): v for k, v in llm_model_input.items()}
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         else:
@@ -609,7 +608,7 @@ class DCALLMHybridModel:
 
         # Loop through whatever models were passed in __init__
         for llm_name in self.llm_keys:
-            logger.info(f"Processing PLM {llm_name.upper()}...")
+            logger.info(f"Processing PLM {llm_name}...")
             # Extract this specific model's data
             current_llm = self.llm_data[llm_name]
             base_model = current_llm['llm_base_model']
@@ -699,7 +698,7 @@ class DCALLMHybridModel:
                     batch_size=self.batch_size,
                 )
                 logger.info(
-                    f"{llm_name.upper()} supervised tuned performance: "
+                    f"{llm_name} supervised tuned performance: "
                     f"Train = {spearmanr(self.y_ttrain, y_llm_lora_ttrain.detach().cpu())[0]:.3f} "
                     f"(N={len(self.y_ttrain)}), "
                     f"Test = {spearmanr(self.y_ttest, y_llm_lora_ttest.detach().cpu())[0]:.3f} "
@@ -788,12 +787,6 @@ class DCALLMHybridModel:
                 self.y_gp_opt_ttest = self.y_gp_opt_ttest.detach().cpu().numpy()
                 self.fold_predictions[f"{llm_name}_gp"] = self.y_gp_opt_ttest
                 self.betas_str += f"{llm_name}-GP, "
-
-                logger.info(
-                        f"{llm_name} supervised Gaussian process optimized performance: "
-                        f"Test = {spearmanr(self.y_ttest, self.y_gp_opt_ttest)[0]:.3f} "
-                        f"(N={len(self.y_ttest)})"
-                )
         
         if self.gauss_opt and self.gauss_comb_plm_emb:  # Combined (two PLM) GP kernel approach
             if len(self.llm_keys) >= 2:
@@ -869,8 +862,8 @@ class DCALLMHybridModel:
 
                 combined_pred_ttest, _test_variances = predict(gp, likelihood, test_inputs)
                 combined_pred_ttest = combined_pred_ttest.detach().cpu().numpy()
-                self.fold_predictions["combined_gp"] = combined_pred_ttest
-                self.betas_str += "Combined-GP, "
+                self.fold_predictions[f"{llm_name}_gp"] = combined_pred_ttest
+                self.betas_str += f"{llm_name}-GP, "
 
                 logger.info(
                         f"Combined supervised Gaussian process optimized performance: "
@@ -1008,15 +1001,16 @@ class DCALLMHybridModel:
 
         # Start predictors list with baseline DCA models
         predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
+        self.betas_str =  "DCA, DCA-Ridge, "
 
         # Print baseline Spearman correlations
         logger.info(
-            f"DCA unsupervised 'ttest' performance: "
-            f"Test set = {spearmanr(self.y_ttest, self.y_dca_ttest)[0]:.3f} (N={len(self.y_ttest)})"
+            f"DCA unsupervised ensemble test set performance: "
+            f"{spearmanr(self.y_ttest, self.y_dca_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
         logger.info(
-            f"DCA-Ridge supervised 'ttest' performance: "
-            f"Test set = {spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
+            f"DCA-Ridge supervised ensemble test set performance: "
+            f"{spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
 
         # Train and extract PLM predictions if applicable
@@ -1033,7 +1027,7 @@ class DCALLMHybridModel:
                         base_preds = self.fold_predictions[f"{llm_name}_base"]
                         predictors.append(base_preds)
                         logger.info(
-                            f"{llm_name.upper()} zero-shot 'ttest' performance: "
+                            f"{llm_name} zero-shot ensemble test set performance: "
                             f"Test set = {spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                     
@@ -1042,8 +1036,8 @@ class DCALLMHybridModel:
                         lora_preds = self.fold_predictions[f"{llm_name}_lora"]
                         predictors.append(lora_preds)
                         logger.info(
-                            f"{llm_name.upper()} LoRA tuned 'ttest' performance: "
-                            f"Test set = {spearmanr(self.y_ttest, lora_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                            f"{llm_name} LoRA tuned ensemble test set performance: "
+                            f"{spearmanr(self.y_ttest, lora_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                     
                     # Supervised Gaussian Process Optimized PLM
@@ -1051,8 +1045,8 @@ class DCALLMHybridModel:
                         gp_preds = self.fold_predictions[f"{llm_name}_gp"]
                         predictors.append(gp_preds)
                         logger.info(
-                            f"{llm_name.upper()} Gaussian process 'ttest' performance: "
-                            f"Test set = {spearmanr(self.y_ttest, gp_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                            f"{llm_name} Gaussian process ensemble test set performance: "
+                            f"{spearmanr(self.y_ttest, gp_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                 
                 # Combined Multi-PLM Gaussian Process
@@ -1061,8 +1055,8 @@ class DCALLMHybridModel:
                         comb_preds = self.fold_predictions["combined_gp"]
                         predictors.append(comb_preds)
                         logger.info(
-                            f"Combined Gaussian process 'ttest' performance: "
-                            f"Test set = {spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                            f"Combined Gaussian process ensemble test set performance: "
+                            f"{spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
 
         # Clean up the trailing comma left behind by train_llm() on self.betas_str
@@ -1106,7 +1100,7 @@ class DCALLMHybridModel:
                 f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
             )
 
-        logger.info(f"Hybrid optimization done.")
+        logger.info(f"Hybrid optimization done...")
         return (*self.all_betas, self.ridge_opt)
 
     def hybrid_prediction(
@@ -1116,9 +1110,11 @@ class DCALLMHybridModel:
             sequences: list[str] | None = None,
             verbose: bool = False
     ) -> np.ndarray:
+        if x_llm_dict is not None:
+            x_llm_dict = {k.upper(): v for k, v in x_llm_dict.items()}
         betas_used = f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
         logger.info(f"Hybrid prediction with N_individual model weights ('betas') = "
-                    f"{self.betas_str} --> used: {betas_used}...")
+                    f"{self.betas_str} -> used: {betas_used}...")
         
         y_dca = self._delta_e(x_dca)
         y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
@@ -1238,11 +1234,16 @@ class DCALLMHybridModel:
         
         # Enforce Z-score standardizations and compute total ensemble weight outputs
         self.y_hybrid = np.zeros_like(y_dca)
-        for beta, p in zip(self.all_betas, predictions, strict=True):
-            std_val = np.std(p)
-            p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p
-            self.y_hybrid += beta * p_std
-            
+        try:
+            for beta, p in zip(self.all_betas, predictions, strict=True):
+                std_val = np.std(p)
+                p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else p
+                self.y_hybrid += beta * p_std
+        except ValueError as e:
+            raise RuntimeError(
+                f"Got {len(self.all_betas)} ensemble weights but "
+                f"{len(predictions)} predictions. Original error:\n{e}"
+            )
         return self.y_hybrid, self.hybrid_preds
 
     # TODO: Remove?!
