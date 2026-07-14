@@ -430,19 +430,19 @@ ExitOnExitCode
 Write-Host
 
 # 0.4.0 features: hybrid DCA-LLM modeling
-pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINESM1V --ts TS.fasl --params GREMLIN --llm esm
+pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --plm esm
 ExitOnExitCode
 Write-Host
 pypef mkps -i 37_ANEH_variants.csv --wt Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINESM1V --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --llm esm
+pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --plm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDGREMLINESM1V -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
+pypef hybrid directevo -m HYBRIDGREMLINESM -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
 ExitOnExitCode
 Write-Host
 
@@ -617,10 +617,10 @@ Write-Host
 pypef predict_ssm -w P42212_F64L.fasta --params GREMLIN
 ExitOnExitCode
 Write-Host 
-pypef predict_ssm -w P42212_F64L.fasta --llm esm
+pypef predict_ssm -w P42212_F64L.fasta --plm esm
 ExitOnExitCode
 Write-Host 
-pypef predict_ssm -w P42212_F64L.fasta --llm prosst --pdb GFP_AEQVI.pdb
+pypef predict_ssm -w P42212_F64L.fasta --plm prosst --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host 
 
@@ -690,38 +690,73 @@ Write-Host
 pypef mklsts -i avGFP.csv -w P42212_F64L.fasta --ls_proportion 0.02
 ExitOnExitCode
 Write-Host
-pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm esm
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINESM1V --ts TS.fasl --params GREMLIN --llm esm
-ExitOnExitCode
-Write-Host
-
-pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
-ExitOnExitCode
-Write-Host
-pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --plm esm
 ExitOnExitCode
 Write-Host
 
-pypef hybrid directevo -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host
-pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb
+pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+
+pypef hybrid directevo -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm
+ExitOnExitCode
+Write-Host
+pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb
 ExitOnExitCode
 Write-Host
 
 # Takes long.. better delete 7 out of the 8 recomb txt files
-#pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm --pmult --drecomb
+#pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm --pmult --drecomb
 #ExitOnExitCode
 #Write-Host
-#pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb --pmult --drecomb
+#pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb --pmult --drecomb
 #ExitOnExitCode
 #Write-Host
-pypef hybrid -m HYBRIDGREMLINESM1V -w P42212_F64L.fasta --params GREMLIN --llm esm -p avGFP_prediction_set.fasta
+pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm -p avGFP_prediction_set.fasta
 ExitOnExitCode
 Write-Host
-pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --llm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
+pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
+ExitOnExitCode
+Write-Host
+
+# 0.4.4 features: multi-PLM (DCA+ESM+ProSST), LoRA fine-tuning, and Gaussian-process (GP) optimization.
+# These commands run PLM fine-tuning/GP training and are computationally intensive; use a small
+# learning set to keep the runtime tractable.
+pypef mklsts -i avGFP.csv -w P42212_F64L.fasta --ls_proportion 0.02
+ExitOnExitCode
+Write-Host
+# Multiple PLMs can be combined via '+' (also ',' or whitespace): DCA + ESM + ProSST hybrid model
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINESMPROSST --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINESMPROSST --ps avGFP_prediction_set.fasta --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+# LoRA-based supervised PLM fine-tuning (--lora)
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --lora
+ExitOnExitCode
+Write-Host
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --lora
+ExitOnExitCode
+Write-Host
+# Gaussian-process (GP) optimization as an alternative to LoRA tuning (--gauss_opt, requires --wt and --pdb)
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
+ExitOnExitCode
+Write-Host
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
+ExitOnExitCode
+Write-Host
+# Combined multi-PLM GP over both PLM embeddings (--gauss_comb, requires --gauss_opt and two PLMs)
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --gauss_comb
 ExitOnExitCode
 Write-Host
 

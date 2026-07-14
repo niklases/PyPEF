@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import pickle
+import re
 from os import listdir
 from os.path import isfile, join
 from typing import Union
@@ -98,7 +99,7 @@ class DCALLMHybridModel:
             # Check for unsupported models
             unsupported = set(self.llm_keys) - supported_models
             if unsupported:
-                raise RuntimeError(f"LLM input models {unsupported} not supported. "
+                raise RuntimeError(f"PLM input models {unsupported} not supported. "
                                    f"Currently supported models are {supported_models}")
 
             logger.info(f"Using PLM(s) ({', '.join(self.llm_keys)}) next to DCA for hybrid modeling...")
@@ -108,7 +109,7 @@ class DCALLMHybridModel:
             if parameter_range is None:
                 parameter_range = [(0, 1), (0, 1), (0, 1), (0, 1)] 
         else:
-            logger.info("No LLM inputs were defined for hybrid modelling. "
+            logger.info("No PLM inputs were defined for hybrid modelling. "
                   "Using only DCA for hybrid modeling...")
             self.llm_keys = None
             self.llm_model_input = None
@@ -888,7 +889,7 @@ class DCALLMHybridModel:
         zs_scores_pred = {}
 
         if self.llm_keys is not None:
-            # Process all Base and LoRA LLM variants first
+            # Process all Base and LoRA PLM variants first
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
                 inference_fn = current_llm['llm_inference_function']
@@ -956,7 +957,7 @@ class DCALLMHybridModel:
                     )
                     split_predictors.append(y_gp_opt_pred.detach().cpu().numpy())
                 
-                # Process the Combined Multi-LLM Gaussian Process
+                # Process the Combined Multi-PLM Gaussian Process
                 if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
                     x_combined_embeddings_pred = torch.cat(
                         list(embs_pred.values()), 
@@ -1128,7 +1129,7 @@ class DCALLMHybridModel:
         gp_preds = {}
 
         if self.llm_keys is not None:
-            # Complete all Base and LoRA LLM variants first
+            # Complete all Base and LoRA PLM variants first
             for llm_name in self.llm_keys:
                 current_llm = self.llm_data[llm_name]
                 x_input = x_llm_dict.get(llm_name) if x_llm_dict else None
@@ -1180,7 +1181,7 @@ class DCALLMHybridModel:
                     )
                     gp_preds[f"{llm_name}_gp"] = y_gp_opt_pred.detach().cpu().numpy()
                 
-                # Complete the Multi-LLM combined Gaussian Process
+                # Complete the Multi-PLM combined Gaussian Process
                 if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
                     x_combined_embeddings_pred = torch.cat(
                         list(self.embs_pred.values()), 
@@ -1354,23 +1355,29 @@ def get_model_and_type(
     else:  # --> elif model_type in ['PLMC', 'GREMLIN', 'Hybrid']:
         model = model['model']
     if model_type == 'Hybrid':
-        if model.llm_key == 'esm':
-            logger.info("Found hybrid model with ESM PLM model...")
-            base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
-            model_type += '_ESM'
-        elif model.llm_key == 'prosst':
-            logger.info("Found hybrid model with ProSST PLM model...")
-            base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
-            model_type += '_ProSST'
-        else:
+        if not model.llm_keys:
             logger.info("Found hybrid model without PLM model...")
             return model, model_type
-        base_model.load_state_dict(model.llm_base_model)
-        lora_model.load_state_dict(model.llm_model)
-        model.llm_model = lora_model
-        model.llm_base_model = base_model
-        model.llm_model.eval()
-        model.llm_base_model.eval()
+        # Reconstruct each stored PLM (base and LoRA) from its state dictionary
+        for llm_name in model.llm_keys:
+            current_llm = model.llm_data[llm_name]
+            if llm_name == 'ESM':
+                logger.info("Found hybrid model with ESM PLM model...")
+                base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
+                model_type += '_ESM'
+            elif llm_name == 'PROSST':
+                logger.info("Found hybrid model with ProSST PLM model...")
+                base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
+                model_type += '_ProSST'
+            else:
+                logger.info(f"Found hybrid model with unknown PLM model {llm_name}...")
+                continue
+            base_model.load_state_dict(current_llm['llm_base_model'])
+            lora_model.load_state_dict(current_llm['llm_model'])
+            base_model.eval()
+            lora_model.eval()
+            current_llm['llm_base_model'] = base_model
+            current_llm['llm_model'] = lora_model
 
     return model, model_type
 
@@ -1387,20 +1394,18 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    # For Hybrid LLM models save as model.state_dict()
+    # For hybrid PLM models save each PLM (base and LoRA) as state dictionaries
     if model_type.lower().startswith('hybrid'):
-        if model.llm_key is not None:
-            logger.info(f"Storing LLM model {model.llm_key.upper()} "
-                  f"of hybrid model as state dictionaries...")
-            model.llm_model = model.llm_model.to('cpu')
-            model.llm_model = model.llm_model.state_dict()
-            model.llm_base_model = model.llm_base_model.to('cpu')
-            model.llm_base_model = model.llm_base_model.state_dict()
-            model.llm_model_input[model.llm_key]['llm_base_model'] = None
-            model.llm_model_input[model.llm_key]['llm_model'] = None
+        if model.llm_keys is not None:
+            for llm_name in model.llm_keys:
+                logger.info(f"Storing PLM model {llm_name} "
+                      f"of hybrid model as state dictionaries...")
+                current_llm = model.llm_data[llm_name]
+                current_llm['llm_model'] = current_llm['llm_model'].to('cpu').state_dict()
+                current_llm['llm_base_model'] = current_llm['llm_base_model'].to('cpu').state_dict()
             model.progress_cb = None
             model.abort_cb = None
-            model_type += model.llm_key.upper()
+            model_type += ''.join(model.llm_keys)
     pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     pickle.dump(
         {
@@ -1573,6 +1578,45 @@ def remove_gap_pos(
     return variants_v, sequences_v, fitnesses_v
 
 
+def parse_llm_flag(llm: str | None) -> list[str]:
+    """
+    Parse the `--plm` input into a list of (lower-case) PLM names.
+    One or multiple PLMs can be specified, combining them via '+', ',',
+    or whitespace, e.g. '--plm esm', '--plm esm+prosst', or
+    '--plm "esm, prosst"' for combined DCA+ESM+ProSST hybrid modeling.
+    """
+    if llm is None:
+        return []
+    return [name.strip().lower() for name in re.split(r'[+,\s]+', llm) if name.strip()]
+
+
+def setup_llm_input(
+        llm_names: list[str],
+        sequences: list[str],
+        wt_seq: str | None = None,
+        pdb_file: str | None = None
+) -> dict:
+    """
+    Build the (merged) PLM input dictionary for one or multiple PLMs,
+    e.g. {'esm': {...}, 'prosst': {...}}, used as `llm_model_input`
+    for the DCALLMHybridModel.
+    """
+    llm_dict = {}
+    for name in llm_names:
+        if name.startswith('esm'):
+            # ESM has no dedicated WT input; fall back to first sequence
+            esm_wt_seq = wt_seq if wt_seq is not None else sequences[0]
+            llm_dict.update(esm_setup(esm_wt_seq, sequences))
+        elif name == 'prosst':
+            llm_dict.update(prosst_setup(wt_seq, pdb_file, sequences=sequences))
+        else:
+            raise RuntimeError(
+                f"Unknown --plm option '{name}'. Supported PLMs are 'esm' and 'prosst' "
+                f"(combine multiple via '+', e.g. --plm esm+prosst)."
+            )
+    return llm_dict
+
+
 def performance_ls_ts(
         ls_fasta: str | None,
         ts_fasta: str | None,
@@ -1584,8 +1628,11 @@ def performance_ls_ts(
         wt_seq: str | None = None,
         substitution_sep: str = '/',
         label=False,
+        lora_train: bool = False,
+        gauss_opt: bool = False,
+        gauss_comb: bool = False,
         device: str| None = None,
-        progress_cb=None, 
+        progress_cb=None,
         abort_cb=None
 ):
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
@@ -1615,14 +1662,16 @@ def performance_ls_ts(
                     f"{len(test_variants)} (after removing substitutions "
                     f"at gap positions)."
         )
-        if llm is not None:
-            if llm.lower().startswith('esm'):
-                llm_dict = esm_setup(train_sequences)
-                x_llm_test = tokenize_sequences(test_sequences, llm_dict['esm']['llm_tokenizer'])
-            elif llm.lower() == 'prosst':
-                llm_dict = prosst_setup(
-                    wt_seq, pdb_file, sequences=train_sequences)
-                x_llm_test = tokenize_sequences(test_sequences, llm_dict['prosst']['llm_tokenizer'])
+        llm_names = parse_llm_flag(llm)
+        if llm_names:
+            logger.info(f"Setting up PLM(s) for hybrid modeling: {', '.join(llm_names)}...")
+            llm_dict = setup_llm_input(llm_names, train_sequences, wt_seq, pdb_file)
+            # hybrid_prediction expects a dict {PLM_NAME: tokenized_test_sequences}
+            x_llm_test = {
+                llm_name: tokenize_sequences(
+                    test_sequences, llm_data['llm_tokenizer'])[0]
+                for llm_name, llm_data in llm_dict.items()
+            }
         else:
             llm_dict = None
             x_llm_test = None
@@ -1632,11 +1681,19 @@ def performance_ls_ts(
             y_train=np.array(y_train),
             llm_model_input=llm_dict,
             x_dca_wt=x_wt,
+            sequences=list(train_sequences),
+            wt_sequence=wt_seq,
+            pdb_struct=pdb_file,
+            lora_train=lora_train,
+            gauss_opt=gauss_opt,
+            gauss_comb_plm_emb=gauss_comb,
             device=device,
-            progress_cb=progress_cb, 
+            progress_cb=progress_cb,
             abort_cb=abort_cb
         )
-        y_test_pred = hybrid_model.hybrid_prediction(np.array(x_test), x_llm_test)
+        y_test_pred, _hybrid_preds = hybrid_model.hybrid_prediction(
+            np.array(x_test), x_llm_test, sequences=list(test_sequences)
+        )
         logger.info(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f} N={len(y_test)}')
         save_model_to_dict_pickle(hybrid_model, f'HYBRID{model_type}')
 
@@ -1666,18 +1723,22 @@ def performance_ls_ts(
                 test_variants, test_sequences, y_test, params_file,
                 substitution_sep, threads, False
             )
-            if model.llm_model_input is not None:
-                llm_ = list(model.llm_model_input.keys())[0]
-                tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
-                logger.info(f"Found hybrid model with LLM {llm_}...")
-                x_llm_test = tokenize_sequences(test_sequences, tokenizer)
-                y_test_pred = model.hybrid_prediction(x_test, x_llm_test)
+            if model.llm_keys is not None:
+                logger.info(f"Found hybrid model with PLM(s) {', '.join(model.llm_keys)}...")
+                x_llm_test = {
+                    llm_name: tokenize_sequences(
+                        test_sequences, model.llm_data[llm_name]['llm_tokenizer'])[0]
+                    for llm_name in model.llm_keys
+                }
+                y_test_pred, _ = model.hybrid_prediction(
+                    x_test, x_llm_test, sequences=list(test_sequences)
+                )
             else:
-                y_test_pred = model.hybrid_prediction(x_test)
+                y_test_pred, _ = model.hybrid_prediction(x_test)
     
     elif ts_fasta is not None and model_pickle_file is None:
         # no LS and *no hybrid model* provided:
-        # statistical modeling / no ML / zero-shot LLM predictions
+        # statistical modeling / no ML / zero-shot PLM predictions
         logger.info(
             f"No learning set provided, falling back to statistical DCA model: "
             f"no adjustments of individual hybrid model parameters (\"beta's\")."
@@ -1701,10 +1762,10 @@ def performance_ls_ts(
             save_model_to_dict_pickle(model, model_type)
             model_type = f'{model_type}_no_ML'
         else:
-            model_type = 'LLM'
+            model_type = 'PLM'
             if llm == 'esm':
                 llm_dict = esm_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
-                logger.info("Zero-shot LLM inference on test set using ESM...")
+                logger.info("Zero-shot PLM inference on test set using ESM...")
                 y_test_pred = plm_inference(
                     tokenized_sequences = llm_dict['esm']['x_llm'],
                     wt_input_ids=llm_dict['esm']['wt_input_ids'],
@@ -1712,7 +1773,7 @@ def performance_ls_ts(
                 )
             elif llm == 'prosst':
                 llm_dict = prosst_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
-                logger.info("Zero-shot LLM inference on test set using ProSST...")
+                logger.info("Zero-shot PLM inference on test set using ProSST...")
                 y_test_pred = plm_inference(
                     tokenized_sequences = llm_dict['prosst']['x_llm'],
                     wt_input_ids=llm_dict['prosst']['wt_input_ids'],
@@ -1721,13 +1782,13 @@ def performance_ls_ts(
                     
                 )
             else:
-                raise RuntimeError("Unknown --llm flag option.")
+                raise RuntimeError("Unknown --plm flag option.")
     else:
         raise RuntimeError('No test set given for performance estimation.')
     if llm is None or llm == '':
         llm = ''
     else:
-        llm = f"_{llm.upper()}"
+        llm = '_' + '_'.join(parse_llm_flag(llm)).upper()
     plot_y_true_vs_y_pred(
         np.array(y_test), np.array(y_test_pred), np.array(test_variants), 
         label=label, hybrid=True, name=f'{model_type}{llm}'
@@ -1829,19 +1890,23 @@ def predict_ps(
                             variants, sequences, None, model, threads=threads, verbose=False,
                             substitution_sep=separator)
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
-                    else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
+                    else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional PLM input
                         x_test, _test_variants, test_sequences, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
-                        if model.llm_key is None:  # TODO: Check llm_key
-                            ys_pred = model.hybrid_prediction(x_test)
+                        if model.llm_keys is None:
+                            ys_pred, _ = model.hybrid_prediction(x_test)
                         else:
                             sequences = [str(seq) for seq in test_sequences]
-                            llm_ = list(model.llm_model_input.keys())[0]
-                            tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
-                            x_llm_test = tokenize_sequences(sequences, tokenizer)
-                            ys_pred = model.hybrid_prediction(np.asarray(x_test), np.asarray(x_llm_test))
+                            x_llm_test = {
+                                llm_name: tokenize_sequences(
+                                    sequences, model.llm_data[llm_name]['llm_tokenizer'])[0]
+                                for llm_name in model.llm_keys
+                            }
+                            ys_pred, _ = model.hybrid_prediction(
+                                np.asarray(x_test), x_llm_test, sequences=sequences
+                            )
                     for k, y in enumerate(ys_pred):
                         all_y_v_pred.append((ys_pred[k], variants[k]))
                 if negative:  # sort by fitness value
@@ -1862,14 +1927,14 @@ def predict_ps(
         # NaNs are already being removed by the called function
         if not dca_modeling:  # model_pickle_file is None and params_file is None:
             # *No hybrid model* and no DCA params provided:
-            # Zero-shot LLM predictions
+            # Zero-shot PLM predictions
             if llm == 'esm':
-                model_type = 'LLM_ESM'
-                logger.info("Zero-shot LLM inference on test set using ESM...")
+                model_type = 'PLM_ESM'
+                logger.info("Zero-shot PLM inference on test set using ESM...")
                 ys_pred = plm_inference(sequences, llm)  # TODO
             elif llm == 'prosst':
-                model_type = 'LLM_ProSST'
-                logger.info("Zero-shot LLM inference on test set using ProSST...")
+                model_type = 'PLM_ProSST'
+                logger.info("Zero-shot PLM inference on test set using ProSST...")
                 ys_pred = plm_inference(sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)  # TODO
         else:
             if not model_type.startswith('Hybrid'):  # statistical DCA model
@@ -1878,19 +1943,23 @@ def predict_ps(
                     threads=threads, verbose=False, substitution_sep=separator
                 )
                 ys_pred = get_delta_e_statistical_model(xs, x_wt)
-            else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional LLM input
+            else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional PLM input
                 xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
                     variants, sequences, None, params_file,
                     threads=threads, verbose=True, substitution_sep=separator
                 )
-                if model.llm_key is None:
-                    ys_pred = model.hybrid_prediction(xs)
+                if model.llm_keys is None:
+                    ys_pred, _ = model.hybrid_prediction(xs)
                 else:
                     sequences = [str(seq) for seq in sequences]
-                    llm_ = list(model.llm_model_input.keys())[0]
-                    tokenizer = model.llm_model_input[llm_]['llm_tokenizer']
-                    xs_llm = tokenize_sequences(sequences, tokenizer)
-                    ys_pred = model.hybrid_prediction(np.asarray(xs), np.asarray(xs_llm))
+                    xs_llm = {
+                        llm_name: tokenize_sequences(
+                            sequences, model.llm_data[llm_name]['llm_tokenizer'])[0]
+                        for llm_name in model.llm_keys
+                    }
+                    ys_pred, _ = model.hybrid_prediction(
+                        np.asarray(xs), xs_llm, sequences=sequences
+                    )
             assert len(xs) == len(variants) == len(ys_pred)
         y_v_pred = zip(ys_pred, variants)
         y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
@@ -1938,7 +2007,7 @@ def predict_directed_evolution(
             return 'skip'
         y_pred = get_delta_e_statistical_model(xs, x_wt)
     else:  # model_type == 'Hybrid': Hybrid model input requires params 
-        # from PLMC or GREMLIN model plus optional LLM input
+        # from PLMC or GREMLIN model plus optional PLM input
         xs, variant, variant_sequence, *_ = plmc_or_gremlin_encoding(
             variant, variant_sequence, None, encoder, 
             verbose=False, use_global_model=True
@@ -1946,16 +2015,23 @@ def predict_directed_evolution(
         if not list(xs):
             return 'skip'
         try:
-            if model.llm_model_input is None:
-                y_pred = model.hybrid_prediction(xs)
+            if model.llm_keys is None:
+                y_pred, _ = model.hybrid_prediction(
+                    np.atleast_2d(xs), verbose=False
+                )
             else:
-                x_llm = tokenize_sequences(model.llm_model_input, 
-                                     variant_sequence, verbose=False)
-
-                y_pred = model.hybrid_prediction(
-                    np.atleast_2d(xs), 
-                    np.atleast_2d(x_llm), verbose=False
-                )[0]
+                x_llm = {
+                    llm_name: tokenize_sequences(
+                        variant_sequence,
+                        model.llm_data[llm_name]['llm_tokenizer'],
+                        verbose=False)[0]
+                    for llm_name in model.llm_keys
+                }
+                y_pred, _ = model.hybrid_prediction(
+                    np.atleast_2d(xs), x_llm,
+                    sequences=list(variant_sequence), verbose=False
+                )
+            y_pred = y_pred[0]
         except ValueError as e:
             raise RuntimeError(
                 f"Error: {e}\nProbably a different model was used for encoding than "

@@ -91,7 +91,7 @@ class SSM:
                         f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
         else:
-            raise RuntimeError("Unknown modeling option (choose between --llm esm or --llm prosst)!")
+            raise RuntimeError("Unknown modeling option (choose between --plm esm or --plm prosst)!")
 
     def plot(self):
         _fig, ax = plt.subplots(figsize=(2 * len(self.wt_seq) / len(self.aas), 3))

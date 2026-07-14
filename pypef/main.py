@@ -122,7 +122,7 @@ Usage:
         [--wt WT_FASTA] [--opt_iter N_ITER]
     pypef predict_ssm --wt WT_FASTA
         [--params PARAM_FILE]
-        [--llm LLM] 
+        [--plm PLM] [--llm LLM]
         [--pdb PDB_FILE]
     pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
         [--opt_iter N_ITER]
@@ -135,17 +135,18 @@ Usage:
     pypef shift_pos --input CSV_FILE --offset OFFSET
         [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR] [--fitness_key FITNESS_KEY]
     pypef sto2a2m --sto STO_MSA_FILE [--inter_gap INTER_GAP] [--intra_gap INTRA_GAP]
-    pypef hybrid 
+    pypef hybrid
         [--params PARAM_FILE]
         [--model MODEL]
         [--ts TEST_SET] [--ps PREDICTION_SET]
-        [--ls LEARNING_SET] [--label] 
-        [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
+        [--ls LEARNING_SET] [--label]
+        [--plm PLM] [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
+        [--lora] [--gauss_opt] [--gauss_comb]
         [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                           [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS]
     pypef hybrid directevo --wt WT_FASTA --params PARAM_FILE
-        [--model MODEL] [--llm LLM] [--pdb PDB_FILE]
+        [--model MODEL] [--plm PLM] [--llm LLM] [--pdb PDB_FILE]
         [--input CSV_FILE] [--numiter NUM_ITER]
         [--numtraj NUM_TRAJ] [--temp TEMPERATURE]
         [--negative] [--usecsv] [--csvaa] [--drop THRESHOLD]
@@ -190,6 +191,9 @@ Options:
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
                                     and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
+  --gauss_opt                       Use a Gaussian process (GP) to optimize the PLM embeddings and
+                                    zero-shot scores for supervised hybrid modeling (alternative to
+                                    LoRA-based tuning; requires --plm, --pdb, and --wt) [default: False].
   -h --help                         Show this screen [default: False].
   -i --input CSV_FILE               Input data file in .csv format.
   --inter_gap INTER_GAP             Fraction to delete all positions with more than
@@ -201,7 +205,15 @@ Options:
   -l --ls LEARNING_SET              Input learning set in .fasta format.
   --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training + 
                                     testing); float, e.g., 0.8.
-  --llm LLM                         LLM model to use for hybrid modeling next to DCA (options are 'ESM' and 'ProSST').
+  --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
+                                    of all specified PLMs; requires --gauss_opt and two PLMs (e.g.
+                                    'esm+prosst' passed via the --plm flag) [default: False].
+  --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM' and
+                                    'ProSST'). Multiple PLMs can be combined via '+', ',', or whitespace,
+                                    e.g. --plm esm+prosst for DCA+ESM+ProSST hybrid modeling.
+  --llm LLM                         Deprecated alias for --plm (kept for backward compatibility).
+  --lora                            Use LoRA-based supervised fine-tuning of the PLM for hybrid
+                                    modeling (requires --plm) [default: False].
   -m --model MODEL                  Model (pickle file) for plotting of validation or for
                                     performing predictions.
   --modulo                          Modulo-like splits in five-fold cross-validation fashion that 
@@ -222,7 +234,7 @@ Options:
   --opt_iter N_ITER                 Number of iterations for GREMLIN-based optimization of local fields
                                     and couplings [default: 100].
   --params PARAM_FILE               Input PLMC couplings parameter file.
-  --pdb PDB_FILE                    Input protein structure file in PDB format used for ProSST LLM modeling.
+  --pdb PDB_FILE                    Input protein structure file in PDB format used for ProSST PLM modeling.
   --plot                            Plot different five-fold dataset split distributions performed when using
                                     the flags --random, --modulo, --cont with the mklsts command.
   --random                          Random splits in five-fold cross-validation fashion.
@@ -326,12 +338,16 @@ schema = Schema({
     Optional('--encoding'): Use(str),
     Optional('--fitness_key'): Or(None, str),
     Optional('--fit_size'): Use(float),
+    Optional('--gauss_comb'): bool,
+    Optional('--gauss_opt'): bool,
     Optional('--help'): bool,
     Optional('--input'): Or(None, str),
     Optional('--inter_gap'): Use(float),
     Optional('--intra_gap'): Use(float),
     Optional('--label'): bool,
     Optional('--llm'): Or(None, str),
+    Optional('--plm'): Or(None, str),
+    Optional('--lora'): bool,
     Optional('--ls'): Or(None, str),
     Optional('--ls_proportion'): Or(None, Use(float)),
     Optional('--model'): Or(None, str),
@@ -429,6 +445,12 @@ def run_main(argv=None, progress_cb=None, abort_cb=None):
     logger.debug(str(argv)[1:-1].replace("\'", "").replace(",", ""))
     logger.debug(f'\n{arguments}')
     arguments = validate(arguments)
+    # '--plm' is the preferred flag; '--llm' is kept as a deprecated alias. Resolve both
+    # into '--llm' so downstream routing (which uses the internal 'llm' naming) is unchanged.
+    if arguments['--plm']:
+        arguments['--llm'] = arguments['--plm']
+    elif arguments['--llm']:
+        logger.warning("The '--llm' flag is deprecated; please use '--plm' instead.")
     if arguments['directevo']:
         run_pypef_utils(arguments)
     elif arguments['ml']:

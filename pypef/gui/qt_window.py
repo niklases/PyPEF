@@ -11,9 +11,9 @@ import time
 
 from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
 from PySide6.QtWidgets import (
-    QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget, 
-    QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox, 
-    QFileDialog, QProgressBar
+    QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget,
+    QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox,
+    QFileDialog, QProgressBar, QCheckBox
 )
 
 from pypef import __version__
@@ -254,7 +254,7 @@ class MainWidget(QWidget):
         self.device_text_out.setStyleSheet(text_out_style)
         self.device_text_out.setFixedHeight(85)
         self.device_text_out_info_text = (
-            f"Device (for LLM/DCA): {get_device().upper()}\n"
+            f"Device (for PLM/DCA): {get_device().upper()}\n"
             f"{get_nvidia_gpu_info_pynvml()[0]}\n"
             f"PyTorch version: {get_torch_version()}\n"
             f"Driver version: {get_nvidia_gpu_info_pynvml()[1]}\n"
@@ -304,10 +304,38 @@ class MainWidget(QWidget):
         )
 
         self.box_llm = QComboBox()
-        self.box_llm.addItems(['None', 'ESM1v', 'ProSST'])
+        self.box_llm.addItems(['None', 'ESM', 'ProSST', 'ESM+ProSST'])
         self.box_llm.currentIndexChanged.connect(self.selection_llm_model)
         self.box_llm.setCurrentIndex(1)
         self.box_llm.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
+
+        # DCA+PLM (supervised) hybrid training options (map to the --lora / --gauss_opt /
+        # --gauss_comb CLI flags). Only relevant for (Train) and (Train-Test) DCA+PLM runs.
+        checkbox_style = "color:white;"
+        self.check_lora = QCheckBox("LoRA tuning")
+        self.check_lora.setToolTip(
+            "Use LoRA-based supervised fine-tuning of the PLM (training only)."
+        )
+        self.check_lora.setStyleSheet(checkbox_style)
+        self.check_gauss_opt = QCheckBox("GP optimization")
+        self.check_gauss_opt.setToolTip(
+            "Use a Gaussian process (GP) to optimize the PLM embeddings and zero-shot "
+            "scores as an alternative to LoRA tuning (training only; requires a WT FASTA "
+            "and a PDB structure file)."
+        )
+        self.check_gauss_opt.setStyleSheet(checkbox_style)
+        self.check_gauss_comb = QCheckBox("Combined GP")
+        self.check_gauss_comb.setToolTip(
+            "Additionally build a combined GP over the embeddings of both PLMs "
+            "(requires GP optimization and two PLMs, i.e. ESM+ProSST)."
+        )
+        self.check_gauss_comb.setStyleSheet(checkbox_style)
+        self.box_plm_options = QWidget()
+        _plm_options_layout = QVBoxLayout(self.box_plm_options)
+        _plm_options_layout.setContentsMargins(0, 0, 0, 0)
+        _plm_options_layout.setSpacing(0)
+        for _cb in (self.check_lora, self.check_gauss_opt, self.check_gauss_comb):
+            _plm_options_layout.addWidget(_cb)
 
         self.box_mklsts_cv = QComboBox()
         self.box_mklsts_cv.addItems([
@@ -363,10 +391,10 @@ class MainWidget(QWidget):
         )
         self.button_gremlin_ssm.setStyleSheet(button_style)
 
-        self.button_llm_ssm = QPushButton("LLM SSM prediction")
+        self.button_llm_ssm = QPushButton("PLM SSM prediction")
         self.button_llm_ssm.setMinimumWidth(80)
         self.button_llm_ssm.setToolTip(
-            "Runs full site-saturation (single) mutagenesis using the selected LLM predcitor "
+            "Runs full site-saturation (single) mutagenesis using the selected PLM predcitor "
             "and saves resulting landscape mutation effect plot"
         )
         self.button_llm_ssm.clicked.connect(
@@ -403,21 +431,21 @@ class MainWidget(QWidget):
         self.button_dca_predict_dca.clicked.connect(self.pypef_dca_predict)
         self.button_dca_predict_dca.setStyleSheet(button_style)
 
-        # Zero-shot LLM
-        self.button_llm_test_zs = QPushButton("Test (LLM)")
+        # Zero-shot PLM
+        self.button_llm_test_zs = QPushButton("Test (PLM)")
         self.button_llm_test_zs.setMinimumWidth(80)
         self.button_llm_test_zs.setToolTip(
             "Test performance on any test dataset using "
-            "the LLM model for zero-shot prediction"
+            "the PLM model for zero-shot prediction"
         )
         self.button_llm_test_zs.clicked.connect(self.pypef_llm_test)
         self.button_llm_test_zs.setStyleSheet(button_style)
 
-        self.button_llm_predict_zs = QPushButton("Predict (LLM)")
+        self.button_llm_predict_zs = QPushButton("Predict (PLM)")
         self.button_llm_predict_zs.setMinimumWidth(80)
         self.button_llm_predict_zs.setToolTip(
             "Test performance on any test dataset using "
-            "the LLM model for zero-shot prediction"
+            "the PLM model for zero-shot prediction"
         )
         self.button_llm_predict_zs.clicked.connect(self.pypef_llm_predict)
         self.button_llm_predict_zs.setStyleSheet(button_style)
@@ -467,7 +495,7 @@ class MainWidget(QWidget):
         self.button_hybrid_train_dca_llm = QPushButton("Train (DCA+PLM)")
         self.button_hybrid_train_dca_llm.setMinimumWidth(80)
         self.button_hybrid_train_dca_llm.setToolTip(
-            "Optimize the GREMLIN model and tune the LLM by "
+            "Optimize the GREMLIN model and tune the PLM by "
             "supervised training on variant-fitness labels"
         )
         self.button_hybrid_train_dca_llm.clicked.connect(
@@ -478,7 +506,7 @@ class MainWidget(QWidget):
         self.button_hybrid_train_test_dca_llm = QPushButton("Train-Test (DCA+PLM)")
         self.button_hybrid_train_test_dca_llm.setMinimumWidth(80)
         self.button_hybrid_train_test_dca_llm.setToolTip(
-            "Optimize the GREMLIN model and tune the LLM by supervised "
+            "Optimize the GREMLIN model and tune the PLM by supervised "
             "training on variant-fitness labels and testing the model "
             "on a test set"
         )
@@ -676,6 +704,7 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_hybrid_train_test_dca_llm, self.shift + 5, 3, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca_llm, self.shift + 6, 3, 1, 1)
         layout.addWidget(self.button_hybrid_predict_dca_llm, self.shift + 7, 3, 1, 1)
+        layout.addWidget(self.box_plm_options, self.shift + 8, 3, 1, 1)
 
         layout.addWidget(self.regression_model_text, self.shift + 1, 4, 1, 1)
         layout.addWidget(self.box_regression_model, self.shift + 2, 4, 1, 1)
@@ -906,7 +935,36 @@ class MainWidget(QWidget):
         ][i]
 
     def selection_llm_model(self, i):
-        self.llm = [None, 'esm', 'prosst'][i]
+        self.llm = [None, 'esm', 'prosst', 'esm+prosst'][i]
+
+    def _llm_hybrid_flags(self):
+        """
+        Build the trailing CLI flag string for supervised DCA+PLM hybrid
+        training from the LoRA/GP option check boxes (--lora / --gauss_opt /
+        --gauss_comb).
+        """
+        flags = ''
+        if self.check_lora.isChecked():
+            flags += ' --lora'
+        if self.check_gauss_opt.isChecked():
+            flags += ' --gauss_opt'
+        if self.check_gauss_comb.isChecked():
+            flags += ' --gauss_comb'
+        return flags
+
+    def _llm_needs_structure(self, training: bool):
+        """
+        Whether a WT FASTA and PDB structure file are required for the current
+        PLM selection: always for ProSST (single or combined), and additionally
+        for Gaussian-process optimization during training.
+        """
+        if not self.llm:
+            return False
+        if 'prosst' in self.llm:
+            return True
+        if training and self.check_gauss_opt.isChecked():
+            return True
+        return False
 
     def selection_mklsts_splits(self, i):
         self.mklsts_cv_method = [
@@ -1018,18 +1076,18 @@ class MainWidget(QWidget):
                         "ProSST zero shot model inference..."
                     )
                     self.cmd = (
-                        f'predict_ssm --llm {self.llm} '
+                        f'predict_ssm --plm {self.llm} '
                         f'--wt {wt_fasta_file} --pdb {pdb_file}'
                         )
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'predict_ssm --llm {self.llm} --wt {wt_fasta_file}'
+                self.cmd = f'predict_ssm --plm {self.llm} --wt {wt_fasta_file}'
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
-                    "Provide a LLM option for modeling."
+                    "Provide a PLM option for modeling."
                 )
                 self.end_process()
         else:
@@ -1099,18 +1157,18 @@ class MainWidget(QWidget):
                         "ProSST zero shot model inference..."
                     )
                     self.cmd = (
-                        f'hybrid --ts {test_set_file} --llm {self.llm} '
+                        f'hybrid --ts {test_set_file} --plm {self.llm} '
                         f'--wt {wt_fasta_file} --pdb {pdb_file}'
                         )
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'hybrid --ts {test_set_file} --llm {self.llm}'
+                self.cmd = f'hybrid --ts {test_set_file} --plm {self.llm}'
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
-                    "Provide a LLM option for modeling."
+                    "Provide a PLM option for modeling."
                 )
                 self.end_process()
         else:
@@ -1161,18 +1219,18 @@ class MainWidget(QWidget):
                         "ProSST zero shot model inference..."
                     )
                     self.cmd = (
-                        f'hybrid --ps {prediction_file} --llm {self.llm} '
+                        f'hybrid --ps {prediction_file} --plm {self.llm} '
                         f'--wt {wt_fasta_file} --pdb {pdb_file}'
                         )
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'hybrid --ps {prediction_file} --llm {self.llm}'
+                self.cmd = f'hybrid --ps {prediction_file} --plm {self.llm}'
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
-                    "Provide a LLM option for modeling."
+                    "Provide a PLM option for modeling."
                 )
                 self.end_process()
         else:
@@ -1279,7 +1337,11 @@ class MainWidget(QWidget):
 
     def pypef_dca_llm_hybrid_train(self):
         self.target_button = self.button_hybrid_train_dca_llm
-        self.start_process()  
+        self.start_process()
+        if not self.llm:
+            self.logTextBox.widget.appendPlainText("Provide a PLM option for modeling.")
+            self.end_process()
+            return
         training_file = QFileDialog.getOpenFileName(
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
@@ -1288,7 +1350,8 @@ class MainWidget(QWidget):
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
-        if self.llm == 'prosst':
+        flags = self._llm_hybrid_flags()
+        if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
@@ -1303,31 +1366,32 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file} --llm {self.llm} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}'
+                    f'--params {params_pkl_file} --plm {self.llm} '
+                    f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        elif self.llm == 'esm':
+        else:
             if training_file and params_pkl_file:
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file} --llm {self.llm}'
+                    f'--params {params_pkl_file} --plm {self.llm}{flags}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        else:
-            self.logTextBox.widget.appendPlainText("Provide a LLM option for modeling.")
-            self.end_process()
 
     def pypef_dca_llm_hybrid_train_test(self):
         self.target_button = self.button_hybrid_train_test_dca_llm
-        self.start_process()  
+        self.start_process()
+        if not self.llm:
+            self.logTextBox.widget.appendPlainText("Provide a PLM option for modeling.")
+            self.end_process()
+            return
         training_file = QFileDialog.getOpenFileName(
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
@@ -1340,7 +1404,8 @@ class MainWidget(QWidget):
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
-        if self.llm == 'prosst':
+        flags = self._llm_hybrid_flags()
+        if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
@@ -1350,7 +1415,7 @@ class MainWidget(QWidget):
                 filter="PDB file (*.pdb)"
             )[0]
             if (
-                training_file and test_file and params_pkl_file 
+                training_file and test_file and params_pkl_file
                 and wt_fasta_file and pdb_file
             ):
                 self.version_text.setText(
@@ -1358,31 +1423,32 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --llm {self.llm} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}'
+                    f'--params {params_pkl_file} --plm {self.llm} '
+                    f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        elif self.llm == 'esm':
+        else:
             if training_file and test_file and params_pkl_file:
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --llm {self.llm}'
+                    f'--params {params_pkl_file} --plm {self.llm}{flags}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        else:
-            self.logTextBox.widget.appendPlainText("Provide a LLM option for modeling.")
-            self.end_process()
 
     def pypef_dca_llm_hybrid_test(self):
         self.target_button = self.button_hybrid_test_dca_llm
-        self.start_process()  
+        self.start_process()
+        if not self.llm:
+            self.logTextBox.widget.appendPlainText("Provide a PLM option for modeling.")
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
@@ -1395,7 +1461,7 @@ class MainWidget(QWidget):
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
-        if self.llm == 'prosst':
+        if self._llm_needs_structure(training=False):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
@@ -1405,7 +1471,7 @@ class MainWidget(QWidget):
                 filter="PDB file (*.pdb)"
             )[0]
             if (
-                test_file and params_pkl_file and wt_fasta_file 
+                test_file and params_pkl_file and wt_fasta_file
                 and pdb_file and model_file
             ):
                 self.version_text.setText(
@@ -1413,29 +1479,30 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --llm {self.llm} '
+                    f'--params {params_pkl_file} --plm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}')
                 self.start_main_thread()
             else:
                 self.end_process()
-        elif self.llm == 'esm':
+        else:
             if test_file and params_pkl_file and model_file:
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model testing..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --llm {self.llm}')
+                    f'--params {params_pkl_file} --plm {self.llm}')
                 self.start_main_thread()
             else:
                 self.end_process()
-        else:
-            self.logTextBox.widget.appendPlainText("Provide a LLM option for modeling.")
-            self.end_process()
 
     def pypef_dca_llm_hybrid_predict(self):
         self.target_button = self.button_hybrid_predict_dca_llm
-        self.start_process()  
+        self.start_process()
+        if not self.llm:
+            self.logTextBox.widget.appendPlainText("Provide a PLM option for modeling.")
+            self.end_process()
+            return
         prediction_file = QFileDialog.getOpenFileName(
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
@@ -1448,7 +1515,7 @@ class MainWidget(QWidget):
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
-        if self.llm == 'prosst':
+        if self._llm_needs_structure(training=False):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
@@ -1458,35 +1525,32 @@ class MainWidget(QWidget):
                 filter="PDB file (*.pdb)"
             )[0]
             if (
-                prediction_file and params_pkl_file and wt_fasta_file 
+                prediction_file and params_pkl_file and wt_fasta_file
                 and pdb_file and model_file
             ):
                 self.version_text.setText(
-                    "Hybrid (DCA+PLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model prediction..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ps {prediction_file} '
-                    f'--params {params_pkl_file} --llm {self.llm} '
+                    f'--params {params_pkl_file} --plm {self.llm} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        elif self.llm == 'esm':
+        else:
             if prediction_file and params_pkl_file and model_file:
                 self.version_text.setText(
-                    "Hybrid (DCA+PLM-supervised) model training..."
+                    "Hybrid (DCA+PLM-supervised) model prediction..."
                 )
                 self.cmd = (
                     f'hybrid -m {model_file} --ps {prediction_file} '
-                    f'--params {params_pkl_file} --llm {self.llm}'
+                    f'--params {params_pkl_file} --plm {self.llm}'
                 )
                 self.start_main_thread()
             else:
                 self.end_process()
-        else:
-            self.logTextBox.widget.appendPlainText("Provide a LLM option for modeling.")
-            self.end_process()
 
     def pypef_dca_supervised_train(self):
         self.target_button = self.button_supervised_train_dca

@@ -1,7 +1,7 @@
 # PyPEF - Pythonic Protein Engineering Framework
 # https://github.com/niklases/PyPEF
 
-# Using (training, testing/infering) ESM model(s) (e.g. ESM1v) published under 
+# Using (training, testing/infering) ESM model(s) (e.g. ESM1v and ESM2) published under
 # MIT License
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # https://github.com/facebookresearch/esm
@@ -9,6 +9,12 @@
 # Joshua Meier, Roshan Rao, Robert Verkuil, Jason Liu, Tom Sercu, Alexander Rives
 # Language models enable zero-shot prediction of the effects of mutations on protein function
 # bioRxiv 2021.07.09.450648; doi: https://doi.org/10.1101/2021.07.09.450648 
+# ESM2 model publication:
+# Zeming Lin, Halil Akin, Roshan Rao, Brian Hie, Zhongkai Zhu, Wenting Lu, Nikita Smetanin,
+# Robert Verkuil, Ori Kabeli, Yaniv Shmueli, Allan dos Santos Costa, Maryam Fazel-Zarandi,
+# Tom Sercu, Salvatore Candido, Alexander Rives
+# Evolutionary-scale prediction of atomic-level protein structure with a language model
+# Science 379, 1123-1130 (2023); doi: https://doi.org/10.1126/science.ade2574
 
 # Inspired by ConFit
 # https://github.com/luo-group/ConFit
@@ -30,8 +36,8 @@ from pypef.plm.utils import _set_seeds
 
 
 def get_esm_models(
-        model='facebook/esm1v_t33_650M_UR90S_3', 
-        seed: None | bool = None, 
+        model='facebook/esm2_t33_650M_UR50D',
+        seed: None | bool = None,
         revision: str | None = None,
         deepcopy_base_model: bool = True
 ):

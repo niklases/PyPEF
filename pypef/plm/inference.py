@@ -762,7 +762,7 @@ def get_plm_embeddings(
 def esm_setup(
         wt_seq, 
         sequences, 
-        model: str = "facebook/esm1v_t33_650M_UR90S_3",
+        model: str = "facebook/esm2_t33_650M_UR50D",
         loss_method: str = "spearman",
         seed: int | None =None,
         revision: str | None = None,

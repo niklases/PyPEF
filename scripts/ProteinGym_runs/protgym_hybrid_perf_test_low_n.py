@@ -39,8 +39,8 @@ formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
-ESM_MODEL = 'facebook/esm1v_t33_650M_UR90S_3'
-ESM_REVISION = "0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
+ESM_MODEL = 'facebook/esm2_t33_650M_UR50D'
+ESM_REVISION = None
 PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
 
 JUST_PLOT_RESULTS = False

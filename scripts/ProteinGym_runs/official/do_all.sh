@@ -2,7 +2,6 @@
 set -e
 
 # Pre-download models from HuggingFace
-#hf download facebook/esm1v_t33_650M_UR90S_3
 #hf download facebook/esm2_t33_650M_UR50D
 #hf download AI4Protein/ProSST-2048
 

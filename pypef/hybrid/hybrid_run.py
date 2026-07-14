@@ -53,7 +53,10 @@ def run_pypef_hybrid_modeling(arguments, progress_cb=None, abort_cb=None):
             wt_seq=get_wt_sequence(arguments['--wt']),
             substitution_sep=arguments['--mutation_sep'],
             label=arguments['--label'],
-            progress_cb=progress_cb, 
+            lora_train=arguments['--lora'],
+            gauss_opt=arguments['--gauss_opt'],
+            gauss_comb=arguments['--gauss_comb'],
+            progress_cb=progress_cb,
             abort_cb=abort_cb
         )
 

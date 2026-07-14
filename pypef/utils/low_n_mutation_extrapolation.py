@@ -121,7 +121,7 @@ def low_n(
                     x_dca_wt=x_wt
                 )
                 spearmanr_nruns.append(
-                    spearmanr(y_test, hybrid_model.hybrid_prediction(x_test))[0]
+                    spearmanr(y_test, hybrid_model.hybrid_prediction(x_test)[0])[0]
                 )
 
             else:  # ML
@@ -280,7 +280,7 @@ def performance_mutation_extrapolation(
                                     'test_lvl': test_idx + 1,
                                     'n_y_test': len(y_test),
                                     'spearman_rho': spearmanr(
-                                        y_test, hybrid_model.hybrid_prediction(x_test))[0]
+                                        y_test, hybrid_model.hybrid_prediction(x_test)[0])[0]
                                 }
                         })
                     else:  # ML
@@ -322,7 +322,7 @@ def performance_mutation_extrapolation(
                                         'n_y_test': len(y_test),
                                         'spearman_rho': spearmanr(
                                             y_test, 
-                                            hybrid_model.hybrid_prediction(x_test)
+                                            hybrid_model.hybrid_prediction(x_test)[0]
                                         )[0]
                                     }
                             })
