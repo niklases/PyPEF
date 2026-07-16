@@ -41,8 +41,13 @@ import hashlib
 
 from pypef.ml.regression import AAIndexEncoding, full_aaidx_txt_path, get_regressor_performances
 from pypef.dca.gremlin_inference import GREMLIN
-from pypef.utils.variant_data import extract_pdb_coords, get_seqs_from_var_name, get_sequences_from_file, get_wt_sequence, split_variants
-from pypef.plm.inference import plm_inference, esm_setup, prosst_setup, tokenize_sequences, get_plm_embeddings
+from pypef.utils.variant_data import (
+    extract_pdb_coords, get_seqs_from_var_name, get_sequences_from_file, 
+    get_wt_sequence, split_variants
+)
+from pypef.plm.inference import (
+    plm_inference, esm_setup, prosst_setup, tokenize_sequences, get_plm_embeddings
+)
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import (
@@ -302,7 +307,7 @@ def test_hybrid_model_dca_llm_aneh(
         print(f'~~~ {setup} ~~~')
         if setup == 'ESM':
             llm_dict = esm_setup(
-                wt_seq=wt_seq, sequences=train_seqs, 
+                wt_seq=wt_seq, sequences=train_seqs, model="facebook/esm1v_t33_650M_UR90S_3",
                 seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
             )
         else:  # elif setup == 'ProSST':
@@ -547,7 +552,7 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'~~~ {setup} ~~~')
         if setup == 'ESM':
             llm_dict_esm = esm_setup(
-                wt_seq=wt_seq, sequences=train_seqs, 
+                wt_seq=wt_seq, sequences=train_seqs, model="facebook/esm1v_t33_650M_UR90S_3",
                 seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
             )
             llm_dict = llm_dict_esm

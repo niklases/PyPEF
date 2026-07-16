@@ -151,7 +151,7 @@ def get_sequences_from_file(
     if mult_path is not None:
         os.chdir('..')
 
-    return np.array(sequences), np.array(names_of_mutations), np.array(values)
+    return np.array(sequences), np.array(names_of_mutations), np.asarray(values, dtype=np.float64)
 
 
 def get_seqs_from_var_name(

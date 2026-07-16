@@ -553,10 +553,10 @@ class DCALLMHybridModel:
                 f"'positional', 'modulo', or 'contiguous'."
             )
         
-        self.x_dca_ttrain = splits[0]
-        self.x_dca_ttest = splits[1]
-        self.y_ttrain = splits[2]
-        self.y_ttest = splits[3]
+        self.x_dca_ttrain = np.asarray(splits[0], dtype=float)
+        self.x_dca_ttest = np.asarray(splits[1], dtype=float)
+        self.y_ttrain = np.asarray(splits[2], dtype=float)
+        self.y_ttest = np.asarray(splits[3], dtype=float)
         
         # Dynamically set index based on whether variants were included
         if has_sequences:
@@ -1230,7 +1230,7 @@ class DCALLMHybridModel:
                 if "combined_gp" in gp_preds:
                     self.hybrid_preds["combined_gp"] = gp_preds["combined_gp"]
 
-        predictions = list(self.hybrid_preds.values())
+        predictions = np.array(list(self.hybrid_preds.values()), dtype=float)
         logger.info(f"Running hybrid prediction with: {list(self.hybrid_preds.keys())}")
         
         # Enforce Z-score standardizations and compute total ensemble weight outputs
@@ -1245,7 +1245,7 @@ class DCALLMHybridModel:
                 f"Got {len(self.all_betas)} ensemble weights but "
                 f"{len(predictions)} predictions. Original error:\n{e}"
             )
-        return self.y_hybrid, self.hybrid_preds
+        return np.asarray(self.y_hybrid, dtype=float), self.hybrid_preds
 
     # TODO: Remove?!
     #def ls_ts_performance(self):
@@ -1446,7 +1446,7 @@ def plmc_or_gremlin_encoding(
     """
     global global_model, global_model_type
     if ys_true is None:
-        ys_true = np.zeros(np.shape(sequences))
+        ys_true = np.zeros(np.shape(sequences), dtype=np.float64)
     if use_global_model:
         if global_model is None:
             global_model, global_model_type = get_model_and_type(
@@ -1483,6 +1483,7 @@ def plmc_or_gremlin_encoding(
             f"train a new hybrid model on the provided LS/TS datasets."
         )
     assert len(xs) == len(variants) == len(sequences) == len(ys_true)
+    ys_true = np.asarray(ys_true, dtype=np.float64)
     return xs, variants, sequences, ys_true, x_wt, model, model_type
 
 
@@ -1992,7 +1993,8 @@ def predict_directed_evolution(
     if hybrid_model_data_pkl is not None:
         if global_hybrid_model is None:
             global_hybrid_model, global_hybrid_model_type = get_model_and_type(
-                hybrid_model_data_pkl)
+                hybrid_model_data_pkl
+            )
             model, model_type = global_hybrid_model, global_hybrid_model_type
         else:
             model, model_type = global_hybrid_model, global_hybrid_model_type
