@@ -76,7 +76,7 @@ class SSM:
                 base_model, _lora_model, tokenizer, _optimizer = get_esm_models()
                 wt_structure_input_ids = None
             else:
-                base_model, _lora_model, tokenizer, _optimizer = get_prosst_models
+                base_model, _lora_model, tokenizer, _optimizer = get_prosst_models()
                 _wt_input_ids, _attention_mask, wt_structure_input_ids = get_structure_quantizied(
                     self.pdb, tokenizer, self.wt_seq)
             wt_tokens, _ = tokenize_sequences([self.wt_seq], tokenizer=tokenizer)
@@ -85,8 +85,10 @@ class SSM:
             #self.scoress = inference(
             #            np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
             #).numpy()
-            self.scoress = plm_inference(xs, wt_tokens, attn_mask, base_model, 
-                                         wt_structure_input_ids=wt_structure_input_ids)
+            self.scoress = plm_inference(
+                xs, wt_tokens, attn_mask, base_model, 
+                wt_structure_input_ids=wt_structure_input_ids
+            ).cpu().numpy()
             logger.info(f"Reshaping flat array of shape {np.shape(self.scoress)} "
                         f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))

@@ -1765,7 +1765,7 @@ def performance_ls_ts(
         else:
             model_type = 'PLM'
             if llm == 'esm':
-                llm_dict = esm_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
+                llm_dict = esm_setup(wt_seq, test_sequences)
                 logger.info("Zero-shot PLM inference on test set using ESM...")
                 y_test_pred = plm_inference(
                     tokenized_sequences = llm_dict['esm']['x_llm'],
@@ -1773,7 +1773,7 @@ def performance_ls_ts(
                     model=llm_dict['esm']['llm_base_model']
                 )
             elif llm == 'prosst':
-                llm_dict = prosst_setup(test_sequences[0], test_sequences)  # TODO: Improve wt_seq input workaround
+                llm_dict = prosst_setup(wt_seq, pdb_file, test_sequences)
                 logger.info("Zero-shot PLM inference on test set using ProSST...")
                 y_test_pred = plm_inference(
                     tokenized_sequences = llm_dict['prosst']['x_llm'],
@@ -1791,8 +1791,12 @@ def performance_ls_ts(
     else:
         llm = '_' + '_'.join(parse_llm_flag(llm)).upper()
     plot_y_true_vs_y_pred(
-        np.array(y_test), np.array(y_test_pred), np.array(test_variants), 
-        label=label, hybrid=True, name=f'{model_type}{llm}'
+        np.array(y_test, dtype=np.float64), 
+        np.array(y_test_pred, dtype=np.float64), 
+        np.array(test_variants), 
+        label=label, 
+        hybrid=True, 
+        name=f'{model_type}{llm}'
     )
 
 
@@ -2033,13 +2037,11 @@ def predict_directed_evolution(
                     np.atleast_2d(xs), x_llm,
                     sequences=list(variant_sequence), verbose=False
                 )
-            y_pred = y_pred[0]
         except ValueError as e:
             raise RuntimeError(
                 f"Error: {e}\nProbably a different model was used for encoding than "
                 "for modeling; e.g. using a HYBRIDgremlin model in "
                 "combination with parameters taken from a PLMC file."
             )
-    y_pred = float(y_pred)
-
-    return [(y_pred, variant[0][1:])]
+    y_pred = float(y_pred[0])
+    return y_pred, variant[0][1:]

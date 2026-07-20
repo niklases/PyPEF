@@ -241,13 +241,14 @@ class DirectedEvolution:
                             no_fft=self.no_fft,
                             couplings_file=self.dca_encoder
                         )
+                    wt_prediction = wt_prediction[0]
                 if self.de_step_counter == 0:
                     logger.info(
                         f"Step {self.de_step_counter}: "
-                        f"WT ({wt_mut}) --> {wt_prediction[0][0]:.3f} WT relative fitness: "
-                        f"{wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
+                        f"WT ({wt_mut}) --> {wt_prediction[0]:.3f} WT relative fitness: "
+                        f"{wt_prediction[0] - wt_prediction[0] + add_epsilon:.3f}"
                     )
-                    y_traj[0] = wt_prediction[0][0]
+                    y_traj[0] = wt_prediction[0]
                 predictions = predict(  # AAidx, OneHot, or DCA-based pure ML prediction
                     path=self.path,
                     model=self.model,
@@ -257,6 +258,8 @@ class DirectedEvolution:
                     no_fft=self.no_fft,
                     couplings_file=self.dca_encoder
                 )
+                if predictions != "skip":
+                    predictions = predictions[0]
 
             else:  # hybrid modeling and prediction
                 if wt_prediction is None or wt_prediction == 'skip':
@@ -274,11 +277,10 @@ class DirectedEvolution:
                 if self.de_step_counter == 0:
                     logger.info(
                         f"Step {self.de_step_counter}: "
-                        f"WT ({wt_mut}) --> {wt_prediction[0][0]:.3f} WT relative fitness: "
-                        f"{wt_prediction[0][0] - wt_prediction[0][0] + add_epsilon:.3f}"
+                        f"WT ({wt_mut}) --> {wt_prediction[0]:.3f} WT relative fitness: "
+                        f"{wt_prediction[0] - wt_prediction[0] + add_epsilon:.3f}"
                     )
-                    # add_epsilon = 0.01 * abs(wt_prediction[0][0]) # Adding 1% to prediction for hybrid modeling!
-                    y_traj[0] = wt_prediction[0][0] - wt_prediction[0][0]
+                    y_traj[0] = wt_prediction[0] - wt_prediction[0]
                 predictions = predict_directed_evolution(
                     encoder=self.dca_encoder,
                     variant=self.s_wt[int(new_variant[:-1]) - 1] + new_variant,
@@ -286,16 +288,20 @@ class DirectedEvolution:
                     hybrid_model_data_pkl=self.model
                 )
             if predictions != 'skip':
-                logger.info(f"Step {self.de_step_counter + 1}: "
-                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> "
-                            f"{predictions[0][0]:.3f} WT relative fitness: "
-                            f"{predictions[0][0] - wt_prediction[0][0] + add_epsilon:.3f}")
+                logger.info(
+                    f"Step {self.de_step_counter + 1}: "
+                    f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> "
+                    f"{predictions[0]:.3f} WT relative fitness: "
+                    f"{predictions[0] - wt_prediction[0] + add_epsilon:.3f}"
+                )
             else:  # skip if variant cannot be encoded by DCA-based encoding technique
-                logger.info(f"Step {self.de_step_counter + 1}: "                      # 'skip'
-                            f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}")
+                logger.info(
+                    f"Step {self.de_step_counter + 1}: "
+                    f"{self.s_wt[int(new_variant[:-1]) - 1]}{new_variant} --> {predictions}"
+                )
                 continue
-            new_y = predictions[0][0] - wt_prediction[0][0] + add_epsilon  # Adding 1% to prediction for hybrid modeling!
-            new_var = predictions[0][1]  # new_var == new_variant nonetheless
+            new_y = predictions[0] - wt_prediction[0] + add_epsilon  # Adding 1% to prediction for hybrid modeling!
+            new_var = predictions[1]  # new_var == new_variant nonetheless
             # probability function for trial sequence
             # The lower the fitness (y) of the new variant, the higher are the chances to get excluded
             with warnings.catch_warnings():  # catching Overflow warning

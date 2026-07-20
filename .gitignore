@@ -45,6 +45,14 @@ scripts/ProteinGym_runs/single_point_mut_performance.png
 scripts/ProteinGym_runs/multi_point_mut_performance.png
 scripts/ProteinGym_runs/model_saves/*
 
+scripts/ProteinGym_runs/official/data/cv_folds_multiples_substitutions/*
+scripts/ProteinGym_runs/official/data/cv_folds_singles_substitutions/*
+scripts/ProteinGym_runs/official/data/DMS_msa_files/*
+scripts/ProteinGym_runs/official/data/ProteinGym_AF2_structures/*
+scripts/ProteinGym_runs/official/data/DMS_substitutions.csv
+scripts/ProteinGym_runs/official/benchmark_runs/output.log
+scripts/ProteinGym_runs/official/benchmark_runs/model_scores/supervised_substitutions/*
+
 scripts/ESM_finetuning/DMS_msa_files/
 scripts/ESM_finetuning/DMS_ProteinGym_substitutions/
 scripts/ESM_finetuning/ProteinGym_AF2_structures/
@@ -55,6 +63,8 @@ scripts/ESM_finetuning/results/dca_esm_and_hybrid_opt_results.csv
 scripts/ESM_finetuning/mut_performance.png
 scripts/ESM_finetuning/_Description_DMS_substitutions_data.csv
 scripts/ESM_finetuning/mut_performance_violin.png
+
+scripts/CLI/pypef_log.log
 
 datasets/ANEH/37_ANEH_variants_aaidx_encoded.csv
 datasets/ANEH/37_ANEH_variants_dca_encoded.csv
@@ -384,6 +394,10 @@ datasets/ANEH/Recomb_Quintuple_Split/Predictions_MLGREMLIN_TopRecomb_Quintuple_S
 datasets/ANEH/Recomb_Quintuple_Split/Predictions_MLPLMC_TopRecomb_Quintuple_Split.txt
 datasets/ANEH/Recomb_Triple_Split/Predictions_MLGREMLIN_TopRecomb_Triple_Split.txt
 datasets/ANEH/Recomb_Triple_Split/Predictions_MLPLMC_TopRecomb_Triple_Split.txt
+datasets/ANEH/DCA_Hybrid_Model_Performance_Hybrid_ESM_ESM.png
+datasets/ANEH/HYBRIDGREMLINESM_DE_trajectories.png
+datasets/ANEH/Predictions_Hybrid_ESM_Top37_ANEH_variants_prediction_set.txt
+datasets/ANEH/Pickles/HYBRIDGREMLINESM
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv
@@ -495,11 +509,9 @@ datasets/AVGFP/MLPLMC_DE_trajectories.png
 datasets/AVGFP/Predictions_GREMLIN_TopTS.txt
 datasets/AVGFP/Predictions_PLMC_TopTS.txt
 datasets/AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params
-
-scripts/ProteinGym_runs/official/data/cv_folds_multiples_substitutions/*
-scripts/ProteinGym_runs/official/data/cv_folds_singles_substitutions/*
-scripts/ProteinGym_runs/official/data/DMS_msa_files/*
-scripts/ProteinGym_runs/official/data/ProteinGym_AF2_structures/*
-scripts/ProteinGym_runs/official/data/DMS_substitutions.csv
-scripts/ProteinGym_runs/official/benchmark_runs/output.log
-scripts/ProteinGym_runs/official/benchmark_runs/model_scores/supervised_substitutions/*
+datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM_ESM.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM_ProSST_ESM_PROSST.png
+datasets/AVGFP/Predictions_Hybrid_ESM_ProSST_TopavGFP_prediction_set.txt
+datasets/AVGFP/Predictions_Hybrid_ESM_TopavGFP_prediction_set.txt
+datasets/AVGFP/Predictions_Hybrid_ProSST_TopavGFP_prediction_set.txt
