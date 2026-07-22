@@ -1052,7 +1052,9 @@ def test_gaussian_process_opt():
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(
+        gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150
+    )
 
     # Predict
     test_inputs = prepare_kermut_inputs(
@@ -1091,7 +1093,9 @@ def test_gaussian_process_opt():
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(
+        gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150
+        )
 
     # Predict
     test_inputs = prepare_kermut_inputs(
@@ -1128,7 +1132,9 @@ def test_gaussian_process_opt():
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(
+        gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150
+    )
 
     # Predict
     test_inputs = prepare_kermut_inputs(
@@ -1194,7 +1200,9 @@ def test_gaussian_process_opt():
     )
 
     # Train
-    gp, likelihood = optimize_gp(gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150)
+    gp, likelihood = optimize_gp(
+        gp, likelihood, train_inputs, y_train, lr=0.05, n_steps=150
+    )
 
     # Predict
     test_inputs = prepare_kermut_inputs(
