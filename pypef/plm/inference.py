@@ -52,8 +52,10 @@ def load_model(model, filename):
 
 
 def tokenize_sequences(sequences, tokenizer, max_length=None, verbose=True):
+    model_name = getattr(tokenizer, "name_or_path", None) or type(tokenizer).__name__
     if max_length is None:
-        logger.info(f"Setting max. tokenized sequence length to {len(sequences[0]) + 2}...")
+        if verbose:
+            logger.info(f"Setting max. tokenized sequence length to {len(sequences[0]) + 2}, tokenizer: {model_name}...")
         max_length = len(sequences[0]) + 2
     tokenized_sequences = []
     for seq in tqdm(sequences, desc='Tokenizing sequences', disable=not verbose):
@@ -449,6 +451,7 @@ def plm_inference(
         model.eval()
         keep_remaining = True
 
+    model_name = getattr(model, "name_or_path", None) or type(model).__name__
     model = model.to(device)
     model_kwargs = {}
 
@@ -489,7 +492,6 @@ def plm_inference(
         model_kwargs["extract_probs"] = True
         model_kwargs["tokenizer"] = kwargs["tokenizer"]
 
-
     scores = []
     if batch_size is None and tokenized_sequences is not None:
         xs_b = torch.atleast_2d(tokenized_sequences)
@@ -503,15 +505,14 @@ def plm_inference(
                                keep_remaining=keep_remaining, verbose=verbose)
             xs_b = [torch.from_numpy(x).to(device) for x in xs_b]
     if extract_emb:
-        desc = (f"PLM inference: embeddings batch "
+        desc = (f"PLM {model_name} inference: embeddings batch "
                 f"(size={batch_size}) processing ({device.upper()})")
     elif extract_conditional_aa_prob:
-        desc = (f"PLM inference: AA probabilities batch (size={batch_size}) "
+        desc = (f"PLM {model_name} inference: AA probabilities batch (size={batch_size}) "
                 f"processing ({device.upper()})'")
     else:
-        desc = (f"PLM inference: {inference_type} batch (size={batch_size}) "
+        desc = (f"PLM {model_name} inference: {inference_type} batch (size={batch_size}) "
                 f"processing ({device.upper()})'")
-
 
     if mask_token_id is not None:
         model_kwargs["mask_token_id"] = mask_token_id
@@ -716,9 +717,10 @@ def get_plm_embeddings(
 ):
     if device is None:
         device = get_device()
-    desc=f"Getting PLM embeddings (mode={mode})"
+    model_name = getattr(model, "name_or_path", None) or type(model).__name__
+    desc=f"Getting PLM {model_name} embeddings (mode={mode})"
     if extract_conditional_aa_prob:
-        desc=f"Getting AA cond. probs. from PLM embeddings"
+        desc=f"Getting AA cond. probs. from PLM {model_name} embeddings"
     if plm_inference_function is None:
         plm_inference_function = plm_inference
     pbar = tqdm(range(0, len(tokenized_sequences), batch_size), desc=desc, disable=not verbose)

@@ -989,15 +989,6 @@ class DCALLMHybridModel:
         return self.y_ttest, split_predictors
 
     def train_and_optimize(self) -> tuple:
-        """
-        Get the adjusted parameters 'beta_1', 'beta_2', and the
-        tuned regressor of the hybrid model.
-
-        Returns
-        -------
-        Tuple containing the adjusted ensemble parameters (betas)
-        as well as the tuned regressor of the hybrid model.
-        """
         # Base Setup: Compute DCA and DCA-Ridge predictions
         self.get_subsplits_train()
         self.y_dca_ttrain = self._delta_e(self.x_dca_ttrain)
@@ -1006,9 +997,10 @@ class DCALLMHybridModel:
         self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
-        # Start predictors list with baseline DCA models
+        # 1. Start predictors AND feature_names with baseline DCA models
         predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
-        self.betas_str =  "DCA, DCA-Ridge, "
+        feature_names = ["y_dca", "y_ridge"]  # Matches self.hybrid_preds keys
+        self.betas_str = "DCA, DCA-Ridge, "
 
         # Print baseline Spearman correlations
         logger.info(
@@ -1022,17 +1014,15 @@ class DCALLMHybridModel:
 
         # Train and extract PLM predictions if applicable
         if len(self.parameter_range) >= 4:
-            # Executes your custom train_llm routine
             self.train_llm()
             
-            # Unpack predictions from self.fold_predictions in the EXACT order 
-            # they were processed and appended to self.betas_str inside train_llm()
             if self.llm_keys:
                 for llm_name in self.llm_keys:
                     # Unsupervised Base / Zero-Shot PLM
                     if f"{llm_name}_base" in self.fold_predictions:
                         base_preds = self.fold_predictions[f"{llm_name}_base"]
                         predictors.append(base_preds)
+                        feature_names.append(f"{llm_name}_base")
                         logger.info(
                             f"{llm_name} zero-shot ensemble test set performance: "
                             f"Test set = {spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
@@ -1042,6 +1032,7 @@ class DCALLMHybridModel:
                     if self.lora_train and f"{llm_name}_lora" in self.fold_predictions:
                         lora_preds = self.fold_predictions[f"{llm_name}_lora"]
                         predictors.append(lora_preds)
+                        feature_names.append(f"{llm_name}_lora")
                         logger.info(
                             f"{llm_name} LoRA tuned ensemble test set performance: "
                             f"{spearmanr(self.y_ttest, lora_preds)[0]:.3f} (N={len(self.y_ttest)})"
@@ -1051,6 +1042,7 @@ class DCALLMHybridModel:
                     if self.gauss_opt and f"{llm_name}_gp" in self.fold_predictions:
                         gp_preds = self.fold_predictions[f"{llm_name}_gp"]
                         predictors.append(gp_preds)
+                        feature_names.append(f"{llm_name}_gp")
                         logger.info(
                             f"{llm_name} Gaussian process ensemble test set performance: "
                             f"{spearmanr(self.y_ttest, gp_preds)[0]:.3f} (N={len(self.y_ttest)})"
@@ -1061,10 +1053,14 @@ class DCALLMHybridModel:
                     if "combined_gp" in self.fold_predictions:
                         comb_preds = self.fold_predictions["combined_gp"]
                         predictors.append(comb_preds)
+                        feature_names.append("combined_gp")
                         logger.info(
                             f"Combined ({self.llm_keys}) Gaussian process ensemble test set performance: "
                             f"{spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
+
+        # Attach feature_names to self so it gets saved with the pickled model
+        self.feature_names = feature_names
 
         # Clean up the trailing comma left behind by train_llm() on self.betas_str
         if hasattr(self, 'betas_str'):
@@ -1246,35 +1242,55 @@ class DCALLMHybridModel:
                 if "combined_gp" in gp_preds:
                     self.hybrid_preds["combined_gp"] = gp_preds["combined_gp"]
 
+        # Check feature key/count consistency against saved weights ---
+        current_keys = list(self.hybrid_preds.keys())
+        expected_count = len(self.all_betas)
+        current_count = len(current_keys)
+
+        if hasattr(self, "feature_names") and self.feature_names is not None:
+            if set(self.feature_names) != set(current_keys):
+                raise ValueError(
+                    f"\n[PyPEF Mismatch Error] Loaded Hybrid Model feature names mismatch!\n"
+                    f"  - Model trained with ({len(self.feature_names)} features): {list(self.feature_names)}\n"
+                    f"  - Inference requested ({len(current_keys)} features): {current_keys}\n"
+                    f"Fix: Match CLI flags (--gp, --params, --plm) to how the pickled model was trained."
+                )
+
+        if expected_count != current_count:
+            raise ValueError(
+                f"\n[PyPEF Mismatch Error] Number of model weights ('betas') does not match sub-models!\n"
+                f"  - Trained weights vector length: {expected_count} ({self.all_betas})\n"
+                f"  - Active sub-model predictions count: {current_count} {current_keys}\n"
+                f"Fix: Re-fit the hybrid model or adjust CLI flags so weight dimensions match active sub-models."
+            )
+
         predictions = np.array(list(self.hybrid_preds.values()), dtype=float)
-        logger.info(f"Running hybrid prediction with: {list(self.hybrid_preds.keys())}")
+        logger.info(f"Running hybrid prediction with: {current_keys}")
         
-        # Enforce Z-score standardizations and compute total ensemble weight outputs
+        # --- PREDICTION AGGREGATION ---
         self.y_hybrid = np.zeros_like(y_dca)
-        try:
-            for beta, p in zip(self.all_betas, predictions, strict=True):
+        
+        feature_means = getattr(self, "feature_means", None)
+        feature_stds = getattr(self, "feature_stds", None)
+
+        for idx, (beta, p) in enumerate(zip(self.all_betas, predictions, strict=True)):
+            # Scenario A: Use pre-calculated scaler parameters from model fitting
+            if feature_means is not None and feature_stds is not None and idx < len(feature_means):
+                p_mean = feature_means[idx]
+                p_std_dev = feature_stds[idx]
+                p_std = (p - p_mean) / (p_std_dev + 1e-8)
+            # Scenario B: Single sequence evaluation (len(p) == 1, e.g. Directed Evolution step)
+            elif len(p) == 1:
+                p_std = p  # Avoid p - np.mean(p) which zero-out single sequence predictions
+            # Scenario C: Batch evaluation fallback (len(p) > 1)
+            else:
                 std_val = np.std(p)
                 p_std = (p - np.mean(p)) / (std_val + 1e-8) if std_val > 1e-8 else (p - np.mean(p))
-                self.y_hybrid += beta * p_std
-        except ValueError as e:
-            raise RuntimeError(
-                f"Got {len(self.all_betas)} ensemble weights but "
-                f"{len(predictions)} predictions. Original error:\n{e}"
-            )
+                
+            self.y_hybrid += beta * p_std
+
         return np.asarray(self.y_hybrid, dtype=float), self.hybrid_preds
 
-    # TODO: Remove?!
-    #def ls_ts_performance(self):
-    #    beta_1, beta_2, reg = self.settings(
-    #        x_train=self.x_train,
-    #        y_train=self.y_traing
-    #    )
-    #    spearman_r = self.spearmanr(
-    #        self.y_test,
-    #        self.hybrid_prediction(self.x_test, reg, beta_1, beta_2)
-    #    )
-    #    self.beta_1, self.beta_2, self.regressor = beta_1, beta_2, reg
-    #    return spearman_r, reg, beta_1, beta_2
 
 
 """ 
@@ -2048,7 +2064,7 @@ def predict_directed_evolution(
                         verbose=False)[0]
                     for llm_name in model.llm_keys
                 }
-                y_pred, _ = model.hybrid_prediction(
+                y_pred, _y_pred_indiv = model.hybrid_prediction(
                     np.atleast_2d(xs), x_llm,
                     sequences=list(variant_sequence), verbose=False
                 )

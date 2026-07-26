@@ -54,10 +54,23 @@ class BaseKernel(Kernel):
         x2_idx: torch.Tensor,
         device: torch.device,
     ) -> torch.Tensor:
-        one_hot_x1 = torch.zeros(x1_idx[:, 0].size(0), x1_idx[:, 0].max().item() + 1).to(device)
-        one_hot_x2 = torch.zeros(x2_idx[:, 0].size(0), x2_idx[:, 0].max().item() + 1).to(device)
+        # Early return if either set of sequences has no mutations (e.g. Wild-Type)
+        if x1_idx.numel() == 0 or x2_idx.numel() == 0:
+            n1 = int(x1_idx[:, 0].max().item()) + 1 if x1_idx.numel() > 0 else 1
+            n2 = int(x2_idx[:, 0].max().item()) + 1 if x2_idx.numel() > 0 else 1
+            return torch.zeros((n1, n2), device=device)
+    
+        # Convert max() outputs to int to satisfy torch.zeros dimensions
+        n1 = int(x1_idx[:, 0].max().item()) + 1
+        n2 = int(x2_idx[:, 0].max().item()) + 1
+    
+        # Initialize directly on device to avoid unnecessary allocations
+        one_hot_x1 = torch.zeros(x1_idx[:, 0].size(0), n1, device=device)
+        one_hot_x2 = torch.zeros(x2_idx[:, 0].size(0), n2, device=device)
+    
         one_hot_x1.scatter_(1, x1_idx[:, 0].unsqueeze(1), 1)
         one_hot_x2.scatter_(1, x2_idx[:, 0].unsqueeze(1), 1)
+    
         return torch.transpose(torch.transpose(k_mult @ one_hot_x2, 0, 1) @ one_hot_x1, 0, 1)
 
 

@@ -64,11 +64,10 @@ class SSM:
             self.variant_sequencess.append(variant_sequences)
 
     def predict(self):
+        self.scoress = []
         if self.model == "dca" and self.gremlin is not None:
             logger.info("Predicting all SSM effects using the unsupervised GREMLIN model...")
             wt_score = self.gremlin.get_wt_score()
-        self.scoress = []
-        if self.model == "dca" and self.gremlin is not None:
             for seqs in tqdm(self.variant_sequencess, desc="Predicting seq. pos. substitution effects"):
                 self.scoress.append(self.gremlin.get_scores(seqs) - wt_score)
         elif self.model in ["esm", "prosst"]:
@@ -82,9 +81,6 @@ class SSM:
             wt_tokens, _ = tokenize_sequences([self.wt_seq], tokenizer=tokenizer)
             wt_tokens = torch.tensor(wt_tokens[0], dtype=torch.long)  # shape (L,)
             xs, attn_mask = tokenize_sequences(np.array(self.variant_sequencess).flatten(), tokenizer=tokenizer)
-            #self.scoress = inference(
-            #            np.array(self.variant_sequencess).flatten(), llm=self.model, pdb_file=self.pdb, wt_seq=self.wt_seq
-            #).numpy()
             self.scoress = plm_inference(
                 xs, wt_tokens, attn_mask, base_model, 
                 wt_structure_input_ids=wt_structure_input_ids
@@ -93,7 +89,7 @@ class SSM:
                         f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
         else:
-            raise RuntimeError("Unknown modeling option (choose between --plm esm or --plm prosst)!")
+            raise RuntimeError("Unknown modeling option (choose between --dca, --plm esm or --plm prosst)!")
 
     def plot(self):
         _fig, ax = plt.subplots(figsize=(2 * len(self.wt_seq) / len(self.aas), 3))
