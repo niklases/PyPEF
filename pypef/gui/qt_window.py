@@ -704,7 +704,6 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_hybrid_train_test_dca_llm, self.shift + 5, 3, 1, 1)
         layout.addWidget(self.button_hybrid_test_dca_llm, self.shift + 6, 3, 1, 1)
         layout.addWidget(self.button_hybrid_predict_dca_llm, self.shift + 7, 3, 1, 1)
-        layout.addWidget(self.box_plm_options, self.shift + 8, 3, 1, 1)
 
         layout.addWidget(self.regression_model_text, self.shift + 1, 4, 1, 1)
         layout.addWidget(self.box_regression_model, self.shift + 2, 4, 1, 1)
@@ -713,10 +712,12 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_supervised_train_test_dca, self.shift + 5, 4, 1, 1)
         layout.addWidget(self.button_supervised_test_dca, self.shift + 6, 4, 1, 1)
         layout.addWidget(self.button_supervised_predict_dca, self.shift + 7, 4, 1, 1)
+
         layout.addWidget(self.button_supervised_train_onehot, self.shift + 4, 5, 1, 1)
         layout.addWidget(self.button_supervised_train_test_onehot, self.shift + 5, 5, 1, 1)
         layout.addWidget(self.button_supervised_test_onehot, self.shift + 6, 5, 1, 1)
         layout.addWidget(self.button_supervised_predict_onehot, self.shift + 7, 5, 1, 1)
+        layout.addWidget(self.box_plm_options, self.shift + 9, 5, 1, 1)
 
         layout.setRowMinimumHeight(self.shift + 9, 60)  # 60 pixels of space after row
 

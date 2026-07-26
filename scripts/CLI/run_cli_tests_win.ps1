@@ -24,16 +24,19 @@ function ExitOnExitCode { if ($LastExitCode) {
 ### $ .\run_cli_tests_win.ps1                      # printing STDOUT and STDERR to terminal
 
 
-$path=Get-Location                                                                                                       #
-$path=Split-Path -Path $path -Parent                                                                                     #
-$path=Split-Path -Path $path -Parent                                                                                     #
+$path=Get-Location
+$path=Split-Path -Path $path -Parent
+$path=Split-Path -Path $path -Parent
 ### if using downloaded/locally stored pypef .py files:
 ##########################################################################################################################
-Write-Output Y | conda env remove -n pypef                                                                               #
+(& conda 'shell.powershell' 'hook') | Out-String | Invoke-Expression                                                     #
+$ErrorActionPreference = "SilentlyContinue"                                                                              #
+conda env remove -n pypef -y                                                                                             #
+$ErrorActionPreference = "Stop"                                                                                          #
 conda create -n pypef python=3.12 -y                                                                                     #
 conda activate pypef                                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
-#pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128               # ONLY IF NIGHTLY IS NEEDED, E.G., NEW BLACKWELL GPU GENERATION 
+python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 --force-reinstall  #
 $env:PYTHONPATH=$path                                                                                                    #
 function pypef { python $path\pypef\main.py @args }                                                                      #
 ##########################################################################################################################
@@ -44,6 +47,10 @@ function pypef { python $path\pypef\main.py @args }                             
 # if pypef/settings.py defines USE_RAY = True                                                                            #
 $threads = 1                                                                                                             #
 ##########################################################################################################################
+
+Write-Host "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
+python -c "import torch; print(f'GPU available?: {torch.cuda.is_available()}')"
+Write-Host "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
 
 ### threads=1 shows progress bar where possible
 ### CV-based mlp and rf regression option take a long time and related testing commands are commented out/not included herein

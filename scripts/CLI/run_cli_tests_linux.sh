@@ -39,6 +39,10 @@ pypef="python3 $path/pypef/main.py"                                             
 threads=1                                                                                                                #
 ##########################################################################################################################
 
+echo "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
+python3 -c "import torch; print(f'GPU available?: {torch.cuda.is_available()}')"
+echo "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
+
 ### threads=1 shows progress bar where possible
 ### CV-based mlp and rf regression option take a long time and related testing commands are commented out/not included herein
 
