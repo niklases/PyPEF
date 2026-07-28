@@ -9,7 +9,10 @@ authors = [
     { name = "Niklas Siedhoff", email = "niklas.siedhoff@rwth-aachen.de" },
     { name = "Alexander-Maurice Illig" }
 ]
-description = "A tool for performing data-driven protein engineering by building machine learning models from protein variant fitness data."
+description = """\
+A tool for performing data-driven protein engineering by building, testing, and \
+inferring machine learning models trained on protein variant fitness data.\
+"""
 requires-python = ">=3.10"
 license = { text = "CC BY-SA 4.0" }
 keywords = ["Pythonic Protein Engineering Framework"]
@@ -20,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
     "Topic :: Scientific/Engineering :: Artificial Intelligence"
 ]
@@ -67,7 +71,7 @@ include = ["pypef*"]
 pypef = [
     "ml/AAindex/*",
     "ml/AAindex/Refined_cluster_indices_r0.93_r0.97/*",
-    "llm/prosst_structure/static/*"
+    "plm/prosst_structure/static/*"
 ]
 
 [tool.pytest.ini_options]

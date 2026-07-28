@@ -64,13 +64,13 @@ for llm in prosst+esm; do
         else
             hybrid_model_split_scheme="block-random"
         fi
-        max_idx=5
+        max_idx=216
     fi
     for ((i=0; i<=max_idx; i++)); do
         echo -e "\n\nRunning DMS_idx=$i with llm=$llm and split_method=$split_method and hybrid_model_split_scheme=$hybrid_model_split_scheme"
         python pgym_cv_benchmark.py split_method=$split_method DMS_idx=$i llm=$llm \
             hybrid_model_split_scheme=$hybrid_model_split_scheme \
-            loss_method=listMLE n_ensemble_splits=3
+            loss_method=listMLE n_ensemble_splits=1
         find ./model_saves/ -type f -name '*.pt' | xargs rm -f || true  # Delete pt model checkpoints
     done
 done

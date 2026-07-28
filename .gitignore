@@ -33,6 +33,9 @@ scripts/Setup/windows/Miniconda3/*
 
 scripts/Encoding_low_N/apc.png
 scripts/Encoding_low_N/low_N_avGFP_extrapolation.png
+scripts/Encoding_low_N/AVGFP/low_N_avGFP_extrapolation.png
+scripts/Encoding_low_N/AVGFP/uref100_avgfp_jhmmer_119.a2m
+scripts/Encoding_low_N/AVGFP/avGFP.csv
 
 scripts/Runtime_tests/runtimes.png
 
@@ -398,6 +401,7 @@ datasets/ANEH/DCA_Hybrid_Model_Performance_Hybrid_ESM_ESM.png
 datasets/ANEH/HYBRIDGREMLINESM_DE_trajectories.png
 datasets/ANEH/Predictions_Hybrid_ESM_Top37_ANEH_variants_prediction_set.txt
 datasets/ANEH/Pickles/HYBRIDGREMLINESM
+datasets/ANEH/DCA_Hybrid_Model_Performance_Hybrid_ESM.png
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv
