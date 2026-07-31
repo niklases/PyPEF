@@ -31,7 +31,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 - One-hot encoding
 - Amino acid descriptor sets (taken from AAindex database) encoding
 - Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) based encoding
-- LLM embeddings (currently, [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
+- PLM embeddings (currently, [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
 
 <p align="center">
     <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
@@ -97,7 +97,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
   docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP niklases/pypef:latest /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
-       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
+       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
   ```
 - building image from Dockerfile
   ```bash
@@ -108,7 +108,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
   docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP pypef /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
-       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --llm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
+       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
   ```
 
 <a name="requirements"></a>
@@ -129,7 +129,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
     - docopt-ng
     - adjustText
 
-and optionally ray[default] and scikit-learn-intelex. LLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
+and optionally ray[default] and scikit-learn-intelex. PLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
 Usually, running the command presented at https://pytorch.org/get-started/locally/ using the latest CUDA version is working for setting up the GPU, e.g.:
 ```
 pip install torch --index-url https://download.pytorch.org/whl/cu128
@@ -241,11 +241,11 @@ Using saved GREMLIN model for testing:
 pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN
 ```
 
-Adding a LLM model as blend, just add it to the command prompt; note however, that LLM finetuning requires a decent GPU (and video RAM) or quite some time when running on the CPU:
+Adding a PLM model as blend, just add it to the command prompt; note however, that PLM finetuning requires a decent GPU (and video RAM) or quite some time when running on the CPU:
 
 ```
-pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --llm esm
-pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --llm prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb
 ```
 
 Sample files for testing PyPEF routines are provided in the workflow directory, which are also used when running the notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
@@ -270,7 +270,7 @@ Next, to download this repository click Code > Download ZIP and unzip the zipped
 It is recommended to create a new Python environment:
 
 ```
-conda create --name pypef python=3.10
+conda create --name pypef python=3.14
 ```
 
 To activate the environment you can define:
@@ -284,8 +284,6 @@ After activating the environment you can install required packages after changin
 ```
 python3 -m pip install -r requirements.txt
 ```
-
-Note that the package [Ray](https://github.com/ray-project/ray) which we use for parallelizing sequence encoding and model validation of AAindices on the test set, is in beta status for [Windows](https://docs.ray.io/en/latest/installation.html#windows-support).
 
 Now, after installing required packages, you should be able to directly run pypef in the command-line interface.
 
@@ -498,7 +496,7 @@ using the plmc parameters.
 Other well-performing zero-shot prediction methods with available source code can be obtained from the ProteinGym [repository](https://github.com/OATML-Markslab/ProteinGym) and [website](https://proteingym.org/) that provide a more detailed overview of available methods and achieved performances (as well as many benchmark data sets).
 
 The performance of the GREMLIN model used is shown in the following for predicting single substitution effects (blue), including Hybrid model performances with N_Train = {100, 200, 1000}.
-Hybrid GREMLIN-LLM low-N-tuned models using [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
+Hybrid GREMLIN-PLM low-N-tuned models using [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
 
 <p align="center">
     <img src=".github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>
