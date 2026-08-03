@@ -514,7 +514,7 @@ echo
 $pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
 echo
 
-# 0.4.4 features: multi-PLM (DCA+ESM+ProSST), LoRA fine-tuning, and Gaussian-process (GP) optimization.
+# 0.5.0 features: multi-PLM (DCA+ESM+ProSST), LoRA fine-tuning, and Gaussian-process (GP) optimization.
 # These commands run PLM fine-tuning/GP training and are computationally intensive; use a small
 # learning set to keep the runtime tractable.
 $pypef mklsts -i avGFP.csv -w P42212_F64L.fasta --ls_proportion 0.02

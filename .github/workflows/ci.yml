@@ -47,6 +47,15 @@ jobs:
       run: |
         python -c "import sys, platform; print(sys.version, platform.system())"
 
+    - name: Check package-data integrity (pyproject.toml alone)
+      # Builds a wheel from a git-less / MANIFEST-less copy so that only
+      # pyproject.toml's package-data governs inclusion, then verifies the
+      # bundled .pt/.npy/AAindex data files are present. Catches a broken
+      # package-data path that git-tracking / MANIFEST.in would otherwise mask.
+      run: |
+        python -m pip install --upgrade pip wheel
+        python scripts/CLI/check_wheel_packaging.py
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -77,7 +86,14 @@ jobs:
         sleep 3
         pip install .[gui]
         echo $(which pypef)
-        python -m pytest ./tests/ -v -m "pip_specific" --log-cli-level=INFO --capture=tee-sys
+        # Run from a neutral dir with --import-mode=importlib so `import pypef`
+        # resolves to the pip-installed package, NOT the source tree on the
+        # repo root (which `python -m pytest` from the checkout would put on
+        # sys.path). This makes the pip_specific tests exercise the installed
+        # wheel and its bundled data, as intended.
+        cd "$RUNNER_TEMP"
+        python -m pytest "$GITHUB_WORKSPACE/tests" -v -m "pip_specific" \
+          --import-mode=importlib --log-cli-level=INFO --capture=tee-sys
 
   windows:
     name: windows
@@ -107,6 +123,11 @@ jobs:
       run: |
         python -c "import sys, platform; print(sys.version, platform.system())"
 
+    - name: Check package-data integrity (pyproject.toml alone)
+      run: |
+        python -m pip install --upgrade pip wheel
+        python scripts/CLI/check_wheel_packaging.py
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -133,4 +154,8 @@ jobs:
         $env:PYTHONPATH = ""
         pip install .[gui]
         echo (Get-Command pypef).Source
-        python -m pytest .\tests -v -m "pip_specific" --log-cli-level=INFO --capture=tee-sys
+        # Run from a neutral dir with --import-mode=importlib so `import pypef`
+        # resolves to the pip-installed package, not the source tree.
+        cd $env:RUNNER_TEMP
+        python -m pytest "$env:GITHUB_WORKSPACE\tests" -v -m "pip_specific" `
+          --import-mode=importlib --log-cli-level=INFO --capture=tee-sys

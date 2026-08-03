@@ -248,6 +248,28 @@ pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm
 pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb
 ```
 
+Multiple PLMs can be stacked next to the DCA model by combining them with a `+` (or a comma or whitespace), e.g. for a DCA+ESM+ProSST hybrid model:
+
+```
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm+prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb
+```
+
+By default, the supervised PLM contribution is tuned via a lightweight adjustment of the ensemble weights. Two alternative supervised tuning strategies are available (see the [Hybrid Modeling](#hybrid-modeling-using-the-merge-method) section):
+
+- `--lora`: LoRA-based fine-tuning of the PLM itself (requires `--plm`).
+- `--gauss_opt`: a Gaussian process (GP) over the PLM embeddings and zero-shot scores (requires `--plm`, `--wt`, and `--pdb`); with two PLMs, `--gauss_comb` additionally builds a single combined GP over both embedding sets.
+
+```
+# LoRA-based PLM fine-tuning:
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm --lora
+# Gaussian-process embedding optimization:
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb --gauss_opt
+# Combined GP over two PLMs' embeddings:
+pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm+prosst --wt WT_SEQUENCE.fasta --pdb PDB_STRUCTURE.pdb --gauss_opt --gauss_comb
+```
+
+The `--plm` flag replaces the now-deprecated `--llm` alias (still accepted for backward compatibility).
+
 Sample files for testing PyPEF routines are provided in the workflow directory, which are also used when running the notebook tutorial. PyPEF's package dependencies are linked [here](https://github.com/niklases/PyPEF/network/dependencies).
 Further, for designing your own API based on the PyPEF workflow, modules can be adapted from the [source code](pypef).
 
@@ -257,11 +279,11 @@ As standard input files, PyPEF requires the target protein wild-type sequence in
 ## Tutorial
 
 A basic example workflow procedure (tutorial) is explained in the [Jupyter notebook](scripts/CLI/Workflow_PyPEF.ipynb) (.ipynb) protocol.
-Before starting running the tutorial, it is a good idea to set up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/download#downloads) ([Anaconda3-2023.03-1-Linux-x86_64.sh installer download](https://repo.anaconda.com/archive/Anaconda3-2023.03-1-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+Before starting running the tutorial, it is a good idea to set up a new Python environment using Anaconda, https://www.anaconda.com/, e.g. using [Anaconda](https://www.anaconda.com/download#downloads) ([Anaconda3-2026.07-1-Linux-x86_64.sh installer download](https://repo.anaconda.com/archive/Anaconda3-2026.07-1-Linux-x86_64.sh)) or [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
 Change to the download directory and run the installation, e.g. in Linux:
 
 ```
-bash Anaconda3-2023.03-1-Linux-x86_64.sh
+bash Anaconda3-2026.07-1-Linux-x86_64.sh
 ```
 
 After accepting all steps, the conda setup should also be written to your `~/.bashrc`file, so that you can call anaconda typing `conda`.
@@ -342,10 +364,12 @@ Following regression options from [Scikit-learn](https://scikit-learn.org/stable
 <a name="hybrid-modeling"></a>
 ### Hybrid Modeling Using the MERGE Method
 
-Optimization of the two model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see the [hybrid model preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1) and the corresponding repository of the method termed [MERGE](https://github.com/Protein-Engineering-Framework/MERGE)); only based on DCA-derived features (therefore no definition of the flag `-e`, `--encoding` necessary for hybrid modeling):
+Optimization of the model contributions to the final hybrid model using the [differential evolution](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.differential_evolution.html) algorithm (see the [hybrid model preprint](https://www.biorxiv.org/content/10.1101/2022.06.07.495081v1) and the corresponding repository of the method termed [MERGE](https://github.com/Protein-Engineering-Framework/MERGE)). At its core, the hybrid model blends an unsupervised statistical component with a supervised component, so no `-e`/`--encoding` flag is required for hybrid modeling:
 
 - DCA-based statistical prediction of the evolutionary energy, i.e., probability, of a variant relative to the wild type (see [EVmutation](https://marks.hms.harvard.edu/evmutation/); [EVmutation repository](https://github.com/debbiemarkslab/EVmutation)/[EVcouplings repository](https://github.com/debbiemarkslab/EVcouplings)).
-- ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression)
+- ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression).
+
+Beyond the DCA-only case, one or more protein language models (PLMs; currently [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST)) can be added as additional components via `--plm` (multiple PLMs combined with `+`, e.g. `--plm esm+prosst`). Each PLM contributes an unsupervised zero-shot score and a supervised, few-shot-tuned prediction; the supervised PLM tuning can be performed by (i) a lightweight adjustment of the ensemble weights (default), (ii) LoRA-based fine-tuning of the PLM (`--lora`), or (iii) a Gaussian process over the PLM embeddings and zero-shot scores (`--gauss_opt`, with `--gauss_comb` building a single combined GP across two PLMs). All unsupervised and supervised component outputs are then blended into the final ensemble prediction.
 
 <a name="grids"></a>
 ## Model Hyperparameter Grids for Training
