@@ -6,8 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pypef"
 dynamic = ["version", "readme"]
 authors = [
-    { name = "Niklas Siedhoff", email = "niklas.siedhoff@rwth-aachen.de" },
-    { name = "Alexander-Maurice Illig" }
+    { name = "Niklas Siedhoff", email = "niklas.siedhoff@rwth-aachen.de" }
 ]
 description = """\
 A tool for performing data-driven protein engineering by building, testing, and \

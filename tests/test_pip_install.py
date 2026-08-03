@@ -15,6 +15,7 @@ import subprocess
 import sys
 import os
 from pathlib import Path
+import shutil
 import pytest
 
 
@@ -23,7 +24,18 @@ import pytest
 # ---------------------------------------------------------------------------
 
 def _run(*args) -> tuple[str, str, int]:
-    proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    """Execute a CLI command within the active Python environment's bin directory."""
+    venv_bin_dir = Path(sys.executable).parent
+    
+    # Resolve command from current environment's bin/ directory if possible
+    cmd = shutil.which(args[0], path=str(venv_bin_dir)) or shutil.which(args[0]) or args[0]
+    
+    # Ensure current venv's bin dir is prepended to PATH for spawned child processes
+    env = os.environ.copy()
+    p = f"{venv_bin_dir}{os.pathsep}{env.get('PATH', '')}"
+    env["PATH"] = p
+
+    proc = subprocess.Popen([cmd, *args[1:]], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     out, err = proc.communicate()
     return out.decode(), err.decode(), proc.returncode
 

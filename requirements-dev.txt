@@ -16,6 +16,8 @@ gpytorch
 huggingface_hub[hf_xet]
 #scikit-learn-intelex
 #ray[default]
+ipykernel
+jupyter
 pytest
 seaborn
 hydra-core

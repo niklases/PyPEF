@@ -402,6 +402,10 @@ datasets/ANEH/HYBRIDGREMLINESM_DE_trajectories.png
 datasets/ANEH/Predictions_Hybrid_ESM_Top37_ANEH_variants_prediction_set.txt
 datasets/ANEH/Pickles/HYBRIDGREMLINESM
 datasets/ANEH/DCA_Hybrid_Model_Performance_Hybrid_ESM.png
+datasets/ANEH/low_N_37_ANEH_variants_dca_encoded_ml_pls.png
+datasets/ANEH/ML_Model_Performance_DCA_GREMLIN.png
+datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_concat_lvls_extrapolation.png
+datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_lvl_1_extrapolation.png
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv
@@ -523,3 +527,4 @@ datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM_ProSST.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ProSST.png
 datasets/AVGFP/HYBRIDGREMLIN_DE_trajectories.png
+datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_lvl_1_extrapolation.png
