@@ -114,44 +114,32 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
 <a name="requirements"></a>
 ## Requirements
 - Python >=3.10
-    - numpy
-    - scipy
-    - pandas
-    - torch
-    - torch-geometric
-    - scikit-learn
-    - peft (Hugging Face transformers)
-    - matplotlib
-    - tqdm
-    - biopython
-    - biotite
-    - schema
-    - docopt-ng
-    - adjustText
+    - numpy [![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
+    - scipy [![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)
+    - pandas [![Python version](https://img.shields.io/pypi/pyversions/pandas?label=pandas%3A%20python)](https://github.com/pandas-dev/pandas)
+    - torch [![Python version](https://img.shields.io/pypi/pyversions/torch?label=torch%3A%20python)](https://github.com/pytorch/pytorch)
+    - torch-geometric [![Python version](https://img.shields.io/pypi/pyversions/torch-geometric?label=torch-geometric%3A%20python)](https://github.com/pyg-team/pytorch_geometric)
+    - gpytorch [![Python version](https://img.shields.io/pypi/pyversions/gpytorch?label=gpytorch%3A%20python)](https://github.com/cornellius-gp/gpytorch)
+    - scikit-learn [![Python version](https://img.shields.io/pypi/pyversions/scikit-learn?label=scikit-learn%3A%20python)](https://github.com/scikit-learn/scikit-learn)
+    - peft (Hugging Face transformers) [![Python version](https://img.shields.io/pypi/pyversions/peft?label=peft%3A%20python)](https://github.com/huggingface/peft)
+    - nvidia-ml-py [![Python version](https://img.shields.io/pypi/pyversions/nvidia-ml-py?label=nvidia-ml-py%3A%20python)](https://pypi.org/project/nvidia-ml-py)
+    - huggingface_hub[hf_xet] [![Python version](https://img.shields.io/pypi/pyversions/huggingface_hub?label=huggingface_hub%3A%20python)](https://github.com/huggingface/huggingface_hub)
+    - matplotlib [![Python version](https://img.shields.io/pypi/pyversions/matplotlib?label=matplotlib%3A%20python)](https://github.com/matplotlib/matplotlib)
+    - tqdm [![Python version](https://img.shields.io/pypi/pyversions/tqdm?label=tqdm%3A%20python)](https://github.com/tqdm/tqdm)
+    - biopython [![Python version](https://img.shields.io/pypi/pyversions/biopython?label=biopython%3A%20python)](https://github.com/biopython/biopython)
+    - biotite [![Python version](https://img.shields.io/pypi/pyversions/biotite?label=biotite%3A%20python)](https://github.com/biotite-dev/biotite)
+    - schema [![Python version](https://img.shields.io/pypi/pyversions/schema?label=schema%3A%20python)](https://github.com/keleshev/schema)
+    - docopt-ng [![Python version](https://img.shields.io/pypi/pyversions/docopt-ng?label=docopt%3A%20python)](https://github.com/jazzband/docopt-ng)
+    - adjustText [![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=adjusttext%3A%20python)](https://github.com/Phlya/adjustText)
+    - pathos [![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=pathos%3A%20python)](https://github.com/uqfoundation/pathos)
+    - gpytorch [![Python version](https://img.shields.io/pypi/pyversions/gpytorch?label=pathos%3A%20python)](https://github.com/cornellius-gp/gpytorch)
 
 and optionally ray[default] and scikit-learn-intelex. PLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
 Usually, running the command presented at https://pytorch.org/get-started/locally/ using the latest CUDA version is working for setting up the GPU, e.g.:
 ```
 pip install torch --index-url https://download.pytorch.org/whl/cu128
 ```
-If errors occur with third-party packages, you can check the required Python version dependencies (if available); also, as a rule of thumb, it is often helpful to use the second most recent Python version instead of the latest, since development for the latest version is often ongoing:
-
-[![Python version](https://img.shields.io/pypi/pyversions/numpy?label=numpy%3A%20python)](https://github.com/numpy/numpy)
-[![Python version](https://img.shields.io/pypi/pyversions/scipy?label=scipy%3A%20python)](https://github.com/scipy/scipy)
-[![Python version](https://img.shields.io/pypi/pyversions/pandas?label=pandas%3A%20python)](https://github.com/pandas-dev/pandas)
-[![Python version](https://img.shields.io/pypi/pyversions/torch?label=torch%3A%20python)](https://github.com/pytorch/pytorch)
-[![Python version](https://img.shields.io/pypi/pyversions/torch-geometric?label=torch-geometric%3A%20python)](https://github.com/pyg-team/pytorch_geometric)
-[![Python version](https://img.shields.io/pypi/pyversions/gpytorch?label=gpytorch%3A%20python)](https://github.com/cornellius-gp/gpytorch)
-[![Python version](https://img.shields.io/pypi/pyversions/scikit-learn?label=scikit-learn%3A%20python)](https://github.com/scikit-learn/scikit-learn)
-[![Python version](https://img.shields.io/pypi/pyversions/peft?label=peft%3A%20python)](https://github.com/huggingface/peft)
-[![Python version](https://img.shields.io/pypi/pyversions/nvidia-ml-py?label=nvidia-ml-py%3A%20python)](https://pypi.org/project/nvidia-ml-py)
-[![Python version](https://img.shields.io/pypi/pyversions/matplotlib?label=matplotlib%3A%20python)](https://github.com/matplotlib/matplotlib)
-[![Python version](https://img.shields.io/pypi/pyversions/tqdm?label=tqdm%3A%20python)](https://github.com/tqdm/tqdm)
-[![Python version](https://img.shields.io/pypi/pyversions/biopython?label=biopython%3A%20python)](https://github.com/biopython/biopython)
-[![Python version](https://img.shields.io/pypi/pyversions/biotite?label=biotite%3A%20python)](https://github.com/biotite-dev/biotite)
-[![Python version](https://img.shields.io/pypi/pyversions/schema?label=schema%3A%20python)](https://github.com/keleshev/schema)
-[![Python version](https://img.shields.io/pypi/pyversions/docopt?label=docopt%3A%20python)](https://github.com/docopt/docopt)
-[![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=adjusttext%3A%20python)](https://github.com/Phlya/adjustText)
+If errors occur with third-party packages, you can check the required Python version dependencies (if available); also, as a rule of thumb, it is often helpful to use the second most recent Python version instead of the latest, since development for the latest version is often ongoing.
 
 <a name="examples"></a>
 ## Running Examples

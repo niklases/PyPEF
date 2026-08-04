@@ -799,9 +799,9 @@ def esm_setup(
             'llm_train_function': plm_train,
             'llm_inference_function': plm_inference,
             'llm_loss_function': partial(hybrid_corr_mse_loss, method=loss_method),
-            'x_llm' : torch.tensor(x_esm),  # TODO: Not needed here?
-            'llm_attention_mask':  torch.tensor(esm_attention_mask),  # TODO: Not needed here?
-            'wt_input_ids': torch.tensor(wt_tokens),  # TODO: Not needed here?
+            'x_llm' : torch.tensor(x_esm),                            # TODO: Check: Not needed here?
+            'llm_attention_mask':  torch.tensor(esm_attention_mask),  # "
+            'wt_input_ids': torch.tensor(wt_tokens),                  # "
             'wt_structure_input_ids': None,
             'llm_tokenizer': esm_tokenizer
         }

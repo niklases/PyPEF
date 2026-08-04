@@ -42,6 +42,7 @@ dependencies = [
     "peft",
     "nvidia-ml-py",
     "gpytorch",
+    "huggingface_hub[hf_xet]",
     "torch",
     "torch-geometric"
 ]
