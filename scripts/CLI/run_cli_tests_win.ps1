@@ -48,9 +48,23 @@ function pypef { python $path\pypef\main.py @args }                             
 $threads = 1                                                                                                             #
 ##########################################################################################################################
 
+Write-Host "~~~~~~~~~~~~~~~~~~ WHERE ~~~~~~~~~~~~~~~~~~"
+Write-Host (Get-Command pypef).Source -ForegroundColor Blue
+Write-Host "~~~~~~~~~~~~~~~~~~ WHERE ~~~~~~~~~~~~~~~~~~"
 Write-Host "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
-python -c "import torch; print(f'GPU available?: {torch.cuda.is_available()}')"
+# sys.exit(0) if CUDA available, sys.exit(1) if False
+python -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)"
+$gpuAvailable = ($LASTEXITCODE -eq 0)
+Write-Host "GPU available?: $gpuAvailable"
+if (-not $gpuAvailable) {
+    Write-Host "GPU not available. Sleeping for 10 seconds if user wants to abort here..." -ForegroundColor DarkRed
+    Start-Sleep -Seconds 10
+}
+else {
+    Write-Host "GPU detected! Proceeding with execution..." -ForegroundColor Green
+}
 Write-Host "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
+
 
 ### threads=1 shows progress bar where possible
 ### CV-based mlp and rf regression option take a long time and related testing commands are commented out/not included herein

@@ -17,16 +17,16 @@ qt_window.spec
 __pycache__/
 *.py[cod]
 
+# Created test/output files
+model_saves/*
+avGFP_shortened_dca_encoded.csv
+avGFP_dca_encoded.csv
+
 # Downloaded ProteinGym data
 scripts/ProteinGym_runs/DMS_msa_files/
 scripts/ProteinGym_runs/DMS_ProteinGym_substitutions/
 scripts/ProteinGym_runs/ProteinGym_AF2_structures/
 scripts/ProteinGym_runs/_Description_DMS_substitutions_data.csv
-
-# Created test/output files
-model_saves/*
-avGFP_shortened_dca_encoded.csv
-avGFP_dca_encoded.csv
 
 scripts/Setup/windows/Miniconda3-latest-Windows-x86_64.exe
 scripts/Setup/windows/Miniconda3/*
@@ -68,6 +68,7 @@ scripts/ESM_finetuning/_Description_DMS_substitutions_data.csv
 scripts/ESM_finetuning/mut_performance_violin.png
 
 scripts/CLI/pypef_log.log
+scripts/CLI/.ipynb_checkpoints/Workflow_PyPEF-checkpoint.ipynb
 
 datasets/ANEH/37_ANEH_variants_aaidx_encoded.csv
 datasets/ANEH/37_ANEH_variants_dca_encoded.csv
@@ -528,3 +529,8 @@ datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ProSST.png
 datasets/AVGFP/HYBRIDGREMLIN_DE_trajectories.png
 datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_lvl_1_extrapolation.png
+datasets/AVGFP/low_N_avGFP_aaidx_encoded_ml_pls.png
+datasets/AVGFP/low_N_avGFP_dca_encoded_ml_pls.png
+datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_concat_lvls_extrapolation.png
+datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_lvl_1_extrapolation.png
+datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_concat_lvls_extrapolation.png

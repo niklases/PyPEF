@@ -129,10 +129,9 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
     - biopython [![Python version](https://img.shields.io/pypi/pyversions/biopython?label=biopython%3A%20python)](https://github.com/biopython/biopython)
     - biotite [![Python version](https://img.shields.io/pypi/pyversions/biotite?label=biotite%3A%20python)](https://github.com/biotite-dev/biotite)
     - schema [![Python version](https://img.shields.io/pypi/pyversions/schema?label=schema%3A%20python)](https://github.com/keleshev/schema)
-    - docopt-ng [![Python version](https://img.shields.io/pypi/pyversions/docopt-ng?label=docopt%3A%20python)](https://github.com/jazzband/docopt-ng)
+    - docopt-ng [![Python version](https://img.shields.io/pypi/pyversions/docopt-ng?label=docopt-ng%3A%20python)](https://github.com/jazzband/docopt-ng)
     - adjustText [![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=adjusttext%3A%20python)](https://github.com/Phlya/adjustText)
     - pathos [![Python version](https://img.shields.io/pypi/pyversions/adjusttext?label=pathos%3A%20python)](https://github.com/uqfoundation/pathos)
-    - gpytorch [![Python version](https://img.shields.io/pypi/pyversions/gpytorch?label=pathos%3A%20python)](https://github.com/cornellius-gp/gpytorch)
 
 and optionally ray[default] and scikit-learn-intelex. PLM/DCA-related tasks can be accelerated using a GPU for computations. As PyTorch is shipped with its own CUDA runtime, for running on GPU, only a recent NVIDIA driver and a CUDA-compatible GPU is needed (a compatibility list can be found at [NVIDIA website](https://developer.nvidia.com/cuda-gpus) and [Wikipedia](https://en.wikipedia.org/wiki/CUDA#GPUs_supported)) next to an installed CUDA toolkit version that fits the GPU driver version (see [download link](https://developer.nvidia.com/cuda-downloads) and [release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/index.html), Table 2). 
 Usually, running the command presented at https://pytorch.org/get-started/locally/ using the latest CUDA version is working for setting up the GPU, e.g.:

@@ -39,8 +39,30 @@ pypef="python3 $path/pypef/main.py"                                             
 threads=1                                                                                                                #
 ##########################################################################################################################
 
+# ANSI Color Codes
+BLUE='\033[0;34m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
+echo "~~~~~~~~~~~~~~~~~~ WHERE ~~~~~~~~~~~~~~~~~~"
+PYPEF_PATH=$(command -v pypef 2>/dev/null || echo "pypef not found in PATH")
+echo -e "${BLUE}${PYPEF_PATH}${NC}"
+echo "~~~~~~~~~~~~~~~~~~ WHERE ~~~~~~~~~~~~~~~~~~"
+
 echo "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
-python3 -c "import torch; print(f'GPU available?: {torch.cuda.is_available()}')"
+# sys.exit(0) if CUDA available, sys.exit(1) if False
+python3 -c "import torch, sys; sys.exit(0 if torch.cuda.is_available() else 1)"
+gpuAvailable=$?
+
+if [ $gpuAvailable -eq 0 ]; then
+    echo "GPU available?: True"
+    echo -e "${GREEN}GPU detected! Proceeding with execution...${NC}"
+else
+    echo "GPU available?: False"
+    echo -e "${RED}GPU not available. Sleeping for 10 seconds if user wants to abort here...${NC}"
+    sleep 10
+fi
 echo "~~~~~~~~~~~~~~~~~~ GPU CHECK ~~~~~~~~~~~~~~~~~~"
 
 ### threads=1 shows progress bar where possible

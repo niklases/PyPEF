@@ -211,8 +211,8 @@ def get_single_or_multi_point_mut_data(csv_description_path, datasets_path=None,
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Download ProteinGym data and extract single/multi-point mutation information.")
-    parser.add_argument('--source', type=str, default='zenodo', choices=['harvard', 'zenodo'],
-                        help="Source to download ProteinGym data from: 'harvard' or 'zenodo'. Default is 'zenodo'.")
+    parser.add_argument('--source', type=str, default='harvard', choices=['harvard', 'zenodo'],
+                        help="Source to download ProteinGym data from: 'harvard' or 'zenodo'. Default is 'harvard'.")
     parser.add_argument('--version', type=str, default='1.3', help="Version of ProteinGym data to download (only used if source='harvard'). Default is '1.3'.")
     parser.add_argument('--zenodo_record_id', type=str, default='15293562', help="Zenodo record ID to download from (only used if source='zenodo'). Default is '15293562'.")
     args = parser.parse_args()
