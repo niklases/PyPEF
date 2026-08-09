@@ -6,7 +6,7 @@
 
 import os
 import inspect
-import re  
+import warnings
 from functools import partial
 from typing import Literal
 import numpy as np
@@ -254,8 +254,8 @@ def sequence_log_likelihood(
 
 def mutation_only_mutation_masked_pll(
     tokenized_sequences: torch.Tensor,        # (L,)
-    wt_input_ids: torch.Tensor,     # (L,)
-    attention_mask: torch.Tensor,   # (L,)
+    wt_input_ids: torch.Tensor,               # (L,)
+    attention_mask: torch.Tensor,             # (L,)
     model,
     mask_token_id: int,
     train: bool = False,
@@ -842,10 +842,11 @@ def prosst_setup(
         raise RuntimeError(f"Loss function must be within {allowed_methods}.")
 
     pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
-    assert wt_seq == pdb_seq, (
-        f"Wild-type sequence is not matching PDB-extracted sequence:"
-        f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
-    )
+    if wt_seq != pdb_seq:
+        warnings.warn(
+            f"Wild-type sequence is not matching PDB-extracted sequence:"
+            f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
+        )
     prosst_base_model, prosst_lora_model, prosst_tokenizer, prosst_optimizer = get_prosst_models(seed=seed, revision=revision)
     prosst_base_model.eval()
     prosst_lora_model.eval()
