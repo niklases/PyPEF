@@ -6,7 +6,6 @@
 
 import os
 import inspect
-import warnings
 from functools import partial
 from typing import Literal
 import numpy as np
@@ -843,7 +842,7 @@ def prosst_setup(
 
     pdb_seq = str(list(SeqIO.parse(pdb_file, "pdb-atom"))[0].seq)
     if wt_seq != pdb_seq:
-        warnings.warn(
+        logger.warning(
             f"Wild-type sequence is not matching PDB-extracted sequence:"
             f"\nWT sequence:\n{wt_seq}\nPDB sequence:\n{pdb_seq}"
         )

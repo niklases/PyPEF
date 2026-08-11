@@ -3,7 +3,6 @@
 
 import os
 import re
-import warnings
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -43,7 +42,7 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
             rw = True
         if rw:
             if warn_counter == 0:
-                warnings.warn(
+                logger.warning(
                     "'CUBLAS_WORKSPACE_CONFIG' not set, "
                     "will likely face a torch RuntimeError. "
                     "Make sure to e.g. run 'export CUBLAS_WORKSPACE_CONFIG=:4096:8' (Linux/Mac) "
