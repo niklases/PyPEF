@@ -321,7 +321,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             n_epochs=50,  # Only if lora_train==True
                             verbose=False
                         )
-                        y_test_pred, _ = hm.hybrid_prediction(
+                        y_test_pred, indiv_preds = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test),
                             x_llm_dict=[
                                 None,
@@ -331,6 +331,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             ][i_m],
                             sequences=list(s_test)
                         )
+                        print(f'Individual model performances:\n {indiv_preds}')
                         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
                         hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                     except RuntimeError as e:  # modeling_prosst.py, line 920, in forward

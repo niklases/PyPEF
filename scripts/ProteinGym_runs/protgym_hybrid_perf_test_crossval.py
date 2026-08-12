@@ -327,11 +327,12 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 {'prosst': np.asarray(x_llm_test_prosst)},
                                 {'esm': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
                             ][i_m]
-                            y_test_pred, _ = hm.hybrid_prediction(
+                            y_test_pred, indiv_preds = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test),
                                 x_llm_dict=x_llm_test_dict,
                                 sequences=list(pdb_test_seqs)
                             )
+                            print(f'        Individual model performances:\n        {indiv_preds}')
                             print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')
                             temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})

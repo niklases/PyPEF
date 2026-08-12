@@ -428,7 +428,7 @@ class GREMLIN:
                 "e.g., try GREMLIN('Alignment.fasta', optimize=True)."
             )
 
-    def get_scores(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False):
+    def get_scores(self, seqs, v=None, w=None, v_idx=None, encode=False, h_wt_seq=0.0, recompute_z=False, verbose=False):
         """
         Computes the GREMLIN score for a given sequence or list of sequences.
         For now, only runs on CPU.
@@ -448,20 +448,21 @@ class GREMLIN:
                 f"Input sequence shape (length: {np.shape(seqs_int)[1]}) does not match GREMLIN "
                 f"MSA shape (common sequence length: {wt_seq_len}) inferred from the MSA."
             )
-        # Check nums of mutations to MSA first/WT sequence and gives warning if too apart from MSA seq
-        all_mismatches = []
-        for i, seq in enumerate(seqs):
-            n_mismatches, mismatches = get_mismatches(self.wt_seq, seq)
-            if n_mismatches / wt_seq_len > 0.05:
-                all_mismatches.append(f"Seq {i + 1}: {mismatches}")
-        if all_mismatches:
-            summary = "; ".join(all_mismatches)
-            if len(summary) > 500: 
-                summary = summary[:500] + '...'
-            logger.warning(
-                f"High mismatch rate (>5%) detected in the following sequences:\n{summary}\n"
-                "DCA-based effect predictions will likely be incorrect for those sequences!"
-            )
+        if verbose:
+            # Check nums of mutations to MSA first/WT sequence and gives warning if too apart from MSA seq
+            all_mismatches = []
+            for i, seq in enumerate(seqs):
+                n_mismatches, mismatches = get_mismatches(self.wt_seq, seq)
+                if n_mismatches / wt_seq_len > 0.05:
+                    all_mismatches.append(f"Seq {i + 1}: {mismatches}")
+            if all_mismatches:
+                summary = "; ".join(all_mismatches)
+                if len(summary) > 500: 
+                    summary = summary[:500] + '...'
+                logger.warning(
+                    f"High mismatch rate (>5%) detected in the following sequences:\n{summary}\n"
+                    "DCA-based effect predictions will likely be incorrect for those sequences!"
+                )
         try:
             if seqs_int.shape[-1] != len(v_idx):  # The input sequence length ({seqs_int.shape[-1]}) 
                 # does not match the common gap-trimmed MSA sequence length (len(v_idx)
