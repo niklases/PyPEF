@@ -214,9 +214,16 @@ def test_hybrid_model_dca_llm_aneh(
         model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
+    # ESM lm_head decoder must stay tied to the input word embeddings. 
+    # A globally forced tie_word_embeddings=False leaves the ESM decoder 
+    # randomly initialized -> near-random zero-shot log-likelihoods.
+    assert torch.equal(
+        esm_base_model.esm.embeddings.word_embeddings.weight,
+        esm_base_model.lm_head.decoder.weight,
+    ), "ESM lm_head decoder is not tied to word embeddings — zero-shot scoring would be random!"
     total_sum = sum(p.sum().item() for p in esm_base_model.parameters())
     print('Total model parameter sum (ESM):', total_sum)
-    np.testing.assert_allclose(total_sum, -15815.186912, atol=1e-1)
+    np.testing.assert_allclose(total_sum, -15522.971457719803, atol=1e-1)
     model_hash = get_model_hash(esm_base_model)
     print(f"Model Hash: {model_hash}")
     x_esm, esm_attention_mask = tokenize_sequences(
@@ -245,6 +252,13 @@ def test_hybrid_model_dca_llm_aneh(
         seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_base_model.eval()
     prosst_base_model = prosst_base_model.to(device)
+    # Guard intent: ProSST is intentionally untied but its decoder head is
+    # weight-copied from the embeddings (parity), so decoder values must equal
+    # the embeddings — otherwise zero-shot scoring would be random.
+    assert torch.equal(
+        prosst_base_model.prosst.embeddings.word_embeddings.weight,
+        prosst_base_model.cls.predictions.decoder.weight,
+    ), "ProSST decoder head is not weight-matched to embeddings — zero-shot scoring would be random!"
     total_sum = sum(p.sum().item() for p in prosst_base_model.parameters())
     #for name, param in prosst_base_model.named_parameters():
     #    s = param.sum().item()
@@ -482,6 +496,10 @@ def test_hybrid_model_dca_llm_avgfp(
         model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
+    assert torch.equal(
+        esm_base_model.esm.embeddings.word_embeddings.weight,
+        esm_base_model.lm_head.decoder.weight,
+    ), "ESM lm_head decoder is not tied to word embeddings — zero-shot scoring would be random!"
     x_esm, esm_attention_mask = tokenize_sequences(
         train_seqs, esm_tokenizer, max_length=len(wt_seq) + 2
     )
@@ -508,6 +526,10 @@ def test_hybrid_model_dca_llm_avgfp(
     )
     prosst_base_model.eval()
     prosst_base_model = prosst_base_model.to(device)
+    assert torch.equal(
+        prosst_base_model.prosst.embeddings.word_embeddings.weight,
+        prosst_base_model.cls.predictions.decoder.weight,
+    ), "ProSST decoder head is not weight-matched to embeddings — zero-shot scoring would be random!"
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_file, prosst_tokenizer, wt_seq, device=device)
     
@@ -699,6 +721,10 @@ def test_plm_corr_blat_ecolx():
         seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_vocab = prosst_tokenizer.get_vocab()
     prosst_base_model = prosst_base_model.to("cuda")
+    assert torch.equal(
+        prosst_base_model.prosst.embeddings.word_embeddings.weight,
+        prosst_base_model.cls.predictions.decoder.weight,
+    ), "ProSST decoder head is not weight-matched to embeddings — zero-shot scoring would be random!"
     df = pd.read_csv(csv_blat_ecolx_stiffler2015)
     sequences = df['mutated_sequence'].to_list()
     y_true = df['DMS_score'].to_list()
@@ -706,6 +732,10 @@ def test_plm_corr_blat_ecolx():
         esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
             model=x, seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
         esm_base_model = esm_base_model.to("cuda")
+        assert torch.equal(
+            esm_base_model.esm.embeddings.word_embeddings.weight,
+            esm_base_model.lm_head.decoder.weight,
+        ), "ESM lm_head decoder is not tied to word embeddings — zero-shot scoring would be random!"
         x_esm, esm_attention_mask = tokenize_sequences(
             sequences, esm_tokenizer, max_length=len(blat_ecolx_wt_seq) + 2)
         # Tokenize WT sequence once
@@ -872,9 +902,17 @@ def test_gaussian_process_opt():
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
         seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8")
     prosst_base_model = prosst_base_model.to(device)
+    assert torch.equal(
+        prosst_base_model.prosst.embeddings.word_embeddings.weight,
+        prosst_base_model.cls.predictions.decoder.weight,
+    ), "ProSST decoder head is not weight-matched to embeddings — zero-shot scoring would be random!"
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
          model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
+    assert torch.equal(
+        esm_base_model.esm.embeddings.word_embeddings.weight,
+        esm_base_model.lm_head.decoder.weight,
+    ), "ESM lm_head decoder is not tied to word embeddings — zero-shot scoring would be random!"
 
     wt_prosst_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
         pdb_blat_ecolx, prosst_tokenizer, wt_seq, device=device, verbose=True

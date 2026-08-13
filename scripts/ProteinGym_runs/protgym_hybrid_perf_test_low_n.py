@@ -331,7 +331,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             ][i_m],
                             sequences=list(s_test)
                         )
-                        print(f'Individual model performances:\n {indiv_preds}')
+                        print(f'Individual model performances:')
+                        for model_name, model_preds in indiv_preds.items():
+                            print(f'  {model_name}: {spearmanr(y_test, model_preds)[0]:.3f}')
                         print(f'Hybrid performance: {spearmanr(y_test, y_test_pred)[0]:.3f}')
                         hybrid_perfs.append(spearmanr(y_test, y_test_pred)[0])
                     except RuntimeError as e:  # modeling_prosst.py, line 920, in forward

@@ -345,12 +345,18 @@ def load_model_and_tokenizer(
             revision=revision, 
             cache_dir=cache_dir,
             local_files_only=False,
-            force_download=True, # Nuke corrupted config.json
+            force_download=True,  # Nuke corrupted config.json
             token=hf_token
         )
 
-    # Force the architecture to create a separate decoder layer
-    config.tie_word_embeddings = False
+    # ProSST (with older transformers versions) needs an explicitly separate,
+    # untied decoder head, which is then weight-copied from the embeddings below.
+    # This must NOT be applied to ESM: ESM ships tied weights only, so untying
+    # would leave its lm_head.decoder randomly initialized, destroying zero-shot
+    # scoring (near-random Spearman).
+    if "prosst" in model_name.lower():
+        # Force the architecture to create a separate decoder layer
+        config.tie_word_embeddings = False
 
     # Common arguments for Model and Tokenizer
     load_kwargs = {
@@ -448,7 +454,7 @@ def load_model_and_tokenizer(
         with torch.no_grad():
             embedding_weight = model.prosst.embeddings.word_embeddings.weight
             model.cls.predictions.decoder.weight.copy_(embedding_weight)
-            
+        
         # Do NOT call model.tie_weights() here, or PyTorch will turn them back into pointers
 
     # Loading the tokenizer

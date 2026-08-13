@@ -243,8 +243,8 @@ pypef hybrid -l LEARNING_SET.fasl -t TEST_SET.fasl --params GREMLIN --plm esm+pr
 
 By default, the supervised PLM contribution is tuned via a lightweight adjustment of the ensemble weights. Two alternative supervised tuning strategies are available (see the [Hybrid Modeling](#hybrid-modeling-using-the-merge-method) section):
 
-- `--lora`: LoRA-based fine-tuning of the PLM itself (requires `--plm`).
-- `--gauss_opt`: a Gaussian process (GP) over the PLM embeddings and zero-shot scores (requires `--plm`, `--wt`, and `--pdb`); with two PLMs, `--gauss_comb` additionally builds a single combined GP over both embedding sets.
+- `--lora`: [LoRA](https://arxiv.org/abs/2106.09685)-based fine-tuning of the PLM itself (requires `--plm`).
+- `--gauss_opt`: as an alternative to LoRA fine-tuning, a Gaussian process (GP) is fitted on the PLM embeddings and zero-shot scores (requires `--plm`, `--wt`, and `--pdb`). The GP modeling follows the composite-kernel approach of [Kermut](https://github.com/petergroth/kermut) (Groth et al., NeurIPS 2024). With two PLMs, `--gauss_comb` additionally builds a single combined GP over both embedding sets.
 
 ```
 # LoRA-based PLM fine-tuning:
@@ -356,7 +356,7 @@ Optimization of the model contributions to the final hybrid model using the [dif
 - DCA-based statistical prediction of the evolutionary energy, i.e., probability, of a variant relative to the wild type (see [EVmutation](https://marks.hms.harvard.edu/evmutation/); [EVmutation repository](https://github.com/debbiemarkslab/EVmutation)/[EVcouplings repository](https://github.com/debbiemarkslab/EVcouplings)).
 - ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression).
 
-Beyond the DCA-only case, one or more protein language models (PLMs; currently [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST)) can be added as additional components via `--plm` (multiple PLMs combined with `+`, e.g. `--plm esm+prosst`). Each PLM contributes an unsupervised zero-shot score and a supervised, few-shot-tuned prediction; the supervised PLM tuning can be performed by (i) a lightweight adjustment of the ensemble weights (default), (ii) LoRA-based fine-tuning of the PLM (`--lora`), or (iii) a Gaussian process over the PLM embeddings and zero-shot scores (`--gauss_opt`, with `--gauss_comb` building a single combined GP across two PLMs). All unsupervised and supervised component outputs are then blended into the final ensemble prediction.
+Beyond the DCA-only case, one or more protein language models (PLMs; currently [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST)) can be added as additional components via `--plm` (multiple PLMs combined with `+`, e.g. `--plm esm+prosst`). Each PLM contributes an unsupervised zero-shot score and a supervised, few-shot-tuned prediction; the supervised PLM tuning can be performed by (i) a lightweight adjustment of the ensemble weights (default), (ii) [LoRA](https://arxiv.org/abs/2106.09685)-based fine-tuning of the PLM (`--lora`), or, as an alternative to LoRA fine-tuning, (iii) a Gaussian process (GP) fitted on the PLM embeddings and zero-shot scores (`--gauss_opt`, with `--gauss_comb` building a single combined GP across two PLMs). The GP modeling adapts the composite-kernel approach of [Kermut](https://github.com/petergroth/kermut) (Groth et al., *Kermut: Composite kernel regression for protein variant effects*, NeurIPS 2024, [OpenReview](https://openreview.net/forum?id=jM9atrvUii)). All unsupervised and supervised component outputs are then blended into the final ensemble prediction.
 
 <a name="grids"></a>
 ## Model Hyperparameter Grids for Training

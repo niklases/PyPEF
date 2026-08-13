@@ -32,6 +32,14 @@ from pypef import __version__
 version = __version__.split('-')[0]
 # e.g., version = '0.4.3'
 
+import logging
+package_logger = logging.getLogger('pypef')
+package_logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+package_logger.addHandler(handler)
+
 JUST_PLOT_RESULTS = False
 
 ESM_MODEL = 'facebook/esm2_t33_650M_UR50D'
@@ -237,11 +245,11 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         temp_results[c][f'Split {s}'][m] = np.nan
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = CATEGORIES[i_category]
-                print(f'Category: {category}')
+                print(f'~~~ Category: {category} ~~~')
                 for i_split, (train_i, test_i) in enumerate(zip(
                     train_indices, test_indices
                 )):
-                    print(f'    Split: {i_split + 1}')
+                    print(f'    ----- Split: {i_split + 1} -----')
                     try:
                         pdb_train_seqs = np.asarray(pdb_trimmed_seqs)[train_i]
                         pdb_test_seqs = np.asarray(pdb_trimmed_seqs)[test_i]
@@ -332,7 +340,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                                 x_llm_dict=x_llm_test_dict,
                                 sequences=list(pdb_test_seqs)
                             )
-                            print(f'        Individual model performances:\n        {indiv_preds}')
+                            print(f'        Individual model performances:')
+                            for model_name, model_preds in indiv_preds.items():
+                                print(f'          {model_name}: {spearmanr(y_test, model_preds)[0]:.3f}')
                             print(f'        {m_str} (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred)[0]:.3f} '
                                   f'(train size={train_size}, test_size={test_size})')
                             temp_results[category][f'Split {i_split}'].update({m_str: spearmanr(y_test, y_test_pred)[0]})
