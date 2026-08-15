@@ -49,7 +49,7 @@ A quick installation of the PyPEF command line framework using PyPI for Linux an
 
 ```bash
 # For GPU support (e.g., using CUDA 12.8, see requirements section below):
-# pip install torch --index-url https://download.pytorch.org/whl/cu128
+pip install torch --index-url https://download.pytorch.org/whl/cu128
 pip install -U pypef
 ```
 
