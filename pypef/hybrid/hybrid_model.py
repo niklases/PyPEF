@@ -1671,7 +1671,8 @@ def performance_ls_ts(
 
     if ls_fasta is not None and ts_fasta is not None:
         train_sequences, train_variants, y_train = get_sequences_from_file(
-            ls_fasta)
+            ls_fasta
+        )
         (
             x_train, train_variants, train_sequences, 
             y_train, x_wt, _, model_type 
@@ -1794,25 +1795,26 @@ def performance_ls_ts(
             save_model_to_dict_pickle(model, model_type)
             model_type = f'{model_type}_no_ML'
         else:
-            model_type = 'PLM'
+            model_type = 'PLM'   
             if llm == 'esm':
-                llm_dict = esm_setup(wt_seq, test_sequences)
-                logger.info("Zero-shot PLM inference on test set using ESM...")
+                logger.info("Zero-shot PLM inference using ESM...")
+                plm_dict = esm_setup(wt_seq, test_sequences)
                 y_test_pred = plm_inference(
-                    tokenized_sequences = llm_dict['esm']['x_llm'],
-                    wt_input_ids=llm_dict['esm']['wt_input_ids'],
-                    model=llm_dict['esm']['llm_base_model']
-                )
+                    tokenized_sequences=plm_dict['esm']['x_llm'],
+                    wt_input_ids=plm_dict['esm']['wt_input_ids'],
+                    attention_mask=plm_dict['esm']['llm_attention_mask'],
+                    model=plm_dict['esm']['llm_base_model']
+                ).cpu()
             elif llm == 'prosst':
-                llm_dict = prosst_setup(wt_seq, pdb_file, test_sequences)
-                logger.info("Zero-shot PLM inference on test set using ProSST...")
+                logger.info("Zero-shot PLM inference using ProSST...")
+                plm_dict = prosst_setup(wt_seq, pdb_file, test_sequences)
                 y_test_pred = plm_inference(
-                    tokenized_sequences = llm_dict['prosst']['x_llm'],
-                    wt_input_ids=llm_dict['prosst']['wt_input_ids'],
-                    model=llm_dict['prosst']['llm_base_model'],
-                    wt_structure_input_ids=llm_dict['prosst']['wt_structure_input_ids']
-                    
-                )
+                    tokenized_sequences=plm_dict['prosst']['x_llm'],
+                    wt_input_ids=plm_dict['prosst']['wt_input_ids'],
+                    attention_mask=plm_dict['prosst']['llm_attention_mask'],
+                    model=plm_dict['prosst']['llm_base_model'],
+                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                ).cpu()
             else:
                 raise RuntimeError("Unknown --plm flag option.")
     else:
@@ -1832,65 +1834,20 @@ def performance_ls_ts(
 
 
 def predict_ps(
-        prediction_dict: dict,
-        threads: int,
-        separator: str,
-        model_pickle_file: str | None = None,
-        params_file: str | None = None,
-        prediction_set: str | None = None,
-        llm: str | None = None,
-        pdb_file: str | None = None,
-        wt_seq: str | None = None,
-        negative: bool = False
+    prediction_dict: dict,
+    threads: int,
+    separator: str,
+    model_pickle_file: str | None = None,
+    params_file: str | None = None,
+    prediction_set: str | None = None,
+    llm: str | None = None,
+    pdb_file: str | None = None,
+    wt_seq: str | None = None,
+    negative: bool = False
 ):
     """
-    Description
-    -----------
-    Predicting the fitness of sequences of a prediction set
-    or multiple prediction sets that were exemplary created with
-    'pypef mkps' based on single substitutional variant data
-    provided in a CSV and the wild type sequence:
-        pypef mkps --wt WT_SEQ --input CSV_FILE
-        [--drop THRESHOLD] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
-        [--ddiverse] [--tdiverse] [--qdiverse]
-
-    Parameters
-    -----------
-    prediction_dict: dict
-        Contains arguments which directory to predict, e.g. {'drecomb': True},
-        than predicts prediction files that are present in this directory, e.g.
-        in directory './Recomb_Double_Split'.
-    params_file: str
-        PLMC/GREMLIN couplings parameter file
-    threads: int
-        Threads used for parallelization for DCA-based sequence encoding
-    separator: str
-        Separator of individual substitution of variants, default '/'
-    model_pickle_file: str
-        Pickle file containing the hybrid model and model parameters in
-        a dictionary format
-    test_set: str = None
-        Test set for prediction and plotting of predictions (contains
-        true fitness values of variants).
-    prediction_set: str = None
-        Prediction set for prediction, does not contain true fitness values.
-    figure: str = None
-        Plotting the test set predictions and the corresponding true fitness
-        values.
-    label: bool = False
-        If True, plots associated variant names of predicted variants.
-    negative: bool = False
-        If true, negative defines improved variants having a reduced/negative
-        fitness compared to wild type.
-
-
-    Returns
-    -----------
-    ()
-        Writes sorted predictions to files (for [--drecomb] [--trecomb]
-        [--qarecomb] [--qirecomb] [--ddiverse] [--tdiverse] [--qdiverse]
-        in the respective created folders).
-
+    Predicting the fitness of sequences of a prediction set or multiple prediction 
+    sets (e.g. created with 'pypef mkps') using DCA, Hybrid, or PLM Zero-Shot models.
     """
     dca_modeling = False
     if model_pickle_file is None and params_file is not None:
@@ -1900,9 +1857,12 @@ def predict_ps(
     elif params_file is not None:
         logger.info(f'Loading model from saved model (Pickle file {model_pickle_file})...')
         dca_modeling = True
+
+    model_type = None
+    model = None
     if dca_modeling:
         model, model_type = get_model_and_type(model_pickle_file)
-        if model_type == 'PLMC' or model_type == 'GREMLIN':
+        if model_type in ('PLMC', 'GREMLIN'):
             logger.info(f'Found {model_type} model file. No hybrid model provided - '
                         f'falling back to a statistical DCA model...')
 
@@ -1911,100 +1871,153 @@ def predict_ps(
         'Recomb_Quintuple_Split', 'Diverse_Double_Split', 'Diverse_Triple_Split',
         'Diverse_Quadruple_Split'
     ]
+
+    # Pre-setup tokenizers for Hybrid model predictions if required
+    llm_dict = None
+    if dca_modeling and model_type.startswith('Hybrid') and model.llm_keys:
+        logger.info(f"Setting up PLM tokenizer(s) for hybrid prediction: {', '.join(model.llm_keys)}...")
+        llm_dict = setup_llm_input(model.llm_keys, None, wt_seq, pdb_file)
+
+    # --- Mode 1: Multi-file directory prediction sets ---
     if True in prediction_dict.values():
         for ps, path in zip(prediction_dict.values(), pmult):
-            if ps:  # if True, run prediction in this directory, e.g. for drecomb
-                logger.info(f'Running predictions for variant-sequence files in directory {path}...')
-                all_y_v_pred = []
-                files = [f for f in listdir(path) if isfile(join(path, f)) if f.endswith('.fasta')]
-                for i, file in enumerate(files):  # collect and predict for each file in the directory
-                    logger.info(f'Encoding files ({i + 1}/{len(files)}) for prediction...')
-                    file_path = os.path.join(path, file)
-                    sequences, variants, _ = get_sequences_from_file(file_path)
-                    if not model_type.startswith('Hybrid'):
+            if not ps:
+                continue
+
+            logger.info(f'Running predictions for variant-sequence files in directory {path}...')
+            all_y_v_pred = []
+            files = [f for f in listdir(path) if isfile(join(path, f)) and f.endswith('.fasta')]
+
+            for i, file in enumerate(files):
+                logger.info(f'Processing file ({i + 1}/{len(files)}) for prediction...')
+                file_path = os.path.join(path, file)
+                sequences, variants, _ = get_sequences_from_file(file_path)
+
+                if not dca_modeling:  # Zero-shot PLM inference
+                    if not llm:
+                        raise ValueError("No model or parameters provided. Specify --llm for zero-shot PLM inference.")
+                    model_type = f'PLM_{llm.upper()}'
+                    if llm == 'esm':
+                        logger.info("Zero-shot PLM inference using ESM...")
+                        plm_dict = esm_setup(wt_seq, sequences)
+                        ys_pred = plm_inference(
+                            tokenized_sequences=plm_dict['esm']['x_llm'],
+                            wt_input_ids=plm_dict['esm']['wt_input_ids'],
+                            attention_mask=plm_dict['esm']['llm_attention_mask'],
+                            model=plm_dict['esm']['llm_base_model']
+                        ).cpu()
+                    elif llm == 'prosst':
+                        logger.info("Zero-shot PLM inference using ProSST...")
+                        plm_dict = prosst_setup(wt_seq, pdb_file, sequences)
+                        ys_pred = plm_inference(
+                            tokenized_sequences=plm_dict['prosst']['x_llm'],
+                            wt_input_ids=plm_dict['prosst']['wt_input_ids'],
+                            attention_mask=plm_dict['prosst']['llm_attention_mask'],
+                            model=plm_dict['prosst']['llm_base_model'],
+                            wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                        ).cpu()
+                    else:
+                        raise RuntimeError(f"Unknown --llm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
+                else:
+                    if not model_type.startswith('Hybrid'):  # Statistical DCA
                         x_test, _, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, model, threads=threads, verbose=False,
-                            substitution_sep=separator)
+                            substitution_sep=separator
+                        )
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
-                    else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional PLM input
+                    else:  # Hybrid model
                         x_test, _test_variants, test_sequences, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
-                        if model.llm_keys is None:
+                        if not model.llm_keys:
                             ys_pred, _ = model.hybrid_prediction(x_test)
                         else:
-                            sequences = [str(seq) for seq in test_sequences]
+                            test_seqs = [str(seq) for seq in test_sequences]
                             x_llm_test = {
                                 llm_name: tokenize_sequences(
-                                    sequences, model.llm_data[llm_name]['llm_tokenizer'])[0]
-                                for llm_name in model.llm_keys
+                                    test_seqs, l_data['llm_tokenizer'])[0]
+                                for llm_name, l_data in llm_dict.items()
                             }
                             ys_pred, _ = model.hybrid_prediction(
-                                np.asarray(x_test), x_llm_test, sequences=sequences
+                                np.asarray(x_test), x_llm_test, sequences=test_seqs
                             )
-                    for k, y in enumerate(ys_pred):
-                        all_y_v_pred.append((ys_pred[k], variants[k]))
-                if negative:  # sort by fitness value
-                    all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=False)
-                else:
-                    all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=True)
-                predictions_out(
-                    predictions=all_y_v_pred,
-                    model=model_type,
-                    prediction_set=f'Top{path}',
-                    path=path
-                )
-            else:  # check next task to do, e.g., predicting triple substituted variants, e.g. trecomb
-                continue
 
-    elif prediction_set is not None:  # Predicting single FASTA file sequences
+                assert len(variants) == len(ys_pred), f"Mismatch: {len(variants)} variants vs {len(ys_pred)} predictions."
+                for k in range(len(ys_pred)):
+                    all_y_v_pred.append((ys_pred[k], variants[k]))
+
+            all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=not negative)
+            predictions_out(
+                predictions=all_y_v_pred,
+                model=model_type,
+                prediction_set=f'Top{path}',
+                path=path
+            )
+
+    # --- Mode 2: Single FASTA file prediction set ---
+    elif prediction_set is not None:
         sequences, variants, _ = get_sequences_from_file(prediction_set)
-        # NaNs are already being removed by the called function
-        if not dca_modeling:  # model_pickle_file is None and params_file is None:
-            # *No hybrid model* and no DCA params provided:
-            # Zero-shot PLM predictions
+
+        if not dca_modeling:  # Zero-shot PLM inference
+            if not llm:
+                raise ValueError("No model or parameters provided. Specify --llm for zero-shot PLM inference.")
+            model_type = f'PLM_{llm.upper()}'
             if llm == 'esm':
-                model_type = 'PLM_ESM'
-                logger.info("Zero-shot PLM inference on test set using ESM...")
-                ys_pred = plm_inference(sequences, llm)  # TODO
+                logger.info("Zero-shot PLM inference using ESM...")
+                plm_dict = esm_setup(wt_seq, sequences)
+                ys_pred = plm_inference(
+                    tokenized_sequences=plm_dict['esm']['x_llm'],
+                    attention_mask=plm_dict['esm']['llm_attention_mask'],
+                    wt_input_ids=plm_dict['esm']['wt_input_ids'],
+                    model=plm_dict['esm']['llm_base_model']
+                ).cpu()
             elif llm == 'prosst':
-                model_type = 'PLM_ProSST'
-                logger.info("Zero-shot PLM inference on test set using ProSST...")
-                ys_pred = plm_inference(sequences, llm, pdb_file=pdb_file, wt_seq=wt_seq)  # TODO
+                logger.info("Zero-shot PLM inference using ProSST...")
+                plm_dict = prosst_setup(wt_seq, pdb_file, sequences)
+                ys_pred = plm_inference(
+                    tokenized_sequences=plm_dict['prosst']['x_llm'],
+                    attention_mask=plm_dict['prosst']['llm_attention_mask'],
+                    wt_input_ids=plm_dict['prosst']['wt_input_ids'],
+                    model=plm_dict['prosst']['llm_base_model'],
+                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                ).cpu()
+            else:
+                raise RuntimeError(f"Unknown --llm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
         else:
-            if not model_type.startswith('Hybrid'):  # statistical DCA model
+            if not model_type.startswith('Hybrid'):  # Statistical DCA
                 xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                     variants, sequences, None, params_file,
                     threads=threads, verbose=False, substitution_sep=separator
                 )
                 ys_pred = get_delta_e_statistical_model(xs, x_wt)
-            else:  # Hybrid model input requires params from plmc or GREMLIN model plus optional PLM input
+            else:  # Hybrid model
                 xs, variants, sequences, *_ = plmc_or_gremlin_encoding(
                     variants, sequences, None, params_file,
                     threads=threads, verbose=True, substitution_sep=separator
                 )
-                if model.llm_keys is None:
+                if not model.llm_keys:
                     ys_pred, _ = model.hybrid_prediction(xs)
                 else:
-                    sequences = [str(seq) for seq in sequences]
+                    test_seqs = [str(seq) for seq in sequences]
                     xs_llm = {
                         llm_name: tokenize_sequences(
-                            sequences, model.llm_data[llm_name]['llm_tokenizer'])[0]
-                        for llm_name in model.llm_keys
+                            test_seqs, l_data['llm_tokenizer'])[0]
+                        for llm_name, l_data in llm_dict.items()
                     }
                     ys_pred, _ = model.hybrid_prediction(
-                        np.asarray(xs), xs_llm, sequences=sequences
+                        np.asarray(xs), xs_llm, sequences=test_seqs
                     )
-            assert len(xs) == len(variants) == len(ys_pred)
+
+        assert len(variants) == len(ys_pred), f"Mismatch: {len(variants)} variants vs {len(ys_pred)} predictions."
         y_v_pred = zip(ys_pred, variants)
-        y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=True)
+        y_v_pred = sorted(y_v_pred, key=lambda x: x[0], reverse=not negative)
+
         predictions_out(
             predictions=y_v_pred,
             model=model_type,
             prediction_set=f'Top{prediction_set}'
         )
-
 
 global_hybrid_model = None
 global_hybrid_model_type = None

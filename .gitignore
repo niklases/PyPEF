@@ -516,6 +516,8 @@ datasets/AVGFP/MLGREMLIN_DE_trajectories.png
 datasets/AVGFP/MLPLMC_DE_trajectories.png
 datasets/AVGFP/Predictions_GREMLIN_TopTS.txt
 datasets/AVGFP/Predictions_PLMC_TopTS.txt
+datasets/AVGFP/Predictions_PLM_ESM_TopavGFP_prediction_set.txt
+datasets/AVGFP/Predictions_PLM_PROSST_TopavGFP_prediction_set.txt
 datasets/AVGFP/uref100_avgfp_jhmmer_119_plmc_42.6.params
 datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_Hybrid_ESM_ESM.png
@@ -533,6 +535,8 @@ datasets/AVGFP/low_N_avGFP_dca_encoded_ml_pls.png
 datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_concat_lvls_extrapolation.png
 datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_lvl_1_extrapolation.png
 datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_concat_lvls_extrapolation.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_ESM.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PROSST.png
 
 scripts/ProteinGym_runs/A0A1I9GEU1_NEIME_Kennouche_2019_pos_aa_distr.png
 scripts/ProteinGym_runs/A0A2Z5U3Z0_9INFA_Wu_2014_pos_aa_distr.png

@@ -501,6 +501,10 @@ echo
 # many single variants for recombination, takes too long
 #$pypef hybrid -m HYBRIDPLMC --params uref100_avgfp_jhmmer_119_plmc_42.6.params --pmult --drecomb --threads $threads  
 #echo
+$pypef hybrid --ps avGFP_prediction_set.fasta --plm esm --wt P42212_F64L.fasta
+echo
+$pypef hybrid --ps avGFP_prediction_set.fasta --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
 $pypef hybrid -m HYBRIDGREMLIN --params GREMLIN --pmult --drecomb
 echo
 
@@ -509,6 +513,11 @@ echo
 $pypef hybrid directevo -m HYBRIDPLMC -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 echo
 $pypef hybrid directevo -m HYBRIDPLMC -i avGFP.csv -w P42212_F64L.fasta --temp 0.1 --usecsv --csvaa --params uref100_avgfp_jhmmer_119_plmc_42.6.params
+
+$pypef hybrid --ts TS.fasl --plm esm --wt P42212_F64L.fasta
+echo
+$pypef hybrid --ts TS.fasl --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
 
 # 0.4.0 features: hybrid DCA-LLM modeling
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm

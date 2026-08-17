@@ -1144,11 +1144,11 @@ class MainWidget(QWidget):
             filter="FASL file (*.fasl)"
         )[0]
         if test_set_file:
+            wt_fasta_file = QFileDialog.getOpenFileName(
+                self.win2, "Select WT FASTA File",
+                filter="FASTA file (*.fasta *.fa)"
+            )[0]
             if self.llm == 'prosst':
-                wt_fasta_file = QFileDialog.getOpenFileName(
-                    self.win2, "Select WT FASTA File",
-                    filter="FASTA file (*.fasta *.fa)"
-                )[0]
                 pdb_file = QFileDialog.getOpenFileName(
                     self.win2, "Select PDB protein structure File",
                     filter="PDB file (*.pdb)"
@@ -1165,11 +1165,12 @@ class MainWidget(QWidget):
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'hybrid --ts {test_set_file} --plm {self.llm}'
+                self.cmd = f'hybrid --ts {test_set_file} --plm {self.llm}  --wt {wt_fasta_file}'
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
-                    "Provide a PLM option for modeling."
+                    "Provide a PLM option for modeling. Combined PLM option "
+                    "not implemented for zero-shot scoring."
                 )
                 self.end_process()
         else:
@@ -1206,11 +1207,11 @@ class MainWidget(QWidget):
             filter="FASTA file (*.fasta *.fa)"
         )[0]
         if prediction_file:
+            wt_fasta_file = QFileDialog.getOpenFileName(
+                self.win2, "Select WT FASTA File",
+                filter="FASTA file (*.fasta *.fa)"
+            )[0]
             if self.llm == 'prosst':
-                wt_fasta_file = QFileDialog.getOpenFileName(
-                    self.win2, "Select WT FASTA File",
-                    filter="FASTA file (*.fasta *.fa)"
-                )[0]
                 pdb_file = QFileDialog.getOpenFileName(
                     self.win2, "Select PDB protein structure File",
                     filter="PDB file (*.pdb)"
@@ -1227,11 +1228,12 @@ class MainWidget(QWidget):
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'hybrid --ps {prediction_file} --plm {self.llm}'
+                self.cmd = f'hybrid --ps {prediction_file} --plm {self.llm} --wt {wt_fasta_file}'
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
-                    "Provide a PLM option for modeling."
+                    "Provide a PLM option for modeling. Combined PLM option "
+                    "not implemented for zero-shot scoring."
                 )
                 self.end_process()
         else:
