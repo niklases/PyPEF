@@ -243,6 +243,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     temp_results[c][f'Split {s}'] = {}
                     for m in ZERO_SHOT_MODELS + HYBRID_MODELS:
                         temp_results[c][f'Split {s}'][m] = np.nan
+            llm_dict_esm = llm_dict_prosst = llm_dict_ensemble = None
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = CATEGORIES[i_category]
                 print(f'~~~ Category: {category} ~~~')
@@ -263,6 +264,19 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"cannot split the data in N_Train = {train_size} and N_Test "
                               f"(N_Total - N_Train) [Excepted error: {e}].")
                         continue
+                    if llm_dict_esm is not None:
+                        llm_dict_esm = llm_dict_prosst = llm_dict_ensemble = None
+                        gc.collect()
+                        torch.cuda.empty_cache()
+
+                    print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
+                    if len(y_test) <= 50:
+                        print(f"        Only {len(fitnesses)} in total, splitting the data "
+                              f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
+                              f"results in N_Test <= 50 variants - not getting "
+                              f"performance for N_Train = {len(y_train)}...")
+                        continue
+
                     llm_dict_esm = esm_setup(
                             wt_seq=pdb_trimmed_wt, sequences=list(pdb_train_seqs),
                             model=ESM_MODEL,
@@ -273,13 +287,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             seed=42, revision=PROSST_REVISION, device=device, verbose=True
                     )
                     llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
-                    print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
-                    if len(y_test) <= 50:
-                        print(f"        Only {len(fitnesses)} in total, splitting the data "
-                              f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
-                              f"results in N_Test <= 50 variants - not getting "
-                              f"performance for N_Train = {len(y_train)}...")
-                        continue
 
                     y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
                     temp_results[category][f'Split {i_split}'].update({'DCA': spearmanr(y_test, y_test_pred_dca)[0]})
@@ -481,10 +488,7 @@ if __name__ == '__main__':
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
-    clean_out_results_csv = os.path.join(
-        os.path.dirname(__file__),
-        'results/dca_esm_and_hybrid_5cv-split_results_clean.csv'
-    )
+    clean_out_results_csv = os.path.splitext(out_results_csv)[0] + '_clean.csv'
     with open(clean_out_results_csv, 'w') as fh2:
         header = lines[0]
         content = lines[1:]

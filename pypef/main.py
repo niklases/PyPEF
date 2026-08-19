@@ -43,15 +43,29 @@ Modeling options
 
     II. Hybrid modeling
     -------------------
-        Constructing a hybrid model that combines pure statistical DCA-based prediction (a
-        variant's relative 'evolutionary energy' to the wild type) and DCA-encoding based
-        training of a ML model similar to pure ML modeling option I.1.
-        Based on features generated from the direct coupling analysis (.params file output
-        using the plmc framework or provided MSA and running GREMLIN).
-        Individual model contributions are optimization only based on Spearman's correlation
-        coefficient and thus, only variant fitness ranks are to be considered for evaluating
-        model performance, not the exact predicted fitness value. For regression, up to now
-        only L2-regularized linear regression (Ridge regression) is provided as modeling option.
+        A hybrid model blends one or more unsupervised (zero-shot) fitness estimates with a
+        supervised regression model and optimizes a weighted ensemble of these contributions.
+
+        Unsupervised (zero-shot) components can be:
+            - DCA: a variant's relative statistical 'evolutionary energy' to the wild type,
+                   from a plmc .params file or from GREMLIN parameters inferred from an MSA, and/or
+            - PLM: protein language model log-likelihood scores. ESM (--plm esm) and the
+                   structure-aware ProSST (--plm prosst, requires --pdb and --wt) are supported and
+                   can be combined with '+', ',', or whitespace, e.g. --plm esm+prosst.
+
+        The supervised component is a DCA-encoding-based regressor; up to now only
+        L2-regularized linear regression (Ridge regression) is provided. In addition, each PLM
+        contributes a supervised, few-shot-tuned prediction whose tuning strategy is either
+        (i) a lightweight adjustment of the ensemble weights (default),
+        (ii) LoRA-based fine-tuning of the PLM (--lora), or
+        (iii) a Gaussian process (GP) fitted on the PLM embeddings and zero-shot scores
+              (--gauss_opt; --gauss_comb additionally builds one combined GP over the embeddings
+              of all specified PLMs, requiring two PLMs, e.g. --plm esm+prosst).
+
+        Individual model contributions are weighted by optimizing a loss based on Spearman's
+        rank correlation coefficient (and mean squared error, MSE). Consequently, primarily
+        variant fitness ranks - not the exact predicted fitness value - are to be considered
+        for evaluating model performance.
 
 
 Running example of training, testing, and using a pure ML model for prediction
@@ -85,6 +99,11 @@ see pypef -h for possible commands.
 
 For generating DCA parameters using GREMLIN, you have to provide an MSA in FASTA or A2M format:
 pypef param_inference --msa MSA_FILE --wt WT_FASTA [--opt_iter 100]
+
+For DCA+PLM hybrid modeling, additionally provide the PLM(s) via --plm (and a PDB
+structure plus wild-type sequence for ProSST). The supervised PLM contribution can
+optionally be tuned via LoRA (--lora) or a Gaussian process (--gauss_opt/--gauss_comb):
+pypef hybrid --ls LS.fasta --ts TS.fasta --params GREMLIN --wt WT_FASTA --plm esm+prosst --pdb PDB_FILE [--lora] [--gauss_opt] [--gauss_comb]
 
 
 Helpful commands for data conversion
@@ -191,6 +210,9 @@ Options:
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
                                     and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
+  --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
+                                    of all specified PLMs; requires --gauss_opt and two PLMs (e.g.
+                                    'esm+prosst' passed via the --plm flag) [default: False].
   --gauss_opt                       Use a Gaussian process (GP) to optimize the PLM embeddings and
                                     zero-shot scores for supervised hybrid modeling (alternative to
                                     LoRA-based tuning; requires --plm, --pdb, and --wt) [default: False].
@@ -203,11 +225,8 @@ Options:
                                     (line trimming) [default: 0.5].
   --label                           Label the plot instances [default: False].
   -l --ls LEARNING_SET              Input learning set in .fasta format.
-  --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training + 
+  --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training +
                                     testing); float, e.g., 0.8.
-  --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
-                                    of all specified PLMs; requires --gauss_opt and two PLMs (e.g.
-                                    'esm+prosst' passed via the --plm flag) [default: False].
   --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM' and
                                     'ProSST'). Multiple PLMs can be combined via '+', ',', or whitespace,
                                     e.g. --plm esm+prosst for DCA+ESM+ProSST hybrid modeling.

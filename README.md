@@ -34,13 +34,13 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 - PLM embeddings (currently, [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
 
 <p align="center">
-    <img src=".github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
 </p>
 
 When incorporating DCA and PLM features, both models are fine-tuned via few-shot learning on a subset of the training data. Subsequently, a weighted ensemble of the original (unsupervised) and fine-tuned model outputs is constructed. The ensemble weights are optimized using differential evolution, with the objective function based on performance metrics (Spearman rank correlation) evaluated on the held-out validation split of the training set.
 
 <p align="center">
-<img src=".github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
+<img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/splitting_workflow.png" alt="drawing" width="1000"/>
 </p>
 
 <a name="installation"></a>
@@ -75,7 +75,7 @@ pypef-gui-cli  # command for keeping background debug/tqdm progress information 
 ```
 
 <p align="center">
-  <img src=".github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
+  <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/pypef_gui_screenshot.png" alt="drawing" width="1000"/>
 </p>
 
 The detailed routine for setting up a new virtual environment with Anaconda, installing the necessary Python packages for that environment, and running the Jupyter notebook tutorial can be found below in the Tutorial section.
@@ -510,19 +510,19 @@ The performance of the GREMLIN model used is shown in the following for predicti
 Hybrid GREMLIN-PLM low-N-tuned models using [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
 
 <p align="center">
-    <img src=".github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>
 </p>
 <p align="center">
-    <img src=".github/imgs/mut_performance.png" alt="drawing" width="1000"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/mut_performance.png" alt="drawing" width="1000"/>
 </p>
 
 For estimating model performances for different splitting techniques (random, modulo, continuous), a faster-to-compute subset (limited sequence length and number of variant-fitness pairs) of the ProteinGym data was evaluated (example dataset split technique-dependent data distribution and performances on the ProteinGym subset):
 
 <p align="center">
-    <img src=".github/imgs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png" alt="drawing" width="750"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png" alt="drawing" width="750"/>
 </p>
 <p align="center">
-    <img src=".github/imgs/crossval_pgym_violin.png" alt="drawing" width="750"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/crossval_pgym_violin.png" alt="drawing" width="750"/>
 </p>
 
 The official supervised ProteinGym benchmark runs can be performed using scripts provided at [scripts/ProteinGym_runs/official](scripts/ProteinGym_runs/official). However, these benchmark runs are time-consuming, as cross-validation must be performed for each dataset and across all the split methods being evaluated.
@@ -532,7 +532,7 @@ The official supervised ProteinGym benchmark runs can be performed using scripts
 For script-based encoding of sequences using PyPEF and the available AAindex-, OneHot- or DCA-based techniques, the classes and corresponding functions can be imported, i.e. `OneHotEncoding`, `AAIndexEncoding`, `GREMLIN` (DCA),  `PLMC` (DCA), and `DCALLMHybridModel`. In addition, implemented functions for CV-based tuning of regression models can be used to train and validate models, eventually deriving them to obtain performances on retained data for testing. An exemplary script and a Jupyter notebook for CV-based (low-*N*) tuning of models and using them for testing is provided at [scripts/Encoding_low_N/api_encoding_train_test.py](scripts/Encoding_low_N/api_encoding_train_test.py) and [scripts/Encoding_low_N/api_encoding_train_test.ipynb](scripts/Encoding_low_N/api_encoding_train_test.ipynb), respectively.
 
 <p align="center">
-    <img src=".github/imgs/low_N_avGFP_extrapolation.png" alt="drawing" width="500"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/low_N_avGFP_extrapolation.png" alt="drawing" width="500"/>
 </p>
 
 

@@ -83,7 +83,7 @@ pypef mklsts -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
 
-pypef ml -e onehot -l LS.fasl -t TS.fasl --regressor pls
+pypef ml -e onehot -l LS.fasl -t TS.fasl --regressor pls --label
 ExitOnExitCode
 Write-Host
 pypef ml --show
@@ -752,7 +752,7 @@ Write-Host
 #pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb --pmult --drecomb
 #ExitOnExitCode
 #Write-Host
-pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm -p avGFP_prediction_set.fasta
+pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN -p avGFP_prediction_set.fasta
 ExitOnExitCode
 Write-Host
 pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta

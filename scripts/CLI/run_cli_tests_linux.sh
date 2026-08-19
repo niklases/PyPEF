@@ -336,11 +336,11 @@ echo
 # 0.4.0 features: hybrid DCA-LLM modeling
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm
 echo
-$pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --plm esm
+$pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN
 echo
 $pypef mkps -i 37_ANEH_variants.csv --wt Sequence_WT_ANEH.fasta
 echo
-$pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN --plm esm
+$pypef hybrid -m HYBRIDGREMLINESM --ps 37_ANEH_variants_prediction_set.fasta --params GREMLIN
 echo
 $pypef hybrid directevo -m HYBRIDGREMLINESM -w Sequence_WT_ANEH.fasta --negative --params GREMLIN
 echo
@@ -510,6 +510,8 @@ echo
 
 $pypef hybrid directevo -m HYBRIDPLMC -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 echo
+$pypef hybrid directevo -m HYBRIDGREMLIN -w P42212_F64L.fasta --params GREMLIN
+echo
 $pypef hybrid directevo -m HYBRIDPLMC -w P42212_F64L.fasta --numiter 10 --numtraj 8 --params uref100_avgfp_jhmmer_119_plmc_42.6.params
 echo
 $pypef hybrid directevo -m HYBRIDPLMC -i avGFP.csv -w P42212_F64L.fasta --temp 0.1 --usecsv --csvaa --params uref100_avgfp_jhmmer_119_plmc_42.6.params
@@ -520,29 +522,31 @@ $pypef hybrid --ts TS.fasl --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.p
 echo
 
 # 0.4.0 features: hybrid DCA-LLM modeling
+$pypef mklsts -i avGFP.csv -w P42212_F64L.fasta --ls_proportion 0.02
+echo
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm
 echo
-$pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN --plm esm
+$pypef hybrid -m HYBRIDGREMLINESM --ts TS.fasl --params GREMLIN
 echo
 
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
 echo
-$pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
+$pypef hybrid -m HYBRIDGREMLINPROSST --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta  --pdb GFP_AEQVI.pdb
 echo
 
-$pypef hybrid directevo -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm
+$pypef hybrid directevo -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN
 echo
-$pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb
+$pypef hybrid directevo -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb
 echo
 
 # Takes long.. better delete 7 out of the 8 recomb txt files
-#$pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm --pmult --drecomb
+#$pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --pmult --drecomb
 #echo
-#$pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb --pmult --drecomb
+#$pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb --pmult --drecomb
 #echo
-$pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN --plm esm -p avGFP_prediction_set.fasta
+$pypef hybrid -m HYBRIDGREMLINESM -w P42212_F64L.fasta --params GREMLIN -p avGFP_prediction_set.fasta
 echo
-$pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --plm prosst --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
+$pypef hybrid -m HYBRIDGREMLINPROSST -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb -p avGFP_prediction_set.fasta
 echo
 
 # 0.5.0 features: multi-PLM (DCA+ESM+ProSST), LoRA fine-tuning, and Gaussian-process (GP) optimization.
@@ -553,9 +557,9 @@ echo
 # Multiple PLMs can be combined via '+' (also ',' or whitespace): DCA + ESM + ProSST hybrid model
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
 echo
-$pypef hybrid -m HYBRIDGREMLINESMPROSST --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+$pypef hybrid -m HYBRIDGREMLINESMPROSST --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
 echo
-$pypef hybrid -m HYBRIDGREMLINESMPROSST --ps avGFP_prediction_set.fasta --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+$pypef hybrid -m HYBRIDGREMLINESMPROSST --ps avGFP_prediction_set.fasta --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
 echo
 # LoRA-based supervised PLM fine-tuning (--lora)
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --lora
