@@ -138,6 +138,15 @@ class DCALLMHybridModel:
         self.device = device
         logger.info(f'Using device {device.upper()} for hybrid modeling...')
         self.seed = seed
+        # Seed all RNGs when a seed is given so that the PLM-based paths are
+        # reproducible too: LoRA fine-tuning (torch) and Gaussian-process
+        # optimization (torch/gpytorch) otherwise draw from the global torch RNG,
+        # which the per-call `random_state=self.seed` (split/DE) does not cover.
+        if self.seed is not None:
+            torch.manual_seed(self.seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.seed)
+            np.random.seed(self.seed)
         self.n_ensemble_splits = n_ensemble_splits
         if batch_size is None:
             batch_size = 5
@@ -662,21 +671,22 @@ class DCALLMHybridModel:
                       'graph that requires quite some memory - if you are facing an (out of memory) '
                       'error, try reducing the batch size or sticking to CPU device...')
                 training_fn(
-                    x_sequences=x_tok_llm_ttrain, 
+                    x_sequences=x_tok_llm_ttrain,
                     scores=self.y_ttrain,
                     loss_fn=loss_fn,
                     model=lora_model,
-                    optimizer=optimizer, 
+                    optimizer=optimizer,
                     wt_input_ids=wt_input_ids,
                     attention_mask=attention_mask,
                     n_epochs=self.n_epochs,
                     device=self.device,
                     verbose=self.verbose,
                     raise_error_on_train_fail=False,
-                    progress_cb=self.progress_cb, 
+                    progress_cb=self.progress_cb,
                     abort_cb=self.abort_cb,
                     wt_structure_input_ids=wt_struct_ids,
                     batch_size=self.batch_size,
+                    seed=self.seed,
                 )
                 y_llm_lora_ttrain = inference_fn(
                     tokenized_sequences=x_tok_llm_ttrain,
@@ -1395,11 +1405,11 @@ def get_model_and_type(
             current_llm = model.llm_data[llm_name]
             if llm_name == 'ESM':
                 logger.info("Found hybrid model with ESM PLM model...")
-                base_model, lora_model, _tokenizer, _optimizer = get_esm_models()
+                base_model, lora_model, tokenizer, _optimizer = get_esm_models()
                 model_type += '_ESM'
             elif llm_name == 'PROSST':
                 logger.info("Found hybrid model with ProSST PLM model...")
-                base_model, lora_model, _tokenizer, _optimizer = get_prosst_models()
+                base_model, lora_model, tokenizer, _optimizer = get_prosst_models()
                 model_type += '_ProSST'
             else:
                 logger.info(f"Found hybrid model with unknown PLM model {llm_name}...")
@@ -1410,6 +1420,7 @@ def get_model_and_type(
             lora_model.eval()
             current_llm['llm_base_model'] = base_model
             current_llm['llm_model'] = lora_model
+            current_llm['llm_tokenizer'] = tokenizer
 
     return model, model_type
 
@@ -1663,6 +1674,7 @@ def performance_ls_ts(
         lora_train: bool = False,
         gauss_opt: bool = False,
         gauss_comb: bool = False,
+        seed: int | None = None,
         device: str| None = None,
         progress_cb=None,
         abort_cb=None
@@ -1720,6 +1732,7 @@ def performance_ls_ts(
             lora_train=lora_train,
             gauss_opt=gauss_opt,
             gauss_comb_plm_emb=gauss_comb,
+            seed=seed,
             device=device,
             progress_cb=progress_cb,
             abort_cb=abort_cb
@@ -1795,8 +1808,11 @@ def performance_ls_ts(
             save_model_to_dict_pickle(model, model_type)
             model_type = f'{model_type}_no_ML'
         else:
-            model_type = 'PLM'   
-            if llm == 'esm':
+            model_type = 'PLM'
+            # Zero-shot supports a single PLM
+            plm_names = parse_llm_flag(llm)
+            plm_name = plm_names[0] if plm_names else None
+            if plm_name is not None and plm_name.startswith('esm'):
                 logger.info("Zero-shot PLM inference using ESM...")
                 plm_dict = esm_setup(wt_seq, test_sequences)
                 y_test_pred = plm_inference(
@@ -1805,7 +1821,7 @@ def performance_ls_ts(
                     attention_mask=plm_dict['esm']['llm_attention_mask'],
                     model=plm_dict['esm']['llm_base_model']
                 ).cpu()
-            elif llm == 'prosst':
+            elif plm_name == 'prosst':
                 logger.info("Zero-shot PLM inference using ProSST...")
                 plm_dict = prosst_setup(wt_seq, pdb_file, test_sequences)
                 y_test_pred = plm_inference(
@@ -1816,7 +1832,9 @@ def performance_ls_ts(
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
                 ).cpu()
             else:
-                raise RuntimeError("Unknown --plm flag option.")
+                raise RuntimeError(
+                    f"Unknown or unset --plm option: '{llm}'. Expected 'esm' or 'prosst'."
+                )
     else:
         raise RuntimeError('No test set given for performance estimation.')
     if llm is None or llm == '':
@@ -1872,11 +1890,18 @@ def predict_ps(
         'Diverse_Quadruple_Split'
     ]
 
-    # Pre-setup tokenizers for Hybrid model predictions if required
+    # Pre-setup tokenizers for Hybrid model predictions if required.
+    # Reuse the tokenizers restored while loading the model (see get_model_and_type);
+    # do NOT call setup_llm_input here — it reloads the PLMs and, being handed
+    # sequences=None at this point, would fail during tokenization. It also expects
+    # lower-case PLM names while model.llm_keys are upper-case ('ESM'/'PROSST').
     llm_dict = None
     if dca_modeling and model_type.startswith('Hybrid') and model.llm_keys:
-        logger.info(f"Setting up PLM tokenizer(s) for hybrid prediction: {', '.join(model.llm_keys)}...")
-        llm_dict = setup_llm_input(model.llm_keys, None, wt_seq, pdb_file)
+        logger.info(f"Using PLM tokenizer(s) from the loaded hybrid model: {', '.join(model.llm_keys)}...")
+        llm_dict = {
+            llm_name: {'llm_tokenizer': model.llm_data[llm_name]['llm_tokenizer']}
+            for llm_name in model.llm_keys
+        }
 
     # --- Mode 1: Multi-file directory prediction sets ---
     if True in prediction_dict.values():
@@ -1894,10 +1919,12 @@ def predict_ps(
                 sequences, variants, _ = get_sequences_from_file(file_path)
 
                 if not dca_modeling:  # Zero-shot PLM inference
-                    if not llm:
-                        raise ValueError("No model or parameters provided. Specify --llm for zero-shot PLM inference.")
-                    model_type = f'PLM_{llm.upper()}'
-                    if llm == 'esm':
+                    plm_names = parse_llm_flag(llm)
+                    plm_name = plm_names[0] if plm_names else None
+                    if plm_name is None:
+                        raise ValueError("No model or parameters provided. Specify --plm for zero-shot PLM inference.")
+                    model_type = f'PLM_{plm_name.upper()}'
+                    if plm_name.startswith('esm'):
                         logger.info("Zero-shot PLM inference using ESM...")
                         plm_dict = esm_setup(wt_seq, sequences)
                         ys_pred = plm_inference(
@@ -1906,7 +1933,7 @@ def predict_ps(
                             attention_mask=plm_dict['esm']['llm_attention_mask'],
                             model=plm_dict['esm']['llm_base_model']
                         ).cpu()
-                    elif llm == 'prosst':
+                    elif plm_name == 'prosst':
                         logger.info("Zero-shot PLM inference using ProSST...")
                         plm_dict = prosst_setup(wt_seq, pdb_file, sequences)
                         ys_pred = plm_inference(
@@ -1917,11 +1944,11 @@ def predict_ps(
                             wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
                         ).cpu()
                     else:
-                        raise RuntimeError(f"Unknown --llm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
+                        raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
                 else:
                     if not model_type.startswith('Hybrid'):  # Statistical DCA
                         x_test, _, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
-                            variants, sequences, None, model, threads=threads, verbose=False,
+                            variants, sequences, None, params_file, threads=threads, verbose=False,
                             substitution_sep=separator
                         )
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
@@ -1960,10 +1987,12 @@ def predict_ps(
         sequences, variants, _ = get_sequences_from_file(prediction_set)
 
         if not dca_modeling:  # Zero-shot PLM inference
-            if not llm:
-                raise ValueError("No model or parameters provided. Specify --llm for zero-shot PLM inference.")
-            model_type = f'PLM_{llm.upper()}'
-            if llm == 'esm':
+            plm_names = parse_llm_flag(llm)
+            plm_name = plm_names[0] if plm_names else None
+            if plm_name is None:
+                raise ValueError("No model or parameters provided. Specify --plm for zero-shot PLM inference.")
+            model_type = f'PLM_{plm_name.upper()}'
+            if plm_name.startswith('esm'):
                 logger.info("Zero-shot PLM inference using ESM...")
                 plm_dict = esm_setup(wt_seq, sequences)
                 ys_pred = plm_inference(
@@ -1972,7 +2001,7 @@ def predict_ps(
                     wt_input_ids=plm_dict['esm']['wt_input_ids'],
                     model=plm_dict['esm']['llm_base_model']
                 ).cpu()
-            elif llm == 'prosst':
+            elif plm_name == 'prosst':
                 logger.info("Zero-shot PLM inference using ProSST...")
                 plm_dict = prosst_setup(wt_seq, pdb_file, sequences)
                 ys_pred = plm_inference(
@@ -1983,7 +2012,7 @@ def predict_ps(
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
                 ).cpu()
             else:
-                raise RuntimeError(f"Unknown --llm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
+                raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
         else:
             if not model_type.startswith('Hybrid'):  # Statistical DCA
                 xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(

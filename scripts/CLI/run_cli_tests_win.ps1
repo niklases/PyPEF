@@ -417,6 +417,19 @@ pypef hybrid -m HYBRIDGREMLIN -t TS.fasl --params GREMLIN
 ExitOnExitCode
 Write-Host
 
+### Reproducibility check: with a fixed --seed, hybrid training (train/validation
+### split + differential-evolution beta optimization) must give identical results.
+### Without a seed (default) results vary run to run, so we do NOT assert a value there.
+$seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+$seedPerf2 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+Write-Host "Seeded hybrid reproducibility: run1=$seedPerf1 run2=$seedPerf2" -ForegroundColor Blue
+if (-not $seedPerf1 -or ($seedPerf1 -ne $seedPerf2)) {
+    Write-Host "Reproducibility FAILED: seeded (--seed 42) hybrid runs differ ($seedPerf1 != $seedPerf2)" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Reproducibility OK: seeded (--seed 42) hybrid runs are identical ($seedPerf1)." -ForegroundColor Green
+Write-Host
+
 pypef mkps -i 37_ANEH_variants.csv -w Sequence_WT_ANEH.fasta
 ExitOnExitCode
 Write-Host
@@ -792,6 +805,20 @@ Write-Host
 # Combined multi-PLM GP over both PLM embeddings (--gauss_comb, requires --gauss_opt and two PLMs)
 pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --gauss_comb
 ExitOnExitCode
+Write-Host
+
+### Reproducibility check INCLUDING a PLM (and GP training): with a fixed --seed the
+### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)
+### must be identical run to run. Without --seed these vary (torch/GP RNG), so we only
+### assert reproducibility with a seed, not a specific value (results are hardware/version dependent).
+$plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+$plmPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+Write-Host "Seeded PLM+GP hybrid reproducibility: run1=$plmPerf1 run2=$plmPerf2" -ForegroundColor Blue
+if (-not $plmPerf1 -or ($plmPerf1 -ne $plmPerf2)) {
+    Write-Host "Reproducibility FAILED: seeded (--seed 42) PLM+GP hybrid runs differ ($plmPerf1 != $plmPerf2)" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Reproducibility OK: seeded (--seed 42) PLM+GP hybrid runs are identical ($plmPerf1)." -ForegroundColor Green
 Write-Host
 
 pypef hybrid low_n -i avGFP_dca_encoded.csv

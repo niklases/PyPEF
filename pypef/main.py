@@ -163,7 +163,7 @@ Usage:
         [--lora] [--gauss_opt] [--gauss_comb]
         [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                           [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
-        [--threads THREADS]
+        [--threads THREADS] [--seed SEED]
     pypef hybrid directevo --wt WT_FASTA --params PARAM_FILE
         [--model MODEL] [--plm PLM] [--llm LLM] [--pdb PDB_FILE]
         [--input CSV_FILE] [--numiter NUM_ITER]
@@ -269,6 +269,9 @@ Options:
                                     LassoLars CV R.: lassolars (or l1) [default: pls].
   --rnd_splits RND_SPLITS           Number of random splits for Low N testing [default: 5].
   -s --save NUMBER                  Number of models to be saved as pickle files [default: 5].
+  --seed SEED                       Random seed for reproducible hybrid modeling (train/validation
+                                    split for beta adjustment and the differential-evolution ensemble
+                                    weight optimization). If unset, results vary run to run.
   --sep CSV_COLUMN_SEPARATOR        CSV Column separator [default: ;].
   --show                            Show achieved model performances from Model_Results.txt.
   --sort METRIC_INT                 Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE,
@@ -393,6 +396,7 @@ schema = Schema({
     Optional('--rnd_splits'): Use(int),
     Optional('--rnd_state'): Use(int),
     Optional('--save'): Use(int),
+    Optional('--seed'): Or(None, Use(int)),
     Optional('--sep'): Or(None, str),
     Optional('--show'): Use(int),
     Optional('--sort'): Use(int),

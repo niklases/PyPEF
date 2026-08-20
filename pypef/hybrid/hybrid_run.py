@@ -56,6 +56,7 @@ def run_pypef_hybrid_modeling(arguments, progress_cb=None, abort_cb=None):
             lora_train=arguments['--lora'],
             gauss_opt=arguments['--gauss_opt'],
             gauss_comb=arguments['--gauss_comb'],
+            seed=arguments['--seed'],
             progress_cb=progress_cb,
             abort_cb=abort_cb
         )
