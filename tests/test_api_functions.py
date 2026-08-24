@@ -74,7 +74,8 @@ if LOGGING:
     package_logger.addHandler(handler)
 
 
-device = ["cpu", get_device()][1]
+device = ["cpu", get_device()][1]  # Set device to be used
+
 py_ver = sys.version_info
 print(f"Python version: {py_ver[0:3]}")
 print(f"Torch version: {torch.__version__}")
@@ -531,7 +532,8 @@ def test_hybrid_model_dca_llm_avgfp(
         prosst_base_model.cls.predictions.decoder.weight,
     ), "ProSST decoder head is not weight-matched to embeddings — zero-shot scoring would be random!"
     wt_input_ids, prosst_attention_mask, wt_structure_input_ids = get_structure_quantizied(
-        pdb_file, prosst_tokenizer, wt_seq, device=device)
+        pdb_file, prosst_tokenizer, wt_seq, device=device
+    )
     
     assert wt_structure_input_ids.shape[1] == wt_input_ids.shape[1], (
         f"{wt_structure_input_ids.shape[1]} != {wt_input_ids.shape[1]}"
@@ -641,6 +643,7 @@ def test_hybrid_model_dca_llm_avgfp(
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
         print('hm.y_gp_opt_ttest:', spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], len(hm.y_ttest))
+        print('hm.all_betas:', str(hm.all_betas).replace('\n', ''))
         print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], 0.5948787474579608, 
@@ -656,36 +659,43 @@ def test_hybrid_model_dca_llm_avgfp(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6755242614419105
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6719074588353634  # Same on different devices?
             )
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.27268592420896115
-            #)
-            #np.testing.assert_almost_equal(
-            #    spearmanr(y_test, y_pred_test)[0], 0.702055387846174
-            #)
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.2755330082438609,  # Same on different devices?
+                decimal=2
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.7037790861192881,  # Same on different devices?
+                decimal=2
+            )
             
         elif i == 1:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218
             )
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7500338938575585
-            #)
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6563512715663337
-            #)
-            #np.testing.assert_almost_equal(
-            #    spearmanr(y_test, y_pred_test)[0], 0.7450105938162113
-            #)
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,  # Same on different devices?
+                decimal=2
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6573659005925958,  # Same on different devices?
+                decimal=2
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.7671332945830911,  # Same on different devices?
+                decimal=2
+            )
         
-        #elif i == 2:
-        #    np.testing.assert_almost_equal(
-        #        spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7145349981413047
-        #    )
-        #    np.testing.assert_almost_equal(
-        #        spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
-        #    )
+        elif i == 2:
+            np.testing.assert_almost_equal(
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,  # Same on different devices?
+                decimal=2
+            )
+            np.testing.assert_almost_equal(
+                spearmanr(y_test, y_pred_test)[0], 0.765466784167401,  # Same on different devices?
+                decimal=2
+            )
 
 
 def test_dataset_b_results():

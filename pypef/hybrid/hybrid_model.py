@@ -587,18 +587,13 @@ class DCALLMHybridModel:
         set when splitting the training set.
         Machine learning/adjusting the parameters 'beta_1' and 'beta_2' not 
         possible -> return parameter setting for 'EVmutation/GREMLIN' model.
-        """
-        #return 1.0, 0.0, 1.0, 0.0, None
-        """
+
         The sub-training set 'y_ttrain' is subjected to a five-fold cross 
         validation. This leads to the constraint that at least two sequences
         need to be in the 20 % of that set in order to allow a ranking. 
         If this is not given -> return parameter setting for 'EVmutation/GREMLIN' model.
         """
-        # int(0.2 * len(y_ttrain)) due to 5-fold-CV for adjusting the (Ridge) regressor
-        #y_ttrain_min_cv = int(0.2 * len(y_ttrain))
-        #if y_ttrain_min_cv < 5:
-        #    return 1.0, 0.0, 1.0, 0.0, None
+
 
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
@@ -723,12 +718,14 @@ class DCALLMHybridModel:
             if self.gauss_opt:
                 embs_ttrain = get_plm_embeddings(
                     x_tok_llm_ttrain, base_model, wt_input_ids, 
-                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids
+                    attention_mask, mode="mean", wt_structure_input_ids=wt_struct_ids,
+                    device=self.device
                 )
 
                 embs_ttest = get_plm_embeddings(
                     x_tok_llm_ttest, base_model, wt_input_ids, attention_mask, 
-                    mode="mean", wt_structure_input_ids=wt_struct_ids
+                    mode="mean", wt_structure_input_ids=wt_struct_ids,
+                    device=self.device
                 )
 
                 aa_cond_probs = plm_inference(
@@ -739,7 +736,8 @@ class DCALLMHybridModel:
                     extract_probs=True, 
                     wt_structure_input_ids=wt_struct_ids,
                     extract_conditional_aa_prob=True,
-                    tokenizer=tokenizer
+                    tokenizer=tokenizer,
+                    device=self.device
                 )
 
                 self.embs_ttrain[llm_name] = embs_ttrain
@@ -946,7 +944,8 @@ class DCALLMHybridModel:
                         current_llm['wt_input_ids'], 
                         x_attention_mask, 
                         mode="mean", 
-                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
+                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids'),
+                        device=self.device
                     )
                     embs_pred[llm_name] = llm_embs_pred
                     zs_scores_pred[llm_name] = y_base_ttest
@@ -1179,7 +1178,8 @@ class DCALLMHybridModel:
                         current_llm['wt_input_ids'], 
                         current_llm['llm_attention_mask'], 
                         mode="mean", 
-                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids')
+                        wt_structure_input_ids=current_llm.get('wt_structure_input_ids'),
+                        device=self.device
                     )
                     self.embs_pred[llm_name] = llm_embs_pred
                     self.zs_scores_pred[llm_name] = y_base
@@ -1675,10 +1675,12 @@ def performance_ls_ts(
         gauss_opt: bool = False,
         gauss_comb: bool = False,
         seed: int | None = None,
-        device: str| None = None,
+        device: str | None = None,
         progress_cb=None,
         abort_cb=None
 ):
+    if device is None:
+        device = get_device()
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
     if ls_fasta is not None and ts_fasta is not None:
@@ -1819,7 +1821,8 @@ def performance_ls_ts(
                     tokenized_sequences=plm_dict['esm']['x_llm'],
                     wt_input_ids=plm_dict['esm']['wt_input_ids'],
                     attention_mask=plm_dict['esm']['llm_attention_mask'],
-                    model=plm_dict['esm']['llm_base_model']
+                    model=plm_dict['esm']['llm_base_model'],
+                    device=device
                 ).cpu()
             elif plm_name == 'prosst':
                 logger.info("Zero-shot PLM inference using ProSST...")
@@ -1829,7 +1832,8 @@ def performance_ls_ts(
                     wt_input_ids=plm_dict['prosst']['wt_input_ids'],
                     attention_mask=plm_dict['prosst']['llm_attention_mask'],
                     model=plm_dict['prosst']['llm_base_model'],
-                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
+                    device=device
                 ).cpu()
             else:
                 raise RuntimeError(
@@ -1861,12 +1865,15 @@ def predict_ps(
     llm: str | None = None,
     pdb_file: str | None = None,
     wt_seq: str | None = None,
-    negative: bool = False
+    negative: bool = False,
+    device: str | None = None
 ):
     """
     Predicting the fitness of sequences of a prediction set or multiple prediction 
     sets (e.g. created with 'pypef mkps') using DCA, Hybrid, or PLM Zero-Shot models.
     """
+    if device is None:
+        device = get_device()
     dca_modeling = False
     if model_pickle_file is None and params_file is not None:
         model_pickle_file = params_file
@@ -1931,7 +1938,8 @@ def predict_ps(
                             tokenized_sequences=plm_dict['esm']['x_llm'],
                             wt_input_ids=plm_dict['esm']['wt_input_ids'],
                             attention_mask=plm_dict['esm']['llm_attention_mask'],
-                            model=plm_dict['esm']['llm_base_model']
+                            model=plm_dict['esm']['llm_base_model'],
+                            device=device
                         ).cpu()
                     elif plm_name == 'prosst':
                         logger.info("Zero-shot PLM inference using ProSST...")
@@ -1941,7 +1949,8 @@ def predict_ps(
                             wt_input_ids=plm_dict['prosst']['wt_input_ids'],
                             attention_mask=plm_dict['prosst']['llm_attention_mask'],
                             model=plm_dict['prosst']['llm_base_model'],
-                            wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                            wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
+                            device=device
                         ).cpu()
                     else:
                         raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
@@ -2009,7 +2018,8 @@ def predict_ps(
                     attention_mask=plm_dict['prosst']['llm_attention_mask'],
                     wt_input_ids=plm_dict['prosst']['wt_input_ids'],
                     model=plm_dict['prosst']['llm_base_model'],
-                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids']
+                    wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
+                    device=device
                 ).cpu()
             else:
                 raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
@@ -2047,6 +2057,7 @@ def predict_ps(
             model=model_type,
             prediction_set=f'Top{prediction_set}'
         )
+
 
 global_hybrid_model = None
 global_hybrid_model_type = None

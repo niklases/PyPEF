@@ -55,7 +55,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     # PLM embeddings.
     LORA_TRAIN = False
     MAX_WT_SEQUENCE_LENGTH = 1000
-    MAX_N_VARIANTS = 1E9
+    MAX_N_VARIANTS = 100000
     seed = 42
     device = get_device()
 
@@ -100,22 +100,32 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print(f'RAM used: {round(psutil.virtual_memory()[3]/1E9, 3)} '
                   f'GB ({psutil.virtual_memory()[2]} %)')
             variant_fitness_data = pd.read_csv(csv_path, sep=',')
-            print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
-            if np.shape(variant_fitness_data)[0] > MAX_N_VARIANTS:
-                print(f'More than {MAX_N_VARIANTS} variant-fitness pairs which represents a '
-                      f'potential out-of-memory risk, skipping dataset...')
-                continue
             variants = variant_fitness_data['mutant'].to_numpy()
             variants_orig = variants
             fitnesses = variant_fitness_data['DMS_score'].to_numpy()
-            if len(fitnesses) <= 50:
-                print('Number of available variants <= 50, skipping dataset...')
-                continue
             variants_split = []
             for variant in variants:
                 # Split double and higher substituted variants to multiple single substitutions
                 # e.g. separated by ':' or '/'
                 variants_split.append(variant.split(mut_sep))
+            n_muts = []
+            for variant in variants_split:
+                n_muts.append(len(variant))
+            max_muts = max(n_muts)
+            print('N_variant-fitness-tuples:', np.shape(variant_fitness_data)[0])
+            if np.shape(variant_fitness_data)[0] > MAX_N_VARIANTS:
+                print(f'More than {MAX_N_VARIANTS} variant-fitness pairs which takes too '
+                      f'long to compute, skipping dataset...')
+                with open(out_results_csv, 'a') as fh:
+                    fh.write(
+                        f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                        f'{max_muts},More than {MAX_N_VARIANTS} variant-fitness pairs\n'
+                    )
+                continue
+            if len(fitnesses) <= 50:
+                print('Number of available variants <= 50, skipping dataset...')
+                continue
+
             variants, fitnesses, sequences = get_seqs_from_var_name(
                 wt_seq, variants_split, fitnesses, shift_pos=msa_start - 1)
             # Only model sequences with length of max. 800 amino acids to avoid out of memory errors
@@ -123,10 +133,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             for s in sequences:
                 assert len(s) == len(wt_seq)
             count_gap_variants = 0
-            n_muts = []
-            for variant in variants_split:
-                n_muts.append(len(variant))
-            max_muts = max(n_muts)
             print(f'N max. (multiple) amino acid substitutions: {max_muts}')
             if len(wt_seq) > MAX_WT_SEQUENCE_LENGTH:
                 print(f'Sequence length over {MAX_WT_SEQUENCE_LENGTH}, which represents '
