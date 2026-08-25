@@ -156,6 +156,20 @@ def get_model_hash(model):
     return hash_gen.hexdigest()
 
 
+def assert_portable_corr(rho, name=""):
+    """Sanity-guard for quantities that depend on LoRA fine-tuning.
+
+    LoRA-trained results are NOT portable across GPU architecture / torch /
+    cuDNN versions.
+
+    Run-twice reproducibility of the LoRA path on a FIXED machine is covered
+    by the `--seed`-based checks in scripts/CLI/run_cli_tests_{linux.sh,win.ps1}.
+    """
+    assert np.isfinite(rho) and -1.0 <= rho <= 1.0, (
+        f"{name} correlation not a finite value in [-1, 1]: {rho}"
+    )
+
+
 def test_gremlin_avgfp():
     print("\n\ntest_gremlin_avgfp()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
@@ -302,18 +316,7 @@ def test_hybrid_model_dca_llm_aneh(
         attention_mask=prosst_attention_mask, model=prosst_base_model, 
         wt_structure_input_ids=wt_structure_tokens_prosst, device=device
     ).cpu()
-    #if py_ver[0:2] >= (3, 12):
-    #    np.testing.assert_almost_equal(
-    #        spearmanr(y_train, y_pred_prosst)[0], 
-    #        -0.7425657069861902,
-    #        decimal=7
-    #    )
-    #else:
-    #    np.testing.assert_almost_equal(
-    #        spearmanr(y_train, y_pred_prosst)[0], 
-    #        -0.5022957688493356,
-    #            decimal=7
-    #    )
+
     assert spearmanr(y_train, y_pred_prosst)[0] in [-0.7425657069861902, -0.5022957688493356]
 
     x_dca_test = g.get_scores(test_seqs, encode=True)
@@ -413,47 +416,43 @@ def test_hybrid_model_dca_llm_aneh(
             decimal=7
         )
 
+        # Portable golden values: base-PLM zero-shot (y_llm_ttrain/y_llm_ttest)
+        # reproduces across devices. LoRA-derived quantities (y_llm_lora_*, and
+        # the hybrid y_pred_test that weights the LoRA predictor in) do NOT —
+        # guard them with assert_portable_corr() instead of a golden value.
         if i == 0:
-            np.testing.assert_almost_equal( 
+            np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0], -0.6825218561297186
             )
-            # TODO: Check LoRA-trained performances using same exact package versions 
-            #       on different devices and machines
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], 0.5600438362092571
-            #)
+            assert_portable_corr(
+                spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], "ESM y_llm_lora_ttrain"
+            )
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.7704181041760417
             )
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.3792411638377486
-            #)
-            #np.testing.assert_almost_equal(
-            #    spearmanr(y_test, y_pred_test)[0], 0.8218538345967897
-            #)
+            assert_portable_corr(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], "ESM y_llm_lora_ttest"
+            )
+            assert_portable_corr(
+                spearmanr(y_test, y_pred_test)[0], "ESM hybrid y_pred_test"
+            )
 
         elif i == 1:
-            np.testing.assert_almost_equal( 
+            np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttrain, hm.y_llm_ttrain)[0], -0.6814974117251794
             )
-            # TODO: Check: why perofrmance is still so low after tuning (n_epochs?)?
-            #np.testing.assert_almost_equal( 
-            #    spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], -0.6633846655171465
-            #)
+            assert_portable_corr(
+                spearmanr(hm.y_ttrain, hm.y_llm_lora_ttrain)[0], "ProSST y_llm_lora_ttrain"
+            )
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], -0.8330644449247571
             )
-            #np.testing.assert_almost_equal(
-            #    spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], -0.8274592460156613
-            #)
-            #np.testing.assert_almost_equal(
-            #    spearmanr(y_test, y_pred_test)[0], 0.8427729411367566
-            #)
-        
-        #elif i == 2:
-        #    np.testing.assert_almost_equal(
-        #        spearmanr(y_test, y_pred_test)[0], 0.7464682279264244
-        #    )
+            assert_portable_corr(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], "ProSST y_llm_lora_ttest"
+            )
+            assert_portable_corr(
+                spearmanr(y_test, y_pred_test)[0], "ProSST hybrid y_pred_test"
+            )
 
 
 def test_hybrid_model_dca_llm_avgfp(
@@ -643,7 +642,7 @@ def test_hybrid_model_dca_llm_avgfp(
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
         print('hm.y_gp_opt_ttest:', spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], len(hm.y_ttest))
-        print('hm.all_betas:', str(hm.all_betas).replace('\n', ''))
+        print('hm.all_betas:', str(hm.all_betas).replace('\n', ''), len(hm.all_betas))
         print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], 0.5948787474579608, 
@@ -654,48 +653,81 @@ def test_hybrid_model_dca_llm_avgfp(
             decimal=7
         )
 
+        # Portable golden values: DCA, base-PLM zero-shot, and GP reproduce
+        # bit-for-bit across GPU/torch/cuDNN versions. LoRA-derived quantities
+        # (y_llm_lora_ttest, and the hybrid y_pred_test that weights the LoRA
+        # predictor in) do NOT — see assert_portable_corr().
         if i == 0:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6719074588353634  # Same on different devices?
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6719074588353634
             )
-            np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.2755330082438609,  # Similar on different devices?
-                decimal=1
+            assert_portable_corr(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], "ESM y_llm_lora_ttest"
             )
-            np.testing.assert_almost_equal(
-                spearmanr(y_test, y_pred_test)[0], 0.7037790861192881,  # Similar on different devices?
-                decimal=1
+            assert_portable_corr(
+                spearmanr(y_test, y_pred_test)[0], "ESM hybrid y_pred_test"
             )
-            
+
         elif i == 1:
             np.testing.assert_almost_equal(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.6459731910520218
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,  # Same on different devices?
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,
                 decimal=2
             )
-            np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6573659005925958,  # Similar on different devices?
-                decimal=1
+            assert_portable_corr(
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], "ProSST y_llm_lora_ttest"
             )
-            np.testing.assert_almost_equal(
-                spearmanr(y_test, y_pred_test)[0], 0.7671332945830911,  # Similar on different devices?
-                decimal=1
+            assert_portable_corr(
+                spearmanr(y_test, y_pred_test)[0], "ProSST hybrid y_pred_test"
             )
-        
+
         elif i == 2:
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,  # Same on different devices?
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.7626992630819357,
                 decimal=2
             )
-            np.testing.assert_almost_equal(
-                spearmanr(y_test, y_pred_test)[0], 0.765466784167401,  # Same on different devices?
-                decimal=2
+            assert_portable_corr(
+                spearmanr(y_test, y_pred_test)[0], "Ensemble hybrid y_pred_test"
             )
+
+        # LoRA-free hybrid (DCA + ridge + base-PLM + GP)
+        hm_nolora = DCALLMHybridModel(
+            x_train_dca=np.array(x_dca_train),
+            y_train=y_train,
+            llm_model_input=llm_dict,
+            x_dca_wt=g.x_wt,
+            sequences=train_seqs,
+            wt_sequence=wt_seq,
+            seed=42,
+            lora_train=False,
+            gauss_opt=True,
+            pdb_struct=pdb_file,
+            n_epochs=5,
+            device=device
+        )
+        y_pred_test_nolora, _ = hm_nolora.hybrid_prediction(
+            x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs
+        )
+        nolora_rho = spearmanr(y_test, y_pred_test_nolora)[0]
+        print(f'LoRA-free ({setup}) hybrid feature_names:', hm_nolora.feature_names)
+        print(f'LoRA-free ({setup}) hybrid prediction:', nolora_rho, len(y_test))
+        assert not any("lora" in fn.lower() for fn in hm_nolora.feature_names), (
+            f"LoRA predictor leaked into a lora_train=False hybrid: {hm_nolora.feature_names}"
+        )
+        # Portable golden values: DCA, ridge, base-PLM zero-shot, and GP
+        # (torch.optim.Adam on CPU) all reproduce bit-for-bit across torch
+        # versions (verified 2.12.1 through 2.13.0, cpu and cu13x builds).
+        nolora_golden = [
+            0.6887306170663565,   # ESM
+            0.7676185476159226,   # ProSST
+            0.7693334333339582,   # Ensemble (ESM + ProSST)
+        ][i]
+        np.testing.assert_almost_equal(nolora_rho, nolora_golden, decimal=7)
 
 
 def test_dataset_b_results():

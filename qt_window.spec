@@ -54,11 +54,25 @@ for _pkg in _collect_all_pkgs:
 
 # Packages that call importlib.metadata.version(...) at runtime. Without their
 # dist-info metadata the frozen app raises PackageNotFoundError on startup.
+# For the big frameworks we copy metadata *recursively* to avoid PackageNotFoundError 
+# that only surfaces on another machine / fresh install.
+_metadata_recursive_pkgs = [
+    'torch', 'transformers', 'peft', 'huggingface_hub',
+    'gpytorch', 'scikit-learn', 'tokenizers', 'numpy',
+]
+for _pkg in _metadata_recursive_pkgs:
+    try:
+        datas += copy_metadata(_pkg, recursive=True)
+    except TypeError:
+        datas += copy_metadata(_pkg)  # older PyInstaller without recursive=
+    except Exception:
+        pass  # optional / not installed under that dist name
+
+# A few leaf dists that may be imported indirectly and are not always reachable
+# from the recursive roots above.
 _metadata_pkgs = [
-    'torch', 'transformers', 'peft', 'huggingface_hub', 'tqdm', 'numpy',
-    'safetensors', 'regex', 'requests', 'packaging', 'filelock', 'pyyaml',
-    'gpytorch', 'scikit-learn', 'tokenizers', 'docopt-ng', 'nvidia-ml-py',
-    'sympy', 'networkx',
+    'tqdm', 'safetensors', 'regex', 'requests', 'packaging', 'filelock',
+    'pyyaml', 'fsspec', 'docopt-ng', 'nvidia-ml-py', 'sympy', 'networkx',
 ]
 for _pkg in _metadata_pkgs:
     try:
