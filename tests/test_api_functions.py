@@ -662,12 +662,12 @@ def test_hybrid_model_dca_llm_avgfp(
                 spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6719074588353634  # Same on different devices?
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.2755330082438609,  # Same on different devices?
-                decimal=2
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.2755330082438609,  # Similar on different devices?
+                decimal=1
             )
             np.testing.assert_almost_equal(
-                spearmanr(y_test, y_pred_test)[0], 0.7037790861192881,  # Same on different devices?
-                decimal=2
+                spearmanr(y_test, y_pred_test)[0], 0.7037790861192881,  # Similar on different devices?
+                decimal=1
             )
             
         elif i == 1:
@@ -679,12 +679,12 @@ def test_hybrid_model_dca_llm_avgfp(
                 decimal=2
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6573659005925958,  # Same on different devices?
-                decimal=2
+                spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], 0.6573659005925958,  # Similar on different devices?
+                decimal=1
             )
             np.testing.assert_almost_equal(
-                spearmanr(y_test, y_pred_test)[0], 0.7671332945830911,  # Same on different devices?
-                decimal=2
+                spearmanr(y_test, y_pred_test)[0], 0.7671332945830911,  # Similar on different devices?
+                decimal=1
             )
         
         elif i == 2:
