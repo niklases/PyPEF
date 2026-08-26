@@ -97,7 +97,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
   docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP niklases/pypef:latest /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
-       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
+       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt"
   ```
 - building image from Dockerfile
   ```bash
@@ -108,7 +108,7 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
   docker run --gpus=all -v ./datasets/:/datasets --workdir /datasets/AVGFP pypef /bin/bash -c \
       "python /app/run.py mklsts --wt P42212_F64L.fasta --input avGFP.csv --ls_proportion 0.01 && \
        python /app/run.py param_inference --msa uref100_avgfp_jhmmer_119.a2m --wt P42212_F64L.fasta && \
-       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb"
+       python /app/run.py hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt"
   ```
 
 <a name="requirements"></a>

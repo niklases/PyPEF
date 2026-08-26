@@ -14,6 +14,7 @@ os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
 # Export the PYTHONHASHSEED env variable before running this script! 
 os.environ['PYTHONHASHSEED'] = str(seed)
 import sys
+import time
 import torch
 import numpy as np
 import random
@@ -182,9 +183,12 @@ def test_gremlin_avgfp():
         opt_iter=100,
         device=device
     )
+    t1 = time.time()
     wt_score = g.get_wt_score()  
     np.testing.assert_almost_equal(wt_score, 952.1102220697624, decimal=1)
     assert wt_score == g.wt_score == np.sum(g.x_wt)
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
 
 
 def test_hybrid_model_dca_llm_aneh(
@@ -196,6 +200,7 @@ def test_hybrid_model_dca_llm_aneh(
         wt_seq=get_wt_sequence(wt_seq_file_aneh),
         pdb_file=pdb_file_aneh
 ):
+    t1 = time.time()
     print("\n\ntest_hybrid_model_dca_llm_aneh()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
         alignment=msa,
@@ -453,6 +458,8 @@ def test_hybrid_model_dca_llm_aneh(
             assert_portable_corr(
                 spearmanr(y_test, y_pred_test)[0], "ProSST hybrid y_pred_test"
             )
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
 
 
 def test_hybrid_model_dca_llm_avgfp(
@@ -462,8 +469,10 @@ def test_hybrid_model_dca_llm_avgfp(
         y_train=y_train_avgfp,
         y_test=y_test_avgfp,
         wt_seq=get_wt_sequence(wt_seq_file_avgfp),
-        pdb_file=pdb_file_avgfp
+        pdb_file=pdb_file_avgfp,
+        nolora_test=False
 ):
+    t1 = time.time()
     print("\n\ntest_hybrid_model_dca_llm_avgfp()..." + "\n" + "=" * 80 + "\n")
     g = GREMLIN(
         alignment=msa,
@@ -695,42 +704,46 @@ def test_hybrid_model_dca_llm_avgfp(
                 spearmanr(y_test, y_pred_test)[0], "Ensemble hybrid y_pred_test"
             )
 
-        # LoRA-free hybrid (DCA + ridge + base-PLM + GP)
-        hm_nolora = DCALLMHybridModel(
-            x_train_dca=np.array(x_dca_train),
-            y_train=y_train,
-            llm_model_input=llm_dict,
-            x_dca_wt=g.x_wt,
-            sequences=train_seqs,
-            wt_sequence=wt_seq,
-            seed=42,
-            lora_train=False,
-            gauss_opt=True,
-            pdb_struct=pdb_file,
-            n_epochs=5,
-            device=device
-        )
-        y_pred_test_nolora, _ = hm_nolora.hybrid_prediction(
-            x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs
-        )
-        nolora_rho = spearmanr(y_test, y_pred_test_nolora)[0]
-        print(f'LoRA-free ({setup}) hybrid feature_names:', hm_nolora.feature_names)
-        print(f'LoRA-free ({setup}) hybrid prediction:', nolora_rho, len(y_test))
-        assert not any("lora" in fn.lower() for fn in hm_nolora.feature_names), (
-            f"LoRA predictor leaked into a lora_train=False hybrid: {hm_nolora.feature_names}"
-        )
-        # Portable golden values: DCA, ridge, base-PLM zero-shot, and GP (torch.optim.Adam 
-        # on CPU) all reproduce (but not bit-for-bit?) across torch versions (verified 
-        # 2.12.1 through 2.13.0, cpu and cu13x builds).
-        nolora_golden = [
-            0.6887306170663565,   # ESM
-            0.7676185476159226,   # ProSST, often 0.767617797611235
-            0.7693334333339582,   # Ensemble (ESM + ProSST)
-        ][i]
-        np.testing.assert_almost_equal(nolora_rho, nolora_golden, decimal=3)
+        if nolora_test:  # Over 300 min on GitHub Actions tests, skipping for now by default
+            # LoRA-free hybrid (DCA + ridge + base-PLM + GP)
+            hm_nolora = DCALLMHybridModel(
+                x_train_dca=np.array(x_dca_train),
+                y_train=y_train,
+                llm_model_input=llm_dict,
+                x_dca_wt=g.x_wt,
+                sequences=train_seqs,
+                wt_sequence=wt_seq,
+                seed=42,
+                lora_train=False,
+                gauss_opt=True,
+                pdb_struct=pdb_file,
+                n_epochs=5,
+                device=device
+            )
+            y_pred_test_nolora, _ = hm_nolora.hybrid_prediction(
+                x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs
+            )
+            nolora_rho = spearmanr(y_test, y_pred_test_nolora)[0]
+            print(f'LoRA-free ({setup}) hybrid feature_names:', hm_nolora.feature_names)
+            print(f'LoRA-free ({setup}) hybrid prediction:', nolora_rho, len(y_test))
+            assert not any("lora" in fn.lower() for fn in hm_nolora.feature_names), (
+                f"LoRA predictor leaked into a lora_train=False hybrid: {hm_nolora.feature_names}"
+            )
+            # Portable golden values: DCA, ridge, base-PLM zero-shot, and GP (torch.optim.Adam 
+            # on CPU) all reproduce (but not bit-for-bit?) across torch versions (verified 
+            # 2.12.1 through 2.13.0, cpu and cu13x builds).
+            nolora_golden = [
+                0.6887306170663565,   # ESM
+                0.7676185476159226,   # ProSST, often 0.767617797611235
+                0.7693334333339582,   # Ensemble (ESM + ProSST)
+            ][i]
+            np.testing.assert_almost_equal(nolora_rho, nolora_golden, decimal=3)
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
 
 
 def test_dataset_b_results():
+    t1 = time.time()
     print("\n\ntest_dataset_b_results()..." + "\n" + "=" * 80 + "\n")
     aaindex = "WOLR810101.txt"
     x_fft_train, _ = AAIndexEncoding(
@@ -753,10 +766,13 @@ def test_dataset_b_results():
     np.testing.assert_almost_equal(performances[0], 0.72, decimal=2)
     #  NRMSE, Pearson's r, Spearman's rho
     np.testing.assert_almost_equal(performances[2:5], [0.52, 0.86, 0.89], decimal=2)
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
 
 
 @pytest.mark.requires_gpu
 def test_plm_corr_blat_ecolx():
+    t1 = time.time()
     print("\n\ntest_plm_corr_blat_ecolx() [CUDA]..." + "\n" + "=" * 80 + "\n")
     blat_ecolx_wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
     prosst_base_model, _prosst_lora_model, prosst_tokenizer, _prosst_optimizer = get_prosst_models(
@@ -936,8 +952,12 @@ def test_plm_corr_blat_ecolx():
     #print(f'ProSST (unsupervised performance): '  # ProteinGym: ProSST: 0.760
     #      f'{spearmanr(y_true, y_prosst.cpu())[0]}')
 
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
+
 
 def test_gaussian_process_opt():
+    t1 = time.time()
     print("\n\ntest_gaussian_process_opt()..." + "\n" + "=" * 80 + "\n")
     print("Getting ProSST models")
     wt_seq = get_wt_sequence(wt_seq_file_blat_ecolx)
@@ -1295,7 +1315,8 @@ def test_gaussian_process_opt():
 
     print("Supervised Kermut Spearman ESM + ProSST Concat. Train on Test:", spearmanr(y_test.cpu(), test_means_pred.cpu())[0])
     np.testing.assert_almost_equal(spearmanr(y_test.cpu(), test_means_pred.cpu())[0], 0.8664669154182213, decimal=3)
-
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
 
 if __name__ == "__main__":
     test_gremlin_avgfp()
