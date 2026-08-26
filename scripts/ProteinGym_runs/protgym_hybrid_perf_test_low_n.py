@@ -416,7 +416,10 @@ def plot_csv_data(csv, plot_name):
             all_colors.append(color)
 
     plt.grid(zorder=-1)
-    plt.xticks(range(num_dsets), ['(' + str(n) + ') ' + name for (n, name) in zip(df['No.'], df['Dataset'])], rotation=45, ha='right')
+    plt.xticks(
+        range(num_dsets), ['(' + str(n) + ') ' + name for (n, name) in zip(df['No.'], df['Dataset'])], 
+        rotation=45, ha='right'
+    )
     plt.legend()
     plt.ylim(0.0, 1.0)
     plt.ylabel(r'Spearman $\rho$')
@@ -531,7 +534,8 @@ if __name__ == '__main__':
                 and not line.split(',')[1].startswith('X')
                 and not line.split(',')[4].startswith('PDBseq neq WTseq')
                 and not line.split(',')[4].startswith('Sequence too long')
+                and not line.split(',')[4].startswith('More than')
             ):
                 fh2.write(line)
 
-    plot_csv_data(csv=clean_out_results_csv, plot_name=f'mut_performance_v{version}')
+    plot_csv_data(csv=clean_out_results_csv, plot_name=f'low_n_mut_performance_v{version}')

@@ -510,10 +510,10 @@ The performance of the GREMLIN model used is shown in the following for predicti
 Hybrid GREMLIN-PLM low-N-tuned models using [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST) achieved increased performances compared to the pure DCA-tuned hybrid model for ProteinGym datasets tested using the scripts located at [scripts/ProteinGym_runs](scripts/ProteinGym_runs):
 
 <p align="center">
-    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/mut_performance_violin.png" alt="drawing" width="750"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/low_n_mut_performance_v0.5.0_violin.png" alt="drawing" width="750"/>
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/mut_performance.png" alt="drawing" width="1000"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/low_n_mut_performance_v0.5.0.png" alt="drawing" width="1000"/>
 </p>
 
 For estimating model performances for different splitting techniques (random, modulo, continuous), a faster-to-compute subset (limited sequence length and number of variant-fitness pairs) of the ProteinGym data was evaluated (example dataset split technique-dependent data distribution and performances on the ProteinGym subset):
@@ -522,7 +522,7 @@ For estimating model performances for different splitting techniques (random, mo
     <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png" alt="drawing" width="750"/>
 </p>
 <p align="center">
-    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/crossval_pgym_violin.png" alt="drawing" width="750"/>
+    <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/crossval_mut_performance_violin_v0.5.0.png" alt="drawing" width="750"/>
 </p>
 
 The official supervised ProteinGym benchmark runs can be performed using scripts provided at [scripts/ProteinGym_runs/official](scripts/ProteinGym_runs/official). However, these benchmark runs are time-consuming, as cross-validation must be performed for each dataset and across all the split methods being evaluated.

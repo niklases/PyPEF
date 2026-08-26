@@ -385,7 +385,7 @@ def _build_csv_header():
     return header
 
 
-def plot_csv_data(csv):
+def plot_csv_data(csv, plot_name):
     blue_colors = mpl.colormaps['Blues'](np.linspace(0.3, 0.9, 4))
     red_colors = mpl.colormaps['Reds'](np.linspace(0.3, 0.9, 4))
     green_colors = mpl.colormaps['Greens'](np.linspace(0.3, 0.9, 4))
@@ -429,8 +429,8 @@ def plot_csv_data(csv):
     plt.ylim(-0.09, 1.09)
     plt.margins(0.05)
     plt.tight_layout()
-    plt.savefig(os.path.join(os.path.dirname(__file__), 'crossval_pgym_violin.png'), dpi=300)
-    print('Saved file as ' + os.path.join(os.path.dirname(__file__), 'crossval_pgym_violin.png') + '.')
+    plt.savefig(plot_name, dpi=300)
+    print(f'Saved file as {os.path.abspath(plot_name)}')
     #plt.show()
 
 
@@ -504,7 +504,11 @@ if __name__ == '__main__':
                 and not line.split(',')[1].startswith('X')
                 and not line.split(',')[4].startswith('PDBseq neq WTseq')
                 and not line.split(',')[4].startswith('Sequence too long')
+                and not line.split(',')[4].startswith('More than')
             ):
                 fh2.write(line)
 
-    plot_csv_data(csv=clean_out_results_csv)
+    plot_csv_data(
+        csv=clean_out_results_csv, 
+        plot_name=os.path.join(os.path.dirname(__file__), f'crossval_mut_performance_violin_v{version}.png')
+    )
