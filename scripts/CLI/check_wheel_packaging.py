@@ -38,6 +38,7 @@ REQUIRED_DATA_FILES = [
     "pypef/plm/prosst_structure/static/2048_kmeans_cluster_centers.npy",
     "pypef/ml/AAindex/ANDN920101.txt",
     "pypef/ml/AAindex/Refined_cluster_indices_r0.93_r0.97/0.93_0.97_1_0_2.txt",
+    "pypef/gui/assets/pypef_logo.jpg",
 ]
 
 

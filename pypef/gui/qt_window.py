@@ -3,6 +3,7 @@
 
 # Qt GUI window using PySide6
 
+import os
 import sys
 from os import getcwd, cpu_count, chdir
 import logging
@@ -10,6 +11,7 @@ import time
 
 
 from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget,
     QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox,
@@ -19,6 +21,30 @@ from PySide6.QtWidgets import (
 from pypef import __version__
 from pypef.main import __doc__, run_main, logger, formatter
 from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_nvidia_gpu_info_pynvml
+
+
+def get_logo_path():
+    """Return the absolute path to the bundled PyPEF window-icon logo.
+
+    Works when running from source, from a pip install (the file is shipped as
+    package-data, see pyproject.toml), and from a frozen PyInstaller build
+    (sys._MEIPASS). Returns None if the asset cannot be located so the caller
+    can fall back to the default Qt icon without crashing.
+
+    Note: the icon shows on X11 / Windows / macOS. Wayland compositors ignore
+    Qt's setWindowIcon(); run with QT_QPA_PLATFORM=xcb to see it under Wayland.
+    """
+    candidates = []
+    # PyInstaller onefile/onedir: assets are unpacked under sys._MEIPASS
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        candidates.append(os.path.join(meipass, 'pypef', 'gui', 'assets', 'pypef_logo.jpg'))
+    # Source / pip install: next to this module
+    candidates.append(os.path.join(os.path.dirname(__file__), 'assets', 'pypef_logo.jpg'))
+    for path in candidates:
+        if os.path.isfile(path):
+            return path
+    return None
 
 
 button_style = """
@@ -209,6 +235,9 @@ class MainWidget(QWidget):
         self.shift = 2
         self.setMinimumSize(QSize(1400, 800))
         self.setWindowTitle("PyPEF GUI")
+        logo_path = get_logo_path()
+        if logo_path is not None:
+            self.setWindowIcon(QIcon(logo_path))
         self.setStyleSheet("background-color: rgb(40, 44, 52);")
         self.win2 = SecondWindow()
 
@@ -1746,6 +1775,18 @@ class MainWidget(QWidget):
 
 def run_app():
     app = QApplication([])
+    app.setApplicationName("PyPEF")
+    app.setApplicationDisplayName("PyPEF GUI")
+    # On Wayland the taskbar/dock icon is NOT taken from setWindowIcon(); the
+    # compositor resolves it by matching this desktop-file name (the window
+    # app_id) against an installed pypef.desktop with an Icon= entry. Harmless
+    # on X11/Windows/macOS, where setWindowIcon() below does the job directly.
+    app.setDesktopFileName("pypef")
+    logo_path = get_logo_path()
+    if logo_path is not None:
+        # App-level icon drives the taskbar / dock / Alt-Tab icon on
+        # X11 / Windows / macOS (ignored by Wayland compositors).
+        app.setWindowIcon(QIcon(logo_path))
     widget = MainWidget()
     widget.show()
     sys.exit(app.exec())

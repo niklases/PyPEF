@@ -1955,14 +1955,19 @@ def predict_ps(
                     else:
                         raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
                 else:
+                    # plmc_or_gremlin_encoding drops variants at gap / NaN
+                    # positions the DCA model does not cover, so it returns a
+                    # *filtered* variant list. Bind it back into test_variants
+                    # and use that (NOT the raw `variants`) below, otherwise the
+                    # predictions get paired with the wrong variant names.
                     if not model_type.startswith('Hybrid'):  # Statistical DCA
-                        x_test, _, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
+                        x_test, test_variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file, threads=threads, verbose=False,
                             substitution_sep=separator
                         )
                         ys_pred = get_delta_e_statistical_model(x_test, x_wt)
                     else:  # Hybrid model
-                        x_test, _test_variants, test_sequences, *_ = plmc_or_gremlin_encoding(
+                        x_test, test_variants, test_sequences, *_ = plmc_or_gremlin_encoding(
                             variants, sequences, None, params_file,
                             threads=threads, verbose=False, substitution_sep=separator
                         )
@@ -1979,9 +1984,11 @@ def predict_ps(
                                 np.asarray(x_test), x_llm_test, sequences=test_seqs
                             )
 
-                assert len(variants) == len(ys_pred), f"Mismatch: {len(variants)} variants vs {len(ys_pred)} predictions."
+                assert len(test_variants) == len(ys_pred), (
+                    f"Mismatch: {len(test_variants)} variants vs {len(ys_pred)} predictions."
+                )
                 for k in range(len(ys_pred)):
-                    all_y_v_pred.append((ys_pred[k], variants[k]))
+                    all_y_v_pred.append((ys_pred[k], test_variants[k]))
 
             all_y_v_pred = sorted(all_y_v_pred, key=lambda x: x[0], reverse=not negative)
             predictions_out(

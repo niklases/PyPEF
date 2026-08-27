@@ -71,7 +71,8 @@ include = ["pypef*"]
 pypef = [
     "ml/AAindex/*",
     "ml/AAindex/Refined_cluster_indices_r0.93_r0.97/*",
-    "plm/prosst_structure/static/*"
+    "plm/prosst_structure/static/*",
+    "gui/assets/*"
 ]
 
 [tool.pytest.ini_options]
