@@ -32,6 +32,6 @@ RUN ["python", "-c", "import torch;print(torch.__version__)"]
 
 EXPOSE 5000
 
-# Not defining CMD["python", "/app/run.py"] as CMD/ENTRYPOINT herein for eased 
-# chaining of multiple commands with /bin/bash -c "command1 && command2..."
+# Not defining CMD["python", "/app/run.py"] as CMD/ENTRYPOINT herein 
+# but "standard" /bin/bash terminal.
 CMD ["/bin/bash"]

@@ -37,11 +37,20 @@ conda create -n pypef python=3.12 -y                                            
 conda activate pypef                                                                                                     #
 python -m pip install -r $path\requirements.txt                                                                          #
 python -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128 --force-reinstall  #
-$env:PYTHONPATH=$path                                                                                                    #
-function pypef { python $path\pypef\main.py @args }                                                                      #
+function pypef {                                                                                                         #
+    $localEAP = $ErrorActionPreference                                                                                   #
+    $ErrorActionPreference = 'Continue'                                                                                  #
+    python $path\pypef\main.py @args 2>&1 | ForEach-Object ToString                                                      #
+    $ErrorActionPreference = $localEAP                                                                                   #
+}                                                                                                                        #
 ##########################################################################################################################
 ### else just use pip-installed pypef version (uncomment):                                                               #
-#pypef = pypef                                                                                                           #
+#function pypef {                                                                                                        #
+#    $localEAP = $ErrorActionPreference                                                                                  #
+#    $ErrorActionPreference = 'Continue'                                                                                 #
+#    pypef.exe @args 2>&1 | ForEach-Object ToString                                                                      #
+#    $ErrorActionPreference = $localEAP                                                                                  #
+#}                                                                                                                       #
 ##########################################################################################################################
 # threads are only used for some parallelization of AAindex and DCA-based sequence encoding                              # 
 # if pypef/settings.py defines USE_RAY = True                                                                            #
@@ -420,10 +429,16 @@ Write-Host
 ### Reproducibility check: with a fixed --seed, hybrid training (train/validation
 ### split + differential-evolution beta optimization) must give identical results.
 ### Without a seed (default) results vary run to run, so we do NOT assert a value there.
-$seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
-$seedPerf2 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+$seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+$seedPerf2 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
 Write-Host "Seeded hybrid reproducibility: run1=$seedPerf1 run2=$seedPerf2" -ForegroundColor Blue
-if (-not $seedPerf1 -or ($seedPerf1 -ne $seedPerf2)) {
+if ([string]::IsNullOrWhiteSpace($seedPerf1) -or ($seedPerf1 -ne $seedPerf2)) {
     Write-Host "Reproducibility FAILED: seeded (--seed 42) hybrid runs differ ($seedPerf1 != $seedPerf2)" -ForegroundColor Red
     exit 1
 }
@@ -811,11 +826,17 @@ Write-Host
 ### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)
 ### must be identical run to run. Without --seed these vary (torch/GP RNG), so we only
 ### assert reproducibility with a seed, not a specific value (results are hardware/version dependent).
-$plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
-$plmPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | Select-String 'Hybrid performance: ([-0-9.]+)' | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Last 1)
+$plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+$plmPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
 Write-Host "Seeded PLM+GP hybrid reproducibility: run1=$plmPerf1 run2=$plmPerf2" -ForegroundColor Blue
-if (-not $plmPerf1 -or ($plmPerf1 -ne $plmPerf2)) {
-    Write-Host "Reproducibility FAILED: seeded (--seed 42) PLM+GP hybrid runs differ ($plmPerf1 != $plmPerf2)" -ForegroundColor Red
+if ([string]::IsNullOrWhiteSpace($plmPerf1) -or ($plmPerf1 -ne $plmPerf2)) {
+    Write-Host "Reproducibility FAILED: seeded (--seed 42) PLM+GP hybrid runs differ or failed to parse ($plmPerf1 != $plmPerf2)" -ForegroundColor Red
     exit 1
 }
 Write-Host "Reproducibility OK: seeded (--seed 42) PLM+GP hybrid runs are identical ($plmPerf1)." -ForegroundColor Green

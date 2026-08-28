@@ -664,7 +664,10 @@ class PLMC(CouplingsModel):
             set_silence = True  # thus, also not for directed evolution
         else:
             set_silence = False
-        for i, variant in enumerate(tqdm(np.atleast_1d(variants), disable=set_silence)):
+        for variant in tqdm(
+            np.atleast_1d(variants), desc='Collect PLMC-encoded sequences', 
+            disable=set_silence
+        ):
             try:
                 encoded_sequences.append(self.encode_variant(variant))
             except EffectiveSiteError:
