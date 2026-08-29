@@ -538,6 +538,8 @@ datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_ESM.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PROSST.png
 
+scripts/ProteinGym_runs/official/PyPEF-main/*
+
 scripts/ProteinGym_runs/crossval_mut_performance_violin_v0.5.0.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0_violin.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0.png

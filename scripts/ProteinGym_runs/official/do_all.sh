@@ -9,10 +9,10 @@ set -e
 split_methods=("fold_random_5" "fold_modulo_5" "fold_contiguous_5")
  
  cd data
-#./download_data.sh
+./download_data.sh
 cd ..
  
-#./get_py_packages.sh
+./get_py_packages.sh
 
 cd benchmark_runs
 

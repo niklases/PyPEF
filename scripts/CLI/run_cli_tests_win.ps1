@@ -40,7 +40,7 @@ python -m pip install torch torchvision torchaudio --index-url https://download.
 function pypef {                                                                                                         #
     $localEAP = $ErrorActionPreference                                                                                   #
     $ErrorActionPreference = 'Continue'                                                                                  #
-    python $path\pypef\main.py @args 2>&1 | ForEach-Object ToString                                                      #
+    python $path\pypef\main.py @args                                                                                     #
     $ErrorActionPreference = $localEAP                                                                                   #
 }                                                                                                                        #
 ##########################################################################################################################
@@ -48,7 +48,7 @@ function pypef {                                                                
 #function pypef {                                                                                                        #
 #    $localEAP = $ErrorActionPreference                                                                                  #
 #    $ErrorActionPreference = 'Continue'                                                                                 #
-#    pypef.exe @args 2>&1 | ForEach-Object ToString                                                                      #
+#    pypef.exe @args                                                                                                     #
 #    $ErrorActionPreference = $localEAP                                                                                  #
 #}                                                                                                                       #
 ##########################################################################################################################
@@ -429,11 +429,11 @@ Write-Host
 ### Reproducibility check: with a fixed --seed, hybrid training (train/validation
 ### split + differential-evolution beta optimization) must give identical results.
 ### Without a seed (default) results vary run to run, so we do NOT assert a value there.
-$seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 | 
+$seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
     Select-Object -Last 1)
-$seedPerf2 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 | 
+$seedPerf2 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
     Select-Object -Last 1)
@@ -826,11 +826,11 @@ Write-Host
 ### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)
 ### must be identical run to run. Without --seed these vary (torch/GP RNG), so we only
 ### assert reproducibility with a seed, not a specific value (results are hardware/version dependent).
-$plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 | 
+$plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
     Select-Object -Last 1)
-$plmPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 | 
+$plmPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
     Select-Object -Last 1)

@@ -158,8 +158,8 @@ def main(cfg: DictConfig) -> None:
         else:
             print(
                 f"Wild-type sequence is not matching PDB-extracted sequence"
-                f"\nWT sequence:\n{wt_msa_trimmed_sequence}\nPDB sequence:\n{pdb_seq}. TODO: Shifting "
-                f"variants and trimming sequences. Skipping dataset..."
+                f"\nWT sequence:\n{wt_msa_trimmed_sequence}\nPDB sequence:\n{pdb_seq}. "
+                f"Skipping dataset..."
             )
             raise RuntimeError
     else:
