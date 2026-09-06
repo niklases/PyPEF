@@ -25,7 +25,7 @@ function ExitOnExitCode { if ($LastExitCode) {
 ### RUN ME IN POWERSHELL WITH
 ### $ .\run_cli_tests_win.ps1                      # printing STDOUT and STDERR to terminal
 
-$TEST_PYPI_REMOTE_INSTALL = $true   # Change to $true, if you want to test the pip(remote)-installed version
+$TEST_PYPI_REMOTE_INSTALL = $false   # Change to $true, if you want to test the pip(remote)-installed version
 
 $path=Get-Location
 $path=Split-Path -Path $path -Parent

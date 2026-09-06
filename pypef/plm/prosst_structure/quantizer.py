@@ -20,7 +20,7 @@ import logging
 logger = logging.getLogger('pypef.llm.prosst_structure.quantizer')
 
 
-@torch.jit.script
+@torch.compile
 def _normalize(tensor: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return torch.nan_to_num(torch.div(tensor, torch.norm(tensor, dim=dim, keepdim=True)))
 
@@ -32,7 +32,7 @@ def _rbf(D: torch.Tensor, D_min: float = 0.0, D_max: float = 20.0, D_count: int 
     return torch.exp(-((D_expand - D_mu) / D_sigma) ** 2)
 
 
-@torch.jit.script
+@torch.compile
 def _orientations(X_ca):
     forward = _normalize(X_ca[1:] - X_ca[:-1])
     backward = _normalize(X_ca[:-1] - X_ca[1:])
@@ -41,7 +41,7 @@ def _orientations(X_ca):
     return torch.cat([forward.unsqueeze(-2), backward.unsqueeze(-2)], -2)
 
 
-@torch.jit.script
+@torch.compile
 def _sidechains(X):
     n, origin, c = X[:, 0], X[:, 1], X[:, 2]
     c, n = _normalize(c - origin), _normalize(n - origin)
@@ -50,10 +50,13 @@ def _sidechains(X):
     vec = -bisector * math.sqrt(1 / 3) - perp * math.sqrt(2 / 3)
     return vec
 
+
 def _positional_embeddings(edge_index, num_embeddings=16):
     d = edge_index[0] - edge_index[1]
-    frequency = torch.exp(torch.arange(0, num_embeddings, 2, dtype=torch.float32, device=edge_index.device)
-                          * -(np.log(10000.0) / num_embeddings))
+    frequency = torch.exp(
+        torch.arange(0, num_embeddings, 2, dtype=torch.float32, device=edge_index.device)
+        * -(np.log(10000.0) / num_embeddings)
+    )
     angles = d.unsqueeze(-1) * frequency
     return torch.cat((torch.cos(angles), torch.sin(angles)), -1)
 
