@@ -108,6 +108,9 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Install MSVC compiler
+      uses: ilammy/msvc-dev-cmd@v1    
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:

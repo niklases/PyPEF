@@ -8,7 +8,7 @@ set -e
 # "fold_rand_multiples" "fold_random_5" "fold_modulo_5" "fold_contiguous_5"
 split_methods=("fold_random_5" "fold_modulo_5" "fold_contiguous_5")
  
- cd data
+cd data
 ./download_data.sh
 cd ..
  
