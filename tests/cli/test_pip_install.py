@@ -1,7 +1,7 @@
 
 # Run from repo root after `pip install .`:
-#   Linux:   PYTHONPATH="" python -m pytest tests/test_pip_install.py -v -m pip_specific --log-cli-level=INFO --import-mode=importlib
-#   Windows: $env:PYTHONPATH=""; python -m pytest tests\test_pip_install.py -v -m pip_specific --log-cli-level=INFO --import-mode=importlib
+#   Linux:   PYTHONPATH="" python -m pytest tests/cli/test_pip_install.py -v -m pip_specific --log-cli-level=INFO --import-mode=importlib
+#   Windows: $env:PYTHONPATH=""; python -m pytest tests\cli\test_pip_install.py -v -m pip_specific --log-cli-level=INFO --import-mode=importlib
 #
 # Both PYTHONPATH="" and --import-mode=importlib are required:
 #   - PYTHONPATH="" stops Python from adding an exported repo root to sys.path

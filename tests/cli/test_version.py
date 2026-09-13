@@ -1,3 +1,5 @@
+# Run from repo root after `pip install .`
+
 import os.path
 import subprocess
 import sys
@@ -32,20 +34,34 @@ def capture(command):
     return out, err, proc.returncode
 
 
+# Should pass:
+#   export PYTHONPATH="$PWD" && python -m pytest ./tests/ -v -m "main_script_specific" --log-cli-level=INFO --capture=tee-sys
+# Should fail:
+#   export PYTHONPATH="" && python -m pytest ./tests/ -v -m "main_script_specific" --log-cli-level=INFO --capture=tee-sys
 @pytest.mark.main_script_specific
 def test_main_script_pypef_version():
     pypef_main_path = os.path.abspath(
         os.path.join(os.path.dirname(__file__), '..', '..')
     )
-    if pypef_main_path not in sys.path:
-        sys.path.insert(0, pypef_main_path)
-        
+    #if pypef_main_path not in sys.path:      # Better catch the error!
+    #    sys.path.insert(0, pypef_main_path)  # but pytest may add the local repo anyway
+    
+    import pypef
     from pypef import __version__
+
+    print("PARENT PROCESS")
+    print("pypef:", pypef.__file__)
+    print("PYTHONPATH:", os.environ.get("PYTHONPATH"))
+    print("sys.path:")
+    print("\n".join(sys.path))
     
     script_path = os.path.join(pypef_main_path, "pypef", "main.py")
     command = ["python", script_path, "--version"]
     
     out, err, exitcode = capture(command)
+    print("\nSUBPROCESS OUTPUT")
+    print("stdout:", out)
+    print("stderr:", err)
     assert exitcode == 0, f"Process failed with error:\n{err}"
     assert __version__ in out
 
@@ -63,3 +79,4 @@ def test_pip_pypef_version():
 
 if __name__ == "__main__":
     test_main_script_pypef_version()
+    

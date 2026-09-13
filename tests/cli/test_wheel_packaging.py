@@ -27,6 +27,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -42,8 +43,10 @@ REQUIRED_DATA_FILES = [
 ]
 
 
-def main() -> int:
+@pytest.mark.wheel_build
+def test_wheel_contents() -> int:
     tmp = Path(tempfile.mkdtemp(prefix="pypef_pkg_check_"))
+    exit_code = 0
     try:
         src = tmp / "src"
         src.mkdir()
@@ -75,7 +78,7 @@ def main() -> int:
         wheels = list(wheel_dir.glob("pypef-*.whl"))
         if not wheels:
             print("FAIL: no pypef wheel was produced.", file=sys.stderr)
-            return 1
+            exit_code = 1
 
         names = set(zipfile.ZipFile(wheels[0]).namelist())
         missing = [f for f in REQUIRED_DATA_FILES if f not in names]
@@ -86,15 +89,16 @@ def main() -> int:
             print("\n→ Fix [tool.setuptools.package-data] in pyproject.toml so that")
             print("  package-data alone includes these files (independent of git /")
             print("  MANIFEST.in).")
-            return 1
+            exit_code = 1
 
         print(f"OK: all {len(REQUIRED_DATA_FILES)} required data files present in wheel:")
         for f in REQUIRED_DATA_FILES:
             print(f"  - {f}")
-        return 0
+        assert exit_code == 0
+        return exit_code
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(test_wheel_contents())

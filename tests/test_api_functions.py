@@ -1,12 +1,10 @@
 
 # Run me from parent dir:
 #   Linux
-#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/   # -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
+#       export PYTHONPATH="${PYTHONPATH}:${PWD}" && python -m pytest ./tests/   # -v -m "not (pip_specific or requires_gpu or wheel_build)" --log-cli-level=INFO
 #   Windows
-#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\  # -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO
-# python -m pip install torch==2.7.1 --extra-index-url https://download.pytorch.org/whl/cpu
+#       $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}";python -m pytest .\tests\  # -v -m "not (pip_specific or requires_gpu or wheel_build)" --log-cli-level=INFO
 
-# 
 
 import os
 seed = 42

@@ -48,15 +48,6 @@ jobs:
       run: |
         python -c "import sys, platform; print(sys.version, platform.system())"
 
-    - name: Check package-data integrity (pyproject.toml alone)
-      # Builds a wheel from a git-less / MANIFEST-less copy so that only
-      # pyproject.toml's package-data governs inclusion, then verifies the
-      # bundled .pt/.npy/AAindex data files are present. Catches a broken
-      # package-data path that git-tracking / MANIFEST.in would otherwise mask.
-      run: |
-        python -m pip install --upgrade pip wheel
-        python scripts/CLI/check_wheel_packaging.py
-
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -74,7 +65,7 @@ jobs:
         HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }} # Compatibility fallback for older transformers versions
       run: |
         export PYTHONPATH="${PYTHONPATH}:${PWD}"
-        python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO --capture=tee-sys
+        python -m pytest ./tests/ -v -m "not (pip_specific or requires_gpu or wheel_build)" --log-cli-level=INFO --capture=tee-sys
 
     - name: Export Pythonpath and run GUI tests using pip-installation
       run: |
@@ -95,6 +86,9 @@ jobs:
         cd "$RUNNER_TEMP"
         python -m pytest "$GITHUB_WORKSPACE/tests" -v -m "pip_specific" \
           --import-mode=importlib --log-cli-level=INFO --capture=tee-sys
+    - name: Finally, test wheel builing in venv and temp folder and check wheel contents
+      run: |
+        python -m pytest ./tests/ -v -m "wheel_build" --log-cli-level=INFO --capture=tee-sys       
 
   windows:
     name: windows
@@ -128,11 +122,6 @@ jobs:
       run: |
         python -c "import sys, platform; print(sys.version, platform.system())"
 
-    - name: Check package-data integrity (pyproject.toml alone)
-      run: |
-        python -m pip install --upgrade pip wheel
-        python scripts/CLI/check_wheel_packaging.py
-
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -151,7 +140,7 @@ jobs:
         HUGGING_FACE_HUB_TOKEN: ${{ secrets.HF_TOKEN }}
       run: |
         $env:PYTHONPATH = "${PWD};${env:PYTHONPATH}"
-        python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu)" --log-cli-level=INFO --capture=tee-sys
+        python -m pytest .\tests\ -v -m "not (pip_specific or requires_gpu or wheel_build)" --log-cli-level=INFO --capture=tee-sys
 
     - name: Export Pythonpath and run GUI tests using pip-installation
       shell: pwsh
@@ -164,3 +153,6 @@ jobs:
         cd $env:RUNNER_TEMP
         python -m pytest "$env:GITHUB_WORKSPACE\tests" -v -m "pip_specific" `
           --import-mode=importlib --log-cli-level=INFO --capture=tee-sys
+    - name: Finally, test wheel builing in venv and temp folder and check wheel contents
+      run: |
+        python -m pytest ./tests/ -v -m "wheel_build" --log-cli-level=INFO --capture=tee-sys 

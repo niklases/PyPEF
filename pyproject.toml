@@ -79,5 +79,6 @@ pypef = [
 markers = [
     "main_script_specific",
     "pip_specific",
-    "requires_gpu"
+    "requires_gpu",
+    "wheel_build"
 ]
