@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
 numpy
 pandas
 tqdm
@@ -11,11 +12,11 @@ biotite
 schema
 pathos
 peft
+transformers>=4.40.0
 nvidia-ml-py
 gpytorch
 huggingface_hub[hf_xet]
 #scikit-learn-intelex
 #ray[default]
---extra-index-url https://download.pytorch.org/whl/cu128
 torch
 torch-geometric
