@@ -161,6 +161,7 @@ Usage:
         [--ls LEARNING_SET] [--label]
         [--plm PLM] [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
         [--lora] [--gauss_opt] [--gauss_comb]
+        [--pmpnn] [--pmpnn_cond_probs NPZ_FILE]
         [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                           [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS] [--seed SEED]
@@ -210,6 +211,10 @@ Options:
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
                                     and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
+  --pmpnn                          Compute PMPNN conditional log probabilities for hybrid training;
+                                    adds PMPNN zero-shot and GP components; requires --ls, --pdb and --wt.
+  --pmpnn_cond_probs NPZ_FILE       Load precomputed PMPNN conditional log probabilities instead;
+                                    requires --ls, --pdb and --wt. Takes precedence over --pmpnn.
   --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
                                     of all specified PLMs; requires --gauss_opt and two PLMs (e.g.
                                     'esm+prosst' passed via the --plm flag) [default: False].
@@ -227,9 +232,9 @@ Options:
   -l --ls LEARNING_SET              Input learning set in .fasta format.
   --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training +
                                     testing); float, e.g., 0.8.
-  --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM' and
+  --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM', 'PMPNN' and
                                     'ProSST'). Multiple PLMs can be combined via '+', ',', or whitespace,
-                                    e.g. --plm esm+prosst for DCA+ESM+ProSST hybrid modeling.
+                                    e.g. --plm esm+prosst+pmpnn for DCA+ESM+ProSST+PMPNN.
   --llm LLM                         Deprecated alias for --plm (kept for backward compatibility).
   --lora                            Use LoRA-based supervised fine-tuning of the PLM for hybrid
                                     modeling (requires --plm) [default: False].
@@ -362,6 +367,8 @@ schema = Schema({
     Optional('--fit_size'): Use(float),
     Optional('--gauss_comb'): bool,
     Optional('--gauss_opt'): bool,
+    Optional('--pmpnn'): bool,
+    Optional('--pmpnn_cond_probs'): Or(None, str),
     Optional('--help'): bool,
     Optional('--input'): Or(None, str),
     Optional('--inter_gap'): Use(float),

@@ -1,4 +1,3 @@
-
 # Protein-MPNN autoregressive model inference
 
 import os
@@ -6,16 +5,22 @@ import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
 
-from protein_mpnn_run import run_pmpnn
+from pypef.plm.utils import resolve_variant_mutations
+from pypef.plm.pmpnn.protein_mpnn_run import run_pmpnn
+
+import logging
+logger = logging.getLogger(__name__)
 
 # ProteinMPNN 21-character alphabet mapping
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWYX'
 AA_TO_IDX = {aa: i for i, aa in enumerate(ALPHABET)}
 
 
+
+
 def run_protein_mpnn_conditional(pdb_path, out_folder="out", seed=13, num_samples=10):
     """Step 1: Run ProteinMPNN on structure and return conditional log-probs."""
-    print('\nRunning ProteinMPNN (conditional_probs_only)...\n' + '-' * 80)
+    logger.info('\nRunning ProteinMPNN (conditional_probs_only)...\n' + '-' * 80)
     
     cond_probs_dict = run_pmpnn(
         input_seqs=[],               
@@ -36,65 +41,78 @@ def run_protein_mpnn_conditional(pdb_path, out_folder="out", seed=13, num_sample
     return cond_probs_dict
 
 
-def score_mutants_from_probs(cond_probs_input, df, wt_seq):
-    """
-    Step 2: Score all variants against the WT sequence.
-    
-    Parameters:
-    -----------
-    cond_probs_input : str, dict, or np.ndarray
-        - File path string pointing to a .npz file
-        - Dictionary returned by run_pmpnn()
-        - NumPy array of shape [num_samples, L, 21]
-    df : pd.DataFrame
-        DataFrame containing 'mutated_sequence' column.
-    wt_seq : str
-        Wild-type amino acid sequence string.
-    """
-    # 1. Resolve input type (Path, Dict, or NumPy Array)
+def load_conditional_log_probs(cond_probs_input, wt_seq):
+    """Load PMPNN log probabilities and average decoding draws to [L, 21]."""
     if isinstance(cond_probs_input, (str, os.PathLike)):
-        if not os.path.exists(cond_probs_input):
-            raise FileNotFoundError(f"Could not find file at {cond_probs_input}")
-        data = np.load(cond_probs_input)
-        if 'conditional_probs' in data:
-            log_p = data['conditional_probs']
-        elif 'log_p' in data:
-            log_p = data['log_p']
-        else:
-            log_p = data[list(data.keys())[0]]
-            
+        with np.load(cond_probs_input) as data:
+            if 'conditional_probs' in data:
+                log_p = data['conditional_probs']
+            elif 'log_p' in data:
+                log_p = data['log_p']
+            else:
+                raise KeyError("NPZ must contain 'conditional_probs' or 'log_p'.")
     elif isinstance(cond_probs_input, dict):
         if 'conditional_probs' in cond_probs_input:
             log_p = cond_probs_input['conditional_probs']
         elif 'log_p' in cond_probs_input:
             log_p = cond_probs_input['log_p']
         else:
-            raise KeyError("Dictionary must contain 'conditional_probs' or 'log_p' key.")
-            
+            raise KeyError("Dictionary must contain 'conditional_probs' or 'log_p'.")
     elif isinstance(cond_probs_input, np.ndarray):
         log_p = cond_probs_input
     else:
         raise TypeError(f"Unsupported input type: {type(cond_probs_input)}")
+    log_p = np.asarray(log_p)
+    if log_p.ndim == 3:
+        if log_p.shape[0] == 0:
+            raise ValueError("PMPNN requires at least one decoding draw.")
+        log_p = log_p.mean(axis=0)
+    if log_p.shape != (len(wt_seq), len(ALPHABET)):
+        raise ValueError("PMPNN log probabilities must have shape [L, 21] or [N, L, 21] matching wt_seq.")
+    if not np.isfinite(log_p).all():
+        raise ValueError("PMPNN log probabilities must be finite.")
+    if any(aa not in AA_TO_IDX for aa in wt_seq):
+        raise ValueError("Wild-type sequence contains unsupported PMPNN amino acids.")
+    return log_p
 
-    # 2. Average across decoding order draws -> Shape: [L, 21]
-    mean_log_p = np.mean(log_p, axis=0)
 
-    # 3. Compute Delta Log-Likelihood for each sequence
-    predicted_fitness = []
-
-    for _, row in df.iterrows():
-        mut_seq = row['mutated_sequence']
-        
+def score_sequences_from_probs(cond_probs_input, sequences=None, wt_seq=None,
+                               mutation_strings=None, mutation_separator="/"):
+    """Sum mutant-minus-WT conditional log likelihoods over sequence positions."""
+    if wt_seq is None:
+        raise ValueError("Provide wt_seq.")
+    if sequences is None and mutation_strings is None:
+        raise ValueError("Provide sequences or mutation_strings.")
+    if sequences is not None:
+        sequences = list(sequences)
+    if mutation_strings is not None:
+        mutation_strings = list(mutation_strings)
+        if sequences is not None and len(sequences) != len(mutation_strings):
+            raise ValueError("Sequences and mutation_strings must have the same length.")
+    count = len(sequences) if sequences is not None else len(mutation_strings)
+    log_p = load_conditional_log_probs(cond_probs_input, wt_seq)
+    wt_idx = [AA_TO_IDX[aa] for aa in wt_seq]
+    scores = []
+    for variant_index in range(count):
+        sequence, positions = resolve_variant_mutations(
+            wt_seq, sequences[variant_index] if sequences is not None else None,
+            mutation_strings[variant_index] if mutation_strings is not None else None,
+            mutation_separator,
+        )
+        if any(aa not in AA_TO_IDX for aa in sequence):
+            raise ValueError("Variant sequence contains unsupported PMPNN amino acids.")
+        indices = [AA_TO_IDX[aa] for aa in sequence]
+        # Preserve the original mutation-loop accumulation order and precision
         delta_ll = 0.0
-        for i, (wt_aa, mut_aa) in enumerate(zip(wt_seq, mut_seq)):
-            if wt_aa != mut_aa:
-                wt_idx = AA_TO_IDX[wt_aa]
-                mut_idx = AA_TO_IDX[mut_aa]
-                delta_ll += (mean_log_p[i, mut_idx] - mean_log_p[i, wt_idx])
-                
-        predicted_fitness.append(delta_ll)
+        for i in positions:
+            delta_ll += log_p[i, indices[i]] - log_p[i, wt_idx[i]]
+        scores.append(delta_ll)
+    return np.asarray(scores)
 
-    return np.array(predicted_fitness)
+
+def score_mutants_from_probs(cond_probs_input, df, wt_seq):
+    """Score a DataFrame containing a 'mutated_sequence' column."""
+    return score_sequences_from_probs(cond_probs_input, df['mutated_sequence'], wt_seq)
 
 
 if __name__ == "__main__":
@@ -112,14 +130,14 @@ if __name__ == "__main__":
     # Option A: In-Memory Evaluation
     pred_fitness_mem = score_mutants_from_probs(cond_probs_dict, df, wt_seq)
     rho_mem, _ = spearmanr(true_scores, pred_fitness_mem)
-    print(f"\n[In-Memory] Spearman Correlation: {rho_mem:.4f}")
+    logger.info(f"\n[In-Memory] Spearman Correlation: {rho_mem:.4f}")
 
     # Option B: Loaded from Disk (.npz) Evaluation
     npz_path = "out/conditional_probs_only/BLAT_ECOLX.npz"
     if os.path.exists(npz_path):
         pred_fitness_file = score_mutants_from_probs(npz_path, df, wt_seq)
         rho_file, _ = spearmanr(true_scores, pred_fitness_file)
-        print(f"[From .npz ] Spearman Correlation: {rho_file:.4f}")
+        logger.info(f"[From .npz ] Spearman Correlation: {rho_file:.4f}")
         
         np.testing.assert_array_almost_equal(pred_fitness_mem, pred_fitness_file)
-        print("-> Results match exactly between in-memory and loaded .npz!\n" + '=' * 120 + '\n')
+        logger.info("-> Results match exactly between in-memory and loaded .npz!\n" + '=' * 120 + '\n')

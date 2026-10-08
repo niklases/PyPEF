@@ -15,10 +15,6 @@ from os.path import isfile, join
 from typing import Union
 import warnings
 import gc
-from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
-from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
-from pypef.gaussian_process.kermut.gp.predict import predict
-from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
 import torch
 import numpy as np
 import sklearn.base
@@ -37,6 +33,14 @@ from pypef.utils.variant_data import (
 )
 import pypef.dca.plmc_encoding
 from pypef.dca.plmc_encoding import PLMC, get_dca_data_parallel, get_encoded_sequence
+from pypef.gaussian_process.kermut.gp.instantiate_gp import instantiate_gp
+from pypef.gaussian_process.kermut.gp.optimize_gp import optimize_gp
+from pypef.gaussian_process.kermut.gp.predict import predict
+from pypef.gaussian_process.kermut.utils import prepare_kermut_inputs
+from pypef.plm.pmpnn.get_cond_probs import (
+    load_conditional_log_probs, score_sequences_from_probs, run_protein_mpnn_conditional
+)
+from pypef.plm.pmpnn.gp import train_pmpnn_gp, predict_pmpnn_gp
 from pypef.utils.to_file import predictions_out
 from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
@@ -77,6 +81,7 @@ class DCALLMHybridModel:
             lora_train: bool = False,
             gauss_opt: bool = False,
             gauss_comb_plm_emb: bool = False,
+            pmpnn_conditional_probs: dict | np.ndarray | str | os.PathLike | None = None,
             pdb_struct: str | os.PathLike | None = None,
             batch_size: int | None = None,
             n_epochs: int | None = None,
@@ -177,7 +182,41 @@ class DCALLMHybridModel:
                 "sequence inputs (`sequences` and `wt_sequence`) "
                 "as well as the path to the wild-type protein "
                 "structure file in PDB format (`pdb_struct`).")
+        # PMPNN inputs are conditional *log* probabilities from run_pmpnn or NPZ.
+        self.pmpnn_log_probs = None
+        self.pmpnn_aa_cond_probs = None
+        if pmpnn_conditional_probs is not None:
+            if self.sequences is None or self.wt_sequence is None:
+                raise ValueError("PMPNN requires sequences and wt_sequence.")
+            if len(self.sequences) != len(self.y_train):
+                raise ValueError("PMPNN sequences must align with y_train.")
+            self.pmpnn_log_probs = load_conditional_log_probs(
+                pmpnn_conditional_probs, self.wt_sequence
+            )
+            # Kermut uses the canonical 20-AA alphabet, excluding PMPNN's X.
+            self.pmpnn_aa_cond_probs = torch.softmax(
+                torch.as_tensor(self.pmpnn_log_probs[:, :20], dtype=torch.float32), dim=-1
+            ).to(self.device)
+        self.pmpnn_gauss_opt = self.pmpnn_log_probs is not None
+        self.pmpnn_gp = self.pmpnn_gp_likelihood = None
+        if self.pmpnn_gauss_opt and self.pdb_struct is None:
+            raise ValueError("PMPNN GP requires pmpnn_conditional_probs and pdb_struct.")
         self.train_and_optimize()
+
+    def _pmpnn_scores(self, sequences):
+        if sequences is None:
+            raise ValueError("PMPNN prediction requires variant sequences.")
+        return score_sequences_from_probs(self.pmpnn_log_probs, sequences, self.wt_sequence)
+
+    def _train_pmpnn_gp(self):
+        self.pmpnn_gp, self.pmpnn_gp_likelihood = train_pmpnn_gp(
+            self.sequences_ttrain, self.y_ttrain, self.pmpnn_log_probs,
+            self.pmpnn_aa_cond_probs, self.wt_sequence, self.pdb_struct, self.device
+        )
+
+    def _predict_pmpnn_gp(self, sequences):
+        return predict_pmpnn_gp(self.pmpnn_gp, self.pmpnn_gp_likelihood,
+                               sequences, self.pmpnn_log_probs, self.wt_sequence, self.device)
 
     @staticmethod
     def spearmanr(
@@ -733,7 +772,7 @@ class DCALLMHybridModel:
                     wt_input_ids=wt_input_ids,
                     model=base_model,
                     tokenized_sequences=None,
-                    extract_probs=True, 
+                    extract_probs=True,
                     wt_structure_input_ids=wt_struct_ids,
                     extract_conditional_aa_prob=True,
                     tokenizer=tokenizer,
@@ -995,6 +1034,10 @@ class DCALLMHybridModel:
                     )
                     split_predictors.append(combined_gp_pred_mean.detach().cpu().numpy())
 
+        if getattr(self, "pmpnn_log_probs", None) is not None:
+            split_predictors.append(self._pmpnn_scores(self.sequences_ttest))
+            if getattr(self, "pmpnn_gauss_opt", False):
+                split_predictors.append(self._predict_pmpnn_gp(self.sequences_ttest))
         return self.y_ttest, split_predictors
 
     def train_and_optimize(self) -> tuple:
@@ -1022,7 +1065,7 @@ class DCALLMHybridModel:
         )
 
         # Train and extract PLM predictions if applicable
-        if len(self.parameter_range) >= 4:
+        if self.llm_keys:
             self.train_llm()
             
             if self.llm_keys:
@@ -1067,6 +1110,36 @@ class DCALLMHybridModel:
                             f"Combined ({self.llm_keys}) Gaussian process ensemble test set performance: "
                             f"{spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
+
+        if self.pmpnn_log_probs is not None:
+            y_pmpnn_ttrain = self._pmpnn_scores(self.sequences_ttrain)
+            y_pmpnn_ttest = self._pmpnn_scores(self.sequences_ttest)
+            logger.info(
+                f"PMPNN unsupervised performance: "
+                f"Train set = {spearmanr(self.y_ttrain, y_pmpnn_ttrain)[0]:.3f}"
+                f" (N={len(self.y_ttrain)}), "
+                f"Test set = {spearmanr(self.y_ttest, y_pmpnn_ttest)[0]:.3f}"
+                f" (N={len(self.y_ttest)})"
+            )
+            predictors.append(y_pmpnn_ttest)
+            feature_names.append("PMPNN_base")
+            self.betas_str += "PMPNN-ZS, "
+            if self.pmpnn_gauss_opt:
+                self._train_pmpnn_gp()
+                y_pmpnn_gp_ttest = self._predict_pmpnn_gp(self.sequences_ttest)
+                predictors.append(y_pmpnn_gp_ttest)
+                logger.info(
+                    f"PMPNN Gaussian process ensemble test set performance: "
+                    f"{spearmanr(self.y_ttest, y_pmpnn_gp_ttest)[0]:.3f}"
+                    f" (N={len(self.y_ttest)})"
+                )
+                feature_names.append("PMPNN_gp")
+                self.betas_str += "PMPNN-GP, "
+        # Default bounds must cover every active ensemble component.
+        if len(self.parameter_range) < len(predictors):
+            self.parameter_range = list(self.parameter_range) + [(0, 1)] * (
+                len(predictors) - len(self.parameter_range)
+            )
 
         # Attach feature_names to self so it gets saved with the pickled model
         self.feature_names = feature_names
@@ -1251,6 +1324,14 @@ class DCALLMHybridModel:
             if self.gauss_opt and self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
                 if "combined_gp" in gp_preds:
                     self.hybrid_preds["combined_gp"] = gp_preds["combined_gp"]
+
+        if getattr(self, "pmpnn_log_probs", None) is not None:
+            pmpnn_scores = self._pmpnn_scores(sequences)
+            if len(pmpnn_scores) != len(y_dca):
+                raise ValueError("PMPNN sequences must align with x_dca.")
+            self.hybrid_preds["PMPNN_base"] = pmpnn_scores
+            if getattr(self, "pmpnn_gauss_opt", False):
+                self.hybrid_preds["PMPNN_gp"] = self._predict_pmpnn_gp(sequences)
 
         # Check feature key/count consistency against saved weights ---
         current_keys = list(self.hybrid_preds.keys())
@@ -1677,10 +1758,22 @@ def performance_ls_ts(
         seed: int | None = None,
         device: str | None = None,
         progress_cb=None,
-        abort_cb=None
+        abort_cb=None,
+        pmpnn_conditional_probs=None,
+        pmpnn: bool = False
 ):
     if device is None:
         device = get_device()
+    llm_names = parse_llm_flag(llm)
+    pmpnn = pmpnn or 'pmpnn' in llm_names
+    llm_names = [name for name in llm_names if name != 'pmpnn']
+    if pmpnn or pmpnn_conditional_probs is not None:
+        if ls_fasta is None or pdb_file is None or wt_seq is None:
+            raise ValueError("PMPNN training requires --ls, --pdb and --wt.")
+        if pmpnn_conditional_probs is None:
+            pmpnn_conditional_probs = run_protein_mpnn_conditional(
+                pdb_file, seed=seed if seed is not None else 13
+            )
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
     if ls_fasta is not None and ts_fasta is not None:
@@ -1709,7 +1802,6 @@ def performance_ls_ts(
                     f"{len(test_variants)} (after removing substitutions "
                     f"at gap positions)."
         )
-        llm_names = parse_llm_flag(llm)
         if llm_names:
             logger.info(f"Setting up PLM(s) for hybrid modeling: {', '.join(llm_names)}...")
             llm_dict = setup_llm_input(llm_names, train_sequences, wt_seq, pdb_file)
@@ -1737,6 +1829,7 @@ def performance_ls_ts(
             seed=seed,
             device=device,
             progress_cb=progress_cb,
+            pmpnn_conditional_probs=pmpnn_conditional_probs,
             abort_cb=abort_cb
         )
         y_test_pred, _indiv_preds = hybrid_model.hybrid_prediction(
@@ -1782,7 +1875,7 @@ def performance_ls_ts(
                     x_test, x_llm_test, sequences=list(test_sequences)
                 )
             else:
-                y_test_pred, _ = model.hybrid_prediction(x_test)
+                y_test_pred, _ = model.hybrid_prediction(x_test, sequences=list(test_sequences))
     
     elif ts_fasta is not None and model_pickle_file is None:
         # no LS and *no hybrid model* provided:
@@ -1972,7 +2065,7 @@ def predict_ps(
                             threads=threads, verbose=False, substitution_sep=separator
                         )
                         if not model.llm_keys:
-                            ys_pred, _ = model.hybrid_prediction(x_test)
+                            ys_pred, _ = model.hybrid_prediction(x_test, sequences=list(test_sequences))
                         else:
                             test_seqs = [str(seq) for seq in test_sequences]
                             x_llm_test = {
@@ -2043,7 +2136,7 @@ def predict_ps(
                     threads=threads, verbose=True, substitution_sep=separator
                 )
                 if not model.llm_keys:
-                    ys_pred, _ = model.hybrid_prediction(xs)
+                    ys_pred, _ = model.hybrid_prediction(xs, sequences=list(sequences))
                 else:
                     test_seqs = [str(seq) for seq in sequences]
                     xs_llm = {
@@ -2114,7 +2207,7 @@ def predict_directed_evolution(
         try:
             if model.llm_keys is None:
                 y_pred, _ = model.hybrid_prediction(
-                    np.atleast_2d(xs), verbose=False
+                    np.atleast_2d(xs), sequences=list(variant_sequence), verbose=False
                 )
             else:
                 x_llm = {

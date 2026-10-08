@@ -15,6 +15,10 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
 ts_logging.set_verbosity_error()
 
+from pypef.utils.variant_data import (
+    get_seqs_from_var_name, extract_positions_from_sequences
+)
+
 import logging
 logger = logging.getLogger('pypef.plm.utils')
 
@@ -168,6 +172,51 @@ def get_batches(
             a.append(a_remaining)
             a = [np.asarray(it) for it in a]
     return a
+
+
+def resolve_variant_mutations(wt_sequence: str, variant_sequence: str | None = None,
+                              mutation_string: str | None = None,
+                              mutation_separator: str = '/') -> tuple[str, list[int]]:
+    """Return the variant sequence and sorted zero-based substitution positions.
+
+    Mutation strings use one-based positions, e.g. ``A1C/C2D``. Either input
+    form may be supplied; when both are given they must describe the same variant.
+    ``WT`` or an empty mutation string denotes the wild type.
+    """
+
+    if variant_sequence is None and mutation_string is None:
+        raise ValueError("Provide variant_sequence or mutation_string.")
+    if variant_sequence is not None and len(variant_sequence) != len(wt_sequence):
+        raise ValueError("Variant sequence length must match the wild-type sequence.")
+    if mutation_string is not None:
+        substitutions = []
+        seen = set()
+        if mutation_string.strip().upper() not in ('', 'WT', 'WILDTYPE'):
+            if not mutation_separator:
+                raise ValueError("Mutation separator must not be empty.")
+            for token in mutation_string.split(mutation_separator):
+                match = re.fullmatch(r'([A-Z])([1-9][0-9]*)([A-Z])', token.strip())
+                if match is None:
+                    raise ValueError(f"Invalid substitution: {token!r}.")
+                original, position, replacement = match.groups()
+                index = int(position) - 1
+                if index >= len(wt_sequence):
+                    raise ValueError(f"Mutation position {position} exceeds wild-type length.")
+                if index in seen:
+                    raise ValueError(f"Duplicate mutation position: {position}.")
+                if wt_sequence[index] != original:
+                    raise ValueError(f"Mutation {token!r} does not match the wild-type residue.")
+                seen.add(index)
+                substitutions.append(token.strip())
+        _, _, reconstructed_sequences = get_seqs_from_var_name(
+            wt_sequence, [substitutions or ['WT']]
+        )
+        reconstructed = reconstructed_sequences[0]
+        if variant_sequence is not None and variant_sequence != reconstructed:
+            raise ValueError("Variant sequence and mutation string describe different variants.")
+        variant_sequence = reconstructed
+    positions = list(extract_positions_from_sequences(wt_sequence, [variant_sequence])[0])
+    return variant_sequence, positions
 
 
 def parse_mut_position(mut_string: str | list | tuple, mut_separator: str = '/') -> list[int]:

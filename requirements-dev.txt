@@ -11,6 +11,7 @@ biotite
 schema
 pathos
 peft
+transformers>=4.40.0
 nvidia-ml-py
 gpytorch
 huggingface_hub[hf_xet]

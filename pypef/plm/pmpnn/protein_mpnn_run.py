@@ -1,5 +1,3 @@
-# protein_mpnn/protein_mpnn_run.py
-
 import os.path
 import json, time, os, sys
 import numpy as np
@@ -11,8 +9,15 @@ import os.path
 import subprocess
 from tqdm import tqdm
 
-from protein_mpnn_utils import _scores, _S_to_seq, tied_featurize, parse_PDB
-from protein_mpnn_utils import StructureDataset, StructureDatasetPDB, ProteinMPNN
+from pypef.plm.pmpnn.protein_mpnn_utils import (
+    pmpnn_scores, pmpnn_aaidx_to_seq, tied_featurize, parse_PDB
+)
+from pypef.plm.pmpnn.protein_mpnn_utils import (
+    StructureDataset, StructureDatasetPDB, ProteinMPNN
+)
+
+import logging
+logger = logging.getLogger(__name__)
 
 
 def run_pmpnn(
@@ -70,19 +75,19 @@ def run_pmpnn(
     else: 
         dir_path = os.path.dirname(__file__)
         if ca_only:
-            print("Using CA-ProteinMPNN!")
+            logger.info("Using CA-ProteinMPNN!")
             model_folder_path = os.path.join(dir_path, 'ca_model_weights')
             if use_soluble_model:
-                print("WARNING: CA-SolubleMPNN is not available yet")
+                logger.warning("WARNING: CA-SolubleMPNN is not available yet")
                 sys.exit()
         else:
             if use_soluble_model:
-                print("Using ProteinMPNN trained on soluble proteins only!")
+                logger.info("Using ProteinMPNN trained on soluble proteins only!")
                 model_folder_path = os.path.join(dir_path, 'soluble_model_weights')
             else:
                 model_folder_path = os.path.join(dir_path, 'vanilla_model_weights')
     checkpoint_path = os.path.join(model_folder_path, f'{model_name}.pt')
-    print(f"Loading model from {checkpoint_path}")
+    logger.info(f"Loading model from {checkpoint_path}")
     folder_for_outputs = out_folder
     
     NUM_BATCHES = num_seq_per_target // batch_size
@@ -94,7 +99,7 @@ def run_pmpnn(
     print_all = suppress_print == 0 
     omit_AAs_np = np.array([AA in omit_AAs_list for AA in alphabet]).astype(np.float32)
     device = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
-    print(f"Device: {device}")
+    logger.info(f"Device: {device}")
     if os.path.isfile(chain_id_jsonl):
         with open(chain_id_jsonl, 'r') as json_file:
             json_list = list(json_file)
@@ -103,8 +108,8 @@ def run_pmpnn(
     else:
         chain_id_dict = None
         if print_all:
-            print(40*'-')
-            print('chain_id_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('chain_id_jsonl is NOT loaded')
         
     if os.path.isfile(fixed_positions_jsonl):
         with open(fixed_positions_jsonl, 'r') as json_file:
@@ -113,8 +118,8 @@ def run_pmpnn(
             fixed_positions_dict = json.loads(json_str)
     else:
         if print_all:
-            print(40*'-')
-            print('fixed_positions_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('fixed_positions_jsonl is NOT loaded')
         fixed_positions_dict = None
     
     
@@ -126,8 +131,8 @@ def run_pmpnn(
             pssm_dict.update(json.loads(json_str))
     else:
         if print_all:
-            print(40*'-')
-            print('pssm_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('pssm_jsonl is NOT loaded')
         pssm_dict = None
     
     
@@ -138,8 +143,8 @@ def run_pmpnn(
             omit_AA_dict = json.loads(json_str)
     else:
         if print_all:
-            print(40*'-')
-            print('omit_AA_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('omit_AA_jsonl is NOT loaded')
         omit_AA_dict = None
     
     
@@ -150,8 +155,8 @@ def run_pmpnn(
             bias_AA_dict = json.loads(json_str)
     else:
         if print_all:
-            print(40*'-')
-            print('bias_AA_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('bias_AA_jsonl is NOT loaded')
         bias_AA_dict = None
     
     
@@ -162,8 +167,8 @@ def run_pmpnn(
             tied_positions_dict = json.loads(json_str)
     else:
         if print_all:
-            print(40*'-')
-            print('tied_positions_jsonl is NOT loaded')
+            logger.info(40*'-')
+            logger.info('tied_positions_jsonl is NOT loaded')
         tied_positions_dict = None
 
     
@@ -174,16 +179,16 @@ def run_pmpnn(
         for json_str in json_list:
             bias_by_res_dict = json.loads(json_str)
         if print_all:
-            print('bias by residue dictionary is loaded')
+            logger.info('bias by residue dictionary is loaded')
     else:
         if print_all:
-            print(40*'-')
-            print('bias by residue dictionary is not loaded, or not provided')
+            logger.info(40*'-')
+            logger.info('bias by residue dictionary is not loaded, or not provided')
         bias_by_res_dict = None
    
 
     if print_all: 
-        print(40*'-')
+        logger.info(40*'-')
     bias_AAs_np = np.zeros(len(alphabet))
     if bias_AA_dict:
             for n, AA in enumerate(alphabet):
@@ -221,9 +226,9 @@ def run_pmpnn(
     model.eval()
 
     if print_all:
-        print(40*'-')
-        print('Number of edges:', checkpoint['num_edges'])
-        print(f'Training noise level: {noise_level_print}A')
+        logger.info(40*'-')
+        logger.info('%s %s', 'Number of edges:', checkpoint['num_edges'])
+        logger.info(f'Training noise level: {noise_level_print}A')
  
     # Build paths for experiment
     base_folder = folder_for_outputs
@@ -293,8 +298,8 @@ def run_pmpnn(
                     global_native_score_list = []
                     input_seq_length = len(input_seqs[fc])
                     if fc == 0:
-                        print('Chain encoding all length:', list(chain_encoding_all.size())[1])
-                        print(f'Input sequence length: {input_seq_length}')
+                        logger.info('%s %s', 'Chain encoding all length:', list(chain_encoding_all.size())[1])
+                        logger.info(f'Input sequence length: {input_seq_length}')
                     S_input = torch.tensor([alphabet_dict[AA] for AA in input_seqs[fc]], device=device)[None,:].repeat(X.shape[0], 1)
                     S[:,:input_seq_length] = S_input #assumes that S and S_input are alphabetically sorted for masked_chains
                     
@@ -302,10 +307,10 @@ def run_pmpnn(
                         randn_1 = torch.randn(chain_M.shape, device=X.device)
                         log_probs = model(X, S, mask, chain_M*chain_M_pos, residue_idx, chain_encoding_all, randn_1)
                         mask_for_loss = mask*chain_M*chain_M_pos
-                        scores = _scores(S, log_probs, mask_for_loss)
+                        scores = pmpnn_scores(S, log_probs, mask_for_loss)
                         native_score = scores.cpu().data.numpy()
                         native_score_list.append(native_score)
-                        global_scores = _scores(S, log_probs, mask)
+                        global_scores = pmpnn_scores(S, log_probs, mask)
                         global_native_score = global_scores.cpu().data.numpy()
                         global_native_score_list.append(global_native_score)
                     native_score = np.concatenate(native_score_list, 0)
@@ -321,10 +326,10 @@ def run_pmpnn(
                     global_ns_std_print = np.format_float_positional(np.float32(global_ns_std), unique=False, precision=4)
 
                     ns_sample_size = native_score.shape[0]
-                    seq_str = _S_to_seq(S[0,], chain_M[0,])
+                    seq_str = pmpnn_aaidx_to_seq(S[0,], chain_M[0,])
 
                     if fc < 9:
-                        print(f'Score for {name_}_{fc+1} from FASTA, mean: {ns_mean_print}, std: {ns_std_print}, '
+                        logger.info(f'Score for {name_}_{fc+1} from FASTA, mean: {ns_mean_print}, std: {ns_std_print}, '
                               f'sample size: {ns_sample_size},  global score, mean: {global_ns_mean_print}, '
                               f'std: {global_ns_std_print}, sample size: {ns_sample_size}\n Silencing further score prints...')
                     names.append(f'{name_}_{fc+1}')
@@ -341,13 +346,13 @@ def run_pmpnn(
                     'mean_global_score': mean_global_scores, 
                     'mean_global_score_std': mean_global_scores_stds
                 })
-                print('Writing scores to', os.path.abspath(base_folder + 'pmpnn_mean_scores.csv'), '...')
+                logger.info('%s %s %s', 'Writing scores to', os.path.abspath(base_folder + 'pmpnn_mean_scores.csv'), '...')
                 score_df.to_csv(os.path.abspath(base_folder + 'pmpnn_mean_scores.csv'), sep=',', index=False)
                 result_dict.update({'mean_global_score': mean_global_scores})
 
             elif conditional_probs_only:
                 if print_all:
-                    print(f'Calculating conditional probabilities for {name_}')
+                    logger.info(f'Calculating conditional probabilities for {name_}')
                 conditional_probs_only_file = base_folder + '/conditional_probs_only/' + batch_clones[0]['name']
                 log_conditional_probs_list = []
                 for j in range(NUM_BATCHES):
@@ -362,7 +367,7 @@ def run_pmpnn(
                 result_dict.update({'conditional_probs': concat_log_p})
             elif unconditional_probs_only:
                 if print_all:
-                    print(f'Calculating sequence unconditional probabilities for {name_}')
+                    logger.info(f'Calculating sequence unconditional probabilities for {name_}')
                 unconditional_probs_only_file = base_folder + '/unconditional_probs_only/' + batch_clones[0]['name']
                 log_unconditional_probs_list = []
                 for j in range(NUM_BATCHES):
@@ -376,16 +381,16 @@ def run_pmpnn(
                 randn_1 = torch.randn(chain_M.shape, device=X.device)
                 log_probs = model(X, S, mask, chain_M*chain_M_pos, residue_idx, chain_encoding_all, randn_1)
                 mask_for_loss = mask*chain_M*chain_M_pos
-                scores = _scores(S, log_probs, mask_for_loss) #score only the redesigned part
+                scores = pmpnn_scores(S, log_probs, mask_for_loss) #score only the redesigned part
                 native_score = scores.cpu().data.numpy()
-                global_scores = _scores(S, log_probs, mask) #score the whole structure-sequence
+                global_scores = pmpnn_scores(S, log_probs, mask) #score the whole structure-sequence
                 global_native_score = global_scores.cpu().data.numpy()
                 # Generate some sequences
                 ali_file = base_folder + '/seqs/' + batch_clones[0]['name'] + '.fa'
                 score_file = base_folder + '/scores/' + batch_clones[0]['name'] + '.npz'
                 probs_file = base_folder + '/probs/' + batch_clones[0]['name'] + '.npz'
                 if print_all:
-                    print(f'Generating sequences for: {name_}')
+                    logger.info(f'Generating sequences for: {name_}')
                 t0 = time.time()
                 with open(ali_file, 'w') as f:
                     for temp in temperatures:
@@ -415,10 +420,10 @@ def run_pmpnn(
                                 use_input_decoding_order=True, decoding_order=sample_dict["decoding_order"]
                                 )
                             mask_for_loss = mask*chain_M*chain_M_pos
-                            scores = _scores(S_sample, log_probs, mask_for_loss)
+                            scores = pmpnn_scores(S_sample, log_probs, mask_for_loss)
                             scores = scores.cpu().data.numpy()
                             
-                            global_scores = _scores(S_sample, log_probs, mask) #score the whole structure-sequence
+                            global_scores = pmpnn_scores(S_sample, log_probs, mask) #score the whole structure-sequence
                             global_scores = global_scores.cpu().data.numpy()
                             
                             all_probs_list.append(sample_dict["probs"].cpu().data.numpy())
@@ -434,12 +439,12 @@ def run_pmpnn(
                                         , axis=-1
                                     ) * mask_for_loss[b_ix]
                                 ) / torch.sum(mask_for_loss[b_ix])
-                                seq = _S_to_seq(S_sample[b_ix], chain_M[b_ix])
+                                seq = pmpnn_aaidx_to_seq(S_sample[b_ix], chain_M[b_ix])
                                 score = scores[b_ix]
                                 score_list.append(score)
                                 global_score = global_scores[b_ix]
                                 global_score_list.append(global_score)
-                                native_seq = _S_to_seq(S[b_ix], chain_M[b_ix])
+                                native_seq = pmpnn_aaidx_to_seq(S[b_ix], chain_M[b_ix])
                                 if b_ix == 0 and j==0 and temp==temperatures[0]:
                                     start = 0
                                     end = 0
@@ -513,5 +518,5 @@ def run_pmpnn(
                 num_seqs = len(temperatures)*NUM_BATCHES*BATCH_COPIES
                 total_length = X.shape[1]
                 if print_all:
-                    print(f'{num_seqs} sequences of length {total_length} generated in {dt} seconds')
+                    logger.info(f'{num_seqs} sequences of length {total_length} generated in {dt} seconds')
     return result_dict        

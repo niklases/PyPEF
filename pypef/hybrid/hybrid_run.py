@@ -8,7 +8,7 @@ from pypef.settings import USE_RAY
 if USE_RAY:
     import ray
 
-from pypef.utils.variant_data import read_csv, get_wt_sequence
+from pypef.utils.variant_data import get_wt_sequence
 from pypef.dca.plmc_encoding import save_plmc_dca_encoding_model
 from pypef.hybrid.hybrid_model import get_model_and_type, performance_ls_ts, predict_ps
 from pypef.dca.gremlin_inference import save_gremlin_as_pickle, save_corr_csv, plot_all_corr_mtx, plot_predicted_ssm
@@ -56,6 +56,8 @@ def run_pypef_hybrid_modeling(arguments, progress_cb=None, abort_cb=None):
             lora_train=arguments['--lora'],
             gauss_opt=arguments['--gauss_opt'],
             gauss_comb=arguments['--gauss_comb'],
+            pmpnn=arguments.get('--pmpnn', False),
+            pmpnn_conditional_probs=arguments.get('--pmpnn_cond_probs'),
             seed=arguments['--seed'],
             progress_cb=progress_cb,
             abort_cb=abort_cb

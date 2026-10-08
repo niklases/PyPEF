@@ -9,6 +9,9 @@ import itertools
 
 #A number of functions/classes are adopted from: https://github.com/jingraham/neurips19-graph-protein-design
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def parse_fasta(filename,limit=-1, omit=[]):
     header = []
@@ -32,7 +35,7 @@ def parse_fasta(filename,limit=-1, omit=[]):
     return np.array(header), np.array(sequence)
 
 
-def _scores(S, log_probs, mask):
+def pmpnn_scores(S, log_probs, mask):
     """ Negative log probabilities """
     criterion = torch.nn.NLLLoss(reduction='none')
     loss = criterion(
@@ -43,7 +46,7 @@ def _scores(S, log_probs, mask):
     return scores
 
 
-def _S_to_seq(S, mask):
+def pmpnn_aaidx_to_seq(S, mask):
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     seq = ''.join([alphabet[c] for c, m in zip(S.tolist(), mask.tolist()) if m > 0])
     return seq
@@ -491,7 +494,7 @@ class StructureDataset():
                         discard_count['too_long'] += 1
                 else:
                     if verbose:
-                        print(name, bad_chars, entry['seq'])
+                        logger.info('%s %s %s', name, bad_chars, entry['seq'])
                     discard_count['bad_chars'] += 1
 
                 # Truncate early
@@ -500,9 +503,9 @@ class StructureDataset():
 
                 if verbose and (i + 1) % 1000 == 0:
                     elapsed = time.time() - start
-                    print('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
+                    logger.info('{} entries ({} loaded) in {:.1f} s'.format(len(self.data), i+1, elapsed))
             if verbose:
-                print('discarded', discard_count)
+                logger.info('%s %s', 'discarded', discard_count)
     def __len__(self):
         return len(self.data)
 
@@ -543,7 +546,7 @@ class StructureDatasetPDB():
             if verbose and (i + 1) % 1000 == 0:
                 elapsed = time.time() - start
 
-            #print('Discarded', discard_count)
+            # logger.info('Discarded %s', discard_count)
     def __len__(self):
         return len(self.data)
 

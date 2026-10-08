@@ -31,7 +31,7 @@ a framework written in Python 3 for performing sequence-based machine learning-a
 - One-hot encoding
 - Amino acid descriptor sets (taken from AAindex database) encoding
 - Direct coupling analysis (amino acid coevolution based on multiple sequence alignments) based encoding
-- PLM embeddings (currently, [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST))
+- PLM embeddings and amino acid probabilites (currently, [ESM](https://github.com/facebookresearch/esm), [ProSST](https://github.com/ai4protein/ProSST), and [ProteinMPNN](https://github.com/dauparas/ProteinMPNN))
 
 <p align="center">
     <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/ML_Model_Performance_DCA_GREMLIN.png" alt="drawing" width="500"/>
@@ -121,7 +121,8 @@ Pull from Docker Hub or build the image using the stored [Dockerfile](./Dockerfi
     - torch-geometric [![Python version](https://img.shields.io/pypi/pyversions/torch-geometric?label=torch-geometric%3A%20python)](https://github.com/pyg-team/pytorch_geometric)
     - gpytorch [![Python version](https://img.shields.io/pypi/pyversions/gpytorch?label=gpytorch%3A%20python)](https://github.com/cornellius-gp/gpytorch)
     - scikit-learn [![Python version](https://img.shields.io/pypi/pyversions/scikit-learn?label=scikit-learn%3A%20python)](https://github.com/scikit-learn/scikit-learn)
-    - peft (Hugging Face transformers) [![Python version](https://img.shields.io/pypi/pyversions/peft?label=peft%3A%20python)](https://github.com/huggingface/peft)
+    - peft [![Python version](https://img.shields.io/pypi/pyversions/peft?label=peft%3A%20python)](https://github.com/huggingface/peft)
+    - transformers [![Python version](https://img.shields.io/pypi/pyversions/transformers?label=transformers%3A%20python)](https://github.com/huggingface/transformers)
     - nvidia-ml-py [![Python version](https://img.shields.io/pypi/pyversions/nvidia-ml-py?label=nvidia-ml-py%3A%20python)](https://pypi.org/project/nvidia-ml-py)
     - huggingface_hub[hf_xet] [![Python version](https://img.shields.io/pypi/pyversions/huggingface_hub?label=huggingface_hub%3A%20python)](https://github.com/huggingface/huggingface_hub)
     - matplotlib [![Python version](https://img.shields.io/pypi/pyversions/matplotlib?label=matplotlib%3A%20python)](https://github.com/matplotlib/matplotlib)
@@ -356,7 +357,7 @@ Optimization of the model contributions to the final hybrid model using the [dif
 - DCA-based statistical prediction of the evolutionary energy, i.e., probability, of a variant relative to the wild type (see [EVmutation](https://marks.hms.harvard.edu/evmutation/); [EVmutation repository](https://github.com/debbiemarkslab/EVmutation)/[EVcouplings repository](https://github.com/debbiemarkslab/EVcouplings)).
 - ML-based supervised training with Ridge regression on training subsets of DCA-encoded sequences and the corresponding fitness values (similar to the pure ML approach using the DCA-based encoding technique in combination with Ridge regression).
 
-Beyond the DCA-only case, one or more protein language models (PLMs; currently [ESM](https://github.com/facebookresearch/esm) and [ProSST](https://github.com/ai4protein/ProSST)) can be added as additional components via `--plm` (multiple PLMs combined with `+`, e.g. `--plm esm+prosst`). Each PLM contributes an unsupervised zero-shot score and a supervised, few-shot-tuned prediction; the supervised PLM tuning can be performed by (i) a lightweight adjustment of the ensemble weights (default), (ii) [LoRA](https://arxiv.org/abs/2106.09685)-based fine-tuning of the PLM (`--lora`), or, as an alternative to LoRA fine-tuning, (iii) a Gaussian process (GP) fitted on the PLM embeddings and zero-shot scores (`--gauss_opt`, with `--gauss_comb` building a single combined GP across two PLMs). The GP modeling adapts the composite-kernel approach of [Kermut](https://github.com/petergroth/kermut) (Groth et al., *Kermut: Composite kernel regression for protein variant effects*, NeurIPS 2024, [OpenReview](https://openreview.net/forum?id=jM9atrvUii)). All unsupervised and supervised component outputs are then blended into the final ensemble prediction.
+Beyond the DCA-only case, one or more protein language models (PLMs; currently [ESM](https://github.com/facebookresearch/esm), [ProSST](https://github.com/ai4protein/ProSST), and [ProteinMPNN](https://github.com/dauparas/ProteinMPNN)) can be added as additional components via `--plm` (multiple PLMs combined with `+`, e.g. `--plm esm+prosst`). Each PLM contributes an unsupervised zero-shot score and a supervised, few-shot-tuned prediction; the supervised PLM tuning can be performed by (i) a lightweight adjustment of the ensemble weights (default), (ii) [LoRA](https://arxiv.org/abs/2106.09685)-based fine-tuning of the PLM (`--lora`), or, as an alternative to LoRA fine-tuning, (iii) a Gaussian process (GP) fitted on the PLM embeddings and zero-shot scores (`--gauss_opt`, with `--gauss_comb` building a single combined GP across two PLMs). The GP modeling adapts the composite-kernel approach of [Kermut](https://github.com/petergroth/kermut) (Groth et al., *Kermut: Composite kernel regression for protein variant effects*, NeurIPS 2024, [OpenReview](https://openreview.net/forum?id=jM9atrvUii)). All unsupervised and supervised component outputs are then blended into the final ensemble prediction.
 
 <a name="grids"></a>
 ## Model Hyperparameter Grids for Training
