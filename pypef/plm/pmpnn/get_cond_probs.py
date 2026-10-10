@@ -9,6 +9,8 @@ from pypef.plm.utils import resolve_variant_mutations
 from pypef.plm.pmpnn.protein_mpnn_run import run_pmpnn
 
 import logging
+
+from pypef.utils.helpers import tqdm
 logger = logging.getLogger(__name__)
 
 # ProteinMPNN 21-character alphabet mapping
@@ -16,11 +18,9 @@ ALPHABET = 'ACDEFGHIKLMNPQRSTVWYX'
 AA_TO_IDX = {aa: i for i, aa in enumerate(ALPHABET)}
 
 
-
-
 def run_protein_mpnn_conditional(pdb_path, out_folder="out", seed=13, num_samples=10):
     """Step 1: Run ProteinMPNN on structure and return conditional log-probs."""
-    logger.info('\nRunning ProteinMPNN (conditional_probs_only)...\n' + '-' * 80)
+    logger.info('Running ProteinMPNN (conditional_probs_only)...')
     
     cond_probs_dict = run_pmpnn(
         input_seqs=[],               
@@ -76,8 +76,13 @@ def load_conditional_log_probs(cond_probs_input, wt_seq):
     return log_p
 
 
-def score_sequences_from_probs(cond_probs_input, sequences=None, wt_seq=None,
-                               mutation_strings=None, mutation_separator="/"):
+def score_sequences_from_probs(
+        cond_probs_input, 
+        sequences=None, 
+        wt_seq=None,
+        mutation_strings=None, 
+        mutation_separator="/"
+):
     """Sum mutant-minus-WT conditional log likelihoods over sequence positions."""
     if wt_seq is None:
         raise ValueError("Provide wt_seq.")
@@ -93,7 +98,7 @@ def score_sequences_from_probs(cond_probs_input, sequences=None, wt_seq=None,
     log_p = load_conditional_log_probs(cond_probs_input, wt_seq)
     wt_idx = [AA_TO_IDX[aa] for aa in wt_seq]
     scores = []
-    for variant_index in range(count):
+    for variant_index in tqdm(range(count), desc='PMPNN variant scoring using cond. probs.'):
         sequence, positions = resolve_variant_mutations(
             wt_seq, sequences[variant_index] if sequences is not None else None,
             mutation_strings[variant_index] if mutation_strings is not None else None,

@@ -66,7 +66,7 @@ if ! [[ "$max_idx" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-for llm in prosst+esm; do
+for llm in prosst+esm+pmpnn; do
 
     # Set hybrid model split scheme based on split_method
     if [ "$split_method" = "fold_rand_multiples" ]; then

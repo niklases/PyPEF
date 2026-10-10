@@ -18,16 +18,22 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.utils.variant_data import check_alignment, get_mismatches, get_seqs_from_var_name, shift_and_trim_vars_seqs
+from pypef.utils.variant_data import (
+    check_alignment, get_mismatches, get_seqs_from_var_name, shift_and_trim_vars_seqs
+)
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.inference import esm_setup, prosst_setup, tokenize_sequences
+from pypef.plm.pmpnn.get_cond_probs import run_protein_mpnn_conditional
 
 import logging
 package_logger = logging.getLogger('pypef')
 package_logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(filename)s:%(lineno)d -- %(message)s')
+formatter = logging.Formatter(
+    "%(asctime)s.%(msecs)03d %(levelname)s %(filename)s:%(lineno)d -- %(message)s",
+    "%Y-%m-%d %H:%M:%S"
+)
 handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
@@ -272,6 +278,14 @@ def main(cfg: DictConfig) -> None:
         #    x_llm_test = None
         #    print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
         #          f'would take up (too) much time...')
+
+        if "pmpnn" in llm.lower():
+            pmpnn_conditional_probs = run_protein_mpnn_conditional(
+                pdb_file, seed=seed
+            )
+        else:
+            pmpnn_conditional_probs = None
+
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train),
             y_train=y_train,
@@ -282,6 +296,7 @@ def main(cfg: DictConfig) -> None:
             splitting_scheme=hybrid_model_split_scheme,
             lora_train=False,
             gauss_opt=gauss_opt,
+            pmpnn_conditional_probs=pmpnn_conditional_probs,
             pdb_struct=pdb_file,
             batch_size=batch_size,
             seed=seed,

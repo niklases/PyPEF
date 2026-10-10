@@ -545,6 +545,7 @@ scripts/ProteinGym_runs/crossval_mut_performance_violin_v0.5.0.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0_violin.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0.png
 
+#scripts/ProteinGym_runs/official/benchmark_runs/out/conditional_probs_only/*.npz
 scripts/ProteinGym_runs/A0A1I9GEU1_NEIME_Kennouche_2019_pos_aa_distr.png
 scripts/ProteinGym_runs/A0A2Z5U3Z0_9INFA_Wu_2014_pos_aa_distr.png
 scripts/ProteinGym_runs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png

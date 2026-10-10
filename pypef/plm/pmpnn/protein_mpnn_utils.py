@@ -139,7 +139,9 @@ def parse_PDB_biounits(x, atoms=['N','CA','C'], chain=None):
       return 'no_chain', 'no_chain'
 
 
-def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False):
+def parse_pdb(path_to_pdb, input_chain_list=None, ca_only=False):
+    # to avoid error "AttributeError: 'PosixPath' object has no attribute 'rfind'"
+    path_to_pdb = str(path_to_pdb)
     c=0
     pdb_dict_list = []
     init_alphabet = ['A', 'B', 'C', 'D', 'E', 'F', 'G','H', 'I', 'J','K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T','U', 'V','W','X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g','h', 'i', 'j','k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't','u', 'v','w','x', 'y', 'z']
