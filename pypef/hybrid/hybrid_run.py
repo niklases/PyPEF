@@ -58,6 +58,7 @@ def run_pypef_hybrid_modeling(arguments, progress_cb=None, abort_cb=None):
             gauss_comb=arguments['--gauss_comb'],
             pmpnn=arguments.get('--pmpnn', False),
             pmpnn_conditional_probs=arguments.get('--pmpnn_cond_probs'),
+            alpha=arguments.get('--alpha'),
             seed=arguments['--seed'],
             progress_cb=progress_cb,
             abort_cb=abort_cb

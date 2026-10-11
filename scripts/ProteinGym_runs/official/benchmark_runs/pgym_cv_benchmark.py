@@ -142,7 +142,7 @@ def main(cfg: DictConfig) -> None:
         mapping = check_alignment(wt_msa_trimmed_sequence, pdb_seq)
         pdb_trimmed_common_sequence = mapping['common_seq']  # Use common sequence (WT (MSA-trimmed) seq trimmed to PDB seq)
         print(f"New WT sequence trimmed to common sequence/PDB sequence length): {len(pdb_trimmed_common_sequence)}")
-        print(mapping['identity'])
+        print(f"Seq. identity: {mapping['identity']:.2f}")
         print(mapping['alignment_obj'])
         if mapping and mapping['identity']:
             # Perform the shift and trim

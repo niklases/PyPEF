@@ -160,7 +160,7 @@ Usage:
         [--ts TEST_SET] [--ps PREDICTION_SET]
         [--ls LEARNING_SET] [--label]
         [--plm PLM] [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
-        [--lora] [--gauss_opt] [--gauss_comb]
+        [--lora] [--gauss_opt] [--gauss_comb] [--alpha]
         [--pmpnn] [--pmpnn_cond_probs NPZ_FILE]
         [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                           [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
@@ -197,6 +197,8 @@ Usage:
 
 Options:
   --all                             Finally training on all data [default: False].
+  --alpha                           Weight for Spearman and MSE optimization, 1.0 for pure ranking component, 
+                                    0.0 for only MSE-based optimization, in between a mixture [default: 0.5]. 
   --conc                            Concatenating mutational level variants for predicting variants
                                     from next higher level [default: False].
   --cont                            Continuous splits in five-fold cross-validation fashion that 
@@ -356,6 +358,7 @@ logger.addHandler(ch)
 
 schema = Schema({
     Optional('--all'): bool,
+    Optional('--alpha'): Use(float),
     Optional('--conc'): bool,
     Optional('--cont'): bool,
     Optional('--csvaa'): bool,

@@ -44,7 +44,7 @@ def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, monkeypatch):
         x, targets, sequences=sequences, wt_sequence='AC',
         pmpnn_conditional_probs={'log_p': log_p}, x_dca_wt=np.zeros(2),
         pdb_struct='mock.pdb',
-        alphas=np.array([1.]), batch_size=1, seed=8, device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=8, device='cpu',
         n_ensemble_splits=2, ensemble_func=ensemble_func,
     )
     assert model.feature_names == ['y_dca', 'y_ridge', 'PMPNN_base', 'PMPNN_gp']
@@ -76,7 +76,7 @@ def test_separate_pmpnn_gp(monkeypatch):
         x, rng.normal(size=24), x_dca_wt=np.zeros(2),
         sequences=sequences, wt_sequence='AC', pmpnn_conditional_probs=log_p,
         pdb_struct='mock.pdb', device='cpu',
-        alphas=np.array([1.]), batch_size=1, seed=19, n_ensemble_splits=2,
+        ridge_alphas=np.array([1.]), batch_size=1, seed=19, n_ensemble_splits=2,
     )
     assert not model.gauss_opt
     assert model.feature_names == ['y_dca', 'y_ridge', 'PMPNN_base', 'PMPNN_gp']

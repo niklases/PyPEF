@@ -59,6 +59,29 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
         torch.backends.cudnn.benchmark = False
 
 
+def ols_align(y_true: torch.Tensor, y_pred: torch.Tensor, return_slope_intercept: bool = True) -> torch.Tensor:
+    """
+    Applies Ordinary Least Squares (OLS) linear regression scaling to y_pred 
+    to match the scale/shift of y_true, minimizing MSE without changing ranks.
+    """
+    mean_true = y_true.mean(dim=-1, keepdim=True)
+    mean_pred = y_pred.mean(dim=-1, keepdim=True)
+    
+    pred_centered = y_pred - mean_pred
+    true_centered = y_true - mean_true
+    
+    cov = (pred_centered * true_centered).sum(dim=-1, keepdim=True)
+    var_pred = (pred_centered ** 2).sum(dim=-1, keepdim=True).clamp(min=1e-8)
+    
+    slope = cov / var_pred
+    intercept = mean_true - slope * mean_pred
+
+    if return_slope_intercept:
+        return slope * y_pred + intercept, slope, intercept
+    
+    return slope * y_pred + intercept
+
+
 def hybrid_corr_mse_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
@@ -96,9 +119,11 @@ def hybrid_corr_mse_loss(
 
     if method.startswith("listMLE"):
         _, indices = torch.sort(y_true, descending=True, dim=-1)
-        y_pred_sorted = y_pred[indices]
-        log_cumsum = torch.logcumsumexp(y_pred_sorted.flip(-1), dim=-1).flip(-1)
-        loss_corr = -(y_pred_sorted - log_cumsum).mean()
+        y_pred_sorted = torch.gather(y_pred, dim=-1, index=indices)
+        max_vals = y_pred_sorted.max(dim=-1, keepdim=True).values
+        y_pred_stable = y_pred_sorted - max_vals
+        log_cumsum = torch.logcumsumexp(y_pred_stable.flip(-1), dim=-1).flip(-1)
+        loss_corr = -(y_pred_stable - log_cumsum).mean()
     elif method.startswith("pairwise-margin"):
         y_true_col = y_true.unsqueeze(-1)
         y_pred_col = y_pred.unsqueeze(-1)

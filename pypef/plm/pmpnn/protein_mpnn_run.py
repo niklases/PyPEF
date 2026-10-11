@@ -34,7 +34,7 @@ def run_pmpnn(
         num_seq_per_target: int = 5,
         sampling_temp: float = 0.1,
         model_name: str = "v_48_020",
-        use_soluble_model: bool= False,  # str = "store_true",
+        use_soluble_model: bool= False,
         omit_AAs: str = 'X',
         seed: int | None = None,
         batch_size: int = 1,
@@ -88,7 +88,6 @@ def run_pmpnn(
                 model_folder_path = os.path.join(dir_path, 'vanilla_model_weights')
     checkpoint_path = os.path.join(model_folder_path, f'{model_name}.pt')
     logger.info(f"Loading ProteinMPNN model from {checkpoint_path}")
-    folder_for_outputs = out_folder
     
     NUM_BATCHES = num_seq_per_target // batch_size
     BATCH_COPIES = batch_size
@@ -198,7 +197,7 @@ def run_pmpnn(
     if pdb_path:
         pdb_dict_list = parse_pdb(pdb_path, ca_only=ca_only)
         dataset_valid = StructureDatasetPDB(pdb_dict_list, truncate=None, max_length=max_length)
-        all_chain_list = [item[-1:] for item in list(pdb_dict_list[0]) if item[:9]=='seq_chain'] #['A','B', 'C',...]
+        all_chain_list = [item[-1:] for item in list(pdb_dict_list[0]) if item[:9]=='seq_chain']  # ['A','B', 'C',...]
         if pdb_path_chains:
             designed_chain_list = [str(item) for item in pdb_path_chains.split()]
         else:
@@ -231,26 +230,25 @@ def run_pmpnn(
         logger.info(f'Training noise level: {noise_level_print}A')
  
     # Build paths for experiment
-    base_folder = folder_for_outputs
-    if base_folder[-1] != '/':
-        base_folder = base_folder + '/'
-    if not os.path.exists(base_folder):
-        os.makedirs(base_folder)
+    if out_folder[-1] != '/':
+        out_folder = out_folder + '/'
+    if not os.path.exists(out_folder):
+        os.makedirs(out_folder)
     
-    if not os.path.exists(base_folder + 'seqs'):
-        os.makedirs(base_folder + 'seqs')
+    if not os.path.exists(os.path.join(out_folder, 'seqs')):
+        os.makedirs(os.path.join(out_folder, 'seqs'))
     
     if score_only:
-        if not os.path.exists(base_folder + 'score_only'):
-            os.makedirs(base_folder + 'score_only')
+        if not os.path.exists(os.path.join(out_folder, 'score_only')):
+            os.makedirs(os.path.join(out_folder, 'score_only'))
    
     if conditional_probs_only:
-        if not os.path.exists(base_folder + 'conditional_probs_only'):
-            os.makedirs(base_folder + 'conditional_probs_only')
+        if not os.path.exists(os.path.join(out_folder, 'conditional_probs_only')):
+            os.makedirs(os.path.join(out_folder, 'conditional_probs_only'))
 
     if unconditional_probs_only:
-        if not os.path.exists(base_folder + 'unconditional_probs_only'):
-            os.makedirs(base_folder + 'unconditional_probs_only')
+        if not os.path.exists(os.path.join(out_folder, 'unconditional_probs_only')):
+            os.makedirs(os.path.join(out_folder, 'unconditional_probs_only'))
  
     # Validation epoch
     with torch.no_grad():
@@ -269,7 +267,7 @@ def run_pmpnn(
                                 batch_clones, device, chain_id_dict, fixed_positions_dict, omit_AA_dict, 
                                 tied_positions_dict, pssm_dict, bias_by_res_dict, ca_only=ca_only
             )
-            pssm_log_odds_mask = (pssm_log_odds_all > pssm_threshold).float() #1.0 for true, 0.0 for false
+            pssm_log_odds_mask = (pssm_log_odds_all > pssm_threshold).float()  # 1.0 for true, 0.0 for false
             name_ = batch_clones[0]['name']
             if score_only:
                 names, input_fasta_names, mean_scores, mean_scores_stds, mean_global_scores, mean_global_scores_stds = [], [], [], [], [], []
@@ -330,14 +328,15 @@ def run_pmpnn(
                     'mean_global_score': mean_global_scores, 
                     'mean_global_score_std': mean_global_scores_stds
                 })
-                logger.info('%s %s %s', 'Writing scores to', os.path.abspath(base_folder + 'pmpnn_mean_scores.csv'), '...')
-                score_df.to_csv(os.path.abspath(base_folder + 'pmpnn_mean_scores.csv'), sep=',', index=False)
+                pmpnn_scores_out = os.path.abspath(os.path.join(out_folder, 'pmpnn_mean_scores.csv'))
+                logger.info(f'Writing scores to {pmpnn_scores_out}...')
+                score_df.to_csv(pmpnn_scores_out, sep=',', index=False)
                 result_dict.update({'mean_global_score': mean_global_scores})
 
             elif conditional_probs_only:
                 if print_all:
                     logger.info(f'Calculating conditional probabilities for {name_}')
-                conditional_probs_only_file = os.path.join(base_folder, 'conditional_probs_only', batch_clones[0]['name'])
+                conditional_probs_only_file = os.path.join(out_folder, 'conditional_probs_only', batch_clones[0]['name'])
                 log_conditional_probs_list = []
                 for j in tqdm(range(NUM_BATCHES), desc='Getting PMPNN cond. probs. (ensemble repetitions)'):
                     randn_1 = torch.randn(chain_M.shape, device=X.device)
@@ -353,7 +352,7 @@ def run_pmpnn(
             elif unconditional_probs_only:
                 if print_all:
                     logger.info(f'Calculating sequence unconditional probabilities for {name_}')
-                unconditional_probs_only_file = os.path.join(base_folder, 'unconditional_probs_only', batch_clones[0]['name'])
+                unconditional_probs_only_file = os.path.join(out_folder, 'unconditional_probs_only', batch_clones[0]['name'])
                 log_unconditional_probs_list = []
                 for j in range(NUM_BATCHES):
                     log_unconditional_probs = model.unconditional_probs(X, mask, residue_idx, chain_encoding_all)
@@ -372,9 +371,9 @@ def run_pmpnn(
                 global_scores = pmpnn_scores(S, log_probs, mask) #score the whole structure-sequence
                 global_native_score = global_scores.cpu().data.numpy()
                 # Generate some sequences
-                ali_file = base_folder + '/seqs/' + batch_clones[0]['name'] + '.fa'
-                score_file = base_folder + '/scores/' + batch_clones[0]['name'] + '.npz'
-                probs_file = base_folder + '/probs/' + batch_clones[0]['name'] + '.npz'
+                ali_file = out_folder + '/seqs/' + batch_clones[0]['name'] + '.fa'
+                score_file = out_folder + '/scores/' + batch_clones[0]['name'] + '.npz'
+                probs_file = out_folder + '/probs/' + batch_clones[0]['name'] + '.npz'
                 if print_all:
                     logger.info(f'Generating sequences for: {name_}')
                 t0 = time.time()
@@ -498,7 +497,14 @@ def run_pmpnn(
                     all_probs_concat = np.concatenate(all_probs_list)
                     all_log_probs_concat = np.concatenate(all_log_probs_list)
                     S_sample_concat = np.concatenate(S_sample_list)
-                    np.savez(probs_file, probs=np.array(all_probs_concat, np.float32), log_probs=np.array(all_log_probs_concat, np.float32), S=np.array(S_sample_concat, np.int32), mask=mask_for_loss.cpu().data.numpy(), chain_order=chain_list_list)
+                    np.savez(
+                        probs_file, 
+                        probs=np.array(all_probs_concat, np.float32), 
+                        log_probs=np.array(all_log_probs_concat, np.float32), 
+                        S=np.array(S_sample_concat, np.int32), 
+                        mask=mask_for_loss.cpu().data.numpy(), 
+                        chain_order=chain_list_list
+                    )
                 t1 = time.time()
                 dt = round(float(t1-t0), 4)
                 num_seqs = len(temperatures)*NUM_BATCHES*BATCH_COPIES

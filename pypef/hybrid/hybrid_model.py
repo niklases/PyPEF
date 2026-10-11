@@ -45,7 +45,7 @@ from pypef.utils.to_file import predictions_out
 from pypef.utils.helpers import get_device
 from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
-from pypef.plm.utils import hybrid_corr_mse_loss
+from pypef.plm.utils import hybrid_corr_mse_loss, ols_align
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
@@ -73,7 +73,7 @@ class DCALLMHybridModel:
             x_dca_wt: np.ndarray | None = None,
             sequences: list[str] | None = None,
             wt_sequence: str | None = None,
-            alphas: np.ndarray | None = None,
+            ridge_alphas: np.ndarray | None = None,
             parameter_range: list[tuple] | None = None,
             ensemble_func: str = 'torch',
             splitting_scheme: str = 'random',
@@ -87,6 +87,8 @@ class DCALLMHybridModel:
             n_epochs: int | None = None,
             device: str | None = None,
             seed: int | None = None,
+            alpha: float | None = None,
+            ols_fit: bool = True,
             n_ensemble_splits: int = 1,
             verbose: bool = True,
             progress_cb=None, 
@@ -122,8 +124,8 @@ class DCALLMHybridModel:
                 parameter_range = [(0, 1), (0, 1)]
         self.sequences = sequences
         self.wt_sequence = wt_sequence
-        if alphas is None:
-            alphas = np.logspace(-6, 6, 100)
+        if ridge_alphas is None:
+            ridge_alphas = np.logspace(-6, 6, 100)
         self.parameter_range = parameter_range
         self.ensemble_func = ensemble_func
         self.splitting_scheme = splitting_scheme
@@ -134,7 +136,7 @@ class DCALLMHybridModel:
         self.gauss_comb_plm_emb = gauss_comb_plm_emb
         self.pdb_struct = pdb_struct
         self.lora_train = lora_train
-        self.alphas = alphas
+        self.ridge_alphas = ridge_alphas
         self.x_train_dca = x_train_dca
         self.y_train = y_train
         self.x_wild_type = x_dca_wt
@@ -152,6 +154,10 @@ class DCALLMHybridModel:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(self.seed)
             np.random.seed(self.seed)
+        if alpha is None:
+            alpha=0.5
+        self.alpha = alpha
+        self.ols_fit = ols_fit
         self.n_ensemble_splits = n_ensemble_splits
         if batch_size is None:
             batch_size = 5
@@ -340,79 +346,87 @@ class DCALLMHybridModel:
         """
         grid = GridSearchCV(
             Ridge(), 
-            {'alpha': self.alphas, 'random_state': [self.seed]}, 
+            {'alpha': self.ridge_alphas, 'random_state': [self.seed]}, 
             cv=5
         )
         grid.fit(x_train, y_train)
         return grid.best_estimator_
     
     def optimize_ensemble_weights_torch(
-            self,
-            y_true_np: np.ndarray, 
-            *y_preds_np: np.ndarray | None, 
-            method: str = "spearman-hybrid",
-            alpha: float = 0.5
-        ) -> np.ndarray:
+        self,
+        y_true_np: np.ndarray, 
+        *y_preds_np: np.ndarray | None, 
+        method: str = "spearman-hybrid",
+        alpha: float = 0.5,         # 1.0 for pure ranking component, 0.0 for only MSE focus
+        steps: int = 25
+    ) -> np.ndarray:
 
-            valid_indices = []
-            valid_preds_list = []
+        valid_indices = []
+        valid_preds_list = []
 
-            # Prepare and Flip Predictors
-            for i, p in enumerate(y_preds_np):
-                if p is not None:
-                    # OPTIONAL: If a predictor is naturally anti-correlated, 
-                    # one might want to flip it here: p = -p
-                    p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
-                    valid_preds_list.append(torch.from_numpy(p_std).float())
-                    valid_indices.append(i)
+        # Prepare and Standardize Predictors
+        for i, p in enumerate(y_preds_np):
+            if p is not None:
+                p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
+                valid_preds_list.append(torch.from_numpy(p_std).float())
+                valid_indices.append(i)
 
-            X = torch.stack(valid_preds_list, dim=-1)
-            y_true_std = torch.from_numpy((y_true_np - np.mean(y_true_np)) / (np.std(y_true_np) + 1e-8)).float()
+        X = torch.stack(valid_preds_list, dim=-1)
+        y_true_tensor = torch.from_numpy(y_true_np).float()
+        y_true_std = torch.from_numpy((y_true_np - np.mean(y_true_np)) / (np.std(y_true_np) + 1e-8)).float()
 
-            # Leaf Tensor initialization
-            betas = torch.ones(X.shape[1], requires_grad=True)
-            with torch.no_grad():
-                betas /= X.shape[1]
+        # Leaf Tensor initialization
+        betas = torch.ones(X.shape[1], requires_grad=True)
+        with torch.no_grad():
+            betas /= X.shape[1]
 
-            optimizer = torch.optim.LBFGS([betas], lr=0.1, max_iter=20)
+        optimizer = torch.optim.LBFGS([betas], lr=0.1, max_iter=20)
 
-            def closure():
-                optimizer.zero_grad()
-                # SOFTPLUS: Forces weights to be positive, but allowed to be > 1
-                weights = torch.nn.functional.softplus(betas)
-                y_hat = X @ weights
-                loss = hybrid_corr_mse_loss(y_true_std, y_hat, method=method, alpha=alpha)
-                loss.backward()
-                return loss
+        def closure():
+            optimizer.zero_grad()
+            weights = torch.nn.functional.softplus(betas)
+            y_hat = X @ weights
+            loss = hybrid_corr_mse_loss(y_true_std, y_hat, method=method, alpha=alpha)
+            loss.backward()
+            return loss
 
-            for _ in range(25): # L-BFGS is efficient, 25 steps is usually plenty
-                optimizer.step(closure)
+        logger.info(
+            f"Optimizing predictors with method '{method}' (weight Spearman: "
+            f"{alpha}, weight MSE: {1 - alpha}, steps: {steps})..."
+        )
 
-            # Transform the raw betas into the EFFECTIVE weights
-            with torch.no_grad():
-                # You must apply softplus here too!
-                effective_weights = torch.nn.functional.softplus(betas).numpy()
+        for _ in range(steps):
+            optimizer.step(closure)
 
-            # Map back to original predictor slots
-            final_betas = np.zeros(len(y_preds_np))
-            for idx, w in zip(valid_indices, effective_weights):
-                final_betas[idx] = w
+        # Extract effective weights
+        with torch.no_grad():
+            effective_weights = torch.nn.functional.softplus(betas).numpy()
 
-            # Internal validation check
-            y_ensemble = np.zeros_like(y_true_np)
-            for i, p in enumerate(y_preds_np):
-                if p is not None:
-                    p_scaled = (p - np.mean(p)) / (np.std(p) + 1e-8)
-                    y_ensemble += final_betas[i] * p_scaled
+        # Map back to original predictor slots
+        final_betas = np.zeros(len(y_preds_np))
+        for idx, w in zip(valid_indices, effective_weights):
+            final_betas[idx] = w
 
-            final_corr = self.spearmanr(y_true_np, y_ensemble)
-            self.betas = final_betas
-            self.betas_str += f" [{', '.join(f'{x:.2e}' for x in self.betas)}]"
-            logger.info(
-                f"Ensemble Opt. Spearman: {final_corr:.3f} (N_test={len(y_ensemble)}) | "
-                f"Ensemble weights ({len(final_betas)}): {self.betas_str}"
-            )
-            return final_betas
+        # Build raw ensemble prediction tensor
+        with torch.no_grad():
+            y_ensemble_raw = X @ torch.tensor(effective_weights, dtype=torch.float32)
+            # Automatically scales and shifts to minimize MSE against true targets
+            if self.ols_fit:
+                y_ensemble_ols, slope, intercept = ols_align(y_true_tensor, y_ensemble_raw)
+                self.ols_slope = float(slope)
+                self.ols_intercept = float(intercept)
+                y_ensemble_np = y_ensemble_ols.numpy()
+            else:
+                y_ensemble_np = y_ensemble_raw.numpy()
+
+        final_corr = self.spearmanr(y_true_np, y_ensemble_np)
+        self.betas = final_betas
+        self.betas_str += f" [{', '.join(f'{x:.2e}' for x in self.betas)}]"
+        logger.info(
+            f"Ensemble Opt. Spearman: {final_corr:.3f} (N_test={len(y_ensemble_np)}) | "
+            f"Ensemble weights ({len(final_betas)}): {self.betas_str}"
+        )
+        return final_betas
     
     def optimize_ensemble_weights(self, y: np.ndarray, *predictions: np.ndarray | None) -> np.ndarray:
         """
@@ -1056,11 +1070,11 @@ class DCALLMHybridModel:
 
         # Print baseline Spearman correlations
         logger.info(
-            f"DCA unsupervised ensemble test set performance: "
+            f"DCA unsupervised 'ensemble test set' performance: "
             f"{spearmanr(self.y_ttest, self.y_dca_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
         logger.info(
-            f"DCA-Ridge supervised ensemble test set performance: "
+            f"DCA-Ridge supervised 'ensemble test set' performance: "
             f"{spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
 
@@ -1076,7 +1090,7 @@ class DCALLMHybridModel:
                         predictors.append(base_preds)
                         feature_names.append(f"{llm_name}_base")
                         logger.info(
-                            f"{llm_name} zero-shot ensemble test set performance: "
+                            f"{llm_name} zero-shot 'ensemble test set' performance: "
                             f"Test set = {spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                     
@@ -1086,7 +1100,7 @@ class DCALLMHybridModel:
                         predictors.append(lora_preds)
                         feature_names.append(f"{llm_name}_lora")
                         logger.info(
-                            f"{llm_name} LoRA tuned ensemble test set performance: "
+                            f"{llm_name} LoRA tuned 'ensemble test set' performance: "
                             f"{spearmanr(self.y_ttest, lora_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                     
@@ -1096,7 +1110,7 @@ class DCALLMHybridModel:
                         predictors.append(gp_preds)
                         feature_names.append(f"{llm_name}_gp")
                         logger.info(
-                            f"{llm_name} Gaussian process ensemble test set performance: "
+                            f"{llm_name} Gaussian process 'ensemble test set' performance: "
                             f"{spearmanr(self.y_ttest, gp_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                 
@@ -1107,7 +1121,7 @@ class DCALLMHybridModel:
                         predictors.append(comb_preds)
                         feature_names.append("combined_gp")
                         logger.info(
-                            f"Combined ({self.llm_keys}) Gaussian process ensemble test set performance: "
+                            f"Combined ({self.llm_keys}) Gaussian process 'ensemble test set' performance: "
                             f"{spearmanr(self.y_ttest, comb_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
 
@@ -1129,7 +1143,7 @@ class DCALLMHybridModel:
                 y_pmpnn_gp_ttest = self._predict_pmpnn_gp(self.sequences_ttest)
                 predictors.append(y_pmpnn_gp_ttest)
                 logger.info(
-                    f"PMPNN Gaussian process ensemble test set performance: "
+                    f"PMPNN Gaussian process 'ensemble test set' performance: "
                     f"{spearmanr(self.y_ttest, y_pmpnn_gp_ttest)[0]:.3f}"
                     f" (N={len(self.y_ttest)})"
                 )
@@ -1380,8 +1394,17 @@ class DCALLMHybridModel:
                 
             self.y_hybrid += beta * p_std
 
-        return np.asarray(self.y_hybrid, dtype=float), self.hybrid_preds
+        # apply saved OLS sclaing if available
+        if hasattr(self, "ols_slope") and hasattr(self, "ols_intercept"):
+            self.y_hybrid = self.ols_slope * self.y_hybrid + self.ols_intercept
+        else:
+            # Fallback if model was trained with no-torch ensemble optimization
+            logger.warning(
+                "No OLS slope/intercept found on model. Returning unscaled hybrid predictions, "
+                "MSE will likely be high."
+            )
 
+        return np.asarray(self.y_hybrid, dtype=float), self.hybrid_preds
 
 
 """ 
@@ -1756,6 +1779,7 @@ def performance_ls_ts(
         gauss_opt: bool = False,
         gauss_comb: bool = False,
         seed: int | None = None,
+        alpha: float | None = None,
         device: str | None = None,
         progress_cb=None,
         abort_cb=None,
@@ -1772,7 +1796,7 @@ def performance_ls_ts(
             raise ValueError("PMPNN training requires --ls, --pdb and --wt.")
         if pmpnn_conditional_probs is None:
             pmpnn_conditional_probs = run_protein_mpnn_conditional(
-                pdb_file, seed=seed if seed is not None else 13
+                pdb_file, seed=seed if seed is not None else 42
             )
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
@@ -1827,6 +1851,7 @@ def performance_ls_ts(
             gauss_opt=gauss_opt,
             gauss_comb_plm_emb=gauss_comb,
             seed=seed,
+            alpha=alpha,
             device=device,
             progress_cb=progress_cb,
             pmpnn_conditional_probs=pmpnn_conditional_probs,
@@ -2167,7 +2192,7 @@ def predict_directed_evolution(
         encoder: str,
         variant: str,
         variant_sequence: str,
-        hybrid_model_data_pkl: None | str
+        model_pickle_file: None | str
 ) -> Union[str, list]:
     """
     Perform directed in silico evolution and predict the fitness of a
@@ -2178,10 +2203,10 @@ def predict_directed_evolution(
     returning the predicted fitness value and the variant name.
     """
     global global_hybrid_model, global_hybrid_model_type
-    if hybrid_model_data_pkl is not None:
+    if model_pickle_file is not None:
         if global_hybrid_model is None:
             global_hybrid_model, global_hybrid_model_type = get_model_and_type(
-                hybrid_model_data_pkl
+                model_pickle_file
             )
             model, model_type = global_hybrid_model, global_hybrid_model_type
         else:
