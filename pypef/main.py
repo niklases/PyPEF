@@ -132,7 +132,8 @@ Usage:
     pypef mklsts --wt WT_FASTA --input CSV_FILE
         [--random] [--modulo] [--cont] [--plot]
         [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]
-        [--numrnd NUMBER] [--ls_proportion LS_PROPORTION]
+        [--numrnd NUMBER] [--ls_proportion LS_PROPORTION] [--fitness_key FITNESS_KEY]
+        [--variant_key VARIANT_KEY] [--sequence_key SEQUENCE_KEY]
     pypef mkps --wt WT_FASTA [--input CSV_FILE]
         [--drop THRESHOLD] [--ssm] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
@@ -212,6 +213,8 @@ Options:
   -e --encoding ENCODING_TECHNIQUE  Sets technique used for encoding sequences for constructing regression models;
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
                                     and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
+  --variant_key VARIANT_KEY         CSV mutant identifier column for mklsts. Else uses first column.
+  --sequence_key SEQUENCE_KEY       Optional CSV sequence column for mklsts; validates sequences against WT/mutants.
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
   --pmpnn                          Compute PMPNN conditional log probabilities for hybrid training;
                                     adds PMPNN zero-shot and GP components; requires --ls, --pdb and --wt.
@@ -367,6 +370,8 @@ schema = Schema({
     Optional('--drop'): Use(float),
     Optional('--encoding'): Use(str),
     Optional('--fitness_key'): Or(None, str),
+    Optional('--variant_key'): Or(None, str),
+    Optional('--sequence_key'): Or(None, str),
     Optional('--fit_size'): Use(float),
     Optional('--gauss_comb'): bool,
     Optional('--gauss_opt'): bool,

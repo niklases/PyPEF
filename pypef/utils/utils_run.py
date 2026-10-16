@@ -48,7 +48,24 @@ def run_pypef_utils(arguments):
             logger.info(f'Training set proportion (--ls_proportion): {ls_proportion}.')
             
         df = drop_rows(arguments['--input'], amino_acids, t_drop, 
-                       arguments['--sep'], arguments['--mutation_sep'])
+                       arguments['--sep'], arguments['--mutation_sep'],
+                       fitness_key=arguments.get('--fitness_key'),
+                       variant_key=arguments.get('--variant_key'),
+                       sequence_key=arguments.get('--sequence_key'))
+        if df.empty:
+            raise ValueError("No variants remain after filtering. Check the fitness column "
+                             "(--fitness_key), fitness threshold and mutation format.")
+        if arguments.get('--sequence_key'):
+            substitutions = [
+                ['WT'] if variant.lower() in ('wt', 'wild_type')
+                else variant.split(arguments['--mutation_sep'])
+                for variant in df.iloc[:, 0]
+            ]
+            _, _, expected_sequences = get_seqs_from_var_name(wt_sequence, substitutions)
+            for variant, supplied, expected in zip(
+                    df.iloc[:, 0], df.iloc[:, 2], expected_sequences):
+                if not isinstance(supplied, str) or supplied.strip().upper() != expected:
+                    raise ValueError(f"CSV sequence for {variant!r} does not match WT/mutations.")
         no_rnd = arguments['--numrnd']
         single_variants, single_values, higher_variants, higher_values = get_variants(
             df, amino_acids, wt_sequence, arguments['--mutation_sep']

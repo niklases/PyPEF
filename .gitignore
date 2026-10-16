@@ -537,6 +537,9 @@ datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_lvl_1_extrapolation.png
 datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_ESM.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PROSST.png
+datasets/AVGFP/Predictions_PLM_PMPNN_avGFP_prediction_set.txt
+datasets/AVGFP/Predictions_PLM_ESM_avGFP_prediction_set.txt
+datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PMPNN.png
 
 scripts/ProteinGym_runs/official/PyPEF/
 scripts/ProteinGym_runs/official/PyPEF-main/

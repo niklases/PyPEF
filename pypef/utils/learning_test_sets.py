@@ -43,27 +43,40 @@ def csv_input(csv_file):
     return csv_file
 
 
+def read_variant_csv(csv_file, csv_sep=';'):
+    """Read variant data, accepting the requested separator or common alternatives."""
+    for separator in dict.fromkeys((csv_sep, ';', ',', '\t')):
+        df = pd.read_csv(csv_file, sep=separator)
+        if len(df.columns) >= 2:
+            return df
+    raise ValueError("Required CSV format: variant and at least one fitness column.")
+
+
 def drop_rows(
         csv_file,
         amino_acids,
         threshold_drop,
         csv_sep: str = ';',
-        mutation_sep: str = '/'
+        mutation_sep: str = '/',
+        fitness_key: str = None,
+        variant_key: str = None,
+        sequence_key: str = None
 ):
     """
     Drops rows from .csv data if below defined fitness threshold or if
     amino acid/variant name is unknown or if fitness label is not a digit.
     """
-    separator = ';'
-    try:
-        df_raw = pd.read_csv(csv_file, sep=separator, usecols=[0, 1])
-    except ValueError:
-        separator = ','
-        df_raw = pd.read_csv(csv_file, sep=separator, usecols=[0, 1])
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Specify the input CSV file containing the variant-fitness data. "
-            f"Required CSV format: variant{csv_sep}fitness.")
+    df_raw = read_variant_csv(csv_file, csv_sep)
+    variant_key = variant_key or df_raw.columns[0]
+    fitness_key = fitness_key or df_raw.columns[1]
+    keys = [variant_key, fitness_key] + ([sequence_key] if sequence_key else [])
+    for key in keys:
+        if key not in df_raw.columns:
+            raise ValueError(f"CSV column {key!r} not found. "
+                             f"Available columns: {', '.join(df_raw.columns)}")
+    if len(set(keys)) != len(keys):
+        raise ValueError("Variant, fitness and sequence columns must be different.")
+    df_raw = df_raw.loc[:, keys].copy()
     label = df_raw.iloc[:, 1]
     sequence = df_raw.iloc[:, 0]
     dropping_rows = []

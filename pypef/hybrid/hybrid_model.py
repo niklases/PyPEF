@@ -1791,7 +1791,7 @@ def performance_ls_ts(
     llm_names = parse_llm_flag(llm)
     pmpnn = pmpnn or 'pmpnn' in llm_names
     llm_names = [name for name in llm_names if name != 'pmpnn']
-    if pmpnn or pmpnn_conditional_probs is not None:
+    if ls_fasta is not None and (pmpnn or pmpnn_conditional_probs is not None):
         if ls_fasta is None or pdb_file is None or wt_seq is None:
             raise ValueError("PMPNN training requires --ls, --pdb and --wt.")
         if pmpnn_conditional_probs is None:
@@ -1931,6 +1931,8 @@ def performance_ls_ts(
             model_type = 'PLM'
             # Zero-shot supports a single PLM
             plm_names = parse_llm_flag(llm)
+            if len(plm_names) > 1:
+                raise ValueError("Zero-shot scoring requires a single PLM; use combinations for hybrid training.")
             plm_name = plm_names[0] if plm_names else None
             if plm_name is not None and plm_name.startswith('esm'):
                 logger.info("Zero-shot PLM inference using ESM...")
@@ -1953,9 +1955,16 @@ def performance_ls_ts(
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
                     device=device
                 ).cpu()
+            elif plm_name == 'pmpnn':
+                if pdb_file is None or wt_seq is None:
+                    raise ValueError("PMPNN zero-shot scoring requires --pdb and --wt.")
+                log_probs = run_protein_mpnn_conditional(
+                    pdb_file, seed=seed if seed is not None else 13
+                )
+                y_test_pred = score_sequences_from_probs(log_probs, test_sequences, wt_seq)
             else:
                 raise RuntimeError(
-                    f"Unknown or unset --plm option: '{llm}'. Expected 'esm' or 'prosst'."
+                    f"Unknown or unset --plm option: '{llm}'. Expected 'esm', 'prosst' or 'pmpnn'."
                 )
     else:
         raise RuntimeError('No test set given for performance estimation.')
@@ -2028,6 +2037,14 @@ def predict_ps(
             for llm_name in model.llm_keys
         }
 
+    pmpnn_log_probs = None
+    if not dca_modeling and len(parse_llm_flag(llm)) > 1:
+        raise ValueError("Zero-shot scoring requires a single PLM; use combinations for hybrid training.")
+    if not dca_modeling and parse_llm_flag(llm) == ['pmpnn']:
+        if pdb_file is None or wt_seq is None:
+            raise ValueError("PMPNN zero-shot scoring requires --pdb and --wt.")
+        pmpnn_log_probs = run_protein_mpnn_conditional(pdb_file)
+
     # --- Mode 1: Multi-file directory prediction sets ---
     if True in prediction_dict.values():
         for ps, path in zip(prediction_dict.values(), pmult):
@@ -2070,8 +2087,11 @@ def predict_ps(
                             wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
                             device=device
                         ).cpu()
+                    elif plm_name == 'pmpnn':
+                        ys_pred = score_sequences_from_probs(pmpnn_log_probs, sequences, wt_seq)
                     else:
-                        raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
+                        raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm', 'prosst' or 'pmpnn'.")
+                    test_variants = variants
                 else:
                     # plmc_or_gremlin_encoding drops variants at gap / NaN
                     # positions the DCA model does not cover, so it returns a
@@ -2146,8 +2166,10 @@ def predict_ps(
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
                     device=device
                 ).cpu()
+            elif plm_name == 'pmpnn':
+                ys_pred = score_sequences_from_probs(pmpnn_log_probs, sequences, wt_seq)
             else:
-                raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm' or 'prosst'.")
+                raise RuntimeError(f"Unknown --plm flag option: '{llm}'. Expected 'esm', 'prosst' or 'pmpnn'.")
         else:
             if not model_type.startswith('Hybrid'):  # Statistical DCA
                 xs, variants, _, _, x_wt, *_ = plmc_or_gremlin_encoding(

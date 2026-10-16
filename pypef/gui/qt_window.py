@@ -8,19 +8,28 @@ import sys
 from os import getcwd, cpu_count, chdir
 import logging
 import time
+import re
+import threading
+from contextlib import redirect_stdout, redirect_stderr
 
 
 from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
     QApplication, QPushButton, QTextEdit, QVBoxLayout, QWidget,
     QGridLayout, QLabel, QPlainTextEdit, QSlider, QComboBox,
-    QFileDialog, QProgressBar, QCheckBox
+    QFileDialog, QProgressBar, QCheckBox, QLineEdit
 )
 
 from pypef import __version__
 from pypef.main import __doc__, run_main, logger, formatter
 from pypef.utils.helpers import get_device, get_vram, get_torch_version, get_nvidia_gpu_info_pynvml
+
+
+PLM_OPTIONS = (
+    'None', 'ESM', 'ProSST', 'PMPNN', 'ESM+ProSST',
+    'ESM+PMPNN', 'ProSST+PMPNN', 'ESM+ProSST+PMPNN',
+)
 
 
 def get_logo_path():
@@ -126,6 +135,27 @@ def trap_exc_during_debug(*args):
 sys.excepthook = trap_exc_during_debug
 
 
+class WorkerOutputStream:
+    """Mirror text written by the job thread through a queued GUI signal."""
+
+    def __init__(self, original, emit):
+        self.original = original
+        self.emit = emit
+        self.thread_id = threading.get_ident()
+
+    def write(self, text):
+        result = self.original.write(text)
+        if text and threading.get_ident() == self.thread_id:
+            self.emit(text)
+        return result
+
+    def flush(self):
+        self.original.flush()
+
+    def __getattr__(self, name):
+        return getattr(self.original, name)
+
+
 class Worker(QObject):
     """
     Must derive from QObject in order to emit signals, connect 
@@ -135,6 +165,8 @@ class Worker(QObject):
     """
     sig_step = Signal(dict)
     sig_done = Signal(int)
+    sig_error = Signal(str)
+    sig_output = Signal(str)
     sig_msg = Signal(str)
     sig_abort = Signal(int)
 
@@ -174,8 +206,18 @@ class Worker(QObject):
         def abort_cb():
             return self._abort
 
-        run_main(argv=self.cmd, progress_cb=progress_cb, abort_cb=abort_cb)
-        self.sig_done.emit(f"Done: {self.__id}")
+        try:
+            # Redirect only for the job's lifetime; other threads stay terminal-only.
+            with redirect_stdout(WorkerOutputStream(sys.stdout, self.sig_output.emit)), \
+                    redirect_stderr(WorkerOutputStream(sys.stderr, self.sig_output.emit)):
+                run_main(argv=self.cmd, progress_cb=progress_cb, abort_cb=abort_cb)
+        except (Exception, SystemExit) as error:
+            # CLI validation can raise SystemExit; keep failures inside the job.
+            if not isinstance(error, SystemExit) or error.code not in (None, 0):
+                logger.debug("GUI job failed", exc_info=True)
+                self.sig_error.emit(f"{type(error).__name__}: {error}")
+        finally:
+            self.sig_done.emit(self.__id)
 
     def abort(self):
         self._abort = True
@@ -333,7 +375,7 @@ class MainWidget(QWidget):
         )
 
         self.box_llm = QComboBox()
-        self.box_llm.addItems(['None', 'ESM', 'ProSST', 'ESM+ProSST'])
+        self.box_llm.addItems(PLM_OPTIONS)
         self.box_llm.currentIndexChanged.connect(self.selection_llm_model)
         self.box_llm.setCurrentIndex(1)
         self.box_llm.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
@@ -365,6 +407,30 @@ class MainWidget(QWidget):
         _plm_options_layout.setSpacing(0)
         for _cb in (self.check_lora, self.check_gauss_opt, self.check_gauss_comb):
             _plm_options_layout.addWidget(_cb)
+
+        self.box_csv_columns = QWidget()
+        csv_columns_layout = QGridLayout(self.box_csv_columns)
+        csv_columns_layout.setContentsMargins(0, 0, 0, 0)
+        self.input_variant_key = QLineEdit()
+        self.input_sequence_key = QLineEdit()
+        self.input_fitness_key = QLineEdit()
+        for row, (label, field, placeholder) in enumerate((
+            ('Mutant column', self.input_variant_key, 'First column'),
+            ('Sequence column', self.input_sequence_key, 'Reconstruct from WT'),
+            ('Fitness column', self.input_fitness_key, 'Second column'),
+        )):
+            text = QLabel(label)
+            text.setStyleSheet(text_style)
+            field.setPlaceholderText(placeholder)
+            field.setStyleSheet("color:white;background-color:rgb(54, 69, 79);")
+            field.setToolTip("CSV column name for creating training/test sets. "
+                             "Leave blank to use the default shown.")
+            csv_columns_layout.addWidget(text, row, 0)
+            csv_columns_layout.addWidget(field, row, 1)
+        self.input_sequence_key.setToolTip(
+            "Optional CSV sequence column. Sequences must match the mutant identifiers "
+            "and WT sequence used to construct the training/test sets."
+        )
 
         self.box_mklsts_cv = QComboBox()
         self.box_mklsts_cv.addItems([
@@ -746,6 +812,7 @@ class MainWidget(QWidget):
         layout.addWidget(self.button_supervised_train_test_onehot, self.shift + 5, 5, 1, 1)
         layout.addWidget(self.button_supervised_test_onehot, self.shift + 6, 5, 1, 1)
         layout.addWidget(self.button_supervised_predict_onehot, self.shift + 7, 5, 1, 1)
+        layout.addWidget(self.box_csv_columns, self.shift + 9, 0, 1, 2)
         layout.addWidget(self.box_plm_options, self.shift + 9, 5, 1, 1)
 
         layout.setRowMinimumHeight(self.shift + 9, 60)  # 60 pixels of space after row
@@ -768,6 +835,8 @@ class MainWidget(QWidget):
     def start_main_thread(self):
         self.version_text.setText("Running...")
         self.textedit_out.append(f"Executing command: {self.cmd}")
+        self.logTextBox.widget.moveCursor(QTextCursor.End)
+        self.logTextBox.widget.insertPlainText("\n")
         self.__workers_done = 0
         self.__threads = []
         worker = Worker(0, cmd=self.cmd)
@@ -779,6 +848,8 @@ class MainWidget(QWidget):
 
         worker.sig_step.connect(self.on_train_progress_step)
 
+        worker.sig_output.connect(self.on_cli_output)
+        worker.sig_error.connect(self.on_worker_error)
         worker.sig_done.connect(self.on_worker_done)
         worker.sig_done.connect(thread.quit)
         worker.sig_done.connect(worker.deleteLater)
@@ -869,9 +940,35 @@ class MainWidget(QWidget):
             f"| Elapsed: {delta_elapsed_str} | ETA: {self.batch_eta}"
         )
 
+    @Slot(str)
+    def on_cli_output(self, text):
+        # tqdm writes carriage returns to refresh its current line. Strip ANSI
+        # styling/cursor escapes since this widget is a text view, not a terminal.
+        text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', text)
+        cursor = self.logTextBox.widget.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        for part in re.split(r'(\r|\n)', text):
+            if part == '\r':
+                cursor.movePosition(QTextCursor.StartOfBlock, QTextCursor.KeepAnchor)
+                cursor.removeSelectedText()
+            elif part == '\n':
+                cursor.insertText('\n')
+            elif part:
+                cursor.insertText(part)
+        self.logTextBox.widget.setTextCursor(cursor)
+        self.logTextBox.widget.ensureCursorVisible()
+
+    @Slot(str)
+    def on_worker_error(self, message):
+        self._run_failed = True
+        self.logTextBox.widget.appendPlainText(f"Job failed: {message}")
+        self.textedit_out.append(f"Job failed: {message}")
+
     @Slot(int)
-    def on_worker_done(self):
+    def on_worker_done(self, worker_id):
         self.end_process()
+        if self._run_failed:
+            self.version_text.setText("Failed — check the log")
         self.__workers_done += 1
         if self.__workers_done == 1:
             for thread, _worker in self.__threads:
@@ -903,6 +1000,7 @@ class MainWidget(QWidget):
             button.setEnabled(enabled)
 
     def start_process(self):
+        self._run_failed = False
         self.target_button.setEnabled(False)
         self.logTextBox.widget.clear()
         self.c += 1
@@ -965,7 +1063,7 @@ class MainWidget(QWidget):
         ][i]
 
     def selection_llm_model(self, i):
-        self.llm = [None, 'esm', 'prosst', 'esm+prosst'][i]
+        self.llm = None if i == 0 else PLM_OPTIONS[i].lower()
 
     def _llm_hybrid_flags(self):
         """
@@ -985,12 +1083,12 @@ class MainWidget(QWidget):
     def _llm_needs_structure(self, training: bool):
         """
         Whether a WT FASTA and PDB structure file are required for the current
-        PLM selection: always for ProSST (single or combined), and additionally
-        for Gaussian-process optimization during training.
+        PLM selection: always for ProSST or PMPNN (single or combined), and additionally
+        for Gaussian-process optimization or PMPNN components during training.
         """
         if not self.llm:
             return False
-        if 'prosst' in self.llm:
+        if 'prosst' in self.llm or 'pmpnn' in self.llm:
             return True
         if training and self.check_gauss_opt.isChecked():
             return True
@@ -1008,9 +1106,12 @@ class MainWidget(QWidget):
         )   
 
     def set_work_dir(self):
-        self.working_directory = QFileDialog.getExistingDirectory(
+        directory = QFileDialog.getExistingDirectory(
             self.win2, 'Select Folder'
         )
+        if not directory:
+            return
+        self.working_directory = directory
         chdir(self.working_directory)
         self.logTextBox.widget.clear()
         self.logTextBox.widget.appendPlainText(
@@ -1035,16 +1136,30 @@ class MainWidget(QWidget):
             self.win2, "Select WT FASTA File", 
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not wt_fasta_file:
+            self.end_process()
+            return
         csv_variant_file = QFileDialog.getOpenFileName(
             self.win2, "Select variant CSV File", 
             filter="CSV file (*.csv)"
         )[0]
+        if not csv_variant_file:
+            self.end_process()
+            return
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
-            self.cmd = (
-                f'mklsts --wt {wt_fasta_file} --input {csv_variant_file} '
-                f'--ls_proportion {self.ls_proportion} {self.mklsts_cv_method}'
-            )
+            self.cmd = [
+                'mklsts', '--wt', wt_fasta_file, '--input', csv_variant_file,
+                '--ls_proportion', str(self.ls_proportion),
+                *self.mklsts_cv_method.split(),
+            ]
+            for flag, field in (
+                ('--variant_key', self.input_variant_key),
+                ('--sequence_key', self.input_sequence_key),
+                ('--fitness_key', self.input_fitness_key),
+            ):
+                if field.text().strip():
+                    self.cmd.extend([flag, field.text().strip()])
             self.start_main_thread()
         else:
             self.end_process()
@@ -1056,10 +1171,16 @@ class MainWidget(QWidget):
             self.win2, "Select WT FASTA File", 
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not wt_fasta_file:
+            self.end_process()
+            return
         csv_variant_file = QFileDialog.getOpenFileName(
             self.win2, "Select variant CSV File", 
             filter="CSV file (*.csv)"
         )[0]
+        if not csv_variant_file:
+            self.end_process()
+            return
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
             self.cmd = f'mkps --wt {wt_fasta_file} --input {csv_variant_file}'
@@ -1131,12 +1252,18 @@ class MainWidget(QWidget):
             self.win2, "Select WT FASTA File", 
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not wt_fasta_file:
+            self.end_process()
+            return
         msa_file = QFileDialog.getOpenFileName(
             self.win2, 
             ("Select Multiple Sequence Alignment (MSA) "
             "file (in FASTA or A2M format)"),
             filter="MSA file (*.fasta *.a2m)"
         )[0]
+        if not msa_file:
+            self.end_process()
+            return
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
             self.cmd = f'param_inference --wt {wt_fasta_file} --msa {msa_file}'
@@ -1151,10 +1278,16 @@ class MainWidget(QWidget):
             self.win2, "Select Test Set File in \"FASL\" format", 
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_set_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Parameter Pickle file", 
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if test_set_file and params_pkl_file:
             self.version_text.setText(
                 "Testing DCA performance on provided test set..."
@@ -1177,14 +1310,20 @@ class MainWidget(QWidget):
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
-            if self.llm == 'prosst':
+            if not wt_fasta_file:
+                self.end_process()
+                return
+            if self.llm in ('prosst', 'pmpnn'):
                 pdb_file = QFileDialog.getOpenFileName(
                     self.win2, "Select PDB protein structure File",
                     filter="PDB file (*.pdb)"
                 )[0]
+                if not pdb_file:
+                    self.end_process()
+                    return
                 if wt_fasta_file and pdb_file:
                     self.version_text.setText(
-                        "ProSST zero shot model inference..."
+                        f"{self.llm.upper()} zero shot model inference..."
                     )
                     self.cmd = (
                         f'hybrid --ts {test_set_file} --plm {self.llm} '
@@ -1193,7 +1332,7 @@ class MainWidget(QWidget):
                     self.start_main_thread()
                 else:
                     self.end_process()
-            elif self.llm == 'esm':
+            elif self.llm == 'esm' and wt_fasta_file:
                 self.cmd = f'hybrid --ts {test_set_file} --plm {self.llm}  --wt {wt_fasta_file}'
                 self.start_main_thread()
             else:
@@ -1212,10 +1351,16 @@ class MainWidget(QWidget):
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not prediction_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if prediction_file and params_pkl_file:
             self.version_text.setText(
                 "Predicting using the DCA model on provided prediction set..."
@@ -1240,14 +1385,20 @@ class MainWidget(QWidget):
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
-            if self.llm == 'prosst':
+            if not wt_fasta_file:
+                self.end_process()
+                return
+            if self.llm in ('prosst', 'pmpnn'):
                 pdb_file = QFileDialog.getOpenFileName(
                     self.win2, "Select PDB protein structure File",
                     filter="PDB file (*.pdb)"
                 )[0]
+                if not pdb_file:
+                    self.end_process()
+                    return
                 if wt_fasta_file and pdb_file:
                     self.version_text.setText(
-                        "ProSST zero shot model inference..."
+                        f"{self.llm.upper()} zero shot model inference..."
                     )
                     self.cmd = (
                         f'hybrid --ps {prediction_file} --plm {self.llm} '
@@ -1256,7 +1407,7 @@ class MainWidget(QWidget):
                     self.start_main_thread()
                 else:
                     self.end_process()
-            elif self.llm == 'esm':
+            elif self.llm == 'esm' and wt_fasta_file:
                 self.cmd = f'hybrid --ps {prediction_file} --plm {self.llm} --wt {wt_fasta_file}'
                 self.start_main_thread()
             else:
@@ -1276,10 +1427,19 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
+        if not training_file or not params_pkl_file:
+            self.end_process()
+            return
         if training_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training...")
             self.cmd = (
@@ -1297,14 +1457,26 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
+        if not training_file or not params_pkl_file or not test_file:
+            self.end_process()
+            return
         if training_file and test_file and params_pkl_file:
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
@@ -1324,14 +1496,23 @@ class MainWidget(QWidget):
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         model_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select Hybrid Model file in Pickle format",
             filter="Pickle file (HYBRID*)"
         )[0]
+        if not model_pkl_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.cmd = (f'hybrid -m {model_pkl_file} --ts {test_file} '
@@ -1347,14 +1528,23 @@ class MainWidget(QWidget):
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not prediction_file:
+            self.end_process()
+            return
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select Hybrid Model file in Pickle format",
             filter="Pickle file (HYBRID*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if prediction_file and params_pkl_file:
             self.version_text.setText(
                 "Predicting using the hybrid (DCA-supervised) model..."
@@ -1378,27 +1568,40 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         flags = self._llm_hybrid_flags()
+        plm_flags = f' --plm {self.llm}' if self.llm else ''
         if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
+            if not wt_fasta_file:
+                self.end_process()
+                return
             pdb_file = QFileDialog.getOpenFileName(
                 self.win2, "Select PDB protein structure File",
                 filter="PDB file (*.pdb)"
             )[0]
+            if not pdb_file:
+                self.end_process()
+                return
             if training_file and params_pkl_file and wt_fasta_file and pdb_file:
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file} --plm {self.llm} '
+                    f'--params {params_pkl_file}{plm_flags} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
                 )
                 self.start_main_thread()
@@ -1411,7 +1614,7 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file} --plm {self.llm}{flags}'
+                    f'--params {params_pkl_file}{plm_flags}{flags}'
                 )
                 self.start_main_thread()
             else:
@@ -1428,24 +1631,40 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         flags = self._llm_hybrid_flags()
+        plm_flags = f' --plm {self.llm}' if self.llm else ''
         if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
+            if not wt_fasta_file:
+                self.end_process()
+                return
             pdb_file = QFileDialog.getOpenFileName(
                 self.win2, "Select PDB protein structure File",
                 filter="PDB file (*.pdb)"
             )[0]
+            if not pdb_file:
+                self.end_process()
+                return
             if (
                 training_file and test_file and params_pkl_file
                 and wt_fasta_file and pdb_file
@@ -1455,7 +1674,7 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --plm {self.llm} '
+                    f'--params {params_pkl_file}{plm_flags} '
                     f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
                 )
                 self.start_main_thread()
@@ -1468,7 +1687,7 @@ class MainWidget(QWidget):
                 )
                 self.cmd = (
                     f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --plm {self.llm}{flags}'
+                    f'--params {params_pkl_file}{plm_flags}{flags}'
                 )
                 self.start_main_thread()
             else:
@@ -1485,23 +1704,38 @@ class MainWidget(QWidget):
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select Hybrid Model file in Pickle format",
             filter="Pickle file (HYBRID*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if self._llm_needs_structure(training=False):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
+            if not wt_fasta_file:
+                self.end_process()
+                return
             pdb_file = QFileDialog.getOpenFileName(
                 self.win2, "Select PDB protein structure File",
                 filter="PDB file (*.pdb)"
             )[0]
+            if not pdb_file:
+                self.end_process()
+                return
             if (
                 test_file and params_pkl_file and wt_fasta_file
                 and pdb_file and model_file
@@ -1539,23 +1773,38 @@ class MainWidget(QWidget):
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not prediction_file:
+            self.end_process()
+            return
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select Hybrid Model file in Pickle format",
             filter="Pickle file (HYBRID*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if self._llm_needs_structure(training=False):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
                 filter="FASTA file (*.fasta *.fa)"
             )[0]
+            if not wt_fasta_file:
+                self.end_process()
+                return
             pdb_file = QFileDialog.getOpenFileName(
                 self.win2, "Select PDB protein structure File",
                 filter="PDB file (*.pdb)"
             )[0]
+            if not pdb_file:
+                self.end_process()
+                return
             if (
                 prediction_file and params_pkl_file and wt_fasta_file
                 and pdb_file and model_file
@@ -1591,10 +1840,16 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if training_file and params_pkl_file:
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
@@ -1615,14 +1870,23 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if training_file and test_file and params_pkl_file:
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
@@ -1642,14 +1906,23 @@ class MainWidget(QWidget):
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)")[0]
+        if not test_file:
+            self.end_process()
+            return
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select ML Model file in Pickle format",
             filter="Pickle file (ML*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if test_file and params_pkl_file and model_file:
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model testing..."
@@ -1670,14 +1943,23 @@ class MainWidget(QWidget):
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not prediction_file:
+            self.end_process()
+            return
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select ML Model file in Pickle format",
             filter="Pickle file (ML*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         params_pkl_file = QFileDialog.getOpenFileName(
             self.win2, "Select DCA parameter Pickle file",
             filter="Pickle file (*.params GREMLIN PLMC)"
         )[0]
+        if not params_pkl_file:
+            self.end_process()
+            return
         if prediction_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.cmd = (
@@ -1714,10 +1996,16 @@ class MainWidget(QWidget):
             self.win2, "Select Training Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not training_file:
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         if training_file and test_file:
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
@@ -1737,10 +2025,16 @@ class MainWidget(QWidget):
             self.win2, "Select Onehot Model file in Pickle format",
             filter="Pickle file (ONEHOT*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         test_file = QFileDialog.getOpenFileName(
             self.win2, "Select Test Set File in \"FASL\" format",
             filter="FASL file (*.fasl)"
         )[0]
+        if not test_file:
+            self.end_process()
+            return
         if test_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
             self.cmd = (
@@ -1758,10 +2052,16 @@ class MainWidget(QWidget):
             self.win2, "Select Onehot Model file in Pickle format",
             filter="Pickle file (ONEHOT*)"
         )[0]
+        if not model_file:
+            self.end_process()
+            return
         prediction_file = QFileDialog.getOpenFileName(
             self.win2, "Select Prediction Set File in FASTA format",
             filter="FASTA file (*.fasta *.fa)"
         )[0]
+        if not prediction_file:
+            self.end_process()
+            return
         if prediction_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
             self.cmd = (
