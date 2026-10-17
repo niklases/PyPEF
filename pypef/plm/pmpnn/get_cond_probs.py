@@ -1,16 +1,17 @@
-# Protein-MPNN autoregressive model inference
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
+
+# Getting conditional probabilities from PMPNN model
+# for scoring protein variants
 
 import os
-import pandas as pd
 import numpy as np
-from scipy.stats import spearmanr
 
 from pypef.plm.utils import resolve_variant_mutations
 from pypef.plm.pmpnn.protein_mpnn_run import run_pmpnn
+from pypef.utils.helpers import tqdm
 
 import logging
-
-from pypef.utils.helpers import tqdm
 logger = logging.getLogger(__name__)
 
 # ProteinMPNN 21-character alphabet mapping
@@ -18,7 +19,13 @@ ALPHABET = 'ACDEFGHIKLMNPQRSTVWYX'
 AA_TO_IDX = {aa: i for i, aa in enumerate(ALPHABET)}
 
 
-def run_protein_mpnn_conditional(pdb_path, out_folder="out", seed=13, num_samples=10, save_npz_files=False):
+def run_protein_mpnn_conditional(
+        pdb_path, 
+        out_folder="out", 
+        seed=42, 
+        num_samples=10, 
+        save_npz_files=False
+):
     """Step 1: Run ProteinMPNN on structure and return conditional log-probs."""
     logger.info('Running ProteinMPNN (conditional_probs_only)...')
     

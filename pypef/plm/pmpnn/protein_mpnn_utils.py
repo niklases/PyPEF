@@ -1,3 +1,12 @@
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
+
+# ProteinMPNN autoregressive model inference
+# Adapted ProteinMPNN code used under MIT license
+# Code repository: https://github.com/dauparas/ProteinMPNN
+# J. Dauparas et al., Robust deep learning–based protein sequence design 
+# using ProteinMPNN.Science 378,49-56(2022).DOI:10.1126/science.add2187
+
 from __future__ import print_function
 
 import json, time
@@ -7,7 +16,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import itertools
 
-#A number of functions/classes are adopted from: https://github.com/jingraham/neurips19-graph-protein-design
+# A number of functions/classes are adopted from: 
+# https://github.com/jingraham/neurips19-graph-protein-design
 
 import logging
 logger = logging.getLogger(__name__)

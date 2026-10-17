@@ -15,6 +15,7 @@
   - [Preprocessing for DCA-based Sequence Encoding](#preprocessing-for-dca-based-sequence-encoding)
   - [Unsupervised/zero-shot prediction vs. supervised few-shot prediction](#unsupervisedzero-shot-prediction-vs-supervised-few-shot-prediction)
   - [API Usage for Sequence Encoding](#api-usage-for-sequence-encoding)
+  - [Licenses](#licenses)
   - [Citation](#citation)
 
 -------------------------------
@@ -535,6 +536,33 @@ For script-based encoding of sequences using PyPEF and the available AAindex-, O
 <p align="center">
     <img src="https://raw.githubusercontent.com/niklases/PyPEF/main/.github/imgs/low_N_avGFP_extrapolation.png" alt="drawing" width="500"/>
 </p>
+
+<a name="Licenses"></a>
+## Licenses
+
+PyPEF is released under the **GNU General Public License v3.0 (GPLv3)** due to the integration of GPL-licensed software components.
+
+Third-party dependencies, algorithms, and repositories used within PyPEF are credited below alongside their original licenses:
+
+### 1. ProteinMPNN
+* **Author / Repository:** [dauparas/ProteinMPNN](https://github.com/dauparas/ProteinMPNN)
+* **License:** MIT License
+* **Usage:** Utilized for structure-based sequence design and score predictions.
+
+### 2. ProSST
+* **Author / Repository:** [ai4protein/ProSST](https://github.com/ai4protein/ProSST/tree/66a0f16c50022ecf27a4d2a0e390b2ca22a3ff64)
+* **License:** GNU General Public License v3.0 (GPLv3) *(Snapshot commit `66a0f16`)*
+* **Usage:** Integrated for protein structure-sequence representation and embeddings.
+
+### 3. ESM (Evolutionary Scale Modeling)
+* **Author / Repository:** [Meta AI / Evolutionary Scale (facebookresearch/esm)](https://github.com/facebookresearch/esm)
+* **License:** MIT License
+* **Usage:** Used for protein language modeling embeddings and representations.
+
+### 4. GREMLIN / DCA
+* **Author / Repository:** [sokrypton/GREMLIN_CPP](https://github.com/sokrypton/GREMLIN_CPP)
+* **License:** THE BEER-WARE LICENSE (Revision 42)
+* **Usage:** Utilized for Direct Coupling Analysis (DCA) and co-evolutionary contact prediction.
 
 
 <a name="Citation"></a>

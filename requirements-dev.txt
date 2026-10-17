@@ -1,3 +1,4 @@
+--extra-index-url https://download.pytorch.org/whl/cu128
 numpy
 pandas
 tqdm
@@ -23,6 +24,6 @@ pytest
 seaborn
 hydra-core
 pyside6
---extra-index-url https://download.pytorch.org/whl/cu128
 torch
 torch-geometric
+triton

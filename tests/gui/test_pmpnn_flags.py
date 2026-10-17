@@ -31,6 +31,7 @@ def make_window(plm):
     return window
 
 
+@pytest.mark.pip_specific
 @pytest.mark.parametrize('run', RUNS[2:])
 @pytest.mark.parametrize('missing', ['WT FASTA', 'PDB'])
 def test_cancelled_pmpnn_structure_does_not_start(run, missing):
@@ -43,6 +44,7 @@ def test_cancelled_pmpnn_structure_does_not_start(run, missing):
     window.end_process.assert_called_once()
 
 
+@pytest.mark.pip_specific
 @pytest.mark.parametrize('plm', ['PMPNN', 'ESM+PMPNN', 'ProSST+PMPNN', 'ESM+ProSST+PMPNN'])
 @pytest.mark.parametrize('run', RUNS[2:])
 def test_pmpnn_dropdown_training(run, plm):
@@ -59,6 +61,7 @@ def test_pmpnn_dropdown_training(run, plm):
     assert dialog.call_count == (5 if run.endswith('_test') else 4)
 
 
+@pytest.mark.pip_specific
 @pytest.mark.parametrize('custom', [False, True])
 def test_mklsts_inline_column_fields(custom):
     window = make_window('esm')
@@ -82,6 +85,7 @@ def test_mklsts_inline_column_fields(custom):
             assert flag not in window.cmd
 
 
+@pytest.mark.pip_specific
 @pytest.mark.parametrize('action', ['pypef_llm_predict', 'pypef_llm_test'])
 @pytest.mark.parametrize('cancel_structure', [False, True])
 def test_pmpnn_zero_shot_gui(action, cancel_structure):

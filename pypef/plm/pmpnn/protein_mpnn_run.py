@@ -1,3 +1,12 @@
+# PyPEF - Pythonic Protein Engineering Framework
+# https://github.com/niklases/PyPEF
+
+# ProteinMPNN autoregressive model inference
+# Adapted ProteinMPNN code used under MIT license
+# Code repository: https://github.com/dauparas/ProteinMPNN
+# J. Dauparas et al., Robust deep learning–based protein sequence design 
+# using ProteinMPNN.Science 378,49-56(2022).DOI:10.1126/science.add2187
+
 import os.path
 import json, time, os, sys
 import numpy as np
