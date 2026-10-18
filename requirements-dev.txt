@@ -26,4 +26,4 @@ hydra-core
 pyside6
 torch
 torch-geometric
-triton
+#triton

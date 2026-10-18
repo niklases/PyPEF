@@ -1,10 +1,7 @@
 """Check hybrid command construction without launching training or GUI threads."""
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
-
 import pytest
-
-from pypef.gui.qt_window import MainWidget, PLM_OPTIONS
 
 
 RUNS = [
@@ -16,6 +13,7 @@ RUNS = [
 
 
 def make_window(plm):
+    from pypef.gui.qt_window import MainWidget
     window = SimpleNamespace(
         win2=None, llm=plm,
         check_lora=Mock(isChecked=Mock(return_value=False)),
@@ -35,6 +33,7 @@ def make_window(plm):
 @pytest.mark.parametrize('run', RUNS[2:])
 @pytest.mark.parametrize('missing', ['WT FASTA', 'PDB'])
 def test_cancelled_pmpnn_structure_does_not_start(run, missing):
+    from pypef.gui.qt_window import MainWidget
     window = make_window('pmpnn')
     def select_file(parent, title, **kwargs):
         return ('', '') if missing in title else ('input_file', '')
@@ -48,6 +47,7 @@ def test_cancelled_pmpnn_structure_does_not_start(run, missing):
 @pytest.mark.parametrize('plm', ['PMPNN', 'ESM+PMPNN', 'ProSST+PMPNN', 'ESM+ProSST+PMPNN'])
 @pytest.mark.parametrize('run', RUNS[2:])
 def test_pmpnn_dropdown_training(run, plm):
+    from pypef.gui.qt_window import MainWidget, PLM_OPTIONS
     window = make_window(None)
     MainWidget.selection_llm_model(window, PLM_OPTIONS.index(plm))
     assert window.llm == plm.lower()
@@ -64,6 +64,7 @@ def test_pmpnn_dropdown_training(run, plm):
 @pytest.mark.pip_specific
 @pytest.mark.parametrize('custom', [False, True])
 def test_mklsts_inline_column_fields(custom):
+    from pypef.gui.qt_window import MainWidget
     window = make_window('esm')
     window.button_mklsts = Mock()
     window.ls_proportion = 0.8
@@ -89,6 +90,7 @@ def test_mklsts_inline_column_fields(custom):
 @pytest.mark.parametrize('action', ['pypef_llm_predict', 'pypef_llm_test'])
 @pytest.mark.parametrize('cancel_structure', [False, True])
 def test_pmpnn_zero_shot_gui(action, cancel_structure):
+    from pypef.gui.qt_window import MainWidget
     window = make_window('pmpnn')
     window.button_llm_predict_zs = Mock()
     window.button_llm_test_zs = Mock()

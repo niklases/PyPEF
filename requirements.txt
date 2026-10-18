@@ -16,7 +16,5 @@ transformers>=4.40.0
 nvidia-ml-py
 gpytorch
 huggingface_hub[hf_xet]
-#scikit-learn-intelex
-#ray[default]
 torch
 torch-geometric

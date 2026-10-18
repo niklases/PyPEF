@@ -3,14 +3,13 @@ import sys
 import threading
 from types import SimpleNamespace
 from unittest.mock import patch
-
-from PySide6.QtWidgets import QApplication, QTextEdit
 from tqdm import tqdm
+import pytest
 
-from pypef.gui.qt_window import MainWidget, Worker, WorkerOutputStream
 
-
+@pytest.mark.pip_specific
 def test_stream_captures_only_own_thread():
+    from pypef.gui.qt_window import WorkerOutputStream
     terminal, output = io.StringIO(), []
     stream = WorkerOutputStream(terminal, output.append)
     stream.write('job')
@@ -21,7 +20,9 @@ def test_stream_captures_only_own_thread():
     assert terminal.getvalue() == 'jobother'
 
 
+@pytest.mark.pip_specific
 def test_worker_captures_tqdm_and_restores_streams():
+    from pypef.gui.qt_window import Worker
     worker = Worker(0, [])
     output = []
     worker.sig_output.connect(output.append)
@@ -40,7 +41,10 @@ def test_worker_captures_tqdm_and_restores_streams():
     assert '100%' in ''.join(output)
 
 
+@pytest.mark.pip_specific
 def test_progress_updates_replace_current_line():
+    from PySide6.QtWidgets import QApplication, QTextEdit
+    from pypef.gui.qt_window import MainWidget
     app = QApplication.instance() or QApplication([])
     widget = QTextEdit()
     left_widget = QTextEdit()
