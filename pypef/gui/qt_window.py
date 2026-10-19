@@ -144,15 +144,23 @@ class WorkerOutputStream:
         self.thread_id = threading.get_ident()
 
     def write(self, text):
-        result = self.original.write(text)
+        result = None
+        if self.original is not None:
+            result = self.original.write(text)
         if text and threading.get_ident() == self.thread_id:
             self.emit(text)
         return result
 
     def flush(self):
-        self.original.flush()
+        if self.original is not None:
+            self.original.flush()
 
     def __getattr__(self, name):
+        if self.original is None:
+            raise AttributeError(
+                f"'{self.__class__.__name__}' object has no attribute '{name}' "
+                f"(original stream is None)"
+            )
         return getattr(self.original, name)
 
 
