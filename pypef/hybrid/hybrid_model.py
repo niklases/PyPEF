@@ -154,6 +154,7 @@ class DCALLMHybridModel:
             if torch.cuda.is_available():
                 torch.cuda.manual_seed_all(self.seed)
             np.random.seed(self.seed)
+        # Ensemble optimization function weights: 1.0 for pure ranking component, 0.0 for only MSE focus
         if alpha is None:
             alpha=0.5
         self.alpha = alpha
@@ -355,9 +356,7 @@ class DCALLMHybridModel:
     def optimize_ensemble_weights_torch(
         self,
         y_true_np: np.ndarray, 
-        *y_preds_np: np.ndarray | None, 
-        method: str = "spearman-hybrid",
-        alpha: float = 0.5,         # 1.0 for pure ranking component, 0.0 for only MSE focus
+        *y_preds_np: np.ndarray | None,
         steps: int = 25
     ) -> np.ndarray:
 
@@ -386,13 +385,13 @@ class DCALLMHybridModel:
             optimizer.zero_grad()
             weights = torch.nn.functional.softplus(betas)
             y_hat = X @ weights
-            loss = hybrid_corr_mse_loss(y_true_std, y_hat, method=method, alpha=alpha)
+            loss = hybrid_corr_mse_loss(y_true_std, y_hat, alpha=self.alpha)
             loss.backward()
             return loss
 
         logger.info(
-            f"Optimizing predictors with method '{method}' (weight Spearman: "
-            f"{alpha}, weight MSE: {1 - alpha}, steps: {steps})..."
+            f"Optimizing predictors with weight distribution: weight Spearman: "
+            f"{self.alpha}, weight MSE: {1 - self.alpha}, steps: {steps})..."
         )
 
         for _ in range(steps):

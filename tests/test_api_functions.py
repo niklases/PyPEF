@@ -53,6 +53,7 @@ from pypef.plm.prosst_lora_tune import (
     get_prosst_models, get_structure_quantizied, 
     prosst_simple_vocab_aa_tokenizer
 )
+from pypef.plm.pmpnn.get_cond_probs import run_protein_mpnn_conditional, score_sequences_from_probs
 from pypef.plm.utils import hybrid_corr_mse_loss
 from pypef.gaussian_process.gauss_opt import get_gp_kernel_model
 from pypef.utils.helpers import get_device
@@ -189,6 +190,17 @@ def test_gremlin_avgfp():
     print(f"Function run time: {t2 - t1:.2f} s\n")
 
 
+def test_pmpnn_avgfp():
+    t1 = time.time()
+    print("\n\ntest_pmpnn_avgfp()..." + "\n" + "=" * 80 + "\n")
+    pmpnn_conditional_probs = run_protein_mpnn_conditional(pdb_file_avgfp, seed=seed)
+    y_test_pred = score_sequences_from_probs(pmpnn_conditional_probs, s_test_avgfp, get_wt_sequence(wt_seq_file_avgfp))
+    sp = spearmanr(y_test_avgfp, y_test_pred)[0]
+    np.testing.assert_almost_equal(0.6544109650685316, sp, decimal=6)
+    t2 = time.time()
+    print(f"Function run time: {t2 - t1:.2f} s\n")
+
+
 def test_hybrid_model_dca_llm_aneh(
         msa=msa_file_aneh, 
         train_seqs=train_seqs_aneh, 
@@ -229,7 +241,10 @@ def test_hybrid_model_dca_llm_aneh(
     print('len(aneh_wt_seq)', len(wt_seq))
 
     esm_base_model, _esm_lora_model, esm_tokenizer, _esm_optimizer = get_esm_models(
-        model="facebook/esm1v_t33_650M_UR90S_3", seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70")
+        model="facebook/esm1v_t33_650M_UR90S_3", 
+        seed=seed, 
+        revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70"
+    )
     esm_base_model.eval()
     esm_base_model = esm_base_model.to(device)
     # ESM lm_head decoder must stay tied to the input word embeddings. 
@@ -1318,6 +1333,7 @@ def test_gaussian_process_opt():
 
 if __name__ == "__main__":
     test_gremlin_avgfp()
+    test_pmpnn_avgfp()
     test_hybrid_model_dca_llm_aneh()
     test_hybrid_model_dca_llm_avgfp()
     test_dataset_b_results()
