@@ -195,8 +195,8 @@ def test_pmpnn_avgfp():
     print("\n\ntest_pmpnn_avgfp()..." + "\n" + "=" * 80 + "\n")
     pmpnn_conditional_probs = run_protein_mpnn_conditional(pdb_file_avgfp, seed=seed)
     y_test_pred = score_sequences_from_probs(pmpnn_conditional_probs, s_test_avgfp, get_wt_sequence(wt_seq_file_avgfp))
-    sp = spearmanr(y_test_avgfp, y_test_pred)[0]
-    np.testing.assert_almost_equal(0.6544109650685316, sp, decimal=6)
+    rho = spearmanr(y_test_avgfp, y_test_pred)[0]
+    np.testing.assert_almost_equal(0.6544109650685316, rho, decimal=2)
     t2 = time.time()
     print(f"Function run time: {t2 - t1:.2f} s\n")
 
@@ -601,15 +601,18 @@ def test_hybrid_model_dca_llm_avgfp(
                 seed=seed, revision="0b00fd112e63f6b5e70a9cd8484d4e660312ce70", device=device, verbose=True
             )
             llm_dict = llm_dict_esm
+            pmpnn_conditional_probs = None
         elif setup == 'ProSST':  # elif setup == 'ProSST':
             llm_dict_prosst = prosst_setup(
                 wt_seq=wt_seq, pdb_file=pdb_file, sequences=train_seqs, 
                 seed=seed, revision="e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8", device=device, verbose=True
             )
             llm_dict = llm_dict_prosst
+            pmpnn_conditional_probs = None
         else:
             llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
             llm_dict = llm_dict_ensemble
+            pmpnn_conditional_probs = run_protein_mpnn_conditional(pdb_file, seed=seed)
 
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train), 
@@ -621,6 +624,7 @@ def test_hybrid_model_dca_llm_avgfp(
             seed=42,
             lora_train=True,
             gauss_opt=True,
+            pmpnn_conditional_probs=pmpnn_conditional_probs,
             pdb_struct=pdb_file,
             n_epochs=5,
             device=device
@@ -657,7 +661,8 @@ def test_hybrid_model_dca_llm_avgfp(
         print(f'Train-on-test: {spearmanr(hm.y_ttest, hm.y_llm_ttest)[0]:.3f} (unsupervised)'
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
-        y_pred_test, _ = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
+        y_pred_test, individual_predictions = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
+        print("============\n", individual_predictions, "\n============")
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))

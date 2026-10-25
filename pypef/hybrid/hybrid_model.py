@@ -222,8 +222,10 @@ class DCALLMHybridModel:
         )
 
     def _predict_pmpnn_gp(self, sequences):
-        return predict_pmpnn_gp(self.pmpnn_gp, self.pmpnn_gp_likelihood,
-                               sequences, self.pmpnn_log_probs, self.wt_sequence, self.device)
+        return predict_pmpnn_gp(
+            self.pmpnn_gp, self.pmpnn_gp_likelihood, sequences, 
+            self.pmpnn_log_probs, self.wt_sequence, self.device
+        )
 
     @staticmethod
     def spearmanr(
@@ -390,8 +392,8 @@ class DCALLMHybridModel:
             return loss
 
         logger.info(
-            f"Optimizing predictors with weight distribution: weight Spearman: "
-            f"{self.alpha}, weight MSE: {1 - self.alpha}, steps: {steps})..."
+            f"Optimizing predictors with weight distribution: weight Spearman (alpha): "
+            f"{self.alpha}, weight MSE (1 - alpha): {1 - self.alpha}, steps: {steps})..."
         )
 
         for _ in range(steps):
