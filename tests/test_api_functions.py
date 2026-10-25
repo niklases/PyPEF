@@ -662,15 +662,18 @@ def test_hybrid_model_dca_llm_avgfp(
               f'--> {spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0]:.3f} (supervised) | len = {len(hm.y_ttest)}')
 
         y_pred_test, individual_predictions = hm.hybrid_prediction(x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs)
-        print("============\n", individual_predictions, "\n============")
         print('Weights (beta\'s):', hm.betas, 'Regressor:', hm.ridge_opt)
         print('hm.y_dca_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], len(hm.y_ttest))
         print('hm.y_dca_ridge_ttest:', spearmanr(hm.y_ttest, hm.y_dca_ridge_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_ttest:', spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], len(hm.y_ttest))
         print('hm.y_llm_lora_ttest:', spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], len(hm.y_ttest))
         print('hm.y_gp_opt_ttest:', spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], len(hm.y_ttest))
+        print('-------------')
+        for k, v in individual_predictions.items():
+            print(f'{k}: {spearmanr(y_test, v)[0]:.3f}')
+        print('-------------')
         print('hm.all_betas:', str(hm.all_betas).replace('\n', ''), len(hm.all_betas))
-        print('Hybrid prediction:', spearmanr(y_test, y_pred_test)[0], len(y_test))
+        print(f'Hybrid prediction: {spearmanr(y_test, y_pred_test)[0]:.3f}, {len(y_test)}')
         np.testing.assert_almost_equal(
             spearmanr(hm.y_ttest, hm.y_dca_ttest)[0], 0.5948787474579608, 
             decimal=7
