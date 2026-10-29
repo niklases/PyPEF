@@ -19,7 +19,8 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
 from pypef.utils.variant_data import (
-    check_alignment, get_mismatches, get_seqs_from_var_name, shift_and_trim_vars_seqs
+    check_alignment, crop_pdb_to_alignment, get_mismatches, 
+    get_seqs_from_var_name, shift_and_trim_vars_seqs
 )
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
@@ -144,6 +145,12 @@ def main(cfg: DictConfig) -> None:
         print(f"New WT sequence trimmed to common sequence/PDB sequence length): {len(pdb_trimmed_common_sequence)}")
         print(f"Seq. identity: {mapping['identity']:.2f}")
         print(mapping['alignment_obj'])
+        if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
+            # Crop PDB to the common region so structure and sequence lengths match
+            cropped_pdb_file = output_path.parent / "cropped_pdbs" / f"{DMS_id}.pdb"
+            cropped_pdb_file.parent.mkdir(parents=True, exist_ok=True)
+            pdb_file = crop_pdb_to_alignment(pdb_file, cropped_pdb_file, mapping)
+            print(f"Cropped PDB to residues {mapping['start_pdb'] + 1}-{mapping['end_pdb']}: {pdb_file}")
         if mapping and mapping['identity']:
             # Perform the shift and trim
             pdb_vars, _orig_vars, sequences_msa_trimmed, pdb_trimmed_seqs = shift_and_trim_vars_seqs(
