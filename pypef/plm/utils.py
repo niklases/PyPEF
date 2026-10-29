@@ -190,9 +190,9 @@ def get_batches(
     if keep_remaining: 
         if a_remaining is not None:
             logger.info(f'Appending remaining to collected batches as last batch '
-                        f'(the resulting inhomogenous list shape is '
+                        f'(the resulting inhomogeneous list shape is '
                         f'{np.shape(a)} + {np.shape(a_remaining)} = ('
-                        f'{np.shape(a)[0] + 1}, *, {np.shape(a)[-1]}))...')
+                        f'{np.shape(a)[0] + 1}, *[,{np.shape(a)[-1]}]))...')
             a = a.tolist()
             a.append(a_remaining)
             a = [np.asarray(it) for it in a]

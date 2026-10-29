@@ -76,7 +76,10 @@ def load_conditional_log_probs(cond_probs_input, wt_seq):
             raise ValueError("PMPNN requires at least one decoding draw.")
         log_p = log_p.mean(axis=0)
     if log_p.shape != (len(wt_seq), len(ALPHABET)):
-        raise ValueError("PMPNN log probabilities must have shape [L, 21] or [N, L, 21] matching wt_seq.")
+        logger.warning(
+            f"PMPNN log probabilities must have shape (L, 21) or (N, L, 21) matching "
+            f"wt_seq L={len(wt_seq)} but got shape {log_p.shape} instead."
+        )
     if not np.isfinite(log_p).all():
         raise ValueError("PMPNN log probabilities must be finite.")
     if any(aa not in AA_TO_IDX for aa in wt_seq):

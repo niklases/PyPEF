@@ -1092,7 +1092,7 @@ class DCALLMHybridModel:
                         feature_names.append(f"{llm_name}_base")
                         logger.info(
                             f"{llm_name} zero-shot 'ensemble test set' performance: "
-                            f"Test set = {spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
+                            f"{spearmanr(self.y_ttest, base_preds)[0]:.3f} (N={len(self.y_ttest)})"
                         )
                     
                     # Supervised LoRA Fine-tuned PLM

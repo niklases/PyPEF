@@ -540,6 +540,9 @@ datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PROSST.png
 datasets/AVGFP/Predictions_PLM_PMPNN_avGFP_prediction_set.txt
 datasets/AVGFP/Predictions_PLM_ESM_avGFP_prediction_set.txt
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PMPNN.png
+datasets/AVGFP/HYBRIDGREMLINPROSST_DE_trajectories.png
+datasets/AVGFP/HYBRIDGREMLINESM_DE_trajectories.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST_PMPNN.png
 
 scripts/ProteinGym_runs/official/PyPEF/
 scripts/ProteinGym_runs/official/PyPEF-main/
