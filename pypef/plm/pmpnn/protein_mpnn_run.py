@@ -5,7 +5,7 @@
 # Adapted ProteinMPNN code used under MIT license
 # Code repository: https://github.com/dauparas/ProteinMPNN
 # J. Dauparas et al., Robust deep learning–based protein sequence design 
-# using ProteinMPNN.Science 378,49-56(2022).DOI:10.1126/science.add2187
+# using ProteinMPNN. Science 378,49-56(2022). DOI:10.1126/science.add2187
 
 import os.path
 import json, time, os, sys
@@ -107,7 +107,6 @@ def run_pmpnn(
     print_all = suppress_print == 0 
     omit_AAs_np = np.array([AA in omit_AAs_list for AA in alphabet]).astype(np.float32)
     device = get_device()
-    logger.info(f"Device: {device.upper()}")
     if os.path.isfile(chain_id_jsonl):
         with open(chain_id_jsonl, 'r') as json_file:
             json_list = list(json_file)
@@ -130,7 +129,6 @@ def run_pmpnn(
             logger.info('fixed_positions_jsonl is NOT loaded')
         fixed_positions_dict = None
     
-    
     if os.path.isfile(pssm_jsonl):
         with open(pssm_jsonl, 'r') as json_file:
             json_list = list(json_file)
@@ -142,7 +140,6 @@ def run_pmpnn(
             logger.info(40*'-')
             logger.info('pssm_jsonl is NOT loaded')
         pssm_dict = None
-    
     
     if os.path.isfile(omit_AA_jsonl):
         with open(omit_AA_jsonl, 'r') as json_file:
@@ -206,7 +203,7 @@ def run_pmpnn(
     if pdb_path:
         pdb_dict_list = parse_pdb(pdb_path, ca_only=ca_only)
         dataset_valid = StructureDatasetPDB(pdb_dict_list, truncate=None, max_length=max_length)
-        all_chain_list = [item[-1:] for item in list(pdb_dict_list[0]) if item[:9]=='seq_chain']  # ['A','B', 'C',...]
+        all_chain_list = [item[-1:] for item in list(pdb_dict_list[0]) if item[:9]=='seq_chain']  # ['A','B', 'C', ...]
         if pdb_path_chains:
             designed_chain_list = [str(item) for item in pdb_path_chains.split()]
         else:
@@ -347,7 +344,7 @@ def run_pmpnn(
                     logger.info(f'Calculating conditional probabilities for {name_}')
                 conditional_probs_only_file = os.path.join(out_folder, 'conditional_probs_only', batch_clones[0]['name'])
                 log_conditional_probs_list = []
-                for j in tqdm(range(NUM_BATCHES), desc='Getting PMPNN cond. probs. (ensemble repetitions)'):
+                for j in tqdm(range(NUM_BATCHES), desc=f'Getting PMPNN cond. probs. (ensemble repetitions) ({device.upper()})'):
                     randn_1 = torch.randn(chain_M.shape, device=X.device)
                     log_conditional_probs = model.conditional_probs(
                         X, S, mask, chain_M*chain_M_pos, residue_idx, chain_encoding_all, randn_1, conditional_probs_only_backbone
@@ -477,7 +474,7 @@ def run_pmpnn(
                                                 name_, native_score_print, global_native_score_print, print_visible_chains, 
                                                 print_masked_chains, print_model_name, model_name, commit_str, seed, native_seq
                                             )
-                                    ) #write the native sequence
+                                    ) # write the native sequence
                                 start = 0
                                 end = 0
                                 list_of_AAs = []
@@ -499,7 +496,7 @@ def run_pmpnn(
                                 f.write('>T={}, sample={}, score={}, global_score={}, seq_recovery={}\n{}\n'.format(
                                     temp,sample_number,score_print,global_score_print,seq_rec_print,seq
                                     )
-                                ) #write generated sequence
+                                ) # write generated sequence
                 if save_npz_files:
                     np.savez(score_file, score=np.array(score_list, np.float32), global_score=np.array(global_score_list, np.float32))
                 if save_npz_files:
@@ -516,8 +513,8 @@ def run_pmpnn(
                     )
                 t1 = time.time()
                 dt = round(float(t1-t0), 4)
-                num_seqs = len(temperatures)*NUM_BATCHES*BATCH_COPIES
+                num_seqs = len(temperatures) * NUM_BATCHES * BATCH_COPIES
                 total_length = X.shape[1]
                 if print_all:
                     logger.info(f'{num_seqs} sequences of length {total_length} generated in {dt} seconds')
-    return result_dict        
+    return result_dict
