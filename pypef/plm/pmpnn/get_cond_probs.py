@@ -76,7 +76,7 @@ def load_conditional_log_probs(cond_probs_input, wt_seq):
             raise ValueError("PMPNN requires at least one decoding draw.")
         log_p = log_p.mean(axis=0)
     if log_p.shape != (len(wt_seq), len(ALPHABET)):
-        logger.warning(
+        raise ValueError(
             f"PMPNN log probabilities must have shape (L, 21) or (N, L, 21) matching "
             f"wt_seq L={len(wt_seq)} but got shape {log_p.shape} instead."
         )
