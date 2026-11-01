@@ -1555,6 +1555,11 @@ def save_model_to_dict_pickle(
                 current_llm['llm_model'] = current_llm['llm_model'].to('cpu').state_dict()
                 current_llm['llm_base_model'] = current_llm['llm_base_model'].to('cpu').state_dict()
             model_type += ''.join(model.llm_keys)
+        # PMPNN is not part of llm_keys (ESM/ProSST) but should show in the name too,
+        # e.g. Pickles/HYBRIDGREMLINESMPROSSTPMPNN (only the name; loading does not
+        # depend on it)
+        if getattr(model, 'pmpnn_log_probs', None) is not None:
+            model_type += 'PMPNN'
     pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     pickle.dump(
         {

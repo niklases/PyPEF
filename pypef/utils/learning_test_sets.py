@@ -116,6 +116,35 @@ def drop_rows(
     return df
 
 
+def wt_identical_variants(variants, mutation_sep: str = '/') -> list[str]:
+    """
+    Return the variant names that consist only of synonymous "substitutions" (same
+    amino acid before and after, e.g. L215L or L215L/R219R/F244F), i.e. variants
+    whose sequence is identical to the wild type. Such entries are often the WT
+    reference measurement written in the notation of a combinatorial library.
+    """
+    found = []
+    for variant in variants:
+        subs = str(variant).split(mutation_sep)
+        matches = [re.fullmatch(r'([A-Za-z])(\d+)([A-Za-z])', sub.strip()) for sub in subs]
+        if matches and all(m is not None and m.group(1).upper() == m.group(3).upper() for m in matches):
+            found.append(str(variant))
+    return found
+
+
+def log_wt_identical_variants(variants, mutation_sep: str = '/'):
+    """Log a note for variants identical to the WT (kept in the data)."""
+    found = wt_identical_variants(variants, mutation_sep)
+    if found:
+        examples = ', '.join(found[:5]) + (', ...' if len(found) > 5 else '')
+        logger.info(
+            f'Note: {len(found)} variant(s) contain only synonymous substitutions and are '
+            f'identical to the WT sequence: {examples}. They are kept (e.g. as WT reference '
+            f'measurement).'
+        )
+    return found
+
+
 def get_variants(
         df,
         amino_acids,
