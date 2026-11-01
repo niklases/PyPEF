@@ -12,6 +12,12 @@ RUNS = [
 ]
 
 
+def option_value(cmd, option):
+    """Value following a CLI option in an argument list command."""
+    assert isinstance(cmd, list), 'GUI commands must be argument lists'
+    return cmd[cmd.index(option) + 1]
+
+
 def make_window(plm):
     from pypef.gui.qt_window import MainWidget
     window = SimpleNamespace(
@@ -55,9 +61,9 @@ def test_pmpnn_dropdown_training(run, plm):
                side_effect=lambda *args, **kwargs: ('input_file', '')) as dialog:
         getattr(MainWidget, run)(window)
     window.start_main_thread.assert_called_once()
-    assert f'--plm {plm.lower()}' in window.cmd
-    assert '--wt input_file' in window.cmd
-    assert '--pdb input_file' in window.cmd
+    assert option_value(window.cmd, '--plm') == plm.lower()
+    assert option_value(window.cmd, '--wt') == 'input_file'
+    assert option_value(window.cmd, '--pdb') == 'input_file'
     assert dialog.call_count == (5 if run.endswith('_test') else 4)
 
 
@@ -103,6 +109,6 @@ def test_pmpnn_zero_shot_gui(action, cancel_structure):
         window.end_process.assert_called_once()
     else:
         window.start_main_thread.assert_called_once()
-        assert '--plm pmpnn' in window.cmd
-        assert '--pdb input_file' in window.cmd
-        assert '--wt input_file' in window.cmd
+        assert option_value(window.cmd, '--plm') == 'pmpnn'
+        assert option_value(window.cmd, '--pdb') == 'input_file'
+        assert option_value(window.cmd, '--wt') == 'input_file'

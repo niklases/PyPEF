@@ -19,6 +19,9 @@ import shutil
 import pytest
 
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
@@ -54,8 +57,8 @@ def test_pypef_loaded_from_installed_package():
     """
     import pypef
     pypef_file = Path(pypef.__file__).resolve()
-    # This test file lives at tests/test_pip_install.py — repo root is one level up
-    repo_root = Path(__file__).resolve().parent.parent
+    # This test file lives at tests/cli/test_pip_install.py — repo root is two levels up
+    repo_root = REPO_ROOT
     assert not pypef_file.is_relative_to(repo_root), (
         f"pypef was imported from the source tree:\n  {pypef_file}\n"
         f"The tests are NOT exercising the installed package data.\n"
@@ -239,3 +242,64 @@ def test_pickle_roundtrip_hybrid_model_class(tmp_path):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-m", "pip_specific"])
+
+
+# ---------------------------------------------------------------------------
+# Package-data: completeness against the repository
+# ---------------------------------------------------------------------------
+
+def _tracked_data_files() -> list[str]:
+    """All git-tracked non-Python files below pypef/, relative to the package dir."""
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "-z", "pypef"],
+            capture_output=True, check=True,
+        ).stdout.decode()
+    except (OSError, subprocess.CalledProcessError):
+        pytest.skip("git or the repository checkout is not available")
+    files = [f for f in out.split("\0") if f and not f.endswith((".py", ".pyc"))]
+    return sorted(str(Path(f).relative_to("pypef")) for f in files)
+
+
+@pytest.mark.pip_specific
+def test_all_package_data_files_installed():
+    """Every data file shipped in the repo's pypef/ package (model weights, AAindex
+    tables, assets, licenses, ...) must be present in the installed package with
+    the same size. Catches files missing from [tool.setuptools.package-data] (e.g.
+    the ProteinMPNN weights once were) and Git-LFS pointer files installed in
+    place of the real data. New data files are covered automatically.
+    """
+    import pypef
+    installed = Path(pypef.__file__).resolve().parent
+    source = REPO_ROOT / "pypef"
+    if installed == source.resolve():
+        pytest.skip("pypef is imported from the source tree, not from an installation")
+    missing, different = [], []
+    for rel in _tracked_data_files():
+        src, dst = source / rel, installed / rel
+        if not dst.is_file():
+            missing.append(rel)
+        elif src.is_file() and dst.stat().st_size != src.stat().st_size:
+            different.append(f"{rel} (installed {dst.stat().st_size} B, repo {src.stat().st_size} B)")
+    assert not missing, (
+        f"{len(missing)} data file(s) missing from the installed package {installed} - "
+        f"add them to [tool.setuptools.package-data] in pyproject.toml:\n  "
+        + "\n  ".join(missing[:50])
+    )
+    assert not different, "Installed data files differ from the repo:\n  " + "\n  ".join(different)
+
+
+# ---------------------------------------------------------------------------
+# Package-data: ProteinMPNN model weights (.pt)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.pip_specific
+@pytest.mark.parametrize("weights", ["vanilla_model_weights", "soluble_model_weights"])
+def test_pmpnn_weights_load(weights):
+    """The bundled ProteinMPNN checkpoints exist in the installed package and load."""
+    import torch
+    import pypef.plm.pmpnn as pmpnn
+    path = Path(pmpnn.__file__).parent / weights / "v_48_020.pt"
+    assert path.is_file(), f"Missing ProteinMPNN weights: {path}"
+    checkpoint = torch.load(path, map_location="cpu", weights_only=False)
+    assert "model_state_dict" in checkpoint, f"Unexpected checkpoint content in {path}"

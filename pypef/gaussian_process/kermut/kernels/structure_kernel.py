@@ -53,25 +53,28 @@ class BaseKernel(Kernel):
         x1_idx: torch.Tensor,
         x2_idx: torch.Tensor,
         device: torch.device,
+        n1: int,
+        n2: int,
     ) -> torch.Tensor:
-        # Early return if either set of sequences has no mutations (e.g. Wild-Type)
+        """
+        Sum the site-wise kernel values k_mult (one row/column per mutated site) up to
+        an (n1, n2) kernel between sequences. The sequence counts must be passed in:
+        sequences without any substitution (e.g. the WT or synonymous "mutants" like
+        L215L) have no entry in x1_idx/x2_idx and get a zero row/column. Inferring the
+        counts from the highest mutated sequence index would drop such sequences when
+        they are at the end of a batch (shape mismatch in GPyTorch).
+        """
         if x1_idx.numel() == 0 or x2_idx.numel() == 0:
-            n1 = int(x1_idx[:, 0].max().item()) + 1 if x1_idx.numel() > 0 else 1
-            n2 = int(x2_idx[:, 0].max().item()) + 1 if x2_idx.numel() > 0 else 1
             return torch.zeros((n1, n2), device=device)
-    
-        # Convert max() outputs to int to satisfy torch.zeros dimensions
-        n1 = int(x1_idx[:, 0].max().item()) + 1
-        n2 = int(x2_idx[:, 0].max().item()) + 1
-    
-        # Initialize directly on device to avoid unnecessary allocations
-        one_hot_x1 = torch.zeros(x1_idx[:, 0].size(0), n1, device=device)
-        one_hot_x2 = torch.zeros(x2_idx[:, 0].size(0), n2, device=device)
-    
+        one_hot_x1 = torch.zeros(x1_idx.size(0), n1, device=device)
+        one_hot_x2 = torch.zeros(x2_idx.size(0), n2, device=device)
         one_hot_x1.scatter_(1, x1_idx[:, 0].unsqueeze(1), 1)
         one_hot_x2.scatter_(1, x2_idx[:, 0].unsqueeze(1), 1)
-    
         return torch.transpose(torch.transpose(k_mult @ one_hot_x2, 0, 1) @ one_hot_x1, 0, 1)
+
+    def _n_sequences(self, x: torch.Tensor) -> int:
+        """Number of sequences in x (as flattened by _get_mutation_indices)."""
+        return x.numel() // (self.seq_len * 20)
 
 
 class SiteComparisonKernel(BaseKernel):
@@ -282,7 +285,10 @@ class StructureKernel(BaseKernel):
         if self.use_distance_comparison:
             k_mult = k_mult * self.k_d(x1_idx, x2_idx)
 
-        return self._sum_multi_mutants(k_mult, x1_idx, x2_idx, x1.device)
+        return self._sum_multi_mutants(
+            k_mult, x1_idx, x2_idx, x1.device,
+            n1=self._n_sequences(x1), n2=self._n_sequences(x2),
+        )
 
     def get_params(self) -> Dict[str, float]:
         params = {}

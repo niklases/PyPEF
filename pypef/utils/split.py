@@ -66,7 +66,7 @@ class DatasetSplitter:
         if single_mut_idxs:   
             self.df_singles = self.df.loc[single_mut_idxs, :]
             self.df_singles.index.name = 'old_index'
-            self.df_singles.reset_index(inplace=True)  # Keeping the index copy of the full old df
+            self.df_singles = self.df_singles.reset_index()  # Keeping the index copy of the full old df
             self.df_singles['old_index'] = self.df_singles.pop('old_index')  # Move to end (last column)
             if self.df_singles.size != self.df.size:
                 logger.info(  #(TODO): For now, removing double or higher mutated variants (keep in future?!)..
@@ -80,7 +80,9 @@ class DatasetSplitter:
             variants = self.df_singles[self.mutation_column].to_list()
         self.df_singles['variant_pos'] = [int(v[1:-1]) for v in variants]
         self.df_singles['substitutions'] = [v[-1] for v in variants]
-        self.df_singles.sort_values(['variant_pos', 'substitutions'], ascending=[True, True], inplace=True)
+        self.df_singles = self.df_singles.sort_values(
+            ['variant_pos', 'substitutions'], ascending=[True, True]
+        )
         self.min_pos, self.max_pos = self.df_singles['variant_pos'].to_numpy()[0], self.df_singles['variant_pos'].to_numpy()[-1]
 
     def get_old_index(self, new_indices: list):

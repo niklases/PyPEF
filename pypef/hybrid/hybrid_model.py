@@ -1544,6 +1544,9 @@ def save_model_to_dict_pickle(
     
     # For hybrid PLM models save each PLM (base and LoRA) as state dictionaries
     if model_type.lower().startswith('hybrid'):
+        # GUI progress/abort callbacks are local functions and cannot be pickled
+        model.progress_cb = None
+        model.abort_cb = None
         if model.llm_keys is not None:
             for llm_name in model.llm_keys:
                 logger.info(f"Storing PLM model {llm_name} "
@@ -1551,8 +1554,6 @@ def save_model_to_dict_pickle(
                 current_llm = model.llm_data[llm_name]
                 current_llm['llm_model'] = current_llm['llm_model'].to('cpu').state_dict()
                 current_llm['llm_base_model'] = current_llm['llm_base_model'].to('cpu').state_dict()
-            model.progress_cb = None
-            model.abort_cb = None
             model_type += ''.join(model.llm_keys)
     pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
     pickle.dump(
@@ -1944,7 +1945,7 @@ def performance_ls_ts(
                     attention_mask=plm_dict['esm']['llm_attention_mask'],
                     model=plm_dict['esm']['llm_base_model'],
                     device=device
-                ).cpu()
+                ).detach().cpu().numpy()
             elif plm_name == 'prosst':
                 logger.info("Zero-shot PLM inference using ProSST...")
                 plm_dict = prosst_setup(wt_seq, pdb_file, test_sequences)
@@ -1955,7 +1956,7 @@ def performance_ls_ts(
                     model=plm_dict['prosst']['llm_base_model'],
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
                     device=device
-                ).cpu()
+                ).detach().cpu().numpy()
             elif plm_name == 'pmpnn':
                 if pdb_file is None or wt_seq is None:
                     raise ValueError("PMPNN zero-shot scoring requires --pdb and --wt.")
@@ -2155,7 +2156,7 @@ def predict_ps(
                     attention_mask=plm_dict['esm']['llm_attention_mask'],
                     wt_input_ids=plm_dict['esm']['wt_input_ids'],
                     model=plm_dict['esm']['llm_base_model']
-                ).cpu()
+                ).detach().cpu().numpy()
             elif plm_name == 'prosst':
                 logger.info("Zero-shot PLM inference using ProSST...")
                 plm_dict = prosst_setup(wt_seq, pdb_file, sequences)
@@ -2166,7 +2167,7 @@ def predict_ps(
                     model=plm_dict['prosst']['llm_base_model'],
                     wt_structure_input_ids=plm_dict['prosst']['wt_structure_input_ids'],
                     device=device
-                ).cpu()
+                ).detach().cpu().numpy()
             elif plm_name == 'pmpnn':
                 ys_pred = score_sequences_from_probs(pmpnn_log_probs, sequences, wt_seq)
             else:

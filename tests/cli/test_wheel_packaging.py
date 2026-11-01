@@ -40,6 +40,9 @@ REQUIRED_DATA_FILES = [
     "pypef/ml/AAindex/ANDN920101.txt",
     "pypef/ml/AAindex/Refined_cluster_indices_r0.93_r0.97/0.93_0.97_1_0_2.txt",
     "pypef/gui/assets/pypef_logo.jpg",
+    "pypef/plm/pmpnn/vanilla_model_weights/v_48_020.pt",
+    "pypef/plm/pmpnn/soluble_model_weights/v_48_020.pt",
+    "pypef/plm/pmpnn/LICENSE",
 ]
 
 

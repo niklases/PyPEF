@@ -9,10 +9,9 @@ from os import getcwd, cpu_count, chdir
 import logging
 import time
 import re
+import shlex
 import threading
 from contextlib import redirect_stdout, redirect_stderr
-
-
 from PySide6.QtCore import QObject, QThread, QSize, Qt, QRect, QTimer, Signal, Slot, QMetaObject
 from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
@@ -277,7 +276,7 @@ class MainWidget(QWidget):
         super().__init__()
         self.sig_start = Signal()  # needed only due to PyCharm debugger bug
         self.llm = 'esm'
-        self.regression_model = 'PLS'
+        self.regression_model = 'pls'
         self.mklsts_cv_method = ''
         self.c = 0
         self.n_cores = 1
@@ -842,7 +841,7 @@ class MainWidget(QWidget):
 
     def start_main_thread(self):
         self.version_text.setText("Running...")
-        self.textedit_out.append(f"Executing command: {self.cmd}")
+        self.textedit_out.append(f"Executing command: {shlex.join(self.cmd)}")
         self.logTextBox.widget.moveCursor(QTextCursor.End)
         self.logTextBox.widget.insertPlainText("\n")
         self.__workers_done = 0
@@ -860,8 +859,11 @@ class MainWidget(QWidget):
         worker.sig_error.connect(self.on_worker_error)
         worker.sig_done.connect(self.on_worker_done)
         worker.sig_done.connect(thread.quit)
-        worker.sig_done.connect(worker.deleteLater)
-        worker.sig_done.connect(thread.deleteLater)
+        # No deleteLater() for worker/thread: both are owned by Python (self.__threads)
+        # and are freed in the main thread when the next job replaces them, after their
+        # thread has finished. Letting Qt destroy the Python-subclassed Worker inside
+        # the job thread can deadlock: ~QObject holds Qt-internal locks while PySide
+        # waits for the GIL, which the GUI thread holds while it waits for those locks.
         worker.sig_msg.connect(self.logTextBox.widget.appendPlainText)
 
         thread.started.connect(worker.work)
@@ -931,9 +933,7 @@ class MainWidget(QWidget):
         )
 
         elapsed_str = self.format_time(self.elapsed)
-        # Batch update is every update
-        if not progress['epoch'] == progress['epoch_total']:
-            delta_elapsed_str = self.format_time(elapsed_since_last_epoch)
+        delta_elapsed_str = self.format_time(elapsed_since_last_epoch)
 
         # Update format text (stable width!)
         self.epoch_time_label.setText(
@@ -991,12 +991,14 @@ class MainWidget(QWidget):
         # without using QThread::terminate(), which should not be used.
         # TODO: Add functionality for new Signal-connected training/processing
         # for aborting (implemented for training..)
+        workers = [w for t, w in (self.__threads or []) if t.isRunning()]
+        if not workers:
+            self.logTextBox.widget.appendPlainText('No running job to stop.')
+            return
         self.logTextBox.widget.appendPlainText(
             'Asking each worker to abort...'
         )
-        for thread, worker in self.__threads:
-            #thread.quit()
-            #thread.wait()
+        for worker in workers:
             worker.abort()
         # even though threads have exited, there may still be messages 
         # on the main thread's queue (messages that threads emitted 
@@ -1075,17 +1077,17 @@ class MainWidget(QWidget):
 
     def _llm_hybrid_flags(self):
         """
-        Build the trailing CLI flag string for supervised DCA+PLM hybrid
-        training from the LoRA/GP option check boxes (--lora / --gauss_opt /
-        --gauss_comb).
+        Build the trailing CLI flags (argument list) for supervised DCA+PLM
+        hybrid training from the LoRA/GP option check boxes (--lora /
+        --gauss_opt / --gauss_comb).
         """
-        flags = ''
+        flags = []
         if self.check_lora.isChecked():
-            flags += ' --lora'
+            flags.append('--lora')
         if self.check_gauss_opt.isChecked():
-            flags += ' --gauss_opt'
+            flags.append('--gauss_opt')
         if self.check_gauss_comb.isChecked():
-            flags += ' --gauss_comb'
+            flags.append('--gauss_comb')
         return flags
 
     def _llm_needs_structure(self, training: bool):
@@ -1191,7 +1193,11 @@ class MainWidget(QWidget):
             return
         if wt_fasta_file and csv_variant_file:
             self.version_text.setText("Running MKLSTS...")
-            self.cmd = f'mkps --wt {wt_fasta_file} --input {csv_variant_file}'
+            self.cmd = [
+                'mkps',
+                '--wt', wt_fasta_file,
+                '--input', csv_variant_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1210,7 +1216,11 @@ class MainWidget(QWidget):
             )[0]
             if gremlin_pkl_file:
                 self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
-                self.cmd = f'predict_ssm --wt {wt_fasta_file} --params {gremlin_pkl_file}'
+                self.cmd = [
+                    'predict_ssm',
+                    '--wt', wt_fasta_file,
+                    '--params', gremlin_pkl_file,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1234,15 +1244,21 @@ class MainWidget(QWidget):
                     self.version_text.setText(
                         "ProSST zero shot model inference..."
                     )
-                    self.cmd = (
-                        f'predict_ssm --plm {self.llm} '
-                        f'--wt {wt_fasta_file} --pdb {pdb_file}'
-                        )
+                    self.cmd = [
+                        'predict_ssm',
+                        '--plm', self.llm,
+                        '--wt', wt_fasta_file,
+                        '--pdb', pdb_file,
+                    ]
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm':
-                self.cmd = f'predict_ssm --plm {self.llm} --wt {wt_fasta_file}'
+                self.cmd = [
+                    'predict_ssm',
+                    '--plm', self.llm,
+                    '--wt', wt_fasta_file,
+                ]
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
@@ -1274,7 +1290,11 @@ class MainWidget(QWidget):
             return
         if wt_fasta_file and msa_file:
             self.version_text.setText("Running GREMLIN (DCA) optimization on MSA...")
-            self.cmd = f'param_inference --wt {wt_fasta_file} --msa {msa_file}'
+            self.cmd = [
+                'param_inference',
+                '--wt', wt_fasta_file,
+                '--msa', msa_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1300,8 +1320,12 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Testing DCA performance on provided test set..."
             )
-            self.cmd = (f'hybrid --ts {test_set_file} -m {params_pkl_file} '
-                        f'--params {params_pkl_file}')
+            self.cmd = [
+                'hybrid',
+                '--ts', test_set_file,
+                '-m', params_pkl_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1333,15 +1357,23 @@ class MainWidget(QWidget):
                     self.version_text.setText(
                         f"{self.llm.upper()} zero shot model inference..."
                     )
-                    self.cmd = (
-                        f'hybrid --ts {test_set_file} --plm {self.llm} '
-                        f'--wt {wt_fasta_file} --pdb {pdb_file}'
-                        )
+                    self.cmd = [
+                        'hybrid',
+                        '--ts', test_set_file,
+                        '--plm', self.llm,
+                        '--wt', wt_fasta_file,
+                        '--pdb', pdb_file,
+                    ]
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm' and wt_fasta_file:
-                self.cmd = f'hybrid --ts {test_set_file} --plm {self.llm}  --wt {wt_fasta_file}'
+                self.cmd = [
+                    'hybrid',
+                    '--ts', test_set_file,
+                    '--plm', self.llm,
+                    '--wt', wt_fasta_file,
+                ]
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
@@ -1373,10 +1405,12 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Predicting using the DCA model on provided prediction set..."
             )
-            self.cmd = (
-                f'hybrid --ps {prediction_file} '
-                f'-m {params_pkl_file} --params {params_pkl_file}'
-            )
+            self.cmd = [
+                'hybrid',
+                '--ps', prediction_file,
+                '-m', params_pkl_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1408,15 +1442,23 @@ class MainWidget(QWidget):
                     self.version_text.setText(
                         f"{self.llm.upper()} zero shot model inference..."
                     )
-                    self.cmd = (
-                        f'hybrid --ps {prediction_file} --plm {self.llm} '
-                        f'--wt {wt_fasta_file} --pdb {pdb_file}'
-                        )
+                    self.cmd = [
+                        'hybrid',
+                        '--ps', prediction_file,
+                        '--plm', self.llm,
+                        '--wt', wt_fasta_file,
+                        '--pdb', pdb_file,
+                    ]
                     self.start_main_thread()
                 else:
                     self.end_process()
             elif self.llm == 'esm' and wt_fasta_file:
-                self.cmd = f'hybrid --ps {prediction_file} --plm {self.llm} --wt {wt_fasta_file}'
+                self.cmd = [
+                    'hybrid',
+                    '--ps', prediction_file,
+                    '--plm', self.llm,
+                    '--wt', wt_fasta_file,
+                ]
                 self.start_main_thread()
             else:
                 self.logTextBox.widget.appendPlainText(
@@ -1450,10 +1492,13 @@ class MainWidget(QWidget):
             return
         if training_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model training...")
-            self.cmd = (
-                f'hybrid --ls {training_file} --ts {training_file} '
-                f'-m {params_pkl_file} --params {params_pkl_file}'
-            )
+            self.cmd = [
+                'hybrid',
+                '--ls', training_file,
+                '--ts', training_file,
+                '-m', params_pkl_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1489,10 +1534,13 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
             )
-            self.cmd = (
-                f'hybrid -m {params_pkl_file} --ls {training_file} '
-                f'--ts {test_file} --params {params_pkl_file}'
-            )
+            self.cmd = [
+                'hybrid',
+                '-m', params_pkl_file,
+                '--ls', training_file,
+                '--ts', test_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1523,8 +1571,12 @@ class MainWidget(QWidget):
             return
         if test_file and params_pkl_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
-            self.cmd = (f'hybrid -m {model_pkl_file} --ts {test_file} '
-                        f'--params {params_pkl_file}')
+            self.cmd = [
+                'hybrid',
+                '-m', model_pkl_file,
+                '--ts', test_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1557,10 +1609,12 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Predicting using the hybrid (DCA-supervised) model..."
             )
-            self.cmd = (
-                f'hybrid -m {model_file} --ps {prediction_file} '
-                f'--params {params_pkl_file}'
-            )
+            self.cmd = [
+                'hybrid',
+                '-m', model_file,
+                '--ps', prediction_file,
+                '--params', params_pkl_file,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1587,7 +1641,7 @@ class MainWidget(QWidget):
             self.end_process()
             return
         flags = self._llm_hybrid_flags()
-        plm_flags = f' --plm {self.llm}' if self.llm else ''
+        plm_flags = ['--plm', self.llm] if self.llm else []
         if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
@@ -1607,11 +1661,14 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
-                self.cmd = (
-                    f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file}{plm_flags} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '--ls', training_file,
+                    '--ts', training_file,
+                    '--params', params_pkl_file, *plm_flags,
+                    '--wt', wt_fasta_file,
+                    '--pdb', pdb_file, *flags,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1620,10 +1677,12 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
-                self.cmd = (
-                    f'hybrid --ls {training_file} --ts {training_file} '
-                    f'--params {params_pkl_file}{plm_flags}{flags}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '--ls', training_file,
+                    '--ts', training_file,
+                    '--params', params_pkl_file, *plm_flags, *flags,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1657,7 +1716,7 @@ class MainWidget(QWidget):
             self.end_process()
             return
         flags = self._llm_hybrid_flags()
-        plm_flags = f' --plm {self.llm}' if self.llm else ''
+        plm_flags = ['--plm', self.llm] if self.llm else []
         if self._llm_needs_structure(training=True):
             wt_fasta_file = QFileDialog.getOpenFileName(
                 self.win2, "Select WT FASTA File",
@@ -1680,11 +1739,14 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
-                self.cmd = (
-                    f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file}{plm_flags} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}{flags}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '--ls', training_file,
+                    '--ts', test_file,
+                    '--params', params_pkl_file, *plm_flags,
+                    '--wt', wt_fasta_file,
+                    '--pdb', pdb_file, *flags,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1693,10 +1755,12 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model training..."
                 )
-                self.cmd = (
-                    f'hybrid --ls {training_file} --ts {test_file} '
-                    f'--params {params_pkl_file}{plm_flags}{flags}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '--ls', training_file,
+                    '--ts', test_file,
+                    '--params', params_pkl_file, *plm_flags, *flags,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1751,10 +1815,15 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model testing..."
                 )
-                self.cmd = (
-                    f'hybrid -m {model_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --plm {self.llm} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}')
+                self.cmd = [
+                    'hybrid',
+                    '-m', model_file,
+                    '--ts', test_file,
+                    '--params', params_pkl_file,
+                    '--plm', self.llm,
+                    '--wt', wt_fasta_file,
+                    '--pdb', pdb_file,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1763,9 +1832,13 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model testing..."
                 )
-                self.cmd = (
-                    f'hybrid -m {model_file} --ts {test_file} '
-                    f'--params {params_pkl_file} --plm {self.llm}')
+                self.cmd = [
+                    'hybrid',
+                    '-m', model_file,
+                    '--ts', test_file,
+                    '--params', params_pkl_file,
+                    '--plm', self.llm,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1820,11 +1893,15 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model prediction..."
                 )
-                self.cmd = (
-                    f'hybrid -m {model_file} --ps {prediction_file} '
-                    f'--params {params_pkl_file} --plm {self.llm} '
-                    f'--wt {wt_fasta_file} --pdb {pdb_file}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '-m', model_file,
+                    '--ps', prediction_file,
+                    '--params', params_pkl_file,
+                    '--plm', self.llm,
+                    '--wt', wt_fasta_file,
+                    '--pdb', pdb_file,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1833,10 +1910,13 @@ class MainWidget(QWidget):
                 self.version_text.setText(
                     "Hybrid (DCA+PLM-supervised) model prediction..."
                 )
-                self.cmd = (
-                    f'hybrid -m {model_file} --ps {prediction_file} '
-                    f'--params {params_pkl_file} --plm {self.llm}'
-                )
+                self.cmd = [
+                    'hybrid',
+                    '-m', model_file,
+                    '--ps', prediction_file,
+                    '--params', params_pkl_file,
+                    '--plm', self.llm,
+                ]
                 self.start_main_thread()
             else:
                 self.end_process()
@@ -1862,11 +1942,15 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
             )
-            self.cmd = (
-                f'ml --encoding dca --ls {training_file} '
-                f'--ts {training_file} --params {params_pkl_file} '
-                f'--threads {self.n_cores} --regressor {self.regression_model}'
-            )
+            self.cmd = [
+                'ml',
+                '--encoding', 'dca',
+                '--ls', training_file,
+                '--ts', training_file,
+                '--params', params_pkl_file,
+                '--threads', str(self.n_cores),
+                '--regressor', self.regression_model,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1899,11 +1983,15 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
             )
-            self.cmd = (
-                f'ml --encoding dca --ls {training_file} '
-                f'--ts {test_file} --params {params_pkl_file} '
-                f'--threads {self.n_cores} --regressor {self.regression_model}'
-            )
+            self.cmd = [
+                'ml',
+                '--encoding', 'dca',
+                '--ls', training_file,
+                '--ts', test_file,
+                '--params', params_pkl_file,
+                '--threads', str(self.n_cores),
+                '--regressor', self.regression_model,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1935,11 +2023,14 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model testing..."
             )
-            self.cmd = (
-                f'ml -m {model_file} --encoding dca '
-                f'--ts {test_file} --params {params_pkl_file} '
-                f'--threads {self.n_cores}'
-            )
+            self.cmd = [
+                'ml',
+                '-m', model_file,
+                '--encoding', 'dca',
+                '--ts', test_file,
+                '--params', params_pkl_file,
+                '--threads', str(self.n_cores),
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1970,10 +2061,14 @@ class MainWidget(QWidget):
             return
         if prediction_file and params_pkl_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
-            self.cmd = (
-                f'ml -m {model_file} --encoding dca --ps {prediction_file} '
-                f'--params {params_pkl_file} --threads {self.n_cores}'
-            )
+            self.cmd = [
+                'ml',
+                '-m', model_file,
+                '--encoding', 'dca',
+                '--ps', prediction_file,
+                '--params', params_pkl_file,
+                '--threads', str(self.n_cores),
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -1989,10 +2084,14 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training..."
             )
-            self.cmd = (
-                f'ml --encoding onehot --ls {training_file} --ts {training_file} '
-                f'--threads {self.n_cores} --regressor {self.regression_model}'
-            )
+            self.cmd = [
+                'ml',
+                '--encoding', 'onehot',
+                '--ls', training_file,
+                '--ts', training_file,
+                '--threads', str(self.n_cores),
+                '--regressor', self.regression_model,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -2018,16 +2117,20 @@ class MainWidget(QWidget):
             self.version_text.setText(
                 "Hybrid (DCA-supervised) model training and testing..."
             )
-            self.cmd = (
-                f'ml --encoding onehot --ls {training_file} --ts {test_file} '
-                f'--threads {self.n_cores} --regressor {self.regression_model}'
-            )
+            self.cmd = [
+                'ml',
+                '--encoding', 'onehot',
+                '--ls', training_file,
+                '--ts', test_file,
+                '--threads', str(self.n_cores),
+                '--regressor', self.regression_model,
+            ]
             self.start_main_thread()
         else:
             self.end_process()
 
     def pypef_onehot_supervised_test(self):
-        self.target_button = self.button_supervised_train_test_onehot
+        self.target_button = self.button_supervised_test_onehot
         self.start_process()  
         model_file = QFileDialog.getOpenFileName(
             self.win2, "Select Onehot Model file in Pickle format",
@@ -2045,10 +2148,13 @@ class MainWidget(QWidget):
             return
         if test_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model testing...")
-            self.cmd = (
-                f'ml -m {model_file} --encoding onehot --ts {test_file} '
-                f'--threads {self.n_cores}'
-            )
+            self.cmd = [
+                'ml',
+                '-m', model_file,
+                '--encoding', 'onehot',
+                '--ts', test_file,
+                '--threads', str(self.n_cores),
+            ]
             self.start_main_thread()
         else:
             self.end_process()
@@ -2072,10 +2178,13 @@ class MainWidget(QWidget):
             return
         if prediction_file and model_file:
             self.version_text.setText("Hybrid (DCA-supervised) model prediction...")
-            self.cmd = (
-                f'ml -m {model_file} --encoding onehot --ps {prediction_file} '
-                f'--threads {self.n_cores}'
-            )
+            self.cmd = [
+                'ml',
+                '-m', model_file,
+                '--encoding', 'onehot',
+                '--ps', prediction_file,
+                '--threads', str(self.n_cores),
+            ]
             self.start_main_thread()
         else:
             self.end_process()

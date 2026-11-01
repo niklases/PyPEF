@@ -112,9 +112,7 @@ def drop_rows(
 
     logger.info(f'No. of dropped rows: {len(dropping_rows)}. '
                 f'Total given variants (if provided plus WT): {len(df_raw)}')
-    df = df_raw.drop(dropping_rows)
-    df.dropna(inplace=True)
-    df.reset_index(drop=True, inplace=True)
+    df = df_raw.drop(dropping_rows).dropna().reset_index(drop=True)
     return df
 
 

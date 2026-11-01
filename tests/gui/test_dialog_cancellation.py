@@ -33,7 +33,7 @@ def make_window(action_name):
         input_variant_key=Mock(text=Mock(return_value='')),
         input_sequence_key=Mock(text=Mock(return_value='')),
         input_fitness_key=Mock(text=Mock(return_value='')),
-        _llm_hybrid_flags=Mock(return_value=''),
+        _llm_hybrid_flags=Mock(return_value=[]),
         _llm_needs_structure=Mock(return_value=True),
     )
     

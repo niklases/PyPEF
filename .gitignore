@@ -389,6 +389,7 @@ datasets/ANEH/Pickles/HYBRIDGREMLIN
 datasets/ANEH/Pickles/HYBRIDPLMC
 datasets/ANEH/Pickles/MLGREMLIN
 datasets/ANEH/Pickles/MLPLMC
+datasets/ANEH/Pickles/HYBRIDGREMLINESMPROSST
 datasets/ANEH/Recomb_Double_Split/Predictions_MLGREMLIN_TopRecomb_Double_Split.txt
 datasets/ANEH/Recomb_Double_Split/Predictions_MLPLMC_TopRecomb_Double_Split.txt
 datasets/ANEH/Recomb_Quadruple_Split/Predictions_MLGREMLIN_TopRecomb_Quadruple_Split.txt
@@ -406,6 +407,7 @@ datasets/ANEH/low_N_37_ANEH_variants_dca_encoded_ml_pls.png
 datasets/ANEH/ML_Model_Performance_DCA_GREMLIN.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_lvl_1_extrapolation.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST_PMPNN.png
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv

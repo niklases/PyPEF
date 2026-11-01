@@ -394,6 +394,12 @@ class GREMLIN:
         self.mt_v = self.mt_v.detach().cpu().numpy()
         self.vt_w = self.vt_w.detach().cpu().numpy()
         self.mt_w = self.mt_w.detach().cpu().numpy()
+        # The optimization of the L x 21 x L x 21 couplings can reserve most of the GPU
+        # memory (e.g. ~27 GiB for L = 1307). PyTorch keeps the freed memory cached, which
+        # starves later non-PyTorch CUDA allocations (e.g. cuSOLVER handles needed for the
+        # GP Cholesky decompositions -> CUSOLVER_STATUS_INTERNAL_ERROR). Release it.
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
     def initialize_v_w(self, remove_gap_entries=True):
