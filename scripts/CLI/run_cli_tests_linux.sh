@@ -593,6 +593,8 @@ echo
 # Combined multi-PLM GP over both PLM embeddings (--gauss_comb, requires --gauss_opt and two PLMs)
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --gauss_comb
 echo
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst+pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
+echo
 
 ### Reproducibility check INCLUDING a PLM (and GP training): with a fixed --seed the
 ### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)

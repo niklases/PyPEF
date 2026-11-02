@@ -132,7 +132,8 @@ Usage:
     pypef mklsts --wt WT_FASTA --input CSV_FILE
         [--random] [--modulo] [--cont] [--plot]
         [--drop THRESHOLD] [--sep CSV_COLUMN_SEPARATOR] [--mutation_sep MUTATION_SEPARATOR]
-        [--numrnd NUMBER] [--ls_proportion LS_PROPORTION]
+        [--numrnd NUMBER] [--ls_proportion LS_PROPORTION] [--fitness_key FITNESS_KEY]
+        [--variant_key VARIANT_KEY] [--sequence_key SEQUENCE_KEY]
     pypef mkps --wt WT_FASTA [--input CSV_FILE]
         [--drop THRESHOLD] [--ssm] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
         [--ddiverse] [--tdiverse] [--qdiverse]
@@ -160,7 +161,8 @@ Usage:
         [--ts TEST_SET] [--ps PREDICTION_SET]
         [--ls LEARNING_SET] [--label]
         [--plm PLM] [--llm LLM] [--pdb PDB_FILE] [--wt WT_FASTA]
-        [--lora] [--gauss_opt] [--gauss_comb]
+        [--lora] [--gauss_opt] [--gauss_comb] [--alpha]
+        [--pmpnn] [--pmpnn_cond_probs NPZ_FILE]
         [--pmult] [--drecomb] [--trecomb] [--qarecomb] [--qirecomb]
                                           [--ddiverse] [--tdiverse] [--qdiverse] [--negative]
         [--threads THREADS] [--seed SEED]
@@ -196,6 +198,8 @@ Usage:
 
 Options:
   --all                             Finally training on all data [default: False].
+  --alpha                           Weight for Spearman and MSE optimization, 1.0 for pure ranking component, 
+                                    0.0 for only MSE-based optimization, in between a mixture [default: 0.5]. 
   --conc                            Concatenating mutational level variants for predicting variants
                                     from next higher level [default: False].
   --cont                            Continuous splits in five-fold cross-validation fashion that 
@@ -209,7 +213,13 @@ Options:
   -e --encoding ENCODING_TECHNIQUE  Sets technique used for encoding sequences for constructing regression models;
                                     choose between 'aaidx' (AAIndex-based encoding), 'onehot' (OneHot-based encoding),
                                     and DCA encoding using Gremlin/plmc (DCA-based encoding) [default: onehot].
+  --variant_key VARIANT_KEY         CSV mutant identifier column for mklsts. Else uses first column.
+  --sequence_key SEQUENCE_KEY       Optional CSV sequence column for mklsts; validates sequences against WT/mutants.
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
+  --pmpnn                          Compute PMPNN conditional log probabilities for hybrid training;
+                                    adds PMPNN zero-shot and GP components; requires --ls, --pdb and --wt.
+  --pmpnn_cond_probs NPZ_FILE       Load precomputed PMPNN conditional log probabilities instead;
+                                    requires --ls, --pdb and --wt. Takes precedence over --pmpnn.
   --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
                                     of all specified PLMs; requires --gauss_opt and two PLMs (e.g.
                                     'esm+prosst' passed via the --plm flag) [default: False].
@@ -227,9 +237,9 @@ Options:
   -l --ls LEARNING_SET              Input learning set in .fasta format.
   --ls_proportion LS_PROPORTION     Proportion of the learning (training) set to the total dataset size (training +
                                     testing); float, e.g., 0.8.
-  --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM' and
+  --plm PLM                         PLM(s) to use for hybrid modeling next to DCA (options are 'ESM', 'PMPNN' and
                                     'ProSST'). Multiple PLMs can be combined via '+', ',', or whitespace,
-                                    e.g. --plm esm+prosst for DCA+ESM+ProSST hybrid modeling.
+                                    e.g. --plm esm+prosst+pmpnn for DCA+ESM+ProSST+PMPNN.
   --llm LLM                         Deprecated alias for --plm (kept for backward compatibility).
   --lora                            Use LoRA-based supervised fine-tuning of the PLM for hybrid
                                     modeling (requires --plm) [default: False].
@@ -351,6 +361,7 @@ logger.addHandler(ch)
 
 schema = Schema({
     Optional('--all'): bool,
+    Optional('--alpha'): Use(float),
     Optional('--conc'): bool,
     Optional('--cont'): bool,
     Optional('--csvaa'): bool,
@@ -359,9 +370,13 @@ schema = Schema({
     Optional('--drop'): Use(float),
     Optional('--encoding'): Use(str),
     Optional('--fitness_key'): Or(None, str),
+    Optional('--variant_key'): Or(None, str),
+    Optional('--sequence_key'): Or(None, str),
     Optional('--fit_size'): Use(float),
     Optional('--gauss_comb'): bool,
     Optional('--gauss_opt'): bool,
+    Optional('--pmpnn'): bool,
+    Optional('--pmpnn_cond_probs'): Or(None, str),
     Optional('--help'): bool,
     Optional('--input'): Or(None, str),
     Optional('--inter_gap'): Use(float),

@@ -53,6 +53,11 @@ def optimize_gp(
     Uses exact full-batch training when dataset size <= batch_threshold (default 2000).
     Switches to mini-batched training when dataset size > batch_threshold to prevent GPU OOM.
     """
+    if torch.cuda.is_available():
+        # Return memory cached by earlier steps (DCA, PLM inference) to the driver:
+        # cuSOLVER allocates its handle/workspace outside of PyTorch's caching
+        # allocator and fails with CUSOLVER_STATUS_INTERNAL_ERROR if the GPU is full.
+        torch.cuda.empty_cache()
     gp.train()
     likelihood.train()
     mll = ExactMarginalLogLikelihood(likelihood, gp)

@@ -66,19 +66,19 @@ if ! [[ "$max_idx" =~ ^[0-9]+$ ]]; then
     exit 1
 fi
 
-for llm in prosst+esm; do
+for llm in prosst+esm+pmpnn; do
 
     # Set hybrid model split scheme based on split_method
     if [ "$split_method" = "fold_rand_multiples" ]; then
-        hybrid_model_split_scheme="block-random"
+        hybrid_model_split_scheme="random"
     elif [ "$split_method" = "fold_random_5" ]; then
-        hybrid_model_split_scheme="block-random"
+        hybrid_model_split_scheme="random"
     elif [ "$split_method" = "fold_modulo_5" ]; then
-        hybrid_model_split_scheme="block-random" # or "modulo"
+        hybrid_model_split_scheme="random" # or "modulo"
     elif [ "$split_method" = "fold_contiguous_5" ]; then
-        hybrid_model_split_scheme="block-random" # or "contiguous"     
+        hybrid_model_split_scheme="random" # or "contiguous"     
     else
-        hybrid_model_split_scheme="block-random"
+        hybrid_model_split_scheme="random"
     fi
 
     echo "Using max_idx=$max_idx"

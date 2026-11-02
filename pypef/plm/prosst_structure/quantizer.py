@@ -1,6 +1,13 @@
 # PyPEF - Pythonic Protein Engineering Framework
 # https://github.com/niklases/PyPEF
 
+# Using (training, testing/infering) ProSST code and model(s) published under 
+# GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
+# Code repository: https://github.com/ai4protein/ProSST
+# Mingchen Li, Pan Tan, Xinzhu Ma, Bozitao Zhong, Huiqun Yu, Ziyi Zhou, Wanli Ouyang, Bingxin Zhou, Liang Hong, Yang Tan
+# ProSST: Protein Language Modeling with Quantized Structure and Disentangled Attention
+# bioRxiv 2024.04.15.589672; doi: https://doi.org/10.1101/2024.04.15.589672 
+
 import biotite.structure as struc
 import biotite.structure.io as strucio
 from biotite.sequence import ProteinSequence
@@ -11,6 +18,7 @@ import torch
 import torch.nn.functional as F
 from pathlib import Path
 from torch_geometric.data import Batch, Data
+import functools
 
 from pypef.plm.prosst_structure.encoder.gvp import AutoGraphEncoder
 from pypef.plm.prosst_structure.scatter import scatter_mean
@@ -20,7 +28,57 @@ import logging
 logger = logging.getLogger('pypef.llm.prosst_structure.quantizer')
 
 
-@torch.compile
+def safe_compile(*args, **kwargs):
+    """
+    A robust wrapper for torch.compile that gracefully falls back to eager mode
+    if compilation or execution fails (e.g., due to missing Triton on Windows).
+    Can be used as @safe_compile or with arguments like @safe_compile(backend="eager").
+    """
+    func_to_compile = None
+    if len(args) == 1 and callable(args[0]) and not kwargs:
+        func_to_compile = args[0]
+        actual_args = ()
+    else:
+        actual_args = args
+
+    def create_wrapper(func):
+        compiled_ref = [None]
+        fallback_ref = [False]
+        
+        @functools.wraps(func)
+        def wrapper(*fargs, **fkwargs):
+            # If we already failed before, use the raw function directly
+            if fallback_ref[0]:
+                return func(*fargs, **fkwargs)
+            
+            # Lazy-initialize the compiled version on first call
+            if compiled_ref[0] is None:
+                try:
+                    compiled_ref[0] = torch.compile(func, *actual_args, **kwargs)
+                except Exception as e:
+                    #warnings.warn(
+                    #    f"torch.compile setup failed for {func.__name__}: {e}. Falling back to eager mode."
+                    #)
+                    fallback_ref[0] = True
+                    return func(*fargs, **fkwargs)
+            
+            # Execute the compiled function, catch any runtime backend errors (like TritonMissing)
+            try:
+                return compiled_ref[0](*fargs, **fkwargs)
+            except Exception as e:
+                #warnings.warn(
+                #    f"torch.compile execution failed for {func.__name__}: {e}. Falling back to eager mode."
+                #)
+                fallback_ref[0] = True
+                return func(*fargs, **fkwargs)
+        return wrapper
+
+    if func_to_compile is not None:
+        return create_wrapper(func_to_compile)
+    return create_wrapper
+
+
+@safe_compile
 def _normalize(tensor: torch.Tensor, dim: int = -1) -> torch.Tensor:
     return torch.nan_to_num(torch.div(tensor, torch.norm(tensor, dim=dim, keepdim=True)))
 
@@ -32,7 +90,7 @@ def _rbf(D: torch.Tensor, D_min: float = 0.0, D_max: float = 20.0, D_count: int 
     return torch.exp(-((D_expand - D_mu) / D_sigma) ** 2)
 
 
-@torch.compile
+@safe_compile
 def _orientations(X_ca):
     forward = _normalize(X_ca[1:] - X_ca[:-1])
     backward = _normalize(X_ca[:-1] - X_ca[1:])
@@ -41,7 +99,7 @@ def _orientations(X_ca):
     return torch.cat([forward.unsqueeze(-2), backward.unsqueeze(-2)], -2)
 
 
-@torch.compile
+@safe_compile
 def _sidechains(X):
     n, origin, c = X[:, 0], X[:, 1], X[:, 2]
     c, n = _normalize(c - origin), _normalize(n - origin)

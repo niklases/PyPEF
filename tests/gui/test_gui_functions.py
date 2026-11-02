@@ -18,13 +18,18 @@ def app():
 
 @pytest.fixture
 def main_window(app):
+    import gc
     from pypef.gui.qt_window import MainWidget
+    from pypef.main import logger
     window = MainWidget()
     window.show()
     yield window
 
     window.close()
+    logger.removeHandler(window.logTextBox)
     app.processEvents()
+    del window
+    gc.collect()  # destroy the window in the main thread (see tests/gui/conftest.py)
 
 
 #@pytest.mark.skipif(os.environ.get("CI") == "true", reason="Skipping GUI test in CI")

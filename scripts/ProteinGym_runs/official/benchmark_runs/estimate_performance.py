@@ -3,14 +3,16 @@ import os
 from collections import defaultdict
 import pandas as pd
 import numpy as np
-from scipy.stats import spearmanr, pearsonr
+from scipy.stats import ConstantInputWarning, spearmanr, pearsonr
 from sklearn.metrics import mean_squared_error
+import warnings
+warnings.filterwarnings("error")
 
 file_path = os.path.dirname(__file__)
 
 # ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
 target_folds = ["fold_random_5", "fold_modulo_5", "fold_contiguous_5"]
-llm = 'prosst+esm'
+llm = 'prosst+esm+pmpnn'
 
 
 def get_target_folder(split_method):
@@ -36,8 +38,15 @@ def get_df_fold_performances(df):
         y_true = fold_data['y']
         y_pred = fold_data['y_pred']
 
-        spear_p = spearmanr(y_true, y_pred)[0]
-        pearson_r = pearsonr(y_true, y_pred)[0]
+        try:
+            spear_p = spearmanr(y_true, y_pred)[0]
+            pearson_r = pearsonr(y_true, y_pred)[0]
+        except ConstantInputWarning as w:
+            print(f"~~~WARNING~~~\n{w}\nDebug info: Fold {fold}\ny_true[:5]\n-------"
+                  f"\n{y_true[:5]}\ny_pred[:5]\n-------\n{y_pred[:5]}\n~~~~~~~~~~~~~")
+            spear_p = np.nan
+            pearson_r = np.nan
+
         mse = mean_squared_error(y_true, y_pred)
         spears.append(spear_p)
         pears.append(pearson_r)
@@ -66,8 +75,11 @@ for tf in target_folds:
     target_folder = get_target_folder(tf)
     all_spears, all_pears, all_mses = [], [], []
     all_across_spears, all_across_pears, all_across_mses = [], [], []
-    for result_csv in os.listdir(target_folder):
+    for result_csv in sorted(os.listdir(target_folder)):
         res = os.path.join(target_folder, result_csv)
+        if not (os.path.isfile(res) and result_csv.endswith('.csv')):
+            continue
+        print(f'Reading {res}...')
         df = pd.read_csv(res)
         fold_metrics = get_df_fold_performances(df)
         print(f"CSV: {result_csv}\n"

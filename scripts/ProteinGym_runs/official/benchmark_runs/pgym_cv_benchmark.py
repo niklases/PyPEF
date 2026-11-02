@@ -18,16 +18,23 @@ warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
-from pypef.utils.variant_data import check_alignment, get_mismatches, get_seqs_from_var_name, shift_and_trim_vars_seqs
+from pypef.utils.variant_data import (
+    check_alignment, crop_pdb_to_alignment, get_mismatches, 
+    get_seqs_from_var_name, shift_and_trim_vars_seqs
+)
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.inference import esm_setup, prosst_setup, tokenize_sequences
+from pypef.plm.pmpnn.get_cond_probs import run_protein_mpnn_conditional
 
 import logging
 package_logger = logging.getLogger('pypef')
 package_logger.setLevel(logging.INFO)
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(name)s - %(levelname)s - %(filename)s:%(lineno)d -- %(message)s')
+formatter = logging.Formatter(
+    "%(asctime)s.%(msecs)03d %(levelname)s %(filename)s:%(lineno)d -- %(message)s",
+    "%Y-%m-%d %H:%M:%S"
+)
 handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
@@ -136,8 +143,15 @@ def main(cfg: DictConfig) -> None:
         mapping = check_alignment(wt_msa_trimmed_sequence, pdb_seq)
         pdb_trimmed_common_sequence = mapping['common_seq']  # Use common sequence (WT (MSA-trimmed) seq trimmed to PDB seq)
         print(f"New WT sequence trimmed to common sequence/PDB sequence length): {len(pdb_trimmed_common_sequence)}")
-        print(mapping['identity'])
+        print(f"Seq. identity: {mapping['identity']:.2f}")
         print(mapping['alignment_obj'])
+        if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
+            # Crop PDB to the common region so structure and sequence lengths match
+            # Shared across split methods/models: the crop only depends on the PDB and the target sequence
+            cropped_pdb_file = output_scores_folder.parent / "cropped_pdbs" / f"{DMS_id}.pdb"
+            cropped_pdb_file.parent.mkdir(parents=True, exist_ok=True)
+            pdb_file = crop_pdb_to_alignment(pdb_file, cropped_pdb_file, mapping)
+            print(f"Cropped PDB to residues {mapping['start_pdb'] + 1}-{mapping['end_pdb']}: {pdb_file}")
         if mapping and mapping['identity']:
             # Perform the shift and trim
             pdb_vars, _orig_vars, sequences_msa_trimmed, pdb_trimmed_seqs = shift_and_trim_vars_seqs(
@@ -184,26 +198,21 @@ def main(cfg: DictConfig) -> None:
 
     df = df.reset_index(drop=True)
     gremlin_opt = True
-    if len(pdb_trimmed_common_sequence) > 2500:  # "BRCA2_HUMAN_Erwood_2022_HEK293T"
-        gremlin_opt = False
+    gremlin_device = None
+    if len(pdb_trimmed_common_sequence) > 1862:  # "BRCA1_HUMAN_Findlay_2018", "BRCA2_HUMAN_Erwood_2022_HEK293T"
+        gremlin_device = "cpu"
         print(
-            f'NOT RUNNING DCA-OPTIMIZATION DUE TO HIGH SEQUENCE LENGTH '
+            f'Using device {gremlin_device} for DCA due to high sequence length '
             f'(Length={len(pdb_trimmed_common_sequence)})! [GREMLIN DCA (MSA optimization)]...'
         )
+        if len(pdb_trimmed_common_sequence) > 1862:
+            gremlin_opt = False
+            print(
+                f'NOT RUNNING DCA DUE TO HIGH SEQUENCE LENGTH '
+                f'(Length={len(pdb_trimmed_common_sequence)})! [GREMLIN DCA (MSA optimization)]...'
+            )
     batch_size = 5
-    #elif len(pdb_trimmed_common_sequence) > 1024:  
-    #    # Unlike ESM-1v, ESM-2 models (like facebook/esm2_t33_650M_UR90S_1 
-    #    # or the larger 3B variant) use RoPE (Rotary Position Embeddings).
-    #    # RoPE does away with absolute position tables, allowing the 
-    #    # model to dynamically extrapolate and process sequences longer 
-    #    # than 1024 without throwing CUDA out-of-bounds errors.
-    #    # Or run ProSST solo...
-    #    gremlin_opt = True
-    #    batch_size = 1
-    #else:
-    #    gremlin_opt = True
-    #    batch_size = 5
-    #    print('GREMLIN DCA (MSA optimization)...')
+
     gremlin = GREMLIN(
         alignment=msa_file, opt_iter=100, optimize=gremlin_opt
     )
@@ -272,6 +281,14 @@ def main(cfg: DictConfig) -> None:
         #    x_llm_test = None
         #    print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
         #          f'would take up (too) much time...')
+
+        if "pmpnn" in llm.lower():
+            pmpnn_conditional_probs = run_protein_mpnn_conditional(
+                pdb_file, seed=seed
+            )
+        else:
+            pmpnn_conditional_probs = None
+
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train),
             y_train=y_train,
@@ -282,6 +299,7 @@ def main(cfg: DictConfig) -> None:
             splitting_scheme=hybrid_model_split_scheme,
             lora_train=False,
             gauss_opt=gauss_opt,
+            pmpnn_conditional_probs=pmpnn_conditional_probs,
             pdb_struct=pdb_file,
             batch_size=batch_size,
             seed=seed,

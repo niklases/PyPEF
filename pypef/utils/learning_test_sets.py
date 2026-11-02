@@ -43,27 +43,40 @@ def csv_input(csv_file):
     return csv_file
 
 
+def read_variant_csv(csv_file, csv_sep=';'):
+    """Read variant data, accepting the requested separator or common alternatives."""
+    for separator in dict.fromkeys((csv_sep, ';', ',', '\t')):
+        df = pd.read_csv(csv_file, sep=separator)
+        if len(df.columns) >= 2:
+            return df
+    raise ValueError("Required CSV format: variant and at least one fitness column.")
+
+
 def drop_rows(
         csv_file,
         amino_acids,
         threshold_drop,
         csv_sep: str = ';',
-        mutation_sep: str = '/'
+        mutation_sep: str = '/',
+        fitness_key: str = None,
+        variant_key: str = None,
+        sequence_key: str = None
 ):
     """
     Drops rows from .csv data if below defined fitness threshold or if
     amino acid/variant name is unknown or if fitness label is not a digit.
     """
-    separator = ';'
-    try:
-        df_raw = pd.read_csv(csv_file, sep=separator, usecols=[0, 1])
-    except ValueError:
-        separator = ','
-        df_raw = pd.read_csv(csv_file, sep=separator, usecols=[0, 1])
-    except FileNotFoundError:
-        raise FileNotFoundError(
-            f"Specify the input CSV file containing the variant-fitness data. "
-            f"Required CSV format: variant{csv_sep}fitness.")
+    df_raw = read_variant_csv(csv_file, csv_sep)
+    variant_key = variant_key or df_raw.columns[0]
+    fitness_key = fitness_key or df_raw.columns[1]
+    keys = [variant_key, fitness_key] + ([sequence_key] if sequence_key else [])
+    for key in keys:
+        if key not in df_raw.columns:
+            raise ValueError(f"CSV column {key!r} not found. "
+                             f"Available columns: {', '.join(df_raw.columns)}")
+    if len(set(keys)) != len(keys):
+        raise ValueError("Variant, fitness and sequence columns must be different.")
+    df_raw = df_raw.loc[:, keys].copy()
     label = df_raw.iloc[:, 1]
     sequence = df_raw.iloc[:, 0]
     dropping_rows = []
@@ -99,10 +112,37 @@ def drop_rows(
 
     logger.info(f'No. of dropped rows: {len(dropping_rows)}. '
                 f'Total given variants (if provided plus WT): {len(df_raw)}')
-    df = df_raw.drop(dropping_rows)
-    df.dropna(inplace=True)
-    df.reset_index(drop=True, inplace=True)
+    df = df_raw.drop(dropping_rows).dropna().reset_index(drop=True)
     return df
+
+
+def wt_identical_variants(variants, mutation_sep: str = '/') -> list[str]:
+    """
+    Return the variant names that consist only of synonymous "substitutions" (same
+    amino acid before and after, e.g. L215L or L215L/R219R/F244F), i.e. variants
+    whose sequence is identical to the wild type. Such entries are often the WT
+    reference measurement written in the notation of a combinatorial library.
+    """
+    found = []
+    for variant in variants:
+        subs = str(variant).split(mutation_sep)
+        matches = [re.fullmatch(r'([A-Za-z])(\d+)([A-Za-z])', sub.strip()) for sub in subs]
+        if matches and all(m is not None and m.group(1).upper() == m.group(3).upper() for m in matches):
+            found.append(str(variant))
+    return found
+
+
+def log_wt_identical_variants(variants, mutation_sep: str = '/'):
+    """Log a note for variants identical to the WT (kept in the data)."""
+    found = wt_identical_variants(variants, mutation_sep)
+    if found:
+        examples = ', '.join(found[:5]) + (', ...' if len(found) > 5 else '')
+        logger.info(
+            f'Note: {len(found)} variant(s) contain only synonymous substitutions and are '
+            f'identical to the WT sequence: {examples}. They are kept (e.g. as WT reference '
+            f'measurement).'
+        )
+    return found
 
 
 def get_variants(

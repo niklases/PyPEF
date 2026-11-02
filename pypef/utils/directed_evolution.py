@@ -217,7 +217,7 @@ class DirectedEvolution:
                             encoder=self.dca_encoder,
                             variant=wt_mut,
                             variant_sequence=self.s_wt,
-                            hybrid_model_data_pkl=self.model
+                            model_pickle_file=self.model
                         )
                 if self.de_step_counter == 0:
                     logger.info(
@@ -231,7 +231,7 @@ class DirectedEvolution:
                     encoder=self.dca_encoder,
                     variant=new_full_variant,
                     variant_sequence=new_sequence,
-                    hybrid_model_data_pkl=self.model
+                    model_pickle_file=self.model
                 )
 
             if predictions != 'skip':

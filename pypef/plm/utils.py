@@ -15,6 +15,10 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 from transformers.utils import logging as ts_logging
 ts_logging.set_verbosity_error()
 
+from pypef.utils.variant_data import (
+    get_seqs_from_var_name, extract_positions_from_sequences
+)
+
 import logging
 logger = logging.getLogger('pypef.plm.utils')
 
@@ -55,6 +59,29 @@ def _set_seeds(seed: int, use_deterministic_algorithms: bool = True):
         torch.backends.cudnn.benchmark = False
 
 
+def ols_align(y_true: torch.Tensor, y_pred: torch.Tensor, return_slope_intercept: bool = True) -> torch.Tensor:
+    """
+    Applies Ordinary Least Squares (OLS) linear regression scaling to y_pred 
+    to match the scale/shift of y_true, minimizing MSE without changing ranks.
+    """
+    mean_true = y_true.mean(dim=-1, keepdim=True)
+    mean_pred = y_pred.mean(dim=-1, keepdim=True)
+    
+    pred_centered = y_pred - mean_pred
+    true_centered = y_true - mean_true
+    
+    cov = (pred_centered * true_centered).sum(dim=-1, keepdim=True)
+    var_pred = (pred_centered ** 2).sum(dim=-1, keepdim=True).clamp(min=1e-8)
+    
+    slope = cov / var_pred
+    intercept = mean_true - slope * mean_pred
+
+    if return_slope_intercept:
+        return slope * y_pred + intercept, slope, intercept
+    
+    return slope * y_pred + intercept
+
+
 def hybrid_corr_mse_loss(
     y_true: torch.Tensor,
     y_pred: torch.Tensor,
@@ -92,9 +119,11 @@ def hybrid_corr_mse_loss(
 
     if method.startswith("listMLE"):
         _, indices = torch.sort(y_true, descending=True, dim=-1)
-        y_pred_sorted = y_pred[indices]
-        log_cumsum = torch.logcumsumexp(y_pred_sorted.flip(-1), dim=-1).flip(-1)
-        loss_corr = -(y_pred_sorted - log_cumsum).mean()
+        y_pred_sorted = torch.gather(y_pred, dim=-1, index=indices)
+        max_vals = y_pred_sorted.max(dim=-1, keepdim=True).values
+        y_pred_stable = y_pred_sorted - max_vals
+        log_cumsum = torch.logcumsumexp(y_pred_stable.flip(-1), dim=-1).flip(-1)
+        loss_corr = -(y_pred_stable - log_cumsum).mean()
     elif method.startswith("pairwise-margin"):
         y_true_col = y_true.unsqueeze(-1)
         y_pred_col = y_pred.unsqueeze(-1)
@@ -161,13 +190,58 @@ def get_batches(
     if keep_remaining: 
         if a_remaining is not None:
             logger.info(f'Appending remaining to collected batches as last batch '
-                        f'(the resulting inhomogenous list shape is '
+                        f'(the resulting inhomogeneous list shape is '
                         f'{np.shape(a)} + {np.shape(a_remaining)} = ('
-                        f'{np.shape(a)[0] + 1}, *, {np.shape(a)[-1]}))...')
+                        f'{np.shape(a)[0] + 1}, *[,{np.shape(a)[-1]}]))...')
             a = a.tolist()
             a.append(a_remaining)
             a = [np.asarray(it) for it in a]
     return a
+
+
+def resolve_variant_mutations(wt_sequence: str, variant_sequence: str | None = None,
+                              mutation_string: str | None = None,
+                              mutation_separator: str = '/') -> tuple[str, list[int]]:
+    """Return the variant sequence and sorted zero-based substitution positions.
+
+    Mutation strings use one-based positions, e.g. ``A1C/C2D``. Either input
+    form may be supplied; when both are given they must describe the same variant.
+    ``WT`` or an empty mutation string denotes the wild type.
+    """
+
+    if variant_sequence is None and mutation_string is None:
+        raise ValueError("Provide variant_sequence or mutation_string.")
+    if variant_sequence is not None and len(variant_sequence) != len(wt_sequence):
+        raise ValueError("Variant sequence length must match the wild-type sequence.")
+    if mutation_string is not None:
+        substitutions = []
+        seen = set()
+        if mutation_string.strip().upper() not in ('', 'WT', 'WILDTYPE'):
+            if not mutation_separator:
+                raise ValueError("Mutation separator must not be empty.")
+            for token in mutation_string.split(mutation_separator):
+                match = re.fullmatch(r'([A-Z])([1-9][0-9]*)([A-Z])', token.strip())
+                if match is None:
+                    raise ValueError(f"Invalid substitution: {token!r}.")
+                original, position, replacement = match.groups()
+                index = int(position) - 1
+                if index >= len(wt_sequence):
+                    raise ValueError(f"Mutation position {position} exceeds wild-type length.")
+                if index in seen:
+                    raise ValueError(f"Duplicate mutation position: {position}.")
+                if wt_sequence[index] != original:
+                    raise ValueError(f"Mutation {token!r} does not match the wild-type residue.")
+                seen.add(index)
+                substitutions.append(token.strip())
+        _, _, reconstructed_sequences = get_seqs_from_var_name(
+            wt_sequence, [substitutions or ['WT']]
+        )
+        reconstructed = reconstructed_sequences[0]
+        if variant_sequence is not None and variant_sequence != reconstructed:
+            raise ValueError("Variant sequence and mutation string describe different variants.")
+        variant_sequence = reconstructed
+    positions = list(extract_positions_from_sequences(wt_sequence, [variant_sequence])[0])
+    return variant_sequence, positions
 
 
 def parse_mut_position(mut_string: str | list | tuple, mut_separator: str = '/') -> list[int]:

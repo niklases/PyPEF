@@ -1,7 +1,7 @@
 # PyPEF - Pythonic Protein Engineering Framework
 # https://github.com/niklases/PyPEF
 
-# Using (training, testing/infering) ProSST model(s) published under 
+# Using (training, testing/infering) ProSST code and model(s) published under 
 # GNU GENERAL PUBLIC LICENSE: GPL-3.0 license
 # Code repository: https://github.com/ai4protein/ProSST
 # Mingchen Li, Pan Tan, Xinzhu Ma, Bozitao Zhong, Huiqun Yu, Ziyi Zhou, Wanli Ouyang, Bingxin Zhou, Liang Hong, Yang Tan

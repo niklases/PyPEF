@@ -72,6 +72,9 @@ pypef = [
     "ml/AAindex/*",
     "ml/AAindex/Refined_cluster_indices_r0.93_r0.97/*",
     "plm/prosst_structure/static/*",
+    "plm/pmpnn/vanilla_model_weights/*.pt",
+    "plm/pmpnn/soluble_model_weights/*.pt",
+    "plm/pmpnn/LICENSE",
     "gui/assets/*"
 ]
 
@@ -80,5 +83,6 @@ markers = [
     "main_script_specific",
     "pip_specific",
     "requires_gpu",
-    "wheel_build"
+    "wheel_build",
+    "gui_slow: long-running GUI end-to-end runs with PLMs (opt-in: -m gui_slow)"
 ]

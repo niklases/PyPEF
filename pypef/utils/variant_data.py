@@ -7,7 +7,8 @@ import os
 import numpy as np
 import pandas as pd
 from Bio import Align
-from Bio.PDB import PDBParser
+from Bio.PDB import PDBParser, PDBIO
+from Bio.PDB.Polypeptide import is_aa
 from sklearn.model_selection import GroupShuffleSplit
 
 import logging
@@ -475,6 +476,33 @@ def check_alignment(wt_seq, pdb_seq, min_block=3):
     }
 
     return mapping
+
+
+def crop_pdb_to_alignment(pdb_file, out_pdb_file, alignment_mapping):
+    """
+    Crops the first chain of a PDB file to the residues matching the
+    WT sequence, i.e., to the PDB sequence range [start_pdb, end_pdb)
+    from `check_alignment()`. Residues are renumbered starting from 1
+    so that PDB positions correspond to positions of the common sequence.
+    Returns the path to the cropped PDB file.
+    """
+    start, end = alignment_mapping['start_pdb'], alignment_mapping['end_pdb']
+    structure = PDBParser(QUIET=True).get_structure('pdb', str(pdb_file))
+    chain = next(structure[0].get_chains())
+    # Same residue order/selection as Bio.SeqIO "pdb-atom" (standard residues only)
+    aa_residues = [r for r in chain if r.id[0] == ' ' and is_aa(r, standard=True)]
+    keep = aa_residues[start:end]
+    for r in list(chain):
+        if r not in keep:
+            chain.detach_child(r.id)
+    for i, r in enumerate(keep, start=1):
+        r.id = (' ', 100000 + i, ' ')  # temporary ids avoid clashes while renumbering
+    for r in keep:
+        r.id = (' ', r.id[1] - 100000, ' ')
+    io = PDBIO()
+    io.set_structure(chain)  # only this chain is written
+    io.save(str(out_pdb_file))
+    return out_pdb_file
 
 
 def shift_and_trim_vars_seqs(vars_list, seqs_list, alignment_mapping, msa_start):

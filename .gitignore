@@ -389,6 +389,7 @@ datasets/ANEH/Pickles/HYBRIDGREMLIN
 datasets/ANEH/Pickles/HYBRIDPLMC
 datasets/ANEH/Pickles/MLGREMLIN
 datasets/ANEH/Pickles/MLPLMC
+datasets/ANEH/Pickles/HYBRIDGREMLINESMPROSST
 datasets/ANEH/Recomb_Double_Split/Predictions_MLGREMLIN_TopRecomb_Double_Split.txt
 datasets/ANEH/Recomb_Double_Split/Predictions_MLPLMC_TopRecomb_Double_Split.txt
 datasets/ANEH/Recomb_Quadruple_Split/Predictions_MLGREMLIN_TopRecomb_Quadruple_Split.txt
@@ -406,6 +407,7 @@ datasets/ANEH/low_N_37_ANEH_variants_dca_encoded_ml_pls.png
 datasets/ANEH/ML_Model_Performance_DCA_GREMLIN.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_lvl_1_extrapolation.png
+datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST_PMPNN.png
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv
@@ -537,13 +539,21 @@ datasets/AVGFP/ml_pls_avGFP_aaidx_encoded_train_lvl_1_extrapolation.png
 datasets/AVGFP/ml_pls_avGFP_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_ESM.png
 datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PROSST.png
+datasets/AVGFP/Predictions_PLM_PMPNN_avGFP_prediction_set.txt
+datasets/AVGFP/Predictions_PLM_ESM_avGFP_prediction_set.txt
+datasets/AVGFP/DCA_Hybrid_Model_Performance_PLM_PMPNN.png
+datasets/AVGFP/HYBRIDGREMLINPROSST_DE_trajectories.png
+datasets/AVGFP/HYBRIDGREMLINESM_DE_trajectories.png
+datasets/AVGFP/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST_PMPNN.png
 
-scripts/ProteinGym_runs/official/PyPEF-main/*
+scripts/ProteinGym_runs/official/PyPEF/
+scripts/ProteinGym_runs/official/PyPEF-main/
 
 scripts/ProteinGym_runs/crossval_mut_performance_violin_v0.5.0.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0_violin.png
 scripts/ProteinGym_runs/low_n_mut_performance_v0.5.0.png
 
+#scripts/ProteinGym_runs/official/benchmark_runs/out/conditional_probs_only/*.npz
 scripts/ProteinGym_runs/A0A1I9GEU1_NEIME_Kennouche_2019_pos_aa_distr.png
 scripts/ProteinGym_runs/A0A2Z5U3Z0_9INFA_Wu_2014_pos_aa_distr.png
 scripts/ProteinGym_runs/A0A247D711_LISMN_Stadelmann_2021_pos_aa_distr.png

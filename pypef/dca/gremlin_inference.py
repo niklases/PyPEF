@@ -141,7 +141,9 @@ class GREMLIN:
         self.n_row = self.msa_trimmed.shape[0]
         self.n_col = self.msa_trimmed.shape[1]
         logger.info('Initializing v and W terms based on MSA frequencies...')
-        self.v_ini, self.w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
+        # w_ini is not kept: it is all zeros (L x 21 x L x 21 float64, i.e. twice the size
+        # of the trained couplings w) and would only bloat the pickled model.
+        self.v_ini, _w_ini, self.aa_counts = self.initialize_v_w(remove_gap_entries=False)
         self.aa_freqs = self.aa_counts / self.n_row
         self.optimize = optimize
         if self.optimize:
@@ -390,10 +392,19 @@ class GREMLIN:
         
         self.v = self.v.detach().cpu().numpy()
         self.w = self.w.detach().cpu().numpy()
-        self.vt_v = self.vt_v.detach().cpu().numpy()
-        self.mt_v = self.mt_v.detach().cpu().numpy()
-        self.vt_w = self.vt_w.detach().cpu().numpy()
-        self.mt_w = self.mt_w.detach().cpu().numpy()
+        # Only v and w (as NumPy arrays) are needed after the optimization. Drop the
+        # tensors that are only used for training (the one-hot MSA alone is
+        # N_seqs x L x 21 floats, and the Adam moment of w is as large as w): they would
+        # otherwise stay on the GPU and be pickled with the model, making the GREMLIN
+        # pickle very large and impossible to load on machines without CUDA.
+        self.msa_weights = self.msa_weights.detach().cpu().numpy()  # back to NumPy
+        del self.msa, self.oh_msa, self.mt_v, self.vt_v, self.mt_w, self.vt_w
+        # The optimization of the L x 21 x L x 21 couplings can reserve most of the GPU
+        # memory (e.g. ~27 GiB for L = 1307). PyTorch keeps the freed memory cached, which
+        # starves later non-PyTorch CUDA allocations (e.g. cuSOLVER handles needed for the
+        # GP Cholesky decompositions -> CUSOLVER_STATUS_INTERNAL_ERROR). Release it.
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
     def initialize_v_w(self, remove_gap_entries=True):

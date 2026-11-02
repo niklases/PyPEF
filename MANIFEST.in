@@ -3,3 +3,6 @@ include requirements.txt
 include pypef/AAindex/*.txt
 include pypef/plm/prosst_structure/static/*.npy
 include pypef/plm/prosst_structure/static/*.pt
+include pypef/plm/pmpnn/vanilla_model_weights/*.pt
+include pypef/plm/pmpnn/soluble_model_weights/*.pt
+include pypef/plm/pmpnn/LICENSE
