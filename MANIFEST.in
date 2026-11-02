@@ -1,6 +1,6 @@
 include README.md
 include requirements.txt
-include pypef/AAindex/*.txt
+recursive-include pypef/ml/AAindex *.txt
 include pypef/plm/prosst_structure/static/*.npy
 include pypef/plm/prosst_structure/static/*.pt
 include pypef/plm/pmpnn/vanilla_model_weights/*.pt
