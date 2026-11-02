@@ -147,7 +147,8 @@ def main(cfg: DictConfig) -> None:
         print(mapping['alignment_obj'])
         if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
             # Crop PDB to the common region so structure and sequence lengths match
-            cropped_pdb_file = output_path.parent / "cropped_pdbs" / f"{DMS_id}.pdb"
+            # Shared across split methods/models: the crop only depends on the PDB and the target sequence
+            cropped_pdb_file = output_scores_folder.parent / "cropped_pdbs" / f"{DMS_id}.pdb"
             cropped_pdb_file.parent.mkdir(parents=True, exist_ok=True)
             pdb_file = crop_pdb_to_alignment(pdb_file, cropped_pdb_file, mapping)
             print(f"Cropped PDB to residues {mapping['start_pdb'] + 1}-{mapping['end_pdb']}: {pdb_file}")

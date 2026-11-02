@@ -75,8 +75,10 @@ for tf in target_folds:
     target_folder = get_target_folder(tf)
     all_spears, all_pears, all_mses = [], [], []
     all_across_spears, all_across_pears, all_across_mses = [], [], []
-    for result_csv in os.listdir(target_folder):
+    for result_csv in sorted(os.listdir(target_folder)):
         res = os.path.join(target_folder, result_csv)
+        if not (os.path.isfile(res) and result_csv.endswith('.csv')):
+            continue
         print(f'Reading {res}...')
         df = pd.read_csv(res)
         fold_metrics = get_df_fold_performances(df)
