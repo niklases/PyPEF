@@ -70,7 +70,7 @@ ML_TRAIN_BUTTONS = [b for b in DCA_ML_BUTTONS if b.startswith('button_supervised
 #                                   PLM selections that start a job, is training)
 _ALL_PLMS = {p.lower() for p in PLM_LABELS[1:]}
 PLM_BUTTONS = {
-    'button_llm_ssm': ('predict_ssm', {'--wt': 'wt'}, {'esm', 'prosst'}, False),
+    'button_llm_ssm': ('predict_ssm', {'--wt': 'wt'}, {'esm', 'prosst', 'pmpnn'}, False),
     'button_llm_test_zs': ('hybrid', {'--ts': 'ts', '--wt': 'wt'},
                            {'esm', 'prosst', 'pmpnn'}, False),
     'button_llm_predict_zs': ('hybrid', {'--ps': 'ps', '--wt': 'wt'},

@@ -402,7 +402,8 @@ def run_pypef_utils(arguments):
             wt_seq=get_wt_sequence(arguments['--wt']),
             model=arguments['--llm'],
             pdb=arguments['--pdb'],
-            params_file=arguments['--params']
+            params_file=arguments['--params'],
+            seed=arguments['--seed']
         )
     else:
         raise RuntimeError("Unknown run option!")

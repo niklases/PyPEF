@@ -555,7 +555,7 @@ def plm_train(
         batch_size: int = 5,
         n_epochs=50, 
         device: str | None = None, 
-        seed: int | None = None,
+        seed: int | None = 42,
         early_stop: int = 50, 
         verbose: bool = True, 
         n_batch_grad_accumulations: int = 1, 

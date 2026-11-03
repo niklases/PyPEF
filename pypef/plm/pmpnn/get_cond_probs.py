@@ -22,7 +22,7 @@ AA_TO_IDX = {aa: i for i, aa in enumerate(ALPHABET)}
 def run_protein_mpnn_conditional(
         pdb_path, 
         out_folder="out", 
-        seed=42, 
+        seed: int | None = 42,
         num_samples=10, 
         save_npz_files=False
 ):

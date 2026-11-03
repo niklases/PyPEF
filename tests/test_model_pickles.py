@@ -4,6 +4,9 @@ Saved model files:
     1.5 GB for ANEH, and a GPU-trained pickle could not be loaded without CUDA), and
     its predictions are unchanged after a pickle round trip.
   * Hybrid models with PMPNN carry "PMPNN" in their file name.
+  * Hybrid PLM models store only the LoRA adapter weights and the pretrained model's
+    name and revision (not the full PLMs and optimizers: ~9 GB for ESM+ProSST), and
+    are restored exactly, also from files in the old full-state-dict format.
 """
 import os
 import pickle
@@ -76,3 +79,104 @@ def test_hybrid_model_name_shows_pmpnn(tmp_path, monkeypatch, pmpnn, expected):
     )
     save_model_to_dict_pickle(model, 'HybridGREMLIN')
     assert os.listdir(tmp_path / 'Pickles') == [expected]
+
+
+def tiny_esm():
+    """A small, deterministic stand-in for a pretrained ESM model and its LoRA copy."""
+    import copy
+    from peft import LoraConfig, get_peft_model
+    from transformers import EsmConfig, EsmForMaskedLM
+    torch.manual_seed(0)  # identical "pretrained" weights on every call
+    config = EsmConfig(vocab_size=33, hidden_size=16, num_hidden_layers=2,
+                       num_attention_heads=2, intermediate_size=32,
+                       max_position_embeddings=40, pad_token_id=1, mask_token_id=32)
+    base = EsmForMaskedLM(config).eval()
+    base.config._name_or_path = 'facebook/esm2_tiny'
+    base.config._commit_hash = 'abc123'
+    for param in base.parameters():
+        param.requires_grad = False
+    lora = get_peft_model(copy.deepcopy(base), LoraConfig(r=2, target_modules=['query', 'value']))
+    return base, lora, 'tokenizer', torch.optim.Adam(lora.parameters())
+
+
+def hybrid_with_tiny_esm():
+    from pypef.hybrid.hybrid_model import DCALLMHybridModel
+    base, lora, tokenizer, optimizer = tiny_esm()
+    torch.manual_seed(1)
+    with torch.no_grad():  # "LoRA training": non-zero adapter weights
+        for name, param in lora.named_parameters():
+            if 'lora_' in name:
+                param.copy_(torch.randn_like(param))
+    model = DCALLMHybridModel.__new__(DCALLMHybridModel)
+    model.llm_keys = ['ESM']
+    model.llm_data = {'ESM': {
+        'llm_base_model': base, 'llm_model': lora, 'llm_optimizer': optimizer,
+        'llm_tokenizer': tokenizer, 'x_llm': torch.zeros(2, 5, dtype=torch.long),
+    }}
+    model.progress_cb = lambda *a: None
+    model.abort_cb = lambda: False
+    model.pmpnn_log_probs = None
+    return model
+
+
+def plm_outputs(model):
+    tokens = torch.tensor([[0, 5, 6, 7, 2]])
+    data = model.llm_data['ESM']
+    with torch.no_grad():
+        return (data['llm_base_model'](tokens).logits, data['llm_model'](tokens).logits)
+
+
+@pytest.fixture
+def reload_tiny_esm(monkeypatch):
+    import pypef.hybrid.hybrid_model as hm
+    calls = []
+    def get_esm_models(**kwargs):
+        calls.append(kwargs)
+        return tiny_esm()
+    monkeypatch.setattr(hm, 'get_esm_models', get_esm_models)
+    return calls
+
+
+def test_hybrid_pickle_stores_only_lora_adapters(tmp_path, monkeypatch, reload_tiny_esm):
+    from pypef.hybrid.hybrid_model import get_model_and_type
+    monkeypatch.chdir(tmp_path)
+    model = hybrid_with_tiny_esm()
+    expected = plm_outputs(model)
+    save_model_to_dict_pickle(model, 'HybridGREMLIN')
+    # The model itself is left intact (it was converted to state dicts before)
+    data = model.llm_data['ESM']
+    assert isinstance(data['llm_base_model'], torch.nn.Module)
+    assert isinstance(data['llm_optimizer'], torch.optim.Adam)
+    assert model.progress_cb is not None
+    path = tmp_path / 'Pickles' / 'HYBRIDGREMLINESM'
+    stored = pickle.loads(path.read_bytes())['model'].llm_data['ESM']
+    assert stored['llm_base_model'] is None and stored['llm_optimizer'] is None
+    assert stored['llm_storage'] == 'lora_adapter'
+    assert stored['llm_source'] == {'model': 'facebook/esm2_tiny', 'revision': 'abc123'}
+    assert stored['llm_model'] and all('lora_' in k for k in stored['llm_model'])
+    base_bytes = sum(p.numel() * p.element_size() for p in data['llm_base_model'].parameters())
+    assert path.stat().st_size < base_bytes  # i.e. not even one full model copy
+
+    loaded, model_type = get_model_and_type(str(path))
+    assert model_type == 'Hybrid_ESM'
+    assert reload_tiny_esm == [{'model': 'facebook/esm2_tiny', 'revision': 'abc123'}]
+    for before, after in zip(expected, plm_outputs(loaded)):
+        torch.testing.assert_close(after, before, rtol=0, atol=0)
+
+
+def test_hybrid_pickle_old_full_state_dict_format(tmp_path, monkeypatch, reload_tiny_esm):
+    """Files saved before v0.5.1 store the full base and LoRA model state dicts."""
+    from pypef.hybrid.hybrid_model import get_model_and_type
+    monkeypatch.chdir(tmp_path)
+    model = hybrid_with_tiny_esm()
+    expected = plm_outputs(model)
+    data = model.llm_data['ESM']
+    data['llm_base_model'] = data['llm_base_model'].state_dict()
+    data['llm_model'] = data['llm_model'].state_dict()
+    model.progress_cb = model.abort_cb = None
+    path = tmp_path / 'OLD'
+    path.write_bytes(pickle.dumps({'model': model, 'model_type': 'HybridGREMLINESM'}))
+    loaded, _ = get_model_and_type(str(path))
+    assert reload_tiny_esm == [{'revision': None}]  # no source recorded: default model
+    for before, after in zip(expected, plm_outputs(loaded)):
+        torch.testing.assert_close(after, before, rtol=0, atol=0)

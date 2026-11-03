@@ -398,8 +398,8 @@ class MainWidget(QWidget):
         self.check_gauss_opt = QCheckBox("GP optimization")
         self.check_gauss_opt.setToolTip(
             "Use a Gaussian process (GP) to optimize the PLM embeddings and zero-shot "
-            "scores as an alternative to LoRA tuning (training only; requires a WT FASTA "
-            "and a PDB structure file)."
+            "scores as an alternative to LoRA tuning, for every selected PLM incl. PMPNN "
+            "(training only; requires a WT FASTA and a PDB structure file)."
         )
         self.check_gauss_opt.setStyleSheet(checkbox_style)
         self.check_gauss_comb = QCheckBox("Combined GP")
@@ -1230,43 +1230,33 @@ class MainWidget(QWidget):
     def pypef_llm_ssm(self):
         self.target_button = self.button_llm_ssm
         self.start_process()
+        if self.llm not in ('esm', 'prosst', 'pmpnn'):
+            self.logTextBox.widget.appendPlainText(
+                "Provide a PLM option for modeling: SSM prediction supports a single "
+                "PLM (ESM, ProSST or PMPNN), not PLM combinations."
+            )
+            self.end_process()
+            return
         wt_fasta_file = QFileDialog.getOpenFileName(
             self.win2, "Select WT FASTA File", 
             filter="FASTA file (*.fasta *.fa)"
         )[0]
-        if wt_fasta_file:
-            if self.llm == 'prosst':
-                pdb_file = QFileDialog.getOpenFileName(
-                    self.win2, "Select PDB protein structure File",
-                    filter="PDB file (*.pdb)"
-                )[0]
-                if pdb_file:
-                    self.version_text.setText(
-                        "ProSST zero shot model inference..."
-                    )
-                    self.cmd = [
-                        'predict_ssm',
-                        '--plm', self.llm,
-                        '--wt', wt_fasta_file,
-                        '--pdb', pdb_file,
-                    ]
-                    self.start_main_thread()
-                else:
-                    self.end_process()
-            elif self.llm == 'esm':
-                self.cmd = [
-                    'predict_ssm',
-                    '--plm', self.llm,
-                    '--wt', wt_fasta_file,
-                ]
-                self.start_main_thread()
-            else:
-                self.logTextBox.widget.appendPlainText(
-                    "Provide a PLM option for modeling."
-                )
-                self.end_process()
-        else:
+        if not wt_fasta_file:
             self.end_process()
+            return
+        self.cmd = ['predict_ssm', '--plm', self.llm, '--wt', wt_fasta_file]
+        if self.llm in ('prosst', 'pmpnn'):  # structure-based models
+            pdb_file = QFileDialog.getOpenFileName(
+                self.win2, "Select PDB protein structure File",
+                filter="PDB file (*.pdb)"
+            )[0]
+            if not pdb_file:
+                self.end_process()
+                return
+            self.cmd += ['--pdb', pdb_file]
+        name = {'esm': 'ESM', 'prosst': 'ProSST', 'pmpnn': 'PMPNN'}[self.llm]
+        self.version_text.setText(f"{name} zero shot SSM inference...")
+        self.start_main_thread()
 
     # Unsupervised/Zero-Shot/DCA
     def pypef_gremlin(self):

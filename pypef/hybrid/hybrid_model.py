@@ -15,6 +15,7 @@ from os.path import isfile, join
 from typing import Union
 import warnings
 import gc
+import copy
 import torch
 import numpy as np
 import sklearn.base
@@ -47,6 +48,7 @@ from pypef.utils.plot import plot_y_true_vs_y_pred
 import pypef.dca.gremlin_inference
 from pypef.plm.utils import hybrid_corr_mse_loss, ols_align
 from pypef.dca.gremlin_inference import GREMLIN, get_delta_e_statistical_model
+from peft import get_peft_model_state_dict, set_peft_model_state_dict
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models
 from pypef.plm.inference import (
@@ -86,7 +88,7 @@ class DCALLMHybridModel:
             batch_size: int | None = None,
             n_epochs: int | None = None,
             device: str | None = None,
-            seed: int | None = None,
+            seed: int | None = 42,
             alpha: float | None = None,
             ols_fit: bool = True,
             n_ensemble_splits: int = 1,
@@ -204,7 +206,8 @@ class DCALLMHybridModel:
             self.pmpnn_aa_cond_probs = torch.softmax(
                 torch.as_tensor(self.pmpnn_log_probs[:, :20], dtype=torch.float32), dim=-1
             ).to(self.device)
-        self.pmpnn_gauss_opt = self.pmpnn_log_probs is not None
+        # Like the ESM/ProSST GPs, the PMPNN GP is only built with gauss_opt.
+        self.pmpnn_gauss_opt = self.pmpnn_log_probs is not None and self.gauss_opt
         self.pmpnn_gp = self.pmpnn_gp_likelihood = None
         if self.pmpnn_gauss_opt and self.pdb_struct is None:
             raise ValueError("PMPNN GP requires pmpnn_conditional_probs and pdb_struct.")
@@ -1505,29 +1508,83 @@ def get_model_and_type(
         if not model.llm_keys:
             logger.info("Found hybrid model without PLM model...")
             return model, model_type
-        # Reconstruct each stored PLM (base and LoRA) from its state dictionary
+        # Rebuild each PLM: reload the pretrained model (same name and revision as
+        # in training) and apply the stored LoRA adapter weights
         for llm_name in model.llm_keys:
             current_llm = model.llm_data[llm_name]
+            source = current_llm.get('llm_source') or {}
             if llm_name == 'ESM':
                 logger.info("Found hybrid model with ESM PLM model...")
-                base_model, lora_model, tokenizer, _optimizer = get_esm_models()
+                esm_kwargs = {'model': source['model']} if source.get('model') else {}
+                base_model, lora_model, tokenizer, optimizer = get_esm_models(
+                    revision=source.get('revision'), **esm_kwargs)
                 model_type += '_ESM'
             elif llm_name == 'PROSST':
                 logger.info("Found hybrid model with ProSST PLM model...")
-                base_model, lora_model, tokenizer, _optimizer = get_prosst_models()
+                base_model, lora_model, tokenizer, optimizer = get_prosst_models(
+                    revision=source.get('revision'))
                 model_type += '_ProSST'
             else:
                 logger.info(f"Found hybrid model with unknown PLM model {llm_name}...")
                 continue
-            base_model.load_state_dict(current_llm['llm_base_model'])
-            lora_model.load_state_dict(current_llm['llm_model'])
+            if current_llm.get('llm_storage') == 'lora_adapter':
+                result = set_peft_model_state_dict(lora_model, current_llm['llm_model'])
+                if result.unexpected_keys:
+                    raise RuntimeError(
+                        f"Stored {llm_name} LoRA weights do not match the PLM: "
+                        f"{result.unexpected_keys[:5]}..."
+                    )
+            else:  # Files saved before v0.5.1 hold the full PLM state dictionaries
+                base_model.load_state_dict(current_llm['llm_base_model'])
+                lora_model.load_state_dict(current_llm['llm_model'])
             base_model.eval()
             lora_model.eval()
             current_llm['llm_base_model'] = base_model
             current_llm['llm_model'] = lora_model
+            current_llm['llm_optimizer'] = optimizer
             current_llm['llm_tokenizer'] = tokenizer
 
     return model, model_type
+
+
+def plm_source(llm_base_model) -> dict:
+    """Hugging Face model name and commit hash of a loaded pretrained PLM."""
+    config = llm_base_model.config
+    return {
+        'model': getattr(config, '_name_or_path', None),
+        'revision': getattr(config, '_commit_hash', None),
+    }
+
+
+def slim_hybrid_model_for_pickle(model):
+    """
+    Shallow copy of a hybrid model for pickling that leaves the model itself untouched.
+    Of each PLM only the LoRA adapter weights (a few MB) and the pretrained model's
+    name and revision are kept: the frozen pretrained weights are reloaded when the
+    model is loaded (see get_model_and_type), and the optimizer is not needed for
+    predictions. Storing the full models took ~9 GB for ESM+ProSST, and more than
+    twice that in RAM while pickling.
+    """
+    slim = copy.copy(model)
+    # GUI progress/abort callbacks are local functions and cannot be pickled
+    slim.progress_cb = None
+    slim.abort_cb = None
+    if model.llm_keys is not None:
+        slim.llm_data = dict(model.llm_data)
+        for llm_name in model.llm_keys:
+            logger.info(f"Storing LoRA adapter weights of PLM {llm_name} of the hybrid model...")
+            current_llm = dict(model.llm_data[llm_name])
+            current_llm['llm_source'] = plm_source(current_llm['llm_base_model'])
+            current_llm['llm_model'] = {
+                k: v.detach().cpu()
+                for k, v in get_peft_model_state_dict(
+                    current_llm['llm_model'], save_embedding_layers=False).items()
+            }
+            current_llm['llm_storage'] = 'lora_adapter'
+            current_llm['llm_base_model'] = None
+            current_llm['llm_optimizer'] = None
+            slim.llm_data[llm_name] = current_llm
+    return slim
 
 
 def save_model_to_dict_pickle(
@@ -1542,18 +1599,9 @@ def save_model_to_dict_pickle(
     if model_type is None:
         model_type = 'MODEL'
     
-    # For hybrid PLM models save each PLM (base and LoRA) as state dictionaries
     if model_type.lower().startswith('hybrid'):
-        # GUI progress/abort callbacks are local functions and cannot be pickled
-        model.progress_cb = None
-        model.abort_cb = None
+        model = slim_hybrid_model_for_pickle(model)
         if model.llm_keys is not None:
-            for llm_name in model.llm_keys:
-                logger.info(f"Storing PLM model {llm_name} "
-                      f"of hybrid model as state dictionaries...")
-                current_llm = model.llm_data[llm_name]
-                current_llm['llm_model'] = current_llm['llm_model'].to('cpu').state_dict()
-                current_llm['llm_base_model'] = current_llm['llm_base_model'].to('cpu').state_dict()
             model_type += ''.join(model.llm_keys)
         # PMPNN is not part of llm_keys (ESM/ProSST) but should show in the name too,
         # e.g. Pickles/HYBRIDGREMLINESMPROSSTPMPNN (only the name; loading does not
@@ -1561,16 +1609,10 @@ def save_model_to_dict_pickle(
         if getattr(model, 'pmpnn_log_probs', None) is not None:
             model_type += 'PMPNN'
     pkl_path = os.path.abspath(f'Pickles/{model_type.upper()}')
-    pickle.dump(
-        {
-            'model': model,
-            'model_type': model_type
-        },
-        open(pkl_path, 'wb')
-    )
+    with open(pkl_path, 'wb') as fh:
+        pickle.dump({'model': model, 'model_type': model_type}, fh)
     logger.info(f'Saved model as Pickle file ({pkl_path})...')
-    # Free up memory (needed when running from Qt GUI threads?) 
-    del model
+    del model  # the (slim) copy; free up memory, e.g. when running from Qt GUI threads
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -1785,7 +1827,7 @@ def performance_ls_ts(
         lora_train: bool = False,
         gauss_opt: bool = False,
         gauss_comb: bool = False,
-        seed: int | None = None,
+        seed: int | None = 42,
         alpha: float | None = None,
         device: str | None = None,
         progress_cb=None,
@@ -1803,7 +1845,7 @@ def performance_ls_ts(
             raise ValueError("PMPNN training requires --ls, --pdb and --wt.")
         if pmpnn_conditional_probs is None:
             pmpnn_conditional_probs = run_protein_mpnn_conditional(
-                pdb_file, seed=seed if seed is not None else 42
+                pdb_file, seed=seed
             )
     test_sequences, test_variants, y_test = get_sequences_from_file(ts_fasta)
 
@@ -1966,7 +2008,7 @@ def performance_ls_ts(
                 if pdb_file is None or wt_seq is None:
                     raise ValueError("PMPNN zero-shot scoring requires --pdb and --wt.")
                 log_probs = run_protein_mpnn_conditional(
-                    pdb_file, seed=seed if seed is not None else 13
+                    pdb_file, seed=seed
                 )
                 y_test_pred = score_sequences_from_probs(log_probs, test_sequences, wt_seq)
             else:
@@ -2000,7 +2042,8 @@ def predict_ps(
     pdb_file: str | None = None,
     wt_seq: str | None = None,
     negative: bool = False,
-    device: str | None = None
+    device: str | None = None,
+    seed: int | None = 42
 ):
     """
     Predicting the fitness of sequences of a prediction set or multiple prediction 
@@ -2050,7 +2093,7 @@ def predict_ps(
     if not dca_modeling and parse_llm_flag(llm) == ['pmpnn']:
         if pdb_file is None or wt_seq is None:
             raise ValueError("PMPNN zero-shot scoring requires --pdb and --wt.")
-        pmpnn_log_probs = run_protein_mpnn_conditional(pdb_file)
+        pmpnn_log_probs = run_protein_mpnn_conditional(pdb_file, seed=seed)
 
     # --- Mode 1: Multi-file directory prediction sets ---
     if True in prediction_dict.values():

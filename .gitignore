@@ -408,6 +408,7 @@ datasets/ANEH/ML_Model_Performance_DCA_GREMLIN.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_concat_lvls_extrapolation.png
 datasets/ANEH/ml_pls_37_ANEH_variants_dca_encoded_train_lvl_1_extrapolation.png
 datasets/ANEH/DCA_Hybrid_Model_Performance_GREMLIN_ESM_PROSST_PMPNN.png
+datasets/ANEH/Pickles/HYBRIDGREMLINPROSSTPMPNN
 
 datasets/AVGFP/apc.png
 datasets/AVGFP/avGFP_aaidx_encoded.csv
@@ -680,3 +681,4 @@ scripts/ProteinGym_runs/ODP2_GEOSE_Tsuboyama_2023_1W4G_pos_aa_distr.png
 scripts/ProteinGym_runs/PIN1_HUMAN_Tsuboyama_2023_1I6C_pos_aa_distr.png
 scripts/ProteinGym_runs/PITX2_HUMAN_Tsuboyama_2023_2L7M_pos_aa_distr.png
 scripts/ProteinGym_runs/PR40A_HUMAN_Tsuboyama_2023_1UZC_pos_aa_distr.png
+scripts/ProteinGym_runs/official/benchmark_runs/model_scores/cropped_pdbs/KCNH2_HUMAN_Kozek_2020.pdb

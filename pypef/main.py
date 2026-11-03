@@ -143,7 +143,7 @@ Usage:
     pypef predict_ssm --wt WT_FASTA
         [--params PARAM_FILE]
         [--plm PLM] [--llm LLM]
-        [--pdb PDB_FILE]
+        [--pdb PDB_FILE] [--seed SEED]
     pypef save_msa_info --msa MSA_FILE --wt WT_FASTA
         [--opt_iter N_ITER]
     pypef encode --input CSV_FILE --encoding ENCODING_TECHNIQUE --wt WT_FASTA
@@ -217,7 +217,8 @@ Options:
   --sequence_key SEQUENCE_KEY       Optional CSV sequence column for mklsts; validates sequences against WT/mutants.
   --fitness_key FITNESS_KEY         Label of CSV fitness column. Else uses second column.
   --pmpnn                          Compute PMPNN conditional log probabilities for hybrid training;
-                                    adds PMPNN zero-shot and GP components; requires --ls, --pdb and --wt.
+                                    adds a PMPNN zero-shot component (and a PMPNN GP with --gauss_opt);
+                                    requires --ls, --pdb and --wt.
   --pmpnn_cond_probs NPZ_FILE       Load precomputed PMPNN conditional log probabilities instead;
                                     requires --ls, --pdb and --wt. Takes precedence over --pmpnn.
   --gauss_comb                      Additionally build a combined Gaussian process over the embeddings
@@ -225,7 +226,8 @@ Options:
                                     'esm+prosst' passed via the --plm flag) [default: False].
   --gauss_opt                       Use a Gaussian process (GP) to optimize the PLM embeddings and
                                     zero-shot scores for supervised hybrid modeling (alternative to
-                                    LoRA-based tuning; requires --plm, --pdb, and --wt) [default: False].
+                                    LoRA-based tuning; requires --plm, --pdb, and --wt). Applies to all
+                                    selected PLMs incl. PMPNN [default: False].
   -h --help                         Show this screen [default: False].
   -i --input CSV_FILE               Input data file in .csv format.
   --inter_gap INTER_GAP             Fraction to delete all positions with more than
@@ -281,7 +283,7 @@ Options:
   -s --save NUMBER                  Number of models to be saved as pickle files [default: 5].
   --seed SEED                       Random seed for reproducible hybrid modeling (train/validation
                                     split for beta adjustment and the differential-evolution ensemble
-                                    weight optimization). If unset, results vary run to run.
+                                    weight optimization) and PMPNN decoding [default: 42].
   --sep CSV_COLUMN_SEPARATOR        CSV Column separator [default: ;].
   --show                            Show achieved model performances from Model_Results.txt.
   --sort METRIC_INT                 Rank models based on metric {1: R^2, 2: RMSE, 3: NRMSE,
@@ -317,7 +319,9 @@ Options:
   onehot                            OneHot-based encoding [default: False].
   param_inference                   Inferring DCA params using the GREMLIN approach [default: False].
   predict_ssm                       Getting all possible amino acid single substutions across the wild type sequence
-                                    and predicting all up to 19 variants per wild type sequence position.
+                                    and predicting all up to 19 variants per wild type sequence position
+                                    using GREMLIN (--params) or a single PLM (--plm esm, --plm prosst or
+                                    --plm pmpnn; ProSST and PMPNN require --pdb).
   reformat_csv                      Reformat input CSV with indicated column and mutation separators to default
                                     CSV style (column separator ';' and mutation separator '/') [default: False.]
   save_msa_info                     Optimize local fields and couplings of MSA based on GREMLIN DCA approach and

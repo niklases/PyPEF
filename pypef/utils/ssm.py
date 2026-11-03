@@ -14,7 +14,10 @@ import torch
 
 from pypef.utils.helpers import tqdm
 from pypef.plm.prosst_lora_tune import get_structure_quantizied
-from pypef.hybrid.hybrid_model import get_model_and_type
+from pypef.hybrid.hybrid_model import get_model_and_type, parse_llm_flag
+from pypef.plm.pmpnn.get_cond_probs import (
+    AA_TO_IDX, load_conditional_log_probs, run_protein_mpnn_conditional
+)
 from pypef.plm.inference import (
     plm_inference, get_esm_models, get_prosst_models, tokenize_sequences
 )
@@ -25,16 +28,26 @@ class SSM:
             self,
             wt_seq: str,
             aas: str = "ARNDCQEGHILKMFPSTWYV",
-            model: Literal["dca", "esm", "prosst"] | None = None,
+            model: Literal["dca", "esm", "prosst", "pmpnn"] | None = None,
             pdb: str | os.PathLike | None = None,
-            params_file: str | os.PathLike | None = None
+            params_file: str | os.PathLike | None = None,
+            seed: int | None = 42
     ):
         self.wt_seq = wt_seq
         self.aas = aas
         if model is None:
             model = "dca"
-        self.model = model
+        models = parse_llm_flag(model)
+        if len(models) != 1:
+            raise ValueError(
+                f"SSM prediction requires a single model (DCA, ESM, ProSST or PMPNN), "
+                f"got '{model}'"
+            )
+        self.model = models[0]
+        if self.model in ("prosst", "pmpnn") and pdb is None:
+            raise ValueError(f"SSM prediction with {self.model} requires a PDB file (--pdb)")
         self.pdb = pdb
+        self.seed = 42 if seed is None else seed
         if params_file is not None:
             gremlin, m_type = get_model_and_type(params_file)
             if m_type != "GREMLIN":
@@ -83,13 +96,24 @@ class SSM:
             xs, attn_mask = tokenize_sequences(np.array(self.variant_sequencess).flatten(), tokenizer=tokenizer)
             self.scoress = plm_inference(
                 xs, wt_tokens, attn_mask, base_model, 
-                wt_structure_input_ids=wt_structure_input_ids
+                wt_structure_input_ids=wt_structure_input_ids, verbose=True
             ).cpu().numpy()
             logger.info(f"Reshaping flat array of shape {np.shape(self.scoress)} "
                         f"to SSM shape {np.shape(self.variant_sequencess)}...")
             self.scoress = self.scoress.reshape(np.shape(self.variant_sequencess))
+        elif self.model == "pmpnn":
+            # A single substitution's PMPNN score is its conditional log-likelihood
+            # relative to the WT residue (as in score_sequences_from_probs).
+            logger.info("Predicting all SSM effects using ProteinMPNN conditional probabilities...")
+            log_p = load_conditional_log_probs(run_protein_mpnn_conditional(self.pdb, seed=self.seed), self.wt_seq)
+            wt_idx = np.array([AA_TO_IDX[aa] for aa in self.wt_seq])
+            aa_idx = np.array([AA_TO_IDX[aa] for aa in self.aas])
+            self.scoress = log_p[:, aa_idx] - log_p[np.arange(len(self.wt_seq)), wt_idx][:, None]
         else:
-            raise RuntimeError("Unknown modeling option (choose between --dca, --plm esm or --plm prosst)!")
+            raise RuntimeError(
+                "Unknown modeling option (choose between --params GREMLIN for DCA, "
+                "--plm esm, --plm prosst or --plm pmpnn)!"
+            )
 
     def plot(self):
         _fig, ax = plt.subplots(figsize=(2 * len(self.wt_seq) / len(self.aas), 3))

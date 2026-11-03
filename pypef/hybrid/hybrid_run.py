@@ -86,7 +86,8 @@ def run_pypef_hybrid_modeling(arguments, progress_cb=None, abort_cb=None):
             llm=arguments['--llm'],
             pdb_file=arguments['--pdb'],
             wt_seq=get_wt_sequence(arguments['--wt']),
-            negative=arguments['--negative']
+            negative=arguments['--negative'],
+            seed=arguments['--seed']
         )
 
 

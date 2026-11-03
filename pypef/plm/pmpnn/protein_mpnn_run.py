@@ -45,7 +45,7 @@ def run_pmpnn(
         model_name: str = "v_48_020",
         use_soluble_model: bool= False,
         omit_AAs: str = 'X',
-        seed: int | None = None,
+        seed: int | None = 42,
         batch_size: int = 1,
         max_length: int = 20000,
         chain_id_jsonl: str = "",
@@ -65,8 +65,8 @@ def run_pmpnn(
         unconditional_probs_only: int = 0,
         suppress_print: int = 1
 ):
-    if not seed:
-        seed=int(np.random.randint(0, high=999, size=1, dtype=int)[0])
+    if seed is None:
+        seed = 42
     sampling_temp = str(sampling_temp)
 
     torch.manual_seed(seed)

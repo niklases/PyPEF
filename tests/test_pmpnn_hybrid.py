@@ -28,8 +28,9 @@ def test_conditional_scores_and_input_formats(tmp_path):
         score_sequences_from_probs(log_p, ['A-'], 'AC')
 
 
+@pytest.mark.parametrize('gauss_opt', [False, True])
 @pytest.mark.parametrize('ensemble_func', ['torch', 'de'])
-def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, monkeypatch):
+def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, gauss_opt, monkeypatch):
     monkeypatch.setattr(DCALLMHybridModel, "_train_pmpnn_gp", lambda self: None)
     monkeypatch.setattr(DCALLMHybridModel, "_predict_pmpnn_gp",
                         lambda self, sequences: self._pmpnn_scores(sequences))
@@ -45,12 +46,15 @@ def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, monkeypatch):
         pmpnn_conditional_probs={'log_p': log_p}, x_dca_wt=np.zeros(2),
         pdb_struct='mock.pdb',
         ridge_alphas=np.array([1.]), batch_size=1, seed=8, device='cpu',
-        n_ensemble_splits=2, ensemble_func=ensemble_func,
+        n_ensemble_splits=2, ensemble_func=ensemble_func, gauss_opt=gauss_opt,
     )
-    assert model.feature_names == ['y_dca', 'y_ridge', 'PMPNN_base', 'PMPNN_gp']
-    assert len(model.all_betas) == 4
+    # The PMPNN GP follows gauss_opt, like the ESM/ProSST GPs.
+    features = ['y_dca', 'y_ridge', 'PMPNN_base'] + (['PMPNN_gp'] if gauss_opt else [])
+    assert model.feature_names == features
+    assert len(model.all_betas) == len(features)
     np.testing.assert_allclose(model.pmpnn_aa_cond_probs.cpu().sum(-1), 1, atol=1e-6)
     predictions, components = model.hybrid_prediction(x, sequences=sequences)
+    assert ('PMPNN_gp' in components) == gauss_opt
     np.testing.assert_allclose(components['PMPNN_base'], score_sequences_from_probs(log_p, sequences, 'AC'))
     restored = pickle.loads(pickle.dumps(model))
     np.testing.assert_allclose(restored.hybrid_prediction(x, sequences=sequences)[0], predictions)
@@ -77,8 +81,8 @@ def test_separate_pmpnn_gp(monkeypatch):
         sequences=sequences, wt_sequence='AC', pmpnn_conditional_probs=log_p,
         pdb_struct='mock.pdb', device='cpu',
         ridge_alphas=np.array([1.]), batch_size=1, seed=19, n_ensemble_splits=2,
+        gauss_opt=True,
     )
-    assert not model.gauss_opt
     assert model.feature_names == ['y_dca', 'y_ridge', 'PMPNN_base', 'PMPNN_gp']
     kernel = model.pmpnn_gp.covar_module.structure_kernel.base_kernel
     torch.testing.assert_close(kernel.k_p.conditional_probs, model.pmpnn_aa_cond_probs)
@@ -89,10 +93,11 @@ def test_separate_pmpnn_gp(monkeypatch):
 
 
 def test_pmpnn_gp_requires_inputs():
-    with pytest.raises(ValueError, match='PMPNN GP requires'):
+    with pytest.raises(RuntimeError, match='requires .* structure file'):
         DCALLMHybridModel(
             np.zeros((20, 2)), np.zeros(20), sequences=['AC'] * 20,
             wt_sequence='AC', pmpnn_conditional_probs=np.zeros((2, 21)),
+            gauss_opt=True,
         )
 
 

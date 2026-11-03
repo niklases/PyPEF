@@ -161,9 +161,11 @@ SLOW_DCA_PLM = [  # (PLM drop-down, LoRA, GP optimization, combined GP)
     ('ProSST', False, False, False),
     ('ProSST', True, False, False),
     ('PMPNN', False, False, False),
+    ('PMPNN', False, True, False),
     ('ESM+ProSST', False, True, True),
     ('ESM+PMPNN', False, False, False),
     ('ProSST+PMPNN', False, False, False),
+    ('ProSST+PMPNN', False, True, False),
     ('ESM+ProSST+PMPNN', False, False, False),
 ]
 
@@ -199,7 +201,7 @@ def test_slow_plm_zero_shot(gui_window, file_dialogs, slow_e2e, plm):
 
 
 @pytest.mark.gui_slow
-@pytest.mark.parametrize('plm', ['ESM', 'ProSST'])
+@pytest.mark.parametrize('plm', ['ESM', 'ProSST', 'PMPNN'])
 def test_slow_plm_ssm(gui_window, file_dialogs, slow_e2e, plm):
     gui_window.box_llm.setCurrentText(plm)
     slow_e2e.run(gui_window, file_dialogs, 'button_llm_ssm', 3600)
