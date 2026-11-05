@@ -1,5 +1,6 @@
 
 import os
+os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 import gc
 import time
 import warnings
@@ -24,9 +25,14 @@ from pypef.dca.gremlin_inference import GREMLIN
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
-from pypef.utils.variant_data import get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs
+from pypef.utils.variant_data import (
+    get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs, crop_pdb_to_alignment
+)
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import DCALLMHybridModel, get_delta_e_statistical_model
+from pypef.plm.pmpnn.get_cond_probs import (
+    run_protein_mpnn_conditional, load_conditional_log_probs, score_sequences_from_probs
+)
 from pypef import __version__
 version = __version__.split('-')[0]
 # e.g., version = '0.4.3'
@@ -45,7 +51,19 @@ PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
 
 JUST_PLOT_RESULTS = False
 
-
+# Single zero-shot predictors and all 2^3 combinations of the PLMs on top of DCA,
+# i.e. DCA, DCA+ESM, DCA+ProSST, DCA+PMPNN, DCA+ESM+ProSST, DCA+ESM+PMPNN,
+# DCA+ProSST+PMPNN, and DCA+ESM+ProSST+PMPNN
+TRAINING_SIZES = (100, 200, 1000)
+PLMS = ('ESM', 'ProSST', 'PMPNN')
+ZERO_SHOT_MODELS = ('DCA',) + PLMS
+HYBRID_COMBOS = tuple(
+    ('DCA' + ''.join(f'+{plm}' for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1),
+     tuple(plm.lower() for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1))
+    # single predictors first, then the ensembles of two, three, ... PLMs
+    for n_plms in sorted(range(2 ** len(PLMS)), key=lambda n: (n.bit_count(), n))
+)
+HYBRID_MODELS = tuple(label for label, _plms in HYBRID_COMBOS)
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # TODO: Add (R)MSE next to Spearman
@@ -162,6 +180,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         msa_start=msa_start
                     )
                     variants = pdb_vars
+                    if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
+                        # Crop the PDB to the common region so that the structure matches
+                        # the modeled sequence for both ProSST and PMPNN
+                        cropped_pdb = os.path.join(
+                            os.path.dirname(__file__), 'cropped_pdbs', f'{dset_key}.pdb')
+                        os.makedirs(os.path.dirname(cropped_pdb), exist_ok=True)
+                        pdb = crop_pdb_to_alignment(pdb, cropped_pdb, mapping)
+                        print(f"Cropped PDB to residues {mapping['start_pdb'] + 1}-"
+                              f"{mapping['end_pdb']}: {pdb}")
                     print(f"Shifted variants. PDB-trimmed length: {len(pdb_trimmed_seqs[0])}, "
                           f"GREMLIN length: {len(gremlin_seqs[0])}")
                 else:
@@ -213,7 +240,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print(f'ESM (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm)[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm)[0]
-            except RuntimeError:
+            except RuntimeError as e:
+                print(f'ESM failed: {e}')
                 esm_unopt_perf = np.nan
             gc.collect()
             torch.cuda.empty_cache()
@@ -242,8 +270,22 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
-            except RuntimeError:
+            except RuntimeError as e:
+                print(f'ProSST failed: {e}')
                 prosst_unopt_perf = np.nan
+
+            # PMPNN unsupervised (structure-only, uses PDB-trimmed sequences)
+            try:
+                pmpnn_log_probs = load_conditional_log_probs(
+                    run_protein_mpnn_conditional(pdb, seed=seed), pdb_trimmed_wt)
+                y_pmpnn = score_sequences_from_probs(
+                    pmpnn_log_probs, pdb_trimmed_seqs, pdb_trimmed_wt)
+                pmpnn_unopt_perf = spearmanr(fitnesses, y_pmpnn)[0]
+                print(f'PMPNN (unsupervised performance): {pmpnn_unopt_perf:.3f}')
+            except (RuntimeError, ValueError, KeyError) as e:
+                print(f'PMPNN failed: {e}')
+                pmpnn_log_probs = None
+                pmpnn_unopt_perf = np.nan
 
             if np.isnan(esm_unopt_perf) and np.isnan(prosst_unopt_perf):
                 print('Both LLM\'s had RunTimeErrors, skipping dataset...')
@@ -254,15 +296,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             print(f'Current mean ProSST unsupervised: N={len(prosst_unopt_perfs)} SpearCorr={np.nanmean(prosst_unopt_perfs):.3f}')
             print(f'Current mean ESM unsupervised: N={len(esm_unopt_perfs)} SpearCorr={np.nanmean(esm_unopt_perfs):.3f}')
             ns_y_test = [len(variants)]
-            for i_t, train_size in enumerate([100, 200, 1000]):
+            for i_t, train_size in enumerate(TRAINING_SIZES):
                 print('\nTRAIN SIZE:', train_size, '\n-------------------------------------------\n')
                 get_vram()
                 try:
                     (
                         s_train, s_test,
                         x_dca_train, x_dca_test,
-                        x_llm_train_prosst, x_llm_test_prosst,
-                        x_llm_train_esm, x_llm_test_esm,
+                        _x_llm_train_prosst, x_llm_test_prosst,
+                        _x_llm_train_esm, x_llm_test_esm,
                         y_train, y_test
                     ) = train_test_split(
                         pdb_trimmed_seqs,
@@ -278,7 +320,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                           f"cannot split the data in N_Train = {train_size} and N_Test "
                           f"(N_Total - N_Train) [Excepted error: {e}].")
 
-                    hybrid_perfs.extend([np.nan, np.nan, np.nan, np.nan])
+                    hybrid_perfs.extend([np.nan] * len(HYBRID_COMBOS))
                     ns_y_test.append(np.nan)
                     continue
 
@@ -291,35 +333,41 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         wt_seq=pdb_trimmed_wt, pdb_file=pdb, sequences=list(s_train),
                         seed=seed, revision=PROSST_REVISION, device=device, verbose=True
                 )
-                llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
                 print(f'Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                 if len(y_test) <= 50:
                     print(f"Only {len(fitnesses)} in total, splitting the data "
                           f"in N_Train = {len(y_train)} and N_Test = {len(y_test)} "
                           f"results in N_Test <= 50 variants - not getting "
                           f"performance for N_Train = {len(y_train)}...")
-                    hybrid_perfs.extend([np.nan, np.nan, np.nan, np.nan])
+                    hybrid_perfs.extend([np.nan] * len(HYBRID_COMBOS))
                     ns_y_test.append(np.nan)
                     continue
                 get_vram()
-                for i_m, llm_dict in enumerate([None, llm_dict_esm, llm_dict_prosst, llm_dict_ensemble]):
-                    print('\n~~~ ' + ['DCA hybrid', 'DCA+ESM hybrid', 'DCA+ProSST hybrid', 'DCA+ESM+ProSST hybrid'][i_m] + ' ~~~')
+                for model_label, plms in HYBRID_COMBOS:
+                    print(f'\n~~~ {model_label} hybrid ~~~')
+                    if 'pmpnn' in plms and pmpnn_log_probs is None:
+                        print('No PMPNN conditional probabilities, appending performance NaN...')
+                        hybrid_perfs.append(np.nan)
+                        continue
+                    llm_dict, x_llm_test_dict = {}, {}
+                    if 'esm' in plms:
+                        llm_dict.update(llm_dict_esm)
+                        x_llm_test_dict.update({'esm': np.asarray(x_llm_test_esm)})
+                    if 'prosst' in plms:
+                        llm_dict.update(llm_dict_prosst)
+                        x_llm_test_dict.update({'prosst': np.asarray(x_llm_test_prosst)})
                     try:
-                        if i_m == 0:
-                            lora_train=False
-                            gauss_opt=False
-                        else:
-                            lora_train=LORA_TRAIN
-                            gauss_opt=True
                         hm = DCALLMHybridModel(
                             x_train_dca=np.array(x_dca_train),
                             y_train=y_train,
-                            llm_model_input=llm_dict,
+                            llm_model_input=llm_dict or None,
                             x_dca_wt=x_wt,
                             sequences=list(s_train),
                             wt_sequence=pdb_trimmed_wt,
-                            lora_train=lora_train,
-                            gauss_opt=gauss_opt,
+                            lora_train=LORA_TRAIN if llm_dict else False,
+                            # Gaussian process optimization of the PLM (incl. PMPNN) predictors
+                            gauss_opt=bool(plms),
+                            pmpnn_conditional_probs=pmpnn_log_probs if 'pmpnn' in plms else None,
                             pdb_struct=pdb,
                             splitting_scheme='random',
                             batch_size=5,
@@ -329,12 +377,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         )
                         y_test_pred, indiv_preds = hm.hybrid_prediction(
                             x_dca=np.array(x_dca_test),
-                            x_llm_dict=[
-                                None,
-                                {'esm': np.asarray(x_llm_test_esm)},
-                                {'prosst': np.asarray(x_llm_test_prosst)},
-                                {'esm': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
-                            ][i_m],
+                            x_llm_dict=x_llm_test_dict or None,
                             sequences=list(s_test)
                         )
                         print(f'Individual model performances:')
@@ -360,8 +403,29 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
             with open(out_results_csv, 'a') as fh:
                 fh.write(
                     f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},{dca_unopt_perf},'
-                    f'{esm_unopt_perf},{prosst_unopt_perf},{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n'
+                    f'{esm_unopt_perf},{prosst_unopt_perf},{pmpnn_unopt_perf},'
+                    f'{dset_hybrid_perfs_i}{dset_ns_y_test_i}{int(dt)}\n'
                 )
+
+
+def _column_prefix(model_label):
+    """E.g. 'DCA+ESM+PMPNN' -> 'Hybrid_DCA_ESM_PMPNN'."""
+    return 'Hybrid_' + model_label.replace('+', '_')
+
+
+def _build_csv_header():
+    """Build the CSV header, matching the order the performances are written in."""
+    header = 'No.,Dataset,N_Variants,N_Max_Muts'
+    for model in ZERO_SHOT_MODELS:
+        header += f',Untrained_Performance_{model}'
+    for size in TRAINING_SIZES:
+        for model in HYBRID_MODELS:
+            header += f',{_column_prefix(model)}_Trained_Performance_{size}'
+    header += ',N_Y_test'
+    for size in TRAINING_SIZES:
+        header += f',N_Y_test_{size}'
+    header += ',Time_in_s\n'
+    return header
 
 
 def plot_csv_data(csv, plot_name):
@@ -466,7 +530,7 @@ if __name__ == '__main__':
     combined_mut_data.update(h_mut_data)
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
-    out_results_csv = os.path.join(os.path.dirname(__file__), f'results/dca_esm_and_hybrid_opt_results_v{version}.csv')
+    out_results_csv = os.path.join(os.path.dirname(__file__), f'results/dca_esm_and_hybrid_low-n_results_v{version}.csv')
     if os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
@@ -495,18 +559,7 @@ if __name__ == '__main__':
     else:
         with open(out_results_csv, 'w') as fh:
             print(f'\nCreating new file {out_results_csv}...')
-            fh.write(
-                f'No.,Dataset,N_Variants,N_Max_Muts,Untrained_Performance_DCA,Untrained_Performance_ESM,'
-                f'Untrained_Performance_ProSST,Hybrid_DCA_Trained_Performance_100,'
-                f'Hybrid_DCA_ESM_Trained_Performance_100,Hybrid_DCA_ProSST_Trained_Performance_100,'
-                f'Hybrid_DCA_ESM_ProSST_Trained_Performance_100,'
-                f'Hybrid_DCA_Trained_Performance_200,Hybrid_DCA_ESM_Trained_Performance_200,'
-                f'Hybrid_DCA_ProSST_Trained_Performance_200,'
-                f'Hybrid_DCA_ESM_ProSST_Trained_Performance_200,Hybrid_DCA_Trained_Performance_1000,'
-                f'Hybrid_DCA_ESM_Trained_Performance_1000,Hybrid_DCA_ProSST_Trained_Performance_1000,'
-                f'Hybrid_DCA_ESM_ProSST_Trained_Performance_1000,'
-                f'N_Y_test,N_Y_test_100,N_Y_test_200,N_Y_test_1000,Time_in_s\n'
-            )
+            fh.write(_build_csv_header())
             start_i = 0
             already_tested_is = []
 

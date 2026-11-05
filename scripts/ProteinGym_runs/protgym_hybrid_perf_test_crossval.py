@@ -1,5 +1,6 @@
 
 import os
+os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
 import gc
 import time
 import warnings
@@ -22,10 +23,15 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.plm.esm_lora_tune import get_esm_models
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
-from pypef.utils.variant_data import get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs
+from pypef.utils.variant_data import (
+    get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs, crop_pdb_to_alignment
+)
 from pypef.utils.helpers import get_vram, get_device
 from pypef.hybrid.hybrid_model import (
     DCALLMHybridModel, get_delta_e_statistical_model
+)
+from pypef.plm.pmpnn.get_cond_probs import (
+    run_protein_mpnn_conditional, load_conditional_log_probs, score_sequences_from_probs
 )
 from pypef.utils.split import DatasetSplitter
 from pypef import __version__
@@ -45,11 +51,20 @@ JUST_PLOT_RESULTS = False
 ESM_MODEL = 'facebook/esm2_t33_650M_UR50D'
 ESM_REVISION = None
 PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
-HYBRID_MODELS = ['DCA hybrid', 'DCA+ESM hybrid', 'DCA+ProSST hybrid', 'DCA+ESM+ProSST hybrid']
-ZERO_SHOT_MODELS = ['DCA', 'ESM', 'ProSST']
 CATEGORIES = ['Random', 'Modulo', 'Continuous']
 N_CV = 5
-
+# Single zero-shot predictors and all 2^3 combinations of the PLMs on top of DCA,
+# i.e. DCA, DCA+ESM, DCA+ProSST, DCA+PMPNN, DCA+ESM+ProSST, DCA+ESM+PMPNN,
+# DCA+ProSST+PMPNN, and DCA+ESM+ProSST+PMPNN
+PLMS = ('ESM', 'ProSST', 'PMPNN')
+ZERO_SHOT_MODELS = ['DCA'] + list(PLMS)
+HYBRID_COMBOS = [
+    ('DCA' + ''.join(f'+{plm}' for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1) + ' hybrid',
+     tuple(plm.lower() for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1))
+    # single predictors first, then the ensembles of two, three, ... PLMs
+    for n_plms in sorted(range(2 ** len(PLMS)), key=lambda n: (n.bit_count(), n))
+]
+HYBRID_MODELS = [label for label, _plms in HYBRID_COMBOS]
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
@@ -145,6 +160,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         msa_start=msa_start
                     )
                     variants = pdb_vars
+                    if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
+                        # Crop the PDB to the common region so that the structure matches
+                        # the modeled sequence for both ProSST and PMPNN
+                        cropped_pdb = os.path.join(
+                            os.path.dirname(__file__), 'cropped_pdbs', f'{dset_key}.pdb')
+                        os.makedirs(os.path.dirname(cropped_pdb), exist_ok=True)
+                        pdb = crop_pdb_to_alignment(pdb, cropped_pdb, mapping)
+                        print(f"Cropped PDB to residues {mapping['start_pdb'] + 1}-"
+                              f"{mapping['end_pdb']}: {pdb}")
                     print(f"Shifted variants. PDB-trimmed length: {len(pdb_trimmed_seqs[0])}, "
                           f"GREMLIN length: {len(gremlin_seqs[0])}")
                 else:
@@ -195,7 +219,8 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print(f'ESM (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_esm.cpu())[0]:.3f}')
                 esm_unopt_perf = spearmanr(fitnesses, y_esm.cpu())[0]
-            except RuntimeError:
+            except RuntimeError as e:
+                print(f'ESM failed: {e}')
                 esm_unopt_perf = np.nan
             # ProSST unsupervised (uses PDB-trimmed sequences)
             try:
@@ -221,8 +246,22 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                 print(f'ProSST (unsupervised performance): '
                       f'{spearmanr(fitnesses, y_prosst.cpu())[0]:.3f}')
                 prosst_unopt_perf = spearmanr(fitnesses, y_prosst.cpu())[0]
-            except RuntimeError:
+            except RuntimeError as e:
+                print(f'ProSST failed: {e}')
                 prosst_unopt_perf = np.nan
+
+            # PMPNN unsupervised (structure-only, uses PDB-trimmed sequences)
+            try:
+                pmpnn_log_probs = load_conditional_log_probs(
+                    run_protein_mpnn_conditional(pdb, seed=42), pdb_trimmed_wt)
+                y_pmpnn = score_sequences_from_probs(
+                    pmpnn_log_probs, pdb_trimmed_seqs, pdb_trimmed_wt)
+                pmpnn_unopt_perf = spearmanr(fitnesses, y_pmpnn)[0]
+                print(f'PMPNN (unsupervised performance): {pmpnn_unopt_perf:.3f}')
+            except (RuntimeError, ValueError, KeyError) as e:
+                print(f'PMPNN failed: {e}')
+                pmpnn_log_probs, y_pmpnn = None, None
+                pmpnn_unopt_perf = np.nan
 
             if np.isnan(esm_unopt_perf) and np.isnan(prosst_unopt_perf):
                 print('Both LLM\'s had RunTimeErrors, skipping dataset...')
@@ -243,7 +282,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     temp_results[c][f'Split {s}'] = {}
                     for m in ZERO_SHOT_MODELS + HYBRID_MODELS:
                         temp_results[c][f'Split {s}'][m] = np.nan
-            llm_dict_esm = llm_dict_prosst = llm_dict_ensemble = None
+            llm_dict_esm = llm_dict_prosst = None
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = CATEGORIES[i_category]
                 print(f'~~~ Category: {category} ~~~')
@@ -265,7 +304,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"(N_Total - N_Train) [Excepted error: {e}].")
                         continue
                     if llm_dict_esm is not None:
-                        llm_dict_esm = llm_dict_prosst = llm_dict_ensemble = None
+                        llm_dict_esm = llm_dict_prosst = None
                         gc.collect()
                         torch.cuda.empty_cache()
 
@@ -286,7 +325,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                             wt_seq=pdb_trimmed_wt, pdb_file=pdb, sequences=list(pdb_train_seqs),
                             seed=42, revision=PROSST_REVISION, device=device, verbose=True
                     )
-                    llm_dict_ensemble = {**llm_dict_esm, **llm_dict_prosst}
 
                     y_test_pred_dca = get_delta_e_statistical_model(x_dca_test, x_wt)
                     temp_results[category][f'Split {i_split}'].update({'DCA': spearmanr(y_test, y_test_pred_dca)[0]})
@@ -316,35 +354,45 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     ).cpu()
                     temp_results[category][f'Split {i_split}'].update({'ProSST': spearmanr(y_test, y_test_pred_prosst)[0]})
                     print(f'        ProSST ZeroShot (split {i_split + 1}) performance: {spearmanr(y_test, y_test_pred_prosst)[0]:.3f}')
+                    if y_pmpnn is not None:
+                        y_test_pred_pmpnn = np.asarray(y_pmpnn)[test_i]
+                        temp_results[category][f'Split {i_split}'].update(
+                            {'PMPNN': spearmanr(y_test, y_test_pred_pmpnn)[0]})
+                        print(f'        PMPNN ZeroShot (split {i_split + 1}) performance: '
+                              f'{spearmanr(y_test, y_test_pred_pmpnn)[0]:.3f}')
 
-                    for i_m, method in enumerate([None, llm_dict_esm, llm_dict_prosst, llm_dict_ensemble]):
-                        m_str = HYBRID_MODELS[i_m]
+                    for m_str, plms in HYBRID_COMBOS:
+                        if 'pmpnn' in plms and pmpnn_log_probs is None:
+                            print(f'        {m_str}: no PMPNN conditional probabilities, skipping...')
+                            continue
+                        llm_model_input, x_llm_test_dict = {}, {}
+                        if 'esm' in plms:
+                            llm_model_input.update(llm_dict_esm)
+                            x_llm_test_dict.update({'esm': np.asarray(x_llm_test_esm)})
+                        if 'prosst' in plms:
+                            llm_model_input.update(llm_dict_prosst)
+                            x_llm_test_dict.update({'prosst': np.asarray(x_llm_test_prosst)})
                         try:
-                            gauss_opt = (method is not None)
                             hm = DCALLMHybridModel(
                                 x_train_dca=np.array(x_dca_train),
                                 y_train=y_train,
-                                llm_model_input=method,
+                                llm_model_input=llm_model_input or None,
                                 x_dca_wt=x_wt,
                                 sequences=list(pdb_train_seqs),
                                 wt_sequence=pdb_trimmed_wt,
-                                gauss_opt=gauss_opt,
+                                # Gaussian process optimization of the PLM (incl. PMPNN) predictors
+                                gauss_opt=bool(plms),
                                 lora_train=False,
+                                pmpnn_conditional_probs=pmpnn_log_probs if 'pmpnn' in plms else None,
                                 pdb_struct=pdb,
                                 splitting_scheme='block-random',
                                 batch_size=5,
                                 seed=42,
                                 verbose=False
                             )
-                            x_llm_test_dict = [
-                                None,
-                                {'esm': np.asarray(x_llm_test_esm)},
-                                {'prosst': np.asarray(x_llm_test_prosst)},
-                                {'esm': np.asarray(x_llm_test_esm), 'prosst': np.asarray(x_llm_test_prosst)}
-                            ][i_m]
                             y_test_pred, indiv_preds = hm.hybrid_prediction(
                                 x_dca=np.array(x_dca_test),
-                                x_llm_dict=x_llm_test_dict,
+                                x_llm_dict=x_llm_test_dict or None,
                                 sequences=list(pdb_test_seqs)
                             )
                             print(f'        Individual model performances:')
@@ -363,7 +411,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             with open(out_results_csv, 'a') as fh:
                 line = (f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},{max_muts},'
-                        f'{dca_unopt_perf},{esm_unopt_perf},{prosst_unopt_perf}')
+                        f'{dca_unopt_perf},{esm_unopt_perf},{prosst_unopt_perf},{pmpnn_unopt_perf}')
                 for cat in CATEGORIES:
                     for model in HYBRID_MODELS:
                         for s in range(N_CV):
@@ -374,8 +422,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
 def _build_csv_header():
     """Build the CSV header string for the results file."""
-    header = ('No.,Dataset,N_Variants,N_Max_Muts,'
-              'Untrained_Performance_DCA,Untrained_Performance_ESM,Untrained_Performance_ProSST')
+    header = 'No.,Dataset,N_Variants,N_Max_Muts'
+    for model in ZERO_SHOT_MODELS:
+        header += f',Untrained_Performance_{model}'
     for cat in CATEGORIES:
         for model in HYBRID_MODELS:
             model_col = model.replace(' ', '_')
