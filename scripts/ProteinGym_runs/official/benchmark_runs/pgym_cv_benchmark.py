@@ -4,6 +4,7 @@ Structured based on Kermut run script.
 """
 
 from pathlib import Path
+import gc
 import hydra
 import numpy as np
 import pandas as pd
@@ -347,6 +348,12 @@ def main(cfg: DictConfig) -> None:
             df_predictions = df_pred_fold
         else:
             df_predictions = pd.concat([df_predictions, df_pred_fold])
+
+        # Free this fold's hybrid model (GPs, PLM copies, training tensors) before the next
+        # fold builds its own; otherwise both are held on the GPU at the same time
+        hm = predictors = llm_dict_train = llm_dict_esm = llm_dict_prosst = None
+        gc.collect()
+        torch.cuda.empty_cache()
 
     df_predictions.to_csv(output_path, index=False)
     print(f"Saved prediction CSV to {output_path}.")

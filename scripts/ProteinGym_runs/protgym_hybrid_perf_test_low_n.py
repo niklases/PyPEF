@@ -51,19 +51,19 @@ PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
 
 JUST_PLOT_RESULTS = False
 
-# Single zero-shot predictors and all 2^3 combinations of the PLMs on top of DCA,
-# i.e. DCA, DCA+ESM, DCA+ProSST, DCA+PMPNN, DCA+ESM+ProSST, DCA+ESM+PMPNN,
-# DCA+ProSST+PMPNN, and DCA+ESM+ProSST+PMPNN
+# Single zero-shot predictors, each PLM as hybrid on top of DCA, and the combination of all
 TRAINING_SIZES = (100, 200, 1000)
 PLMS = ('ESM', 'ProSST', 'PMPNN')
 ZERO_SHOT_MODELS = ('DCA',) + PLMS
-HYBRID_COMBOS = tuple(
-    ('DCA' + ''.join(f'+{plm}' for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1),
-     tuple(plm.lower() for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1))
-    # single predictors first, then the ensembles of two, three, ... PLMs
-    for n_plms in sorted(range(2 ** len(PLMS)), key=lambda n: (n.bit_count(), n))
+HYBRID_COMBOS = (
+    ('DCA', ()),
+    ('DCA+ESM', ('esm',)),
+    ('DCA+ProSST', ('prosst',)),
+    ('DCA+PMPNN', ('pmpnn',)),
+    ('DCA+ESM+ProSST+PMPNN', ('esm', 'prosst', 'pmpnn')),
 )
 HYBRID_MODELS = tuple(label for label, _plms in HYBRID_COMBOS)
+PMPNN_CMAP = 'YlOrBr'
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # TODO: Add (R)MSE next to Spearman
@@ -179,6 +179,17 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         alignment_mapping=mapping,
                         msa_start=msa_start
                     )
+                    if len(pdb_trimmed_seqs) != len(fitnesses):
+                        # Dropped variants would misalign the sequences with the fitnesses
+                        n_dropped = len(fitnesses) - len(pdb_trimmed_seqs)
+                        print(f'Dropped {n_dropped} variants when trimming to the PDB, '
+                              f'skipping dataset...')
+                        with open(out_results_csv, 'a') as fh:
+                            fh.write(
+                                f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                                f'{max_muts},Dropped {n_dropped} variants when trimming to PDB\n'
+                            )
+                        continue
                     variants = pdb_vars
                     if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
                         # Crop the PDB to the common region so that the structure matches
@@ -389,7 +400,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         # or UnboundLocalError in prosst_lora_tune.py, line 167
                         print(e, '\nAppending performance NaN...')
                         hybrid_perfs.append(np.nan)
-                ns_y_test.append(len(y_test_pred))
+                ns_y_test.append(len(y_test))
+                # Release this training size's PLM copies (also referenced by the hybrid model)
+                # before the next esm_setup/prosst_setup loads new ones
+                hm = llm_dict_esm = llm_dict_prosst = None
                 gc.collect()
                 torch.cuda.empty_cache()
 
@@ -433,11 +447,14 @@ def plot_csv_data(csv, plot_name):
     num_dsets = len(df)
     train_test_size_texts = []
 
+    # Each single predictor (untrained and in its DCA hybrid) and the combination of all
+    # predictors (hybrid only)
     configs = [
         ('DCA', 'Hybrid_DCA', 'Blues'),
         ('ESM', 'Hybrid_DCA_ESM', 'Greens'),
         ('ProSST', 'Hybrid_DCA_ProSST', 'Reds'),
-        ('Triple', 'Hybrid_DCA_ESM_ProSST', 'Purples')
+        ('PMPNN', 'Hybrid_DCA_PMPNN', PMPNN_CMAP),
+        ('DCA+ESM+ProSST+PMPNN', 'Hybrid_DCA_ESM_ProSST_PMPNN', 'Purples')
     ]
 
     training_sizes = [0, 100, 200, 1000]
@@ -452,12 +469,11 @@ def plot_csv_data(csv, plot_name):
 
         for idx, size in enumerate(training_sizes):
             # Construct column name dynamically
-            col = (f'Untrained_Performance_{model_label}' if size == 0 and model_label != 'Triple'
+            col = (f'Untrained_Performance_{model_label}' if size == 0
                    else f'{prefix}_Trained_Performance_{size}')
-            if model_label == 'Triple' and size == 0: continue # Skip if no untrained baseline for triple
 
             if col not in df.columns:
-                continue # Safety check
+                continue # E.g. no untrained baseline for the combination of all predictors
 
             data = df[col]
             mean_val = np.nanmean(data)
@@ -493,7 +509,7 @@ def plot_csv_data(csv, plot_name):
 
     # Violin Plot Section
     plt.clf()
-    plt.figure(figsize=(28, 12))
+    plt.figure(figsize=(36, 12))
     sns.set_style("whitegrid")
 
     df_violin = df[all_column_names]
@@ -589,6 +605,7 @@ if __name__ == '__main__':
                 and not line.split(',')[4].startswith('PDBseq neq WTseq')
                 and not line.split(',')[4].startswith('Sequence too long')
                 and not line.split(',')[4].startswith('More than')
+                and not line.split(',')[4].startswith('Dropped')
             ):
                 fh2.write(line)
 

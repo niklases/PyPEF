@@ -53,18 +53,18 @@ ESM_REVISION = None
 PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
 CATEGORIES = ['Random', 'Modulo', 'Continuous']
 N_CV = 5
-# Single zero-shot predictors and all 2^3 combinations of the PLMs on top of DCA,
-# i.e. DCA, DCA+ESM, DCA+ProSST, DCA+PMPNN, DCA+ESM+ProSST, DCA+ESM+PMPNN,
-# DCA+ProSST+PMPNN, and DCA+ESM+ProSST+PMPNN
+# Single zero-shot predictors, each PLM as hybrid on top of DCA, and the combination of all
 PLMS = ('ESM', 'ProSST', 'PMPNN')
 ZERO_SHOT_MODELS = ['DCA'] + list(PLMS)
 HYBRID_COMBOS = [
-    ('DCA' + ''.join(f'+{plm}' for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1) + ' hybrid',
-     tuple(plm.lower() for i_plm, plm in enumerate(PLMS) if n_plms >> i_plm & 1))
-    # single predictors first, then the ensembles of two, three, ... PLMs
-    for n_plms in sorted(range(2 ** len(PLMS)), key=lambda n: (n.bit_count(), n))
+    ('DCA hybrid', ()),
+    ('DCA+ESM hybrid', ('esm',)),
+    ('DCA+ProSST hybrid', ('prosst',)),
+    ('DCA+PMPNN hybrid', ('pmpnn',)),
+    ('DCA+ESM+ProSST+PMPNN hybrid', ('esm', 'prosst', 'pmpnn')),
 ]
 HYBRID_MODELS = [label for label, _plms in HYBRID_COMBOS]
+PMPNN_CMAP = 'YlOrBr'
 
 def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
     # Get cpu, gpu or mps device for training.
@@ -87,8 +87,10 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
         if i >= start_i and i not in already_tested_is:
             start_time = time.time()
-            print(f'\n{i+1}/{len(mut_data.items())}\n'
-                  f'===============================================================')
+            print(
+                f'\n{i+1}/{len(mut_data.items())}\n'
+                f'==============================================================='
+            )
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
             wt_seq = dset_paths['WT_sequence']
@@ -159,6 +161,18 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         alignment_mapping=mapping,
                         msa_start=msa_start
                     )
+                    if len(pdb_trimmed_seqs) != len(fitnesses):
+                        # The CV split indices refer to the rows of the input CSV, so dropped
+                        # variants would assign the wrong fitnesses to the sequences
+                        n_dropped = len(fitnesses) - len(pdb_trimmed_seqs)
+                        print(f'Dropped {n_dropped} variants when trimming to the PDB, '
+                              f'skipping dataset...')
+                        with open(out_results_csv, 'a') as fh:
+                            fh.write(
+                                f'{numbers_of_datasets[i]},{dset_key},{len(variants_orig)},'
+                                f'{max_muts},Dropped {n_dropped} variants when trimming to PDB\n'
+                            )
+                        continue
                     variants = pdb_vars
                     if mapping['end_pdb'] - mapping['start_pdb'] != len(pdb_seq):
                         # Crop the PDB to the common region so that the structure matches
@@ -282,7 +296,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     temp_results[c][f'Split {s}'] = {}
                     for m in ZERO_SHOT_MODELS + HYBRID_MODELS:
                         temp_results[c][f'Split {s}'][m] = np.nan
-            llm_dict_esm = llm_dict_prosst = None
             for i_category, (train_indices, test_indices) in enumerate(target_split_indices):
                 category = CATEGORIES[i_category]
                 print(f'~~~ Category: {category} ~~~')
@@ -303,11 +316,6 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f"cannot split the data in N_Train = {train_size} and N_Test "
                               f"(N_Total - N_Train) [Excepted error: {e}].")
                         continue
-                    if llm_dict_esm is not None:
-                        llm_dict_esm = llm_dict_prosst = None
-                        gc.collect()
-                        torch.cuda.empty_cache()
-
                     print(f'        Train: {len(np.array(y_train))} --> Test: {len(np.array(y_test))}')
                     if len(y_test) <= 50:
                         print(f"        Only {len(fitnesses)} in total, splitting the data "
@@ -404,6 +412,9 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                         except RuntimeError as e:  # modeling_prosst.py in forward
                             print(f'        {m_str} RuntimeError: {e}')
                             continue
+                    # Release this split's PLM copies (also referenced by the hybrid model)
+                    # before the next esm_setup/prosst_setup loads new ones
+                    hm = llm_dict_esm = llm_dict_prosst = None
                     gc.collect()
                     torch.cuda.empty_cache()
 
@@ -439,16 +450,19 @@ def plot_csv_data(csv, plot_name):
     red_colors = mpl.colormaps['Reds'](np.linspace(0.3, 0.9, 4))
     green_colors = mpl.colormaps['Greens'](np.linspace(0.3, 0.9, 4))
     purple_colors = mpl.colormaps['Purples'](np.linspace(0.3, 0.9, 4))
-    plt.figure(figsize=(24, 12))
+    pmpnn_colors = mpl.colormaps[PMPNN_CMAP](np.linspace(0.3, 0.9, 4))
+    plt.figure(figsize=(30, 12))
     sns.set_style("whitegrid")
     df = pd.read_csv(csv, sep=',')
     df_mean = pd.DataFrame()
     print(df)
+    # Each single predictor's DCA hybrid and the combination of all predictors
     color_map = {
         'DCA_hybrid': blue_colors,
         'DCA+ESM_hybrid': green_colors,
         'DCA+ProSST_hybrid': red_colors,
-        'DCA+ESM+ProSST_hybrid': purple_colors,
+        'DCA+PMPNN_hybrid': pmpnn_colors,
+        'DCA+ESM+ProSST+PMPNN_hybrid': purple_colors,
     }
     palette = []
     for method, colors in color_map.items():
@@ -554,6 +568,7 @@ if __name__ == '__main__':
                 and not line.split(',')[4].startswith('PDBseq neq WTseq')
                 and not line.split(',')[4].startswith('Sequence too long')
                 and not line.split(',')[4].startswith('More than')
+                and not line.split(',')[4].startswith('Dropped')
             ):
                 fh2.write(line)
 
