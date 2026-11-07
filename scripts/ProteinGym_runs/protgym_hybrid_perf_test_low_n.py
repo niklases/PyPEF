@@ -50,6 +50,11 @@ ESM_REVISION = None
 PROSST_REVISION = "e94ffee7846d7f55c1bf5efa8ec7372a336ac4b8"
 
 JUST_PLOT_RESULTS = False
+# Quick test run: only compute these datasets (numbers as in the 'No.' column, starting at 1),
+# e.g. (42, 208) for a single- and a multi-substituted dataset that reach all training sizes.
+# Results and plots get a '_small_test' suffix and are recomputed from scratch on every run.
+# None runs the full benchmark.
+SMALL_TEST_SET = None  # (42, 208)
 
 # Single zero-shot predictors, each PLM as hybrid on top of DCA, and the combination of all
 TRAINING_SIZES = (100, 200, 1000)
@@ -65,7 +70,8 @@ HYBRID_COMBOS = (
 HYBRID_MODELS = tuple(label for label, _plms in HYBRID_COMBOS)
 PMPNN_CMAP = 'YlOrBr'
 
-def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
+def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = [],
+                         only_is: list | None = None):
     # TODO: Add (R)MSE next to Spearman
     # Get cpu, gpu or mps device for training.
     # LoRA-training takes a lot of time (e.g for 50 epochs at each step) while not giving better
@@ -94,11 +100,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     prosst_unopt_perfs, esm_unopt_perfs = [], []
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
+    is_to_run = [
+        i for i in range(len(mut_data))
+        if i >= start_i and i not in already_tested_is and (only_is is None or i in only_is)
+    ]
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is:  # i > 3 and i <21:  #i == 18 - 1:
+        if i in is_to_run:
             start_time = time.time()
-            print(f'\n{i+1}/{len(mut_data.items())}\n'
-                  f'===============================================================')
+            print(f'\n==== DATASET {is_to_run.index(i) + 1}/{len(is_to_run)}: '
+                  f'No. {i + 1} {dset_key} ====')
             hybrid_perfs = []
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
@@ -355,7 +365,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                     continue
                 get_vram()
                 for model_label, plms in HYBRID_COMBOS:
-                    print(f'\n~~~ {model_label} hybrid ~~~')
+                    print(f'\n+++ {model_label} hybrid (train size {train_size}) +++')
                     if 'pmpnn' in plms and pmpnn_log_probs is None:
                         print('No PMPNN conditional probabilities, appending performance NaN...')
                         hybrid_perfs.append(np.nan)
@@ -515,6 +525,8 @@ def plot_csv_data(csv, plot_name):
     df_violin = df[all_column_names]
     plot = sns.violinplot(data=df_violin, saturation=0.4, palette=all_colors)
     sns.swarmplot(data=df_violin, color='black', size=3)
+    # Thin guide lines behind the violins to match the rotated x-labels to their violins
+    plot.vlines(range(len(all_column_names)), -0.09, 1.09, colors='lightgray', linewidth=0.8, zorder=0)
 
     tick_locations = range(len(all_column_names))
     plot.set_xticks(tick_locations)
@@ -546,8 +558,18 @@ if __name__ == '__main__':
     combined_mut_data.update(h_mut_data)
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
-    out_results_csv = os.path.join(os.path.dirname(__file__), f'results/dca_esm_and_hybrid_low-n_results_v{version}.csv')
-    if os.path.exists(out_results_csv):
+    test_suffix = '_small_test' if SMALL_TEST_SET else ''
+    out_results_csv = os.path.join(
+        os.path.dirname(__file__), f'results/dca_esm_and_hybrid_low-n_results_v{version}{test_suffix}.csv')
+    if SMALL_TEST_SET and not JUST_PLOT_RESULTS:
+        print(f'\nSmall test run, (re-)creating {out_results_csv} for datasets:')
+        for n in SMALL_TEST_SET:
+            print(f'{n} {list(combined_mut_data.keys())[n - 1]}')
+        with open(out_results_csv, 'w') as fh:
+            fh.write(_build_csv_header())
+        start_i = 0
+        already_tested_is = []
+    elif os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
         print(df)
@@ -583,7 +605,8 @@ if __name__ == '__main__':
         compute_performances(
             mut_data=combined_mut_data,
             start_i=start_i,
-            already_tested_is=already_tested_is
+            already_tested_is=already_tested_is,
+            only_is=[n - 1 for n in SMALL_TEST_SET] if SMALL_TEST_SET else None
         )
 
     with open(out_results_csv, 'r') as fh:
@@ -609,4 +632,4 @@ if __name__ == '__main__':
             ):
                 fh2.write(line)
 
-    plot_csv_data(csv=clean_out_results_csv, plot_name=f'low_n_mut_performance_v{version}')
+    plot_csv_data(csv=clean_out_results_csv, plot_name=f'low_n_mut_performance_v{version}{test_suffix}')

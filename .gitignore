@@ -687,3 +687,10 @@ scripts/ProteinGym_runs/official/benchmark_runs/model_scores/cropped_pdbs/POLG_C
 scripts/ProteinGym_runs/official/benchmark_runs/model_scores/cropped_pdbs/SCN5A_HUMAN_Glazer_2019.pdb
 scripts/ProteinGym_runs/official/benchmark_runs/model_scores/cropped_pdbs/POLG_HCVJF_Qi_2014.pdb
 scripts/ProteinGym_runs/official/benchmark_runs/model_scores/cropped_pdbs/CAS9_STRP1_Spencer_2017_positive.pdb
+scripts/ProteinGym_runs/crossval_mut_performance_violin_v0.5.1_small_test.png
+scripts/ProteinGym_runs/low_n_mut_performance_v0.5.1_small_test_violin.png
+scripts/ProteinGym_runs/low_n_mut_performance_v0.5.1_small_test.png
+scripts/ProteinGym_runs/results/dca_esm_and_hybrid_5cv-split_results_v0.5.1_small_test_clean.csv
+scripts/ProteinGym_runs/results/dca_esm_and_hybrid_5cv-split_results_v0.5.1_small_test.csv
+scripts/ProteinGym_runs/results/dca_esm_and_hybrid_low-n_results_v0.5.1_small_test_clean.csv
+scripts/ProteinGym_runs/results/dca_esm_and_hybrid_low-n_results_v0.5.1_small_test.csv

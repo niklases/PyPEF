@@ -47,6 +47,12 @@ handler.setFormatter(formatter)
 package_logger.addHandler(handler)
 
 JUST_PLOT_RESULTS = False
+# Quick test run: only compute these datasets (numbers as in the 'No.' column, starting at 1),
+# e.g. (81, 182) for a single-substituted dataset and a multi-substituted one (random splits
+# on all variants, modulo and continuous splits on its single-substituted variants).
+# Results and plots get a '_small_test' suffix and are recomputed from scratch on every run.
+# None runs the full benchmark.
+SMALL_TEST_SET = None  # (81, 182)
 
 ESM_MODEL = 'facebook/esm2_t33_650M_UR50D'
 ESM_REVISION = None
@@ -66,7 +72,8 @@ HYBRID_COMBOS = [
 HYBRID_MODELS = [label for label, _plms in HYBRID_COMBOS]
 PMPNN_CMAP = 'YlOrBr'
 
-def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = []):
+def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested_is: list = [],
+                         only_is: list | None = None):
     # Get cpu, gpu or mps device for training.
     device = get_device()
     print(f"Using {device.upper()} device")
@@ -84,13 +91,15 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
     get_vram()
     plt.figure(figsize=(40, 12))
     numbers_of_datasets = [i + 1 for i in range(len(mut_data.keys()))]
+    is_to_run = [
+        i for i in range(len(mut_data))
+        if i >= start_i and i not in already_tested_is and (only_is is None or i in only_is)
+    ]
     for i, (dset_key, dset_paths) in enumerate(mut_data.items()):
-        if i >= start_i and i not in already_tested_is:
+        if i in is_to_run:
             start_time = time.time()
-            print(
-                f'\n{i+1}/{len(mut_data.items())}\n'
-                f'==============================================================='
-            )
+            print(f'\n==== DATASET {is_to_run.index(i) + 1}/{len(is_to_run)}: '
+                  f'No. {i + 1} {dset_key} ====')
             csv_path = dset_paths['CSV_path']
             msa_path = dset_paths['MSA_path']
             wt_seq = dset_paths['WT_sequence']
@@ -283,12 +292,16 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
 
             ds = DatasetSplitter(df_or_csv_file=csv_path, n_cv=N_CV, mutation_separator=mut_sep)
             ds.plot_distributions()
-            if max_muts >= 2:  # Only using random cross-validation splits
-                print("Only performing random splits as data contains multi-substituted variants...")
-                target_split_indices = [ds.get_random_single_multi_split_indices()]
-            else:              # Using random, modulo, continuous CV splits
+            # Random, modulo, and continuous CV splits; the indices refer to the rows of the input CSV.
+            # As for the official ProteinGym folds, modulo and continuous splits only use the
+            # single-substituted variants of a dataset
+            target_split_indices = ds.get_all_split_indices()
+            if max_muts >= 2:
+                print("Multi-substituted variants found: performing random splits on all variants "
+                      "and modulo and continuous splits on the single-substituted variants...")
+                target_split_indices[0] = ds.get_random_single_multi_split_indices()
+            else:
                 print("Only single substituted variants found, performing random, modulo, and continuous data splits...")
-                target_split_indices = ds.get_all_split_indices()
             temp_results = {}
             for c in CATEGORIES:
                 temp_results[c] = {}
@@ -370,6 +383,7 @@ def compute_performances(mut_data, mut_sep=':', start_i: int = 0, already_tested
                               f'{spearmanr(y_test, y_test_pred_pmpnn)[0]:.3f}')
 
                     for m_str, plms in HYBRID_COMBOS:
+                        print(f'\n        +++ {m_str} (split {i_split + 1}) +++')
                         if 'pmpnn' in plms and pmpnn_log_probs is None:
                             print(f'        {m_str}: no PMPNN conditional probabilities, skipping...')
                             continue
@@ -479,6 +493,8 @@ def plot_csv_data(csv, plot_name):
         df_mean, saturation=0.4, palette=palette
     )
     sns.swarmplot(df_mean, color='black')
+    # Thin guide lines behind the violins to match the rotated x-labels to their violins
+    plot.vlines(range(df_mean.shape[1]), -0.09, 1.09, colors='lightgray', linewidth=0.8, zorder=0)
     for n in range(0, df_mean.shape[1]):
         plt.text(
             n + 0.15, -0.075,
@@ -512,10 +528,20 @@ if __name__ == '__main__':
     combined_mut_data.update(h_mut_data)
 
     os.makedirs(os.path.join(os.path.dirname(__file__), 'results'), exist_ok=True)
+    test_suffix = '_small_test' if SMALL_TEST_SET else ''
     out_results_csv = os.path.join(
-        os.path.dirname(__file__), f'results/dca_esm_and_hybrid_5cv-split_results_v{version}.csv'
+        os.path.dirname(__file__),
+        f'results/dca_esm_and_hybrid_5cv-split_results_v{version}{test_suffix}.csv'
     )
-    if os.path.exists(out_results_csv):
+    if SMALL_TEST_SET and not JUST_PLOT_RESULTS:
+        print(f'\nSmall test run, (re-)creating {out_results_csv} for datasets:')
+        for n in SMALL_TEST_SET:
+            print(f'{n} {list(combined_mut_data.keys())[n - 1]}')
+        with open(out_results_csv, 'w') as fh:
+            fh.write(_build_csv_header())
+        start_i = 0
+        already_tested_is = []
+    elif os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
         print(df)
@@ -546,7 +572,8 @@ if __name__ == '__main__':
         compute_performances(
             mut_data=combined_mut_data,
             start_i=start_i,
-            already_tested_is=already_tested_is
+            already_tested_is=already_tested_is,
+            only_is=[n - 1 for n in SMALL_TEST_SET] if SMALL_TEST_SET else None
         )
 
     with open(out_results_csv, 'r') as fh:
@@ -574,5 +601,5 @@ if __name__ == '__main__':
 
     plot_csv_data(
         csv=clean_out_results_csv, 
-        plot_name=os.path.join(os.path.dirname(__file__), f'crossval_mut_performance_violin_v{version}.png')
+        plot_name=os.path.join(os.path.dirname(__file__), f'crossval_mut_performance_violin_v{version}{test_suffix}.png')
     )
