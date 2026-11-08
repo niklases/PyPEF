@@ -1,6 +1,6 @@
 
 import os
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 import pandas as pd
 import numpy as np
 from scipy.stats import ConstantInputWarning, spearmanr, pearsonr
@@ -70,6 +70,8 @@ def get_df_fold_performances(df):
 
 
 results_across_split_technique_folds = defaultdict(list)
+mean_spears = OrderedDict()
+mean_ns = OrderedDict()
 for tf in target_folds:
     print('\n' + '~' * 60 +  '\n' + f'~~~ {tf} ~~~\n' +'~' * 60)
     target_folder = get_target_folder(tf)
@@ -97,6 +99,8 @@ for tf in target_folds:
         all_across_pears.append(fold_metrics['Across_folds_Pearson_corr'])
         all_across_mses.append(fold_metrics['Across_folds_MSE'])
         results_across_split_technique_folds[result_csv].append(fold_metrics['Across_folds_Spearman_corr'])
+        mean_spears[tf] = np.mean(all_across_spears)
+        mean_ns[tf] = len(all_across_spears)
 
     print('-' * 60 + '\n' +
           f"Mean Spearman corr. across all {len(all_spears)} datasets={np.mean(all_spears):.3f} | no folds={np.mean(all_across_spears):.3f}\n"
@@ -104,12 +108,19 @@ for tf in target_folds:
           f"Mean MSE across all {len(all_mses)} datasets={np.mean(all_mses):.3f} | no folds={np.mean(all_across_mses):.3f}\n"
     )
 
+
 all_means = []
 print(f'\n\n--- Total performance across split techniques ---\n{target_folds}\n\n')
 for k, v in results_across_split_technique_folds.items():
     mean = np.mean(v)
-    print(k, f"{mean:.3f}")
+    v_str = ""
+    for v_ in v:
+        v_str += f"{v_:.3f} "
+    print(f"{k:50s}{v_str}-> {mean:.3f}")
     all_means.append(mean)
-print('-' * 60 + f'\nMean={np.mean(all_means):.3f}')
-
-
+mean_spears_str, mean_ns_str = "", ""
+for m in mean_spears.values():
+    mean_spears_str += f"{m:.3f} "
+for n in mean_ns.values():
+    mean_ns_str += f"{'(' + str(n) + ')':>5} "
+print('-' * 76 + f'\n{"":50s}{mean_ns_str}\n{"":50s}{mean_spears_str}-> {np.mean(all_means):.3f}')
