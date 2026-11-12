@@ -17,6 +17,9 @@ n_ensemble_splits: 1
 refit_full_train: false  # refit supervised sub-models on the full training fold after weight fitting
 clip_std_preds: null     # clip standardized sub-model predictions to +-value (e.g. 4.0)
 ridge_block_cv: false    # DCA-Ridge alpha via CV over contiguous blocks of mutated positions
+gp_lr: 0.05              # learning rate of the GP hyperparameter optimization (Kermut: 0.1)
+gp_standardize_targets: false  # train the GPs on standardized targets (as Kermut)
+gp_pmpnn_probs: false    # ProteinMPNN instead of PLM amino acid probabilities in the PLM GPs' structure kernel
 prediction_cache_folder: null  # save per-fold sub-model predictions (ttest + test) for offline ensemble evaluation
 seed: 2026
 progress_bar: false

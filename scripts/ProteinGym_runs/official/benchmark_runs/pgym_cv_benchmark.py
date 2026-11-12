@@ -55,13 +55,17 @@ def main(cfg: DictConfig) -> None:
     clip_std_preds = cfg.get('clip_std_preds', None)
     ridge_block_cv = cfg.get('ridge_block_cv', False)
     prediction_cache_folder = cfg.get('prediction_cache_folder', None)
+    gp_standardize_targets = cfg.get('gp_standardize_targets', False)
+    gp_pmpnn_probs = cfg.get('gp_pmpnn_probs', False)
+    gp_lr = cfg.get('gp_lr', 0.05)
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
     print(f"PLM(s): {llm}, internal hybrid model split scheme {hybrid_model_split_scheme}, "
           f"loss_method={loss_method}, n_ensemble_splits={n_ensemble_splits}, "
-          f"refit_full_train={refit_full_train}, clip_std_preds={clip_std_preds}, ridge_block_cv={ridge_block_cv}")
+          f"refit_full_train={refit_full_train}, clip_std_preds={clip_std_preds}, ridge_block_cv={ridge_block_cv}, "
+          f"gp_standardize_targets={gp_standardize_targets}, gp_pmpnn_probs={gp_pmpnn_probs}, gp_lr={gp_lr}")
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -313,6 +317,9 @@ def main(cfg: DictConfig) -> None:
             refit_full_train=refit_full_train,
             clip_std_preds=clip_std_preds,
             ridge_block_cv=ridge_block_cv,
+            gp_standardize_targets=gp_standardize_targets,
+            gp_pmpnn_probs=gp_pmpnn_probs,
+            gp_lr=gp_lr,
             n_epochs=None  # Only used if lora_train==True,
         )
         if len(pdb_trimmed_common_sequence) > 1500:

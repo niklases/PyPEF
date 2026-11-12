@@ -255,6 +255,81 @@ def test_refit_full_train_and_clipping(monkeypatch):
     assert np.abs(unclipped).max() >= np.abs(clipped).max()
 
 
+def test_gp_standardized_targets_and_pmpnn_probs(monkeypatch):
+    """GP targets are standardized with fixed statistics; PMPNN probabilities replace PLM ones."""
+    import pypef.plm.pmpnn.gp as pmpnn_gp
+    import torch
+    seen = []
+    optimize = pmpnn_gp.optimize_gp
+
+    def optimize_spy(gp, likelihood, inputs, targets, **kw):
+        seen.append(targets.detach().cpu().numpy())
+        return optimize(gp, likelihood, inputs, targets, n_steps=2)
+    monkeypatch.setattr(pmpnn_gp, 'optimize_gp', optimize_spy)
+    monkeypatch.setattr(pmpnn_gp, 'extract_pdb_coords',
+                        lambda *args, **kw: np.array([[0., 0., 0.], [1., 0., 0.]]))
+    rng = np.random.default_rng(13)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = 50 + 10 * rng.normal(size=24)  # far from zero mean / unit variance
+    kwargs = dict(
+        x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=13, gauss_opt=True,
+    )
+    DCALLMHybridModel(x, y, **kwargs)
+    assert abs(seen[-1].mean()) > 10  # raw targets by default
+    model = DCALLMHybridModel(x, y, gp_standardize_targets=True, refit_full_train=True, **kwargs)
+    ttrain, full = seen[-2], seen[-1]
+    assert len(full) == 24 > len(ttrain)
+    np.testing.assert_allclose([ttrain.mean(), ttrain.std()], [0, 1], atol=1e-5)
+    mean, std = model._gp_target_stats  # statistics of the first fit are kept for the refit
+    np.testing.assert_allclose(full, (y - mean) / std, rtol=1e-5)
+    pred, _ = model.hybrid_prediction(x, sequences=sequences)
+    assert np.isfinite(pred).all()
+    restored = pickle.loads(pickle.dumps(model))
+    np.testing.assert_allclose(restored.hybrid_prediction(x, sequences=sequences)[0], pred)
+
+    plm_probs = torch.full((2, 20), 0.05, dtype=torch.float64)
+    assert model._struct_kernel_probs(plm_probs) is plm_probs
+    model.gp_pmpnn_probs = True
+    used = model._struct_kernel_probs(plm_probs)
+    assert used.dtype == plm_probs.dtype
+    np.testing.assert_allclose(used.numpy(), model.pmpnn_aa_cond_probs.numpy())
+    assert model._struct_kernel_probs(plm_probs[:1]) is not model.pmpnn_aa_cond_probs  # shape fallback
+    assert model._struct_kernel_probs(plm_probs[:1]).shape == (1, 20)
+
+
+def test_gp_predictions_on_target_scale(monkeypatch):
+    """With standardized GP targets, GP predictions are mapped back to the scale of the targets
+    instead of staying in units of training standard deviations."""
+    import pypef.plm.pmpnn.gp as pmpnn_gp
+    monkeypatch.setattr(pmpnn_gp, 'extract_pdb_coords',
+                        lambda *args, **kw: np.array([[0., 0., 0.], [1., 0., 0.]]))
+    rng = np.random.default_rng(21)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = 50 + 10 * rng.normal(size=24)  # far from zero mean / unit variance
+    kwargs = dict(
+        x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=21, gauss_opt=True,
+    )
+    model = DCALLMHybridModel(x, y, gp_standardize_targets=True, **kwargs)
+    pred, components = model.hybrid_prediction(x, sequences=sequences)
+    gp_pred = components['PMPNN_gp']
+    # On the target scale (mean ~ 50), not in units of training standard deviations (mean ~ 0)
+    assert abs(np.mean(gp_pred) - np.mean(y)) < 3 * np.std(y)
+    assert abs(np.mean(gp_pred)) > 1.0
+    assert np.isfinite(pred).all()
+
+    # Without the flag nothing is transformed, and the raw targets are already on their own scale
+    plain = DCALLMHybridModel(x, y, **kwargs)
+    assert plain._gp_untransform(np.arange(3.0)).tolist() == [0.0, 1.0, 2.0]
+    plain_gp = plain.hybrid_prediction(x, sequences=sequences)[1]['PMPNN_gp']
+    assert abs(np.mean(plain_gp) - np.mean(y)) < 3 * np.std(y)
+
+
 def test_ridge_block_cv():
     """
     Position-blocked CV for the DCA-Ridge alpha: folds are contiguous regions of mutated

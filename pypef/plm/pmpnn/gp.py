@@ -18,7 +18,7 @@ def prepare_pmpnn_gp_inputs(sequences, log_probs, wt_sequence, device):
 
 
 def train_pmpnn_gp(sequences, targets, log_probs, aa_cond_probs, wt_sequence,
-                   pdb_struct, device, n_steps=150):
+                   pdb_struct, device, n_steps=150, lr=0.05):
     inputs = prepare_pmpnn_gp_inputs(sequences, log_probs, wt_sequence, device)
     targets = torch.as_tensor(targets, dtype=torch.float32, device=device)
     gp, likelihood = instantiate_gp(
@@ -30,7 +30,7 @@ def train_pmpnn_gp(sequences, targets, log_probs, aa_cond_probs, wt_sequence,
         use_structure_kernel=True, use_sequence_kernel=True,
         use_zero_shot=True, device=device,
     )
-    return optimize_gp(gp, likelihood, inputs, targets, lr=0.05, n_steps=n_steps)
+    return optimize_gp(gp, likelihood, inputs, targets, lr=lr, n_steps=n_steps)
 
 
 def predict_pmpnn_gp(gp, likelihood, sequences, log_probs, wt_sequence, device):

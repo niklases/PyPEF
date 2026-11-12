@@ -96,6 +96,9 @@ class DCALLMHybridModel:
             clip_std_preds: float | None = None,
             ridge_block_cv: bool = False,
             ridge_block_cv_min_n: int = 150,
+            gp_standardize_targets: bool = False,
+            gp_pmpnn_probs: bool = False,
+            gp_lr: float = 0.05,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -176,6 +179,17 @@ class DCALLMHybridModel:
         # not doing harm on unseen positions. Falls back to plain CV for small data sets.
         self.ridge_block_cv = ridge_block_cv
         self.ridge_block_cv_min_n = ridge_block_cv_min_n
+        # Train all GPs on standardized targets (as Kermut does): the noise prior and the
+        # optimizer settings then do not depend on the units of the fitness scores.
+        # The statistics of the first GP fit are reused for later fits (refit), so that all
+        # GP predictions stay on the scale the ensemble statistics were computed on.
+        self.gp_standardize_targets = gp_standardize_targets
+        self._gp_target_stats = None
+        # Use the structure-conditioned ProteinMPNN amino acid probabilities (instead of the
+        # PLM's own) in the structure kernel of the PLM GPs (as Kermut does)
+        self.gp_pmpnn_probs = gp_pmpnn_probs
+        # Learning rate of the GP hyperparameter optimization (Kermut: 0.1)
+        self.gp_lr = gp_lr
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
@@ -232,13 +246,53 @@ class DCALLMHybridModel:
             raise ValueError("PMPNN prediction requires variant sequences.")
         return score_sequences_from_probs(self.pmpnn_log_probs, sequences, self.wt_sequence)
 
+    def _gp_targets(self, targets) -> np.ndarray:
+        """GP training targets, standardized if `gp_standardize_targets` is set."""
+        targets = np.asarray(targets, dtype=float)
+        if not getattr(self, 'gp_standardize_targets', False):
+            return targets
+        if getattr(self, '_gp_target_stats', None) is None:
+            self._gp_target_stats = (float(np.mean(targets)), float(np.std(targets)) + 1e-8)
+        mean, std = self._gp_target_stats
+        return (targets - mean) / std
+
+    def _gp_untransform(self, predictions: np.ndarray) -> np.ndarray:
+        """
+        Inverse of `_gp_targets`: map GP predictions from the standardized training scale back to
+        the scale of the fitness targets.
+
+        The ensemble is invariant to this (sub-model predictions are standardized with
+        `feature_means`/`feature_stds` and OLS-aligned, both affine), but it keeps a single GP's
+        predictions comparable to the targets -- for pickled models, per-component diagnostics and
+        the prediction cache.
+        """
+        stats = getattr(self, '_gp_target_stats', None)
+        if not getattr(self, 'gp_standardize_targets', False) or stats is None:
+            return predictions
+        mean, std = stats
+        return np.asarray(predictions, dtype=float) * std + mean
+
+    def _struct_kernel_probs(self, aa_cond_probs):
+        """Amino acid probabilities for the structure kernel of a PLM GP."""
+        if getattr(self, 'gp_pmpnn_probs', False):
+            pmpnn_probs = getattr(self, 'pmpnn_aa_cond_probs', None)
+            if pmpnn_probs is not None and tuple(pmpnn_probs.shape) == tuple(aa_cond_probs.shape):
+                return pmpnn_probs.to(dtype=aa_cond_probs.dtype)
+            logger.warning(
+                "gp_pmpnn_probs: ProteinMPNN probabilities missing or of different shape "
+                "than the PLM's; using the PLM's amino acid probabilities."
+            )
+        return aa_cond_probs
+
     def _train_pmpnn_gp(self, sequences=None, targets=None):
         """Train the PMPNN GP (default: on the ttrain subsplit)."""
         if sequences is None:
             sequences, targets = self.sequences_ttrain, self.y_ttrain
+        targets = self._gp_targets(targets)
         self.pmpnn_gp, self.pmpnn_gp_likelihood = train_pmpnn_gp(
             sequences, targets, self.pmpnn_log_probs,
-            self.pmpnn_aa_cond_probs, self.wt_sequence, self.pdb_struct, self.device
+            self.pmpnn_aa_cond_probs, self.wt_sequence, self.pdb_struct, self.device,
+            lr=getattr(self, 'gp_lr', 0.05)
         )
 
     def _fit_plm_gp(self, sequences, x_embed, x_zero_shot, targets, aa_cond_probs):
@@ -247,7 +301,8 @@ class DCALLMHybridModel:
             seqs=sequences, x_embed=x_embed, x_zero_shot=x_zero_shot, device=self.device
         )
         struct_coords = extract_pdb_coords(self.pdb_struct, target_len=len(self.wt_sequence))
-        train_targets = torch.tensor(np.asarray(targets)).to(self.device)
+        train_targets = torch.tensor(self._gp_targets(targets)).to(self.device)
+        aa_cond_probs = self._struct_kernel_probs(aa_cond_probs)
         gp, likelihood = instantiate_gp(
             train_inputs=train_inputs,
             train_targets=train_targets,
@@ -262,7 +317,9 @@ class DCALLMHybridModel:
             use_zero_shot=True,
             device=self.device
         )
-        return optimize_gp(gp, likelihood, train_inputs, train_targets, lr=0.05, n_steps=150)
+        return optimize_gp(
+            gp, likelihood, train_inputs, train_targets, lr=getattr(self, 'gp_lr', 0.05), n_steps=150
+        )
 
     def _refit_on_full_training_data(self):
         """
@@ -309,10 +366,10 @@ class DCALLMHybridModel:
             self._train_pmpnn_gp(self.sequences, y_train)
 
     def _predict_pmpnn_gp(self, sequences):
-        return predict_pmpnn_gp(
-            self.pmpnn_gp, self.pmpnn_gp_likelihood, sequences, 
+        return self._gp_untransform(predict_pmpnn_gp(
+            self.pmpnn_gp, self.pmpnn_gp_likelihood, sequences,
             self.pmpnn_log_probs, self.wt_sequence, self.device
-        )
+        ))
 
     @staticmethod
     def spearmanr(
@@ -981,7 +1038,7 @@ class DCALLMHybridModel:
                 )
 
                 y_gp_opt_ttest, _test_variances = predict(gp, likelihood, test_inputs)
-                self.y_gp_opt_ttest = y_gp_opt_ttest.detach().cpu().numpy()
+                self.y_gp_opt_ttest = self._gp_untransform(y_gp_opt_ttest.detach().cpu().numpy())
                 self.fold_predictions[f"{llm_name}_gp"] = self.y_gp_opt_ttest
                 self.betas_str += f"{llm_name}-GP, "
         
@@ -1029,7 +1086,7 @@ class DCALLMHybridModel:
                 )
 
                 combined_pred_ttest, _test_variances = predict(gp, likelihood, test_inputs)
-                combined_pred_ttest = combined_pred_ttest.detach().cpu().numpy()
+                combined_pred_ttest = self._gp_untransform(combined_pred_ttest.detach().cpu().numpy())
                 
                 # FIXED: Store under 'combined_gp' key and label
                 self.fold_predictions["combined_gp"] = combined_pred_ttest
@@ -1130,7 +1187,8 @@ class DCALLMHybridModel:
                         pred_inputs,
                         batch_size=eval_batch_size
                     )
-                    split_predictors.append(y_gp_opt_pred.detach().cpu().numpy())
+                    split_predictors.append(
+                        self._gp_untransform(y_gp_opt_pred.detach().cpu().numpy()))
                 
                 # Process the Combined Multi-PLM Gaussian Process
                 if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
@@ -1153,7 +1211,8 @@ class DCALLMHybridModel:
                     combined_gp_pred_mean, _ = predict(
                         self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
                     )
-                    split_predictors.append(combined_gp_pred_mean.detach().cpu().numpy())
+                    split_predictors.append(
+                        self._gp_untransform(combined_gp_pred_mean.detach().cpu().numpy()))
 
         if getattr(self, "pmpnn_log_probs", None) is not None:
             split_predictors.append(self._pmpnn_scores(self.sequences_ttest))
@@ -1412,7 +1471,8 @@ class DCALLMHybridModel:
                     y_gp_opt_pred, _test_variances = predict(
                         self.gp_models[llm_name], self.gp_likelihoods[llm_name], pred_inputs
                     )
-                    gp_preds[f"{llm_name}_gp"] = y_gp_opt_pred.detach().cpu().numpy()
+                    gp_preds[f"{llm_name}_gp"] = self._gp_untransform(
+                        y_gp_opt_pred.detach().cpu().numpy())
                 
                 # Complete the Multi-PLM combined Gaussian Process
                 if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
@@ -1439,7 +1499,8 @@ class DCALLMHybridModel:
                     combined_gp_pred_mean, _test_variances = predict(
                         self.gp_models["combined"], self.gp_likelihoods["combined"], pred_inputs
                     )
-                    gp_preds["combined_gp"] = combined_gp_pred_mean.detach().cpu().numpy()
+                    gp_preds["combined_gp"] = self._gp_untransform(
+                        combined_gp_pred_mean.detach().cpu().numpy())
 
         self.hybrid_preds = {}
         
