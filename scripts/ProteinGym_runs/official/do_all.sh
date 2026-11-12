@@ -97,10 +97,16 @@ for split_method in "${split_methods[@]}"; do
     if [[ -n "$MAX_IDX" ]]; then
         ./run_over_all.sh \
             "split_method=$split_method" \
-            "max_idx=$MAX_IDX"
+            "max_idx=$MAX_IDX" \
+            ridge_block_cv=true gp_standardize_targets=true \
+            gauss_comb_plm_emb=true gp_comb_all_zero_shot=true \
+            output_scores_folder=model_scores/supervised_substitutions
     else
         ./run_over_all.sh \
-            "split_method=$split_method"
+            "split_method=$split_method" \
+            ridge_block_cv=true gp_standardize_targets=true \
+            gauss_comb_plm_emb=true gp_comb_all_zero_shot=true \
+            output_scores_folder=model_scores/supervised_substitutions
     fi
 done
 

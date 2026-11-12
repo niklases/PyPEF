@@ -5,12 +5,15 @@ set -e
 # Exit if no arguments provided
 if [ "$#" -eq 0 ]; then
     echo "Error: arguments are required (e.g. split_method=fold_random_5 max_idx=216)"
+    echo "Any other key=value is passed on to pgym_cv_benchmark.py as a hydra override, e.g."
+    echo "  gp_standardize_targets=true ridge_block_cv=true output_scores_folder=model_scores_new/supervised_substitutions"
     exit 1
 fi
 
 # Initialize variables
 split_method=""
 max_idx=""
+extra_args=()  # further key=value arguments: hydra overrides for pgym_cv_benchmark.py
 
 for arg in "$@"; do
     case $arg in
@@ -19,6 +22,9 @@ for arg in "$@"; do
             ;;
         max_idx=*)
             max_idx="${arg#*=}"
+            ;;
+        *=*)
+            extra_args+=("$arg")
             ;;
         *)
             echo "Unknown argument: $arg"
@@ -92,7 +98,8 @@ for llm in prosst+esm+pmpnn; do
             llm=$llm \
             hybrid_model_split_scheme=$hybrid_model_split_scheme \
             loss_method=listMLE \
-            n_ensemble_splits=1
+            n_ensemble_splits=1 \
+            "${extra_args[@]}"
 
         find ./model_saves/ -type f -name '*.pt' -delete || true
     done
