@@ -99,6 +99,7 @@ class DCALLMHybridModel:
             gp_standardize_targets: bool = False,
             gp_pmpnn_probs: bool = False,
             gp_lr: float = 0.05,
+            gp_comb_all_zero_shot: bool = False,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -190,6 +191,12 @@ class DCALLMHybridModel:
         self.gp_pmpnn_probs = gp_pmpnn_probs
         # Learning rate of the GP hyperparameter optimization (Kermut: 0.1)
         self.gp_lr = gp_lr
+        # Use all available zero-shot scores (the PLMs', DCA and ProteinMPNN) in the linear mean
+        # of the combined multi-PLM GP, standardized with the statistics of the first fit.
+        # The linear mean determines the predicted level far from the training data, which is the
+        # dominant error on contiguous (region-wise) test splits.
+        self.gp_comb_all_zero_shot = gp_comb_all_zero_shot
+        self._zs_stats = None
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
@@ -271,6 +278,34 @@ class DCALLMHybridModel:
             return predictions
         mean, std = stats
         return np.asarray(predictions, dtype=float) * std + mean
+
+    def _comb_zs_matrix(self, plm_scores, x_dca=None, sequences=None) -> torch.Tensor:
+        """
+        Zero-shot score matrix for the linear mean of the combined multi-PLM GP.
+
+        Columns are the PLM zero-shot scores; with `gp_comb_all_zero_shot` the DCA statistical
+        energy difference and the ProteinMPNN score are appended and all columns are standardized
+        with the statistics of the first call (the ttrain fit), which are kept for the ttest
+        predictions, the optional refit and the predictions on new variants.
+        """
+        cols = [v.unsqueeze(-1) if v.dim() == 1 else v for v in plm_scores]
+        if getattr(self, 'gp_comb_all_zero_shot', False):
+            extra = []
+            if x_dca is not None:
+                extra.append(self._delta_e(np.asarray(x_dca, dtype=float)))
+            if getattr(self, 'pmpnn_log_probs', None) is not None and sequences is not None:
+                extra.append(self._pmpnn_scores(sequences))
+            for e in extra:
+                cols.append(torch.as_tensor(
+                    np.asarray(e, dtype=float), dtype=torch.float32, device=self.device
+                ).unsqueeze(-1))
+        x = torch.cat([c.to(self.device).float() for c in cols], dim=-1)
+        if not getattr(self, 'gp_comb_all_zero_shot', False):
+            return x
+        if getattr(self, '_zs_stats', None) is None:
+            self._zs_stats = (x.mean(0), x.std(0) + 1e-8)
+        mean, std = self._zs_stats
+        return (x - mean) / std
 
     def _struct_kernel_probs(self, aa_cond_probs):
         """Amino acid probabilities for the structure kernel of a PLM GP."""
@@ -355,8 +390,8 @@ class DCALLMHybridModel:
                     self.aa_cond_probs_dict[llm_name]
                 )
             if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
-                x_zs = torch.cat(
-                    [v.unsqueeze(-1) if v.dim() == 1 else v for v in zs_scores.values()], dim=-1
+                x_zs = self._comb_zs_matrix(
+                    list(zs_scores.values()), self.x_train_dca, self.sequences
                 )
                 self.gp_models["combined"], self.gp_likelihoods["combined"] = self._fit_plm_gp(
                     self.sequences, torch.cat(list(embs.values()), dim=-1), x_zs, y_train,
@@ -1057,17 +1092,12 @@ class DCALLMHybridModel:
                 )
 
                 # Concatenate zero-shot scores
-                zs_train_tensors = [
-                    v.unsqueeze(-1) if v.dim() == 1 else v 
-                    for v in self.scores_ttrain.values()
-                ]
-                x_combined_zs_train = torch.cat(zs_train_tensors, dim=-1)
-
-                zs_test_tensors = [
-                    v.unsqueeze(-1) if v.dim() == 1 else v 
-                    for v in self.scores_ttest.values()
-                ]
-                x_combined_zs_test = torch.cat(zs_test_tensors, dim=-1)
+                x_combined_zs_train = self._comb_zs_matrix(
+                    list(self.scores_ttrain.values()), self.x_dca_ttrain, self.sequences_ttrain
+                )
+                x_combined_zs_test = self._comb_zs_matrix(
+                    list(self.scores_ttest.values()), self.x_dca_ttest, self.sequences_ttest
+                )
                 
                 # Primary model conditional probabilities (or first loaded model)
                 gp, likelihood = self._fit_plm_gp(
@@ -1196,11 +1226,9 @@ class DCALLMHybridModel:
                         list(embs_pred.values()), 
                         dim=-1
                     )
-                    zs_pred_tensors = [
-                        v.unsqueeze(-1) if v.dim() == 1 else v 
-                        for v in zs_scores_pred.values()
-                    ]
-                    x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
+                    x_combined_zs_pred = self._comb_zs_matrix(
+                        list(zs_scores_pred.values()), self.x_dca_ttest, sequences_subsplit
+                    )
 
                     pred_inputs = prepare_kermut_inputs(
                         seqs=sequences_subsplit,
@@ -1482,13 +1510,9 @@ class DCALLMHybridModel:
                         dim=-1
                     )
 
-                    zs_pred_tensors = [
-                        self.zs_scores_pred[k].unsqueeze(-1) 
-                        if self.zs_scores_pred[k].dim() == 1 
-                        else self.zs_scores_pred[k]
-                        for k in self.llm_keys
-                    ]
-                    x_combined_zs_pred = torch.cat(zs_pred_tensors, dim=-1)
+                    x_combined_zs_pred = self._comb_zs_matrix(
+                        [self.zs_scores_pred[k] for k in self.llm_keys], x_dca, sequences
+                    )
 
                     pred_inputs = prepare_kermut_inputs(
                         seqs=sequences,

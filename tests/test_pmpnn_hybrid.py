@@ -330,6 +330,42 @@ def test_gp_predictions_on_target_scale(monkeypatch):
     assert abs(np.mean(plain_gp) - np.mean(y)) < 3 * np.std(y)
 
 
+def test_comb_all_zero_shot_matrix():
+    """The combined GP's zero-shot matrix: extra columns, standardization with kept statistics."""
+    import torch
+    rng = np.random.default_rng(5)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = 50 + 10 * rng.normal(size=24)
+    model = DCALLMHybridModel(
+        x, y, x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=5,
+    )
+    plm_scores = [torch.arange(24, dtype=torch.float32), torch.zeros(24)]
+
+    # Default: PLM scores only, unstandardized
+    plain = model._comb_zs_matrix(plm_scores, x, sequences)
+    assert plain.shape == (24, 2)
+    np.testing.assert_allclose(plain[:, 0].numpy(), np.arange(24), atol=1e-5)
+    assert model._zs_stats is None
+
+    # Flag on: DCA and PMPNN columns appended, all columns standardized
+    model.gp_comb_all_zero_shot = True
+    full = model._comb_zs_matrix(plm_scores, x, sequences)
+    assert full.shape == (24, 4)
+    np.testing.assert_allclose(full[:, 0].mean().item(), 0, atol=1e-5)
+    np.testing.assert_allclose(full[:, 0].std().item(), 1, atol=1e-2)
+    np.testing.assert_allclose(full[:, 1].numpy(), 0, atol=1e-5)  # constant column stays finite
+    assert np.isfinite(full.numpy()).all()
+
+    # The statistics of the first call are reused (prediction batches keep the training scale)
+    stats = model._zs_stats
+    half = model._comb_zs_matrix([s[:12] for s in plm_scores], x[:12], sequences[:12])
+    assert model._zs_stats is stats
+    np.testing.assert_allclose(half.numpy(), full.numpy()[:12], rtol=1e-5)
+
+
 def test_ridge_block_cv():
     """
     Position-blocked CV for the DCA-Ridge alpha: folds are contiguous regions of mutated

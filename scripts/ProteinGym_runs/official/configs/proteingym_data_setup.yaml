@@ -20,6 +20,8 @@ ridge_block_cv: false    # DCA-Ridge alpha via CV over contiguous blocks of muta
 gp_lr: 0.05              # learning rate of the GP hyperparameter optimization (Kermut: 0.1)
 gp_standardize_targets: false  # train the GPs on standardized targets (as Kermut)
 gp_pmpnn_probs: false    # ProteinMPNN instead of PLM amino acid probabilities in the PLM GPs' structure kernel
+gauss_comb_plm_emb: false      # additional GP on the concatenated embeddings of all PLMs
+gp_comb_all_zero_shot: false   # all zero-shot scores (PLMs, DCA, ProteinMPNN) in the combined GP's linear mean
 prediction_cache_folder: null  # save per-fold sub-model predictions (ttest + test) for offline ensemble evaluation
 seed: 2026
 progress_bar: false
