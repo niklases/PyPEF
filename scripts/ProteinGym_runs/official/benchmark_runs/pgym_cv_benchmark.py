@@ -51,12 +51,17 @@ def main(cfg: DictConfig) -> None:
     hybrid_model_split_scheme = cfg.hybrid_model_split_scheme   # 'random' or 'positional'
     loss_method = cfg.loss_method
     n_ensemble_splits = cfg.n_ensemble_splits
+    refit_full_train = cfg.get('refit_full_train', False)
+    clip_std_preds = cfg.get('clip_std_preds', None)
+    ridge_block_cv = cfg.get('ridge_block_cv', False)
+    prediction_cache_folder = cfg.get('prediction_cache_folder', None)
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
     llm = cfg.llm
     print(f"PLM(s): {llm}, internal hybrid model split scheme {hybrid_model_split_scheme}, "
-          f"loss_method={loss_method}, n_ensemble_splits={n_ensemble_splits}")
+          f"loss_method={loss_method}, n_ensemble_splits={n_ensemble_splits}, "
+          f"refit_full_train={refit_full_train}, clip_std_preds={clip_std_preds}, ridge_block_cv={ridge_block_cv}")
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -305,6 +310,9 @@ def main(cfg: DictConfig) -> None:
             batch_size=batch_size,
             seed=seed,
             n_ensemble_splits=n_ensemble_splits,
+            refit_full_train=refit_full_train,
+            clip_std_preds=clip_std_preds,
+            ridge_block_cv=ridge_block_cv,
             n_epochs=None  # Only used if lora_train==True,
         )
         if len(pdb_trimmed_common_sequence) > 1500:
@@ -332,9 +340,40 @@ def main(cfg: DictConfig) -> None:
             x_llm_dict=llm_dict_test,
             sequences=s_test
         )
-        for k, v in predictors.items():
-            print(f"{k}: {spearmanr(y_test, v)[0]:.3f}")
+        # Per sub-model: test Spearman, ensemble weight and test predictions standardized with
+        # the statistics used by the hybrid model (shows sub-models extrapolating off-scale)
+        f_means, f_stds = getattr(hm, 'feature_means', None), getattr(hm, 'feature_stds', None)
+        for j, (k, v) in enumerate(predictors.items()):
+            line = f"{k}: {spearmanr(y_test, v)[0]:.3f}"
+            if f_means is not None:
+                z = (np.asarray(v) - f_means[j]) / (f_stds[j] + 1e-8)
+                line += f"  (beta={hm.all_betas[j]:.2e}, std. test pred mean={z.mean():.2f}, std={z.std():.2f})"
+            print(line)
         print(f"====> Hybrid Performance (Spearman corr.): {spearmanr(y_test, y_test_pred)[0]:.3f}\n")
+
+        if prediction_cache_folder is not None:
+            # Sub-model predictions on the weight-fitting set (ttest) and on the test fold,
+            # for offline evaluation of ensemble variants (see evaluate_prediction_cache.py)
+            wt_arr = np.array(list(pdb_trimmed_common_sequence))
+            first_pos = lambda seqs: np.array(
+                [int(np.argmax(np.array(list(s)) != wt_arr)) for s in seqs], dtype=int)
+            cache_path = (Path(prediction_cache_folder)
+                          / f"{split_method}/{llm}/{DMS_id}/fold_{test_fold}.npz")
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            np.savez_compressed(
+                cache_path,
+                feature_names=np.array(list(predictors.keys())),
+                betas=np.asarray(hm.all_betas, dtype=float),
+                feature_means=np.asarray(hm.feature_means, dtype=float),
+                feature_stds=np.asarray(hm.feature_stds, dtype=float),
+                ols_slope=getattr(hm, 'ols_slope', 1.0), ols_intercept=getattr(hm, 'ols_intercept', 0.0),
+                y_ttest=hm.ttest_predictions['y'], p_ttest=hm.ttest_predictions['predictions'],
+                pos_ttest=first_pos(hm.ttest_predictions['sequences']),
+                y_test=np.asarray(y_test, dtype=float),
+                p_test=np.column_stack([np.asarray(v, dtype=float) for v in predictors.values()]),
+                pos_test=first_pos(s_test), mutant_test=df.loc[test_idx, "mutant"].to_numpy(dtype=str),
+                y_test_pred=np.asarray(y_test_pred, dtype=float), n_train=len(y_train),
+            )
 
         df_pred_fold = pd.DataFrame(
             {

@@ -182,3 +182,152 @@ def test_mutation_sequence_inputs():
     expected = score_sequences_from_probs(log_p, ['ACD', 'CCA'], 'ACD')
     actual = score_sequences_from_probs(log_p, wt_seq='ACD', mutation_strings=['WT', 'D3A/A1C'])
     np.testing.assert_array_equal(actual, expected)
+
+
+@pytest.mark.parametrize('ensemble_func', ['torch', 'de'])
+def test_hybrid_prediction_independent_of_batch(ensemble_func):
+    """
+    Sub-model predictions are standardized with statistics stored at fitting time,
+    not with the statistics of the predicted batch: a variant's prediction must not
+    depend on which other variants are predicted with it. Batch-wise standardization
+    removed the mean level of each batch (e.g. of a held-out sequence region in
+    contiguous CV splits), so that a batch of only low-fitness variants was shifted
+    to the mean of the training data.
+    """
+    rng = np.random.default_rng(3)
+    sequences = ['AC', 'CC', 'AD', 'CD'] * 6
+    log_p = np.zeros((2, 21))
+    log_p[0, 1] = 3
+    log_p[1, 2] = 5
+    targets = score_sequences_from_probs(log_p, sequences, 'AC') + rng.normal(0, .1, 24)
+    x = rng.normal(size=(24, 2))
+    model = DCALLMHybridModel(
+        x, targets, sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs={'log_p': log_p}, x_dca_wt=np.zeros(2),
+        ridge_alphas=np.array([1.]), batch_size=1, seed=3, device='cpu',
+        n_ensemble_splits=2, ensemble_func=ensemble_func,
+    )
+    assert model.feature_means.shape == model.feature_stds.shape == (len(model.feature_names),)
+    full, _ = model.hybrid_prediction(x, sequences=sequences)
+    low = [i for i, s in enumerate(sequences) if s == 'AC']  # lowest-fitness variants only
+    for idx in (low, [0], list(range(5))):
+        subset, _ = model.hybrid_prediction(x[idx], sequences=[sequences[i] for i in idx])
+        np.testing.assert_allclose(subset, full[idx], rtol=1e-6, atol=1e-8)
+    restored = pickle.loads(pickle.dumps(model))
+    np.testing.assert_allclose(restored.feature_means, model.feature_means)
+    np.testing.assert_allclose(restored.hybrid_prediction(x[low], sequences=['AC'] * len(low))[0], full[low])
+
+
+def test_refit_full_train_and_clipping(monkeypatch):
+    """Refit of supervised sub-models on all training data keeps weights and statistics."""
+    import pypef.plm.pmpnn.gp as pmpnn_gp
+    optimize = pmpnn_gp.optimize_gp
+    monkeypatch.setattr(pmpnn_gp, 'optimize_gp',
+                        lambda gp, likelihood, inputs, targets, **kw:
+                        optimize(gp, likelihood, inputs, targets, n_steps=2))
+    monkeypatch.setattr(pmpnn_gp, 'extract_pdb_coords',
+                        lambda *args, **kw: np.array([[0., 0., 0.], [1., 0., 0.]]))
+    rng = np.random.default_rng(5)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = rng.normal(size=24)
+    kwargs = dict(
+        x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=5, gauss_opt=True,
+    )
+    base = DCALLMHybridModel(x, y, **kwargs)
+    refit = DCALLMHybridModel(x, y, refit_full_train=True, **kwargs)
+    np.testing.assert_allclose(refit.all_betas, base.all_betas)
+    np.testing.assert_allclose(refit.feature_means, base.feature_means)
+    # Sub-models were retrained on all 24 instead of the ttrain subsplit variants
+    assert len(base.pmpnn_gp.train_targets) < len(refit.pmpnn_gp.train_targets) == 24
+    assert not np.allclose(refit.ridge_opt.coef_, base.ridge_opt.coef_)
+    pred, _ = refit.hybrid_prediction(x, sequences=sequences)
+    assert np.isfinite(pred).all()
+    # Clipping bounds the contribution of off-scale sub-model predictions
+    x_far = x * 1e4
+    unclipped, _ = base.hybrid_prediction(x_far, sequences=sequences)
+    base.clip_std_preds = 4.0
+    clipped, _ = base.hybrid_prediction(x_far, sequences=sequences)
+    bound = abs(base.ols_slope) * 4.0 * np.sum(np.abs(base.all_betas)) + abs(base.ols_intercept)
+    assert np.abs(clipped).max() <= bound + 1e-6
+    assert np.abs(unclipped).max() >= np.abs(clipped).max()
+
+
+def test_ridge_block_cv():
+    """
+    Position-blocked CV for the DCA-Ridge alpha: folds are contiguous regions of mutated
+    positions, so one-hot-like features of held-out positions carry no training signal and
+    a larger alpha is selected than by plain CV on shuffled data.
+    """
+    rng = np.random.default_rng(7)
+    length, aas = 40, 'CDEFG'
+    wt = 'A' * length
+    sequences, x, y = [], [], []
+    site_effect = rng.normal(0, 2, size=(length, len(aas)))
+    for pos in range(length):
+        for j, aa in enumerate(aas):
+            sequences.append(wt[:pos] + aa + wt[pos + 1:])
+            onehot = np.zeros(length * len(aas))
+            onehot[pos * len(aas) + j] = 1.0
+            x.append(onehot)
+            y.append(site_effect[pos, j])
+    order = rng.permutation(len(y))  # shuffled like the random ttrain subsplit
+    sequences = [sequences[i] for i in order]
+    x, y = np.array(x)[order], np.array(y)[order]
+    # Each site is seen twice with noise, so plain CV can learn the site effects
+    sequences, x = sequences * 2, np.vstack([x, x])
+    y = np.concatenate([y, y]) + rng.normal(0, .1, 2 * len(y))
+
+    model = DCALLMHybridModel.__new__(DCALLMHybridModel)
+    model.wt_sequence, model.seed = wt, 7
+    model.ridge_alphas = np.logspace(-4, 4, 9)
+    model.ridge_block_cv, model.ridge_block_cv_min_n = True, 150
+
+    splits = model._block_cv_splits(sequences)
+    assert len(splits) == 5
+    positions = np.array([next(i for i, (a, b) in enumerate(zip(s, wt)) if a != b) for s in sequences])
+    previous_max = -1
+    for train, test in splits:
+        assert len(train) + len(test) == len(sequences)
+        assert set(positions[train]).isdisjoint(positions[test])  # whole positions held out
+        assert positions[test].min() > previous_max               # contiguous, ordered blocks
+        previous_max = positions[test].max()
+        assert 60 <= len(test) <= 100                            # balanced (400 / 5 = 80)
+
+    alpha_block = model.ridge_predictor(x, y, sequences).alpha
+    model.ridge_block_cv = False
+    alpha_plain = model.ridge_predictor(x, y, sequences).alpha
+    assert alpha_block >= 100 * alpha_plain
+
+    # Fallbacks to plain CV: no/unaligned sequences, too few variants or positions
+    model.ridge_block_cv = True
+    assert model._block_cv_splits(None) is None
+    assert model._block_cv_splits(sequences[:149]) is None
+    assert model._block_cv_splits([s[:-1] for s in sequences]) is None
+    assert model._block_cv_splits([s for s, p in zip(sequences, positions) if p < 5] * 4) is None
+    assert model.ridge_predictor(x, y, None).alpha == alpha_plain
+    model.wt_sequence = None
+    assert model._block_cv_splits(sequences) is None
+
+
+def test_ridge_block_cv_in_hybrid_model():
+    """The flag is used for the initial fit and the refit, and survives pickling."""
+    rng = np.random.default_rng(11)
+    sequences = [('A' * i + 'C' + 'A' * (11 - i)) for i in range(12)] * 4
+    x = rng.normal(size=(48, 3))
+    y = rng.normal(size=48)
+    kwargs = dict(
+        x_dca_wt=np.zeros(3), sequences=sequences, wt_sequence='A' * 12,
+        pmpnn_conditional_probs=rng.normal(size=(12, 21)), device='cpu',
+        ridge_alphas=np.logspace(-2, 2, 5), batch_size=1, seed=11,
+    )
+    model = DCALLMHybridModel(
+        x, y, ridge_block_cv=True, ridge_block_cv_min_n=20, refit_full_train=True, **kwargs
+    )
+    assert model._block_cv_splits(model.sequences_ttrain) is not None
+    restored = pickle.loads(pickle.dumps(model))
+    pred, _ = restored.hybrid_prediction(x, sequences=sequences)
+    np.testing.assert_allclose(pred, model.hybrid_prediction(x, sequences=sequences)[0])
+    assert np.isfinite(pred).all()

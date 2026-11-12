@@ -92,6 +92,10 @@ class DCALLMHybridModel:
             alpha: float | None = None,
             ols_fit: bool = True,
             n_ensemble_splits: int = 1,
+            refit_full_train: bool = False,
+            clip_std_preds: float | None = None,
+            ridge_block_cv: bool = False,
+            ridge_block_cv_min_n: int = 150,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -162,6 +166,16 @@ class DCALLMHybridModel:
         self.alpha = alpha
         self.ols_fit = ols_fit
         self.n_ensemble_splits = n_ensemble_splits
+        # Refit supervised sub-models on all training data after ensemble weight fitting
+        self.refit_full_train = refit_full_train
+        # Clip standardized sub-model predictions to +-clip_std_preds in hybrid_prediction
+        # (limits sub-models that extrapolate off-scale, e.g. DCA-Ridge on unseen positions)
+        self.clip_std_preds = clip_std_preds
+        # Choose the DCA-Ridge alpha by CV over contiguous blocks of mutated positions
+        # (leave-one-region-out) instead of plain 5-fold CV, so that alpha is selected for
+        # not doing harm on unseen positions. Falls back to plain CV for small data sets.
+        self.ridge_block_cv = ridge_block_cv
+        self.ridge_block_cv_min_n = ridge_block_cv_min_n
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
@@ -218,11 +232,81 @@ class DCALLMHybridModel:
             raise ValueError("PMPNN prediction requires variant sequences.")
         return score_sequences_from_probs(self.pmpnn_log_probs, sequences, self.wt_sequence)
 
-    def _train_pmpnn_gp(self):
+    def _train_pmpnn_gp(self, sequences=None, targets=None):
+        """Train the PMPNN GP (default: on the ttrain subsplit)."""
+        if sequences is None:
+            sequences, targets = self.sequences_ttrain, self.y_ttrain
         self.pmpnn_gp, self.pmpnn_gp_likelihood = train_pmpnn_gp(
-            self.sequences_ttrain, self.y_ttrain, self.pmpnn_log_probs,
+            sequences, targets, self.pmpnn_log_probs,
             self.pmpnn_aa_cond_probs, self.wt_sequence, self.pdb_struct, self.device
         )
+
+    def _fit_plm_gp(self, sequences, x_embed, x_zero_shot, targets, aa_cond_probs):
+        """Instantiate and train a Kermut-like GP on PLM embeddings and zero-shot scores."""
+        train_inputs = prepare_kermut_inputs(
+            seqs=sequences, x_embed=x_embed, x_zero_shot=x_zero_shot, device=self.device
+        )
+        struct_coords = extract_pdb_coords(self.pdb_struct, target_len=len(self.wt_sequence))
+        train_targets = torch.tensor(np.asarray(targets)).to(self.device)
+        gp, likelihood = instantiate_gp(
+            train_inputs=train_inputs,
+            train_targets=train_targets,
+            gp_inputs={
+                "aa_cond_probs": aa_cond_probs.to(self.device),
+                "struct_coords": torch.tensor(struct_coords).to(self.device),
+                "wt_seq": self.wt_sequence
+            },
+            use_structure_kernel=True,
+            use_sequence_kernel=True,
+            sequence_kernel_type="RBF",
+            use_zero_shot=True,
+            device=self.device
+        )
+        return optimize_gp(gp, likelihood, train_inputs, train_targets, lr=0.05, n_steps=150)
+
+    def _refit_on_full_training_data(self):
+        """
+        Refit the supervised sub-models (DCA-Ridge and the GPs) on the complete training
+        data after the ensemble weights were fitted on the ttrain/ttest subsplit(s).
+        Ensemble weights, OLS alignment and the stored prediction statistics
+        (feature_means/feature_stds; from out-of-sample ttest predictions) are kept.
+        LoRA-tuned PLMs are not refitted.
+        """
+        logger.info(f"Refitting supervised sub-models on all {len(self.y_train)} training variants...")
+        y_train = np.asarray(self.y_train, dtype=float)
+        self.ridge_opt = self.ridge_predictor(
+            np.asarray(self.x_train_dca, dtype=float), y_train, self.sequences
+        )
+        if self.llm_keys is not None and self.gauss_opt:
+            embs, zs_scores = {}, {}
+            for llm_name in self.llm_keys:
+                llm = self.llm_data[llm_name]
+                wt_struct_ids = llm.get('wt_structure_input_ids')
+                zs_scores[llm_name] = llm['llm_inference_function'](
+                    tokenized_sequences=llm['x_llm'], model=llm['llm_base_model'],
+                    wt_input_ids=llm['wt_input_ids'], attention_mask=llm['llm_attention_mask'],
+                    device=self.device, wt_structure_input_ids=wt_struct_ids,
+                    batch_size=self.batch_size, verbose=False
+                )
+                embs[llm_name] = get_plm_embeddings(
+                    llm['x_llm'], llm['llm_base_model'], llm['wt_input_ids'],
+                    llm['llm_attention_mask'], mode="mean",
+                    wt_structure_input_ids=wt_struct_ids, device=self.device
+                )
+                self.gp_models[llm_name], self.gp_likelihoods[llm_name] = self._fit_plm_gp(
+                    self.sequences, embs[llm_name], zs_scores[llm_name], y_train,
+                    self.aa_cond_probs_dict[llm_name]
+                )
+            if self.gauss_comb_plm_emb and len(self.llm_keys) >= 2:
+                x_zs = torch.cat(
+                    [v.unsqueeze(-1) if v.dim() == 1 else v for v in zs_scores.values()], dim=-1
+                )
+                self.gp_models["combined"], self.gp_likelihoods["combined"] = self._fit_plm_gp(
+                    self.sequences, torch.cat(list(embs.values()), dim=-1), x_zs, y_train,
+                    self.aa_cond_probs_dict[self.llm_keys[0]]
+                )
+        if self.pmpnn_gauss_opt:
+            self._train_pmpnn_gp(self.sequences, y_train)
 
     def _predict_pmpnn_gp(self, sequences):
         return predict_pmpnn_gp(
@@ -329,10 +413,48 @@ class DCALLMHybridModel:
         y_dca = self._delta_e(self.x_train_dca)
         return self.spearmanr(self.y_train, y_dca)
 
+    def _block_cv_splits(
+            self,
+            sequences: list[str] | None,
+            n_blocks: int = 5,
+            min_positions: int = 10
+    ) -> list[tuple[np.ndarray, np.ndarray]] | None:
+        """
+        CV splits over contiguous blocks of mutated positions (first mutated position
+        of each variant w.r.t. the wild type), blocks holding about equally many variants.
+        Returns None if the position-aware CV is not applicable (no/unaligned sequences,
+        too few variants or distinct positions, degenerate blocks).
+        """
+        wt = getattr(self, 'wt_sequence', None)
+        min_n = getattr(self, 'ridge_block_cv_min_n', 150)
+        if sequences is None or wt is None or len(sequences) < min_n:
+            return None
+        if any(len(seq) != len(wt) for seq in sequences):
+            return None
+        wt_arr = np.frombuffer(wt.encode(), dtype=np.uint8)
+        seq_arr = np.frombuffer("".join(sequences).encode(), dtype=np.uint8).reshape(len(sequences), -1)
+        diff = seq_arr != wt_arr
+        mutated = diff.any(axis=1)
+        # Wild-type-like sequences (no mutation) get position -1 and thus join the first block
+        positions = np.where(mutated, diff.argmax(axis=1), -1)
+        unique_pos, counts = np.unique(positions, return_counts=True)
+        if len(unique_pos) < max(min_positions, n_blocks):
+            return None
+        # Assign whole positions to blocks by the cumulative variant count
+        centers = np.cumsum(counts) - counts / 2.0
+        pos_block = np.minimum((centers / counts.sum() * n_blocks).astype(int), n_blocks - 1)
+        blocks = pos_block[np.searchsorted(unique_pos, positions)]
+        idx = np.arange(len(sequences))
+        splits = [(idx[blocks != b], idx[blocks == b]) for b in np.unique(blocks)]
+        if len(splits) < 3 or any(len(test) < 2 for _, test in splits):
+            return None
+        return splits
+
     def ridge_predictor(
             self,
             x_train: np.ndarray,
             y_train: np.ndarray,
+            sequences: list[str] | None = None,
     ) -> object:
         """
         Sets the parameter 'alpha' for ridge regression.
@@ -345,33 +467,73 @@ class DCALLMHybridModel:
             Associated fitness values to the sequences present
             in 'x_train'.
 
+        sequences : list[str] | None
+            Sequences of 'x_train'; only used with `ridge_block_cv` to get
+            the mutated positions for the position-blocked CV.
+
         Returns
         -------
         Ridge object trained on 'x_train' and 'y_train' (cv=5)
         with optimized 'alpha'. 
         """
+        cv = 5
+        if getattr(self, 'ridge_block_cv', False):
+            splits = self._block_cv_splits(sequences)
+            if splits is None:
+                logger.info(
+                    "Ridge alpha: position-blocked CV not applicable "
+                    "(sequences/positions unavailable or too few), using 5-fold CV."
+                )
+            else:
+                cv = splits
         grid = GridSearchCV(
             Ridge(), 
             {'alpha': self.ridge_alphas, 'random_state': [self.seed]}, 
-            cv=5
+            cv=cv
         )
         grid.fit(x_train, y_train)
+        if getattr(self, 'ridge_block_cv', False):
+            logger.info(
+                f"Ridge alpha: {grid.best_params_['alpha']:.3g} "
+                f"({'position-blocked' if cv != 5 else 'plain'} CV, {len(y_train)} variants)"
+            )
         return grid.best_estimator_
     
+    @staticmethod
+    def _predictor_stats(*predictions: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Mean and standard deviation of each sub-model prediction on the set the
+        ensemble weights are fitted on (missing predictors: mean 0, std 1).
+        These statistics are stored on the model (feature_means/feature_stds) and
+        reused in hybrid_prediction, so that test predictions are standardized
+        on the same scale the weights were fitted on. Standardizing each test
+        batch on its own statistics instead would remove all differences in the
+        mean level between batches (e.g. between held-out sequence regions).
+        """
+        means = np.zeros(len(predictions))
+        stds = np.ones(len(predictions))
+        for i, p in enumerate(predictions):
+            if p is not None:
+                p = np.asarray(p, dtype=float)
+                means[i] = np.nanmean(p)
+                stds[i] = np.nanstd(p)
+        return means, stds
+
     def optimize_ensemble_weights_torch(
         self,
-        y_true_np: np.ndarray, 
+        y_true_np: np.ndarray,
         *y_preds_np: np.ndarray | None,
         steps: int = 25
     ) -> np.ndarray:
 
         valid_indices = []
         valid_preds_list = []
+        self._split_feature_stats = self._predictor_stats(*y_preds_np)
 
         # Prepare and Standardize Predictors
         for i, p in enumerate(y_preds_np):
             if p is not None:
-                p_std = (p - np.mean(p)) / (np.std(p) + 1e-8)
+                p_std = (p - self._split_feature_stats[0][i]) / (self._split_feature_stats[1][i] + 1e-8)
                 valid_preds_list.append(torch.from_numpy(p_std).float())
                 valid_indices.append(i)
 
@@ -457,6 +619,10 @@ class DCALLMHybridModel:
             raise ValueError("At least one valid prediction array must be provided.")
 
         num_preds = len(valid_preds)
+        self._split_feature_stats = self._predictor_stats(*predictions)
+        valid_idx = [i for i, p in enumerate(predictions) if p is not None]
+        feat_means = self._split_feature_stats[0][valid_idx]
+        feat_stds = self._split_feature_stats[1][valid_idx]
 
         # Dynamically identify which predictors contain NaNs
         clean_indices = []
@@ -467,7 +633,8 @@ class DCALLMHybridModel:
                 logger.warning(f"Predictor at index {i} contains NaNs. Weighting parameter with zero...")
             else:
                 clean_indices.append(i)
-                clean_preds.append(p)
+                # Standardize like in hybrid_prediction, so the weights apply to the same scale
+                clean_preds.append((p - feat_means[i]) / (feat_stds[i] + 1e-8))
 
         # If all predictors were full of NaNs, return an array of zeros
         if not clean_preds:
@@ -512,10 +679,7 @@ class DCALLMHybridModel:
         for i, p in enumerate(predictions):
             if p is not None:
                 # Standardize the predictor to match the scale used during optimization
-                # (Crucial if your loss function used MSE)
-                p_mean = np.mean(p)
-                p_std = np.std(p) + 1e-8
-                p_scaled = (p - p_mean) / p_std
+                p_scaled = (p - self._split_feature_stats[0][i]) / (self._split_feature_stats[1][i] + 1e-8)
 
                 # Add weighted contribution
                 y_ensemble += final_betas[i] * p_scaled
@@ -803,37 +967,8 @@ class DCALLMHybridModel:
                 self.scores_ttest[llm_name] = y_llm_ttest
                 self.aa_cond_probs_dict[llm_name] = aa_cond_probs
 
-                train_inputs = prepare_kermut_inputs(
-                    seqs=self.sequences_ttrain,
-                    x_embed=embs_ttrain,
-                    x_zero_shot=y_llm_ttrain,
-                    device=self.device
-                )
-
-                struct_coords = extract_pdb_coords(
-                    self.pdb_struct,
-                    target_len=len(self.wt_sequence)
-                )
-
-                gp, likelihood = instantiate_gp(
-                    train_inputs=train_inputs,
-                    train_targets=torch.tensor(self.y_ttrain).to(self.device),
-                    gp_inputs={
-                        "aa_cond_probs": aa_cond_probs, 
-                        "struct_coords": torch.tensor(struct_coords).to(self.device), 
-                        "wt_seq": self.wt_sequence
-                    },
-                    use_structure_kernel=True,
-                    use_sequence_kernel=True,
-                    sequence_kernel_type="RBF",
-                    use_zero_shot=True,
-                    device=self.device
-                )
-
-                # Train GP
-                gp, likelihood = optimize_gp(
-                    gp, likelihood, train_inputs, torch.tensor(self.y_ttrain).to(self.device), 
-                    lr=0.05, n_steps=150
+                gp, likelihood = self._fit_plm_gp(
+                    self.sequences_ttrain, embs_ttrain, y_llm_ttrain, self.y_ttrain, aa_cond_probs
                 )
                 self.gp_models[llm_name] = gp
                 self.gp_likelihoods[llm_name] = likelihood
@@ -877,42 +1012,10 @@ class DCALLMHybridModel:
                 ]
                 x_combined_zs_test = torch.cat(zs_test_tensors, dim=-1)
                 
-                train_inputs = prepare_kermut_inputs(
-                    seqs=self.sequences_ttrain,
-                    x_embed=x_combined_embeddings_train,
-                    x_zero_shot=x_combined_zs_train,
-                    device=self.device
-                )
-
-                struct_coords = extract_pdb_coords(
-                    self.pdb_struct,
-                    target_len=len(self.wt_sequence)
-                )
-
                 # Primary model conditional probabilities (or first loaded model)
-                primary_llm = self.llm_keys[0]
-                primary_aa_cond_probs = self.aa_cond_probs_dict[primary_llm]
-
-                gp, likelihood = instantiate_gp(
-                    train_inputs=train_inputs,
-                    train_targets=torch.tensor(self.y_ttrain).to(self.device),
-                    gp_inputs={
-                        "aa_cond_probs": primary_aa_cond_probs.to(self.device), 
-                        "struct_coords": torch.tensor(struct_coords).to(self.device), 
-                        "wt_seq": self.wt_sequence
-                    },
-                    use_structure_kernel=True,
-                    use_sequence_kernel=True,
-                    sequence_kernel_type="RBF",
-                    use_zero_shot=True,
-                    device=self.device
-                )
-
-                # Train
-                gp, likelihood = optimize_gp(
-                    gp, likelihood, train_inputs, 
-                    torch.tensor(self.y_ttrain).to(self.device), 
-                    lr=0.05, n_steps=150
+                gp, likelihood = self._fit_plm_gp(
+                    self.sequences_ttrain, x_combined_embeddings_train, x_combined_zs_train,
+                    self.y_ttrain, self.aa_cond_probs_dict[self.llm_keys[0]]
                 )
 
                 self.gp_models["combined"] = gp
@@ -1063,7 +1166,9 @@ class DCALLMHybridModel:
         self.get_subsplits_train()
         self.y_dca_ttrain = self._delta_e(self.x_dca_ttrain)
         self.y_dca_ttest = self._delta_e(self.x_dca_ttest)
-        self.ridge_opt = self.ridge_predictor(self.x_dca_ttrain, self.y_ttrain)
+        self.ridge_opt = self.ridge_predictor(
+            self.x_dca_ttrain, self.y_ttrain, self.sequences_ttrain
+        )
         self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
         self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
 
@@ -1172,6 +1277,18 @@ class DCALLMHybridModel:
         else:
             first_betas = self.optimize_ensemble_weights(self.y_ttest, *predictors)
 
+        # Keep the sub-model predictions of the (first) weight-fitting set, so that ensemble
+        # variants can be evaluated without retraining (columns ordered as feature_names)
+        self.ttest_predictions = {
+            'y': np.asarray(self.y_ttest, dtype=float),
+            'predictions': np.column_stack([np.asarray(p, dtype=float) for p in predictors]),
+            'sequences': None if self.sequences_ttest is None else list(self.sequences_ttest),
+        }
+
+        # Sub-model prediction statistics on the weight-fitting set, used to standardize
+        # predictions in hybrid_prediction (see _predictor_stats)
+        all_split_stats = [self._split_feature_stats]
+
         # Handle Cross-Validation Multi-Split Routine
         if self.n_ensemble_splits <= 1:
             self.all_betas = first_betas
@@ -1195,6 +1312,7 @@ class DCALLMHybridModel:
                 else:
                     split_betas = self.optimize_ensemble_weights(y_ttest_split, *split_predictors)
                 all_split_betas.append(split_betas)
+                all_split_stats.append(self._split_feature_stats)
 
             self.seed = original_seed
             self.all_betas = np.mean(all_split_betas, axis=0)
@@ -1202,6 +1320,12 @@ class DCALLMHybridModel:
                 f"Averaged ensemble weights across {self.n_ensemble_splits} splits: "
                 f" [{', '.join(f'{x:.2e}' for x in self.all_betas)}]"
             )
+
+        self.feature_means = np.mean([s[0] for s in all_split_stats], axis=0)
+        self.feature_stds = np.mean([s[1] for s in all_split_stats], axis=0)
+
+        if self.refit_full_train:
+            self._refit_on_full_training_data()
 
         logger.info(f"Hybrid optimization done...")
         return (*self.all_betas, self.ridge_opt)
@@ -1381,13 +1505,24 @@ class DCALLMHybridModel:
         
         feature_means = getattr(self, "feature_means", None)
         feature_stds = getattr(self, "feature_stds", None)
+        if feature_means is None or feature_stds is None:
+            logger.warning(
+                "Hybrid model has no stored sub-model prediction statistics (model fitted with "
+                "an older PyPEF version): standardizing predictions on the predicted batch itself, "
+                "which removes differences in the mean level between prediction batches."
+            )
 
         for idx, (beta, p) in enumerate(zip(self.all_betas, predictions, strict=True)):
-            # Scenario A: Use pre-calculated scaler parameters from model fitting
+            # Scenario A: Standardize with the statistics of the set the ensemble weights were
+            # fitted on (stored in train_and_optimize), independent of the predicted batch
             if feature_means is not None and feature_stds is not None and idx < len(feature_means):
                 p_mean = feature_means[idx]
                 p_std_dev = feature_stds[idx]
                 p_std = (p - p_mean) / (p_std_dev + 1e-8)
+                clip = getattr(self, 'clip_std_preds', None)
+                if clip is not None:
+                    p_std = np.clip(p_std, -clip, clip)
+            # Legacy models without stored statistics:
             # Scenario B: Single sequence evaluation (len(p) == 1, e.g. Directed Evolution step)
             elif len(p) == 1:
                 p_std = p  # Avoid p - np.mean(p) which zero-out single sequence predictions

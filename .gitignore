@@ -54,6 +54,7 @@ scripts/ProteinGym_runs/official/data/ProteinGym_AF2_structures/*
 scripts/ProteinGym_runs/official/data/DMS_substitutions.csv
 scripts/ProteinGym_runs/official/benchmark_runs/output.log
 scripts/ProteinGym_runs/official/benchmark_runs/model_scores/supervised_substitutions/*
+scripts/ProteinGym_runs/official/benchmark_runs/official_performance/
 
 scripts/ESM_finetuning/DMS_msa_files/
 scripts/ESM_finetuning/DMS_ProteinGym_substitutions/
@@ -694,3 +695,4 @@ scripts/ProteinGym_runs/results/dca_esm_and_hybrid_5cv-split_results_v0.5.1_smal
 scripts/ProteinGym_runs/results/dca_esm_and_hybrid_5cv-split_results_v0.5.1_small_test.csv
 scripts/ProteinGym_runs/results/dca_esm_and_hybrid_low-n_results_v0.5.1_small_test_clean.csv
 scripts/ProteinGym_runs/results/dca_esm_and_hybrid_low-n_results_v0.5.1_small_test.csv
+scripts/ProteinGym_runs/official/benchmark_runs/prediction_cache/

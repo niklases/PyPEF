@@ -14,6 +14,10 @@ output_scores_folder: model_scores/supervised_substitutions
 hybrid_model_split_scheme: "block-random"
 loss_method: "spearman-hybrid"
 n_ensemble_splits: 1
+refit_full_train: false  # refit supervised sub-models on the full training fold after weight fitting
+clip_std_preds: null     # clip standardized sub-model predictions to +-value (e.g. 4.0)
+ridge_block_cv: false    # DCA-Ridge alpha via CV over contiguous blocks of mutated positions
+prediction_cache_folder: null  # save per-fold sub-model predictions (ttest + test) for offline ensemble evaluation
 seed: 2026
 progress_bar: false
 overwrite: false

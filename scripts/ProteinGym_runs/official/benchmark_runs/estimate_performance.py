@@ -110,9 +110,11 @@ for tf in target_folds:
 
 
 all_means = []
+all_single_perfs = []
 print(f'\n\n--- Total performance across split techniques ---\n{target_folds}\n\n')
 for k, v in results_across_split_technique_folds.items():
-    mean = np.mean(v)
+    all_single_perfs.extend(v)
+    mean = np.mean(v)  # mean across (1, 2, or) 3 values
     v_str = ""
     for v_ in v:
         v_str += f"{v_:.3f} "
@@ -123,4 +125,9 @@ for m in mean_spears.values():
     mean_spears_str += f"{m:.3f} "
 for n in mean_ns.values():
     mean_ns_str += f"{'(' + str(n) + ')':>5} "
-print('-' * 76 + f'\n{"":50s}{mean_ns_str}\n{"":50s}{mean_spears_str}-> {np.mean(all_means):.3f}')
+mean_of_split_means = np.mean(list(mean_spears.values()))
+print('-' * 76 +
+      f'\n{"":50s}{mean_ns_str}'
+      f'\n{"":50s}{mean_spears_str}-> {mean_of_split_means:.3f}  (mean of split means)'
+      f'\n{"":50s}{" " * 6 * len(mean_spears)}-> {np.mean(all_means):.3f}  (mean of {len(all_means)} per-dataset means)')
+#print(f"Mean across all single performances ({len(all_single_perfs)}): {np.mean(all_single_perfs)}")
