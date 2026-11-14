@@ -371,6 +371,9 @@ def test_ridge_block_cv():
     Position-blocked CV for the DCA-Ridge alpha: folds are contiguous regions of mutated
     positions, so one-hot-like features of held-out positions carry no training signal and
     a larger alpha is selected than by plain CV on shuffled data.
+    With pure site one-hot features the blocked CV score is the same for every alpha (held-out
+    positions are predicted by the intercept); such ties are resolved towards the largest alpha,
+    independent of the platform's floating-point rounding.
     """
     rng = np.random.default_rng(7)
     length, aas = 40, 'CDEFG'
@@ -410,6 +413,8 @@ def test_ridge_block_cv():
     alpha_block = model.ridge_predictor(x, y, sequences).alpha
     model.ridge_block_cv = False
     alpha_plain = model.ridge_predictor(x, y, sequences).alpha
+    assert alpha_block == model.ridge_alphas.max()  # tie between all alphas -> most regularized
+    assert alpha_plain <= 1e-2                      # plain CV learns the site effects
     assert alpha_block >= 100 * alpha_plain
 
     # Fallbacks to plain CV: no/unaligned sequences, too few variants or positions

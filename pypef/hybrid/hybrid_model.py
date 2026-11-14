@@ -584,12 +584,27 @@ class DCALLMHybridModel:
             cv=cv
         )
         grid.fit(x_train, y_train)
+        best_estimator = grid.best_estimator_
         if getattr(self, 'ridge_block_cv', False):
+            alpha = grid.best_params_['alpha']
+            if cv != 5:
+                # Position-blocked CV: if several alphas score the same within numerical precision
+                # (e.g. when held-out positions only have features that are absent in training),
+                # take the largest one. Otherwise floating-point noise decides, which differs
+                # between platforms, and the most regularized model is the safe choice.
+                scores = np.asarray(grid.cv_results_['mean_test_score'], dtype=float)
+                alphas = np.asarray([p['alpha'] for p in grid.cv_results_['params']], dtype=float)
+                best = np.nanmax(scores)
+                tied = scores >= best - 1e-6 * max(1.0, abs(best))
+                alpha_tied = float(alphas[tied].max())
+                if alpha_tied != alpha:
+                    alpha = alpha_tied
+                    best_estimator = Ridge(alpha=alpha, random_state=self.seed).fit(x_train, y_train)
             logger.info(
-                f"Ridge alpha: {grid.best_params_['alpha']:.3g} "
+                f"Ridge alpha: {alpha:.3g} "
                 f"({'position-blocked' if cv != 5 else 'plain'} CV, {len(y_train)} variants)"
             )
-        return grid.best_estimator_
+        return best_estimator
     
     @staticmethod
     def _predictor_stats(*predictions: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]:
