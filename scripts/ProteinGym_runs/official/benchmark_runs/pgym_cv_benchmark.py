@@ -60,6 +60,7 @@ def main(cfg: DictConfig) -> None:
     gp_lr = cfg.get('gp_lr', 0.05)
     gauss_comb_plm_emb = cfg.get('gauss_comb_plm_emb', False)
     gp_comb_all_zero_shot = cfg.get('gp_comb_all_zero_shot', False)
+    use_dca_ridge = cfg.get('use_dca_ridge', True)
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar
@@ -68,7 +69,8 @@ def main(cfg: DictConfig) -> None:
           f"loss_method={loss_method}, n_ensemble_splits={n_ensemble_splits}, "
           f"refit_full_train={refit_full_train}, clip_std_preds={clip_std_preds}, ridge_block_cv={ridge_block_cv}, "
           f"gp_standardize_targets={gp_standardize_targets}, gp_pmpnn_probs={gp_pmpnn_probs}, gp_lr={gp_lr}, "
-          f"gauss_comb_plm_emb={gauss_comb_plm_emb}, gp_comb_all_zero_shot={gp_comb_all_zero_shot}")
+          f"gauss_comb_plm_emb={gauss_comb_plm_emb}, gp_comb_all_zero_shot={gp_comb_all_zero_shot}, "
+          f"use_dca_ridge={use_dca_ridge}")
     sequence_col, target_col = "mutated_sequence", "DMS_score"
     assert cfg.split_method in ["fold_random_5", "fold_modulo_5", "fold_contiguous_5", "fold_rand_multiples"]
     use_multiples = True if cfg.split_method == "fold_rand_multiples" else False
@@ -314,6 +316,7 @@ def main(cfg: DictConfig) -> None:
             gauss_opt=gauss_opt,
             gauss_comb_plm_emb=gauss_comb_plm_emb,
             gp_comb_all_zero_shot=gp_comb_all_zero_shot,
+            use_dca_ridge=use_dca_ridge,
             pmpnn_conditional_probs=pmpnn_conditional_probs,
             pdb_struct=pdb_file,
             batch_size=batch_size,

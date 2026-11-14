@@ -100,6 +100,7 @@ class DCALLMHybridModel:
             gp_pmpnn_probs: bool = False,
             gp_lr: float = 0.05,
             gp_comb_all_zero_shot: bool = False,
+            use_dca_ridge: bool = True,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -197,6 +198,9 @@ class DCALLMHybridModel:
         # dominant error on contiguous (region-wise) test splits.
         self.gp_comb_all_zero_shot = gp_comb_all_zero_shot
         self._zs_stats = None
+        # Include the supervised DCA-Ridge model ('y_ridge') as an ensemble member. 
+        # It has about zero per-fold Spearman on positions that are not in the training data. 
+        self.use_dca_ridge = use_dca_ridge
         if batch_size is None:
             batch_size = 5
         self.batch_size = batch_size
@@ -366,9 +370,10 @@ class DCALLMHybridModel:
         """
         logger.info(f"Refitting supervised sub-models on all {len(self.y_train)} training variants...")
         y_train = np.asarray(self.y_train, dtype=float)
-        self.ridge_opt = self.ridge_predictor(
-            np.asarray(self.x_train_dca, dtype=float), y_train, self.sequences
-        )
+        if getattr(self, 'use_dca_ridge', True):
+            self.ridge_opt = self.ridge_predictor(
+                np.asarray(self.x_train_dca, dtype=float), y_train, self.sequences
+            )
         if self.llm_keys is not None and self.gauss_opt:
             embs, zs_scores = {}, {}
             for llm_name in self.llm_keys:
@@ -926,7 +931,7 @@ class DCALLMHybridModel:
     def train_llm(self):
         # LoRA training on y_llm_ttrain --> Testing on y_llm_ttest 
         # Here, just getting the unsupervised scores and correlations on ttrain and ttest splits
-        self.betas_str = "DCA, Ridge, "
+        self.betas_str = "DCA, Ridge, " if getattr(self, 'use_dca_ridge', True) else "DCA, "
         self.y_llm_preds = {}       # e.g., {'esm': array, 'prosst': array}
         self.y_llm_lora_preds = {} 
         self.embeddings = {}        # e.g., {'esm': emb, 'prosst': emb}
@@ -1151,10 +1156,10 @@ class DCALLMHybridModel:
         # Base Unsupervised and Supervised Predictors
         y_dca_ttest = self._delta_e(self.x_dca_ttest)
         
-        # Also fixed the triple 't' typo here: self.x_dca_tttest -> self.x_dca_ttest
-        y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
-
-        split_predictors = [y_dca_ttest, y_dca_ridge_ttest]
+        split_predictors = [y_dca_ttest]
+        if getattr(self, 'use_dca_ridge', True):
+            # Also fixed the triple 't' typo here: self.x_dca_tttest -> self.x_dca_ttest
+            split_predictors.append(self.ridge_opt.predict(self.x_dca_ttest))
 
         embs_pred = {}
         zs_scores_pred = {}
@@ -1268,26 +1273,33 @@ class DCALLMHybridModel:
         self.get_subsplits_train()
         self.y_dca_ttrain = self._delta_e(self.x_dca_ttrain)
         self.y_dca_ttest = self._delta_e(self.x_dca_ttest)
-        self.ridge_opt = self.ridge_predictor(
-            self.x_dca_ttrain, self.y_ttrain, self.sequences_ttrain
-        )
-        self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
-        self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
-
         # 1. Start predictors AND feature_names with baseline DCA models
-        predictors = [self.y_dca_ttest, self.y_dca_ridge_ttest]
-        feature_names = ["y_dca", "y_ridge"]  # Matches self.hybrid_preds keys
-        self.betas_str = "DCA, DCA-Ridge, "
+        predictors = [self.y_dca_ttest]
+        feature_names = ["y_dca"]  # Matches self.hybrid_preds keys
+        self.betas_str = "DCA, "
 
         # Print baseline Spearman correlations
         logger.info(
             f"DCA unsupervised 'ensemble test set' performance: "
             f"{spearmanr(self.y_ttest, self.y_dca_ttest)[0]:.3f} (N={len(self.y_ttest)})"
         )
-        logger.info(
-            f"DCA-Ridge supervised 'ensemble test set' performance: "
-            f"{spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
-        )
+        if self.use_dca_ridge:
+            self.ridge_opt = self.ridge_predictor(
+                self.x_dca_ttrain, self.y_ttrain, self.sequences_ttrain
+            )
+            self.y_dca_ridge_ttrain = self.ridge_opt.predict(self.x_dca_ttrain)
+            self.y_dca_ridge_ttest = self.ridge_opt.predict(self.x_dca_ttest)
+            predictors.append(self.y_dca_ridge_ttest)
+            feature_names.append("y_ridge")
+            self.betas_str = "DCA, DCA-Ridge, "
+            logger.info(
+                f"DCA-Ridge supervised 'ensemble test set' performance: "
+                f"{spearmanr(self.y_ttest, self.y_dca_ridge_ttest)[0]:.3f} (N={len(self.y_ttest)})"
+            )
+        else:
+            self.ridge_opt = None
+            self.y_dca_ridge_ttrain = self.y_dca_ridge_ttest = None
+            logger.info("DCA-Ridge is excluded from the ensemble (use_dca_ridge=False).")
 
         # Train and extract PLM predictions if applicable
         if self.llm_keys:
@@ -1452,13 +1464,20 @@ class DCALLMHybridModel:
         )
         
         y_dca = self._delta_e(x_dca)
-        y_ridge = self.ridge_opt.predict(x_dca) if self.ridge_opt is not None else np.zeros(len(y_dca))
+        use_ridge = getattr(self, 'use_dca_ridge', True)
+        if use_ridge:
+            y_ridge = (self.ridge_opt.predict(x_dca) if self.ridge_opt is not None
+                       else np.zeros(len(y_dca)))
+        else:
+            y_ridge = None
 
         self.embs_pred = {}
         self.zs_scores_pred = {}
 
         # Intermediate storage maps
-        base_ridge_preds = {"y_dca": y_dca, "y_ridge": y_ridge}
+        base_ridge_preds = {"y_dca": y_dca}
+        if use_ridge:
+            base_ridge_preds["y_ridge"] = y_ridge
         llm_preds = {}
         gp_preds = {}
 
@@ -1545,7 +1564,8 @@ class DCALLMHybridModel:
         
         # Add baselines
         self.hybrid_preds["y_dca"] = base_ridge_preds["y_dca"]
-        self.hybrid_preds["y_ridge"] = base_ridge_preds["y_ridge"]
+        if use_ridge:
+            self.hybrid_preds["y_ridge"] = base_ridge_preds["y_ridge"]
         
         # Interleave variants per PLM key sequentially
         if self.llm_keys is not None:

@@ -366,6 +366,34 @@ def test_comb_all_zero_shot_matrix():
     np.testing.assert_allclose(half.numpy(), full.numpy()[:12], rtol=1e-5)
 
 
+def test_use_dca_ridge_false():
+    """With use_dca_ridge=False the Ridge is not fitted and 'y_ridge' is not an ensemble member."""
+    rng = np.random.default_rng(11)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = rng.normal(size=24)
+    kwargs = dict(
+        x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=11,
+    )
+    with_ridge = DCALLMHybridModel(x, y, **kwargs)
+    assert with_ridge.ridge_opt is not None
+    assert list(with_ridge.hybrid_prediction(x, sequences=sequences)[1])[:2] == ['y_dca', 'y_ridge']
+
+    without = DCALLMHybridModel(x, y, use_dca_ridge=False, **kwargs)
+    assert without.ridge_opt is None
+    pred, components = without.hybrid_prediction(x, sequences=sequences)
+    assert 'y_ridge' not in components and list(components)[0] == 'y_dca'
+    assert len(without.all_betas) == len(components) == len(with_ridge.all_betas) - 1
+    assert np.isfinite(pred).all()
+    # Multi-split weight fitting and pickling work without the Ridge feature
+    multi = DCALLMHybridModel(x, y, use_dca_ridge=False, n_ensemble_splits=2, **kwargs)
+    restored = pickle.loads(pickle.dumps(multi))
+    np.testing.assert_allclose(restored.hybrid_prediction(x, sequences=sequences)[0],
+                               multi.hybrid_prediction(x, sequences=sequences)[0])
+
+
 def test_ridge_block_cv():
     """
     Position-blocked CV for the DCA-Ridge alpha: folds are contiguous regions of mutated
