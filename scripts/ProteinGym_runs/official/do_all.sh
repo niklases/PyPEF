@@ -98,14 +98,14 @@ for split_method in "${split_methods[@]}"; do
         ./run_over_all.sh \
             "split_method=$split_method" \
             "max_idx=$MAX_IDX" \
-            ridge_block_cv=true gp_standardize_targets=true \
-            gauss_comb_plm_emb=true gp_comb_all_zero_shot=true \
+            gp_standardize_targets=true gauss_comb_plm_emb=true \
+            gp_comb_all_zero_shot=true use_dca_ridge=false \
             output_scores_folder=model_scores/supervised_substitutions
     else
         ./run_over_all.sh \
             "split_method=$split_method" \
-            ridge_block_cv=true gp_standardize_targets=true \
-            gauss_comb_plm_emb=true gp_comb_all_zero_shot=true \
+            gp_standardize_targets=true gauss_comb_plm_emb=true \
+            gp_comb_all_zero_shot=true use_dca_ridge=false \
             output_scores_folder=model_scores/supervised_substitutions
     fi
 done

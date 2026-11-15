@@ -48,8 +48,10 @@ def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, gauss_opt, monkeypatc
         ridge_alphas=np.array([1.]), batch_size=1, seed=8, device='cpu',
         n_ensemble_splits=2, ensemble_func=ensemble_func, gauss_opt=gauss_opt,
     )
-    # The PMPNN GP follows gauss_opt, like the ESM/ProSST GPs; the DCA-Ridge is off by default.
-    features = ['y_dca', 'PMPNN_base'] + (['PMPNN_gp'] if gauss_opt else [])
+    # The PMPNN GP follows gauss_opt, like the ESM/ProSST GPs. The DCA-Ridge is off by default,
+    # except without a GP, where it would be the only supervised ensemble member.
+    features = (['y_dca'] + ([] if gauss_opt else ['y_ridge']) + ['PMPNN_base']
+                + (['PMPNN_gp'] if gauss_opt else []))
     assert model.feature_names == features
     assert len(model.all_betas) == len(features)
     np.testing.assert_allclose(model.pmpnn_aa_cond_probs.cpu().sum(-1), 1, atol=1e-6)
@@ -382,7 +384,7 @@ def test_use_dca_ridge_false():
     assert with_ridge.ridge_opt is not None
     assert list(with_ridge.hybrid_prediction(x, sequences=sequences)[1])[:2] == ['y_dca', 'y_ridge']
 
-    without = DCALLMHybridModel(x, y, **kwargs)  # off by default
+    without = DCALLMHybridModel(x, y, use_dca_ridge=False, **kwargs)
     assert without.ridge_opt is None
     pred, components = without.hybrid_prediction(x, sequences=sequences)
     assert 'y_ridge' not in components and list(components)[0] == 'y_dca'
@@ -393,6 +395,36 @@ def test_use_dca_ridge_false():
     restored = pickle.loads(pickle.dumps(multi))
     np.testing.assert_allclose(restored.hybrid_prediction(x, sequences=sequences)[0],
                                multi.hybrid_prediction(x, sequences=sequences)[0])
+
+
+def test_use_dca_ridge_auto_default(monkeypatch):
+    """`use_dca_ridge=None` (the default) keeps the Ridge only while it would be the only
+    supervised ensemble member, i.e. as long as there is no GP and no LoRA predictor."""
+    import pypef.plm.pmpnn.gp as pmpnn_gp
+    monkeypatch.setattr(pmpnn_gp, 'extract_pdb_coords',
+                        lambda *args, **kw: np.array([[0., 0., 0.], [1., 0., 0.]]))
+    rng = np.random.default_rng(31)
+    sequences = ['CC', 'AD', 'CD'] * 8
+    x = rng.normal(size=(24, 2))
+    y = rng.normal(size=24)
+
+    # Pure DCA hybrid model (as in pypef.utils.low_n_mutation_extrapolation): without the Ridge
+    # nothing in the ensemble would learn from y_train, so it is kept.
+    dca_only = DCALLMHybridModel(x, y, x_dca_wt=np.zeros(2), ridge_alphas=np.array([1.]),
+                                 device='cpu', seed=31)
+    assert dca_only.use_dca_ridge is True
+    assert dca_only.ridge_opt is not None
+    assert dca_only.feature_names == ['y_dca', 'y_ridge']
+
+    # With a GP there is a supervised member, so the default drops the Ridge
+    with_gp = DCALLMHybridModel(
+        x, y, x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
+        pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
+        ridge_alphas=np.array([1.]), batch_size=1, seed=31, gauss_opt=True,
+    )
+    assert with_gp.use_dca_ridge is False
+    assert with_gp.ridge_opt is None
+    assert 'y_ridge' not in with_gp.feature_names and 'PMPNN_gp' in with_gp.feature_names
 
 
 def test_ridge_block_cv():

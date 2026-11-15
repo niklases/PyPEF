@@ -100,7 +100,7 @@ class DCALLMHybridModel:
             gp_pmpnn_probs: bool = False,
             gp_lr: float = 0.05,
             gp_comb_all_zero_shot: bool = True,
-            use_dca_ridge: bool = False,
+            use_dca_ridge: bool | None = None,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -198,8 +198,23 @@ class DCALLMHybridModel:
         # dominant error on contiguous (region-wise) test splits.
         self.gp_comb_all_zero_shot = gp_comb_all_zero_shot
         self._zs_stats = None
-        # Include the supervised DCA-Ridge model ('y_ridge') as an ensemble member -- it has 
-        # about zero per-fold Spearman on positions that are not in the training data. 
+        # Include the supervised DCA-Ridge model ('y_ridge') as an ensemble member -- it has
+        # about zero per-fold Spearman on positions that are not in the training data.
+        # `None` (the default) decides automatically: off, unless the Ridge would be the only
+        # supervised ensemble member. Without GPs (`gauss_opt`) and without LoRA, all remaining
+        # members (DCA statistical energy, base-PLM/PMPNN zero-shot scores) are unsupervised, so
+        # dropping the Ridge would ignore `y_train` altogether -- as in a pure DCA hybrid model
+        # (e.g. `pypef.utils.low_n_mutation_extrapolation`). Explicit True/False is always honoured.
+        if use_dca_ridge is None:
+            has_gp = bool(gauss_opt) and (
+                llm_model_input is not None or pmpnn_conditional_probs is not None)
+            has_lora = llm_model_input is not None and bool(lora_train)
+            use_dca_ridge = not (has_gp or has_lora)
+            if use_dca_ridge:
+                logger.info(
+                    "Keeping the supervised DCA-Ridge model: without a GP or LoRA predictor it "
+                    "would be the only supervised ensemble member."
+                )
         self.use_dca_ridge = use_dca_ridge
         if batch_size is None:
             batch_size = 5
