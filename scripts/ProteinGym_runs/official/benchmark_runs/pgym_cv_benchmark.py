@@ -55,12 +55,12 @@ def main(cfg: DictConfig) -> None:
     clip_std_preds = cfg.get('clip_std_preds', None)
     ridge_block_cv = cfg.get('ridge_block_cv', False)
     prediction_cache_folder = cfg.get('prediction_cache_folder', None)
-    gp_standardize_targets = cfg.get('gp_standardize_targets', False)
+    gp_standardize_targets = cfg.get('gp_standardize_targets', True)
     gp_pmpnn_probs = cfg.get('gp_pmpnn_probs', False)
     gp_lr = cfg.get('gp_lr', 0.05)
-    gauss_comb_plm_emb = cfg.get('gauss_comb_plm_emb', False)
-    gp_comb_all_zero_shot = cfg.get('gp_comb_all_zero_shot', False)
-    use_dca_ridge = cfg.get('use_dca_ridge', True)
+    gauss_comb_plm_emb = cfg.get('gauss_comb_plm_emb', True)
+    gp_comb_all_zero_shot = cfg.get('gp_comb_all_zero_shot', True)
+    use_dca_ridge = cfg.get('use_dca_ridge', False)
     # Experiment settings
     split_method = cfg.split_method
     progress_bar = cfg.progress_bar

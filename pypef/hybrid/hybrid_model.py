@@ -82,7 +82,7 @@ class DCALLMHybridModel:
             shared_fraction: float | None = None,
             lora_train: bool = False,
             gauss_opt: bool = False,
-            gauss_comb_plm_emb: bool = False,
+            gauss_comb_plm_emb: bool = True,
             pmpnn_conditional_probs: dict | np.ndarray | str | os.PathLike | None = None,
             pdb_struct: str | os.PathLike | None = None,
             batch_size: int | None = None,
@@ -96,11 +96,11 @@ class DCALLMHybridModel:
             clip_std_preds: float | None = None,
             ridge_block_cv: bool = False,
             ridge_block_cv_min_n: int = 150,
-            gp_standardize_targets: bool = False,
+            gp_standardize_targets: bool = True,
             gp_pmpnn_probs: bool = False,
             gp_lr: float = 0.05,
-            gp_comb_all_zero_shot: bool = False,
-            use_dca_ridge: bool = True,
+            gp_comb_all_zero_shot: bool = True,
+            use_dca_ridge: bool = False,
             verbose: bool = True,
             progress_cb=None, 
             abort_cb=None
@@ -198,8 +198,8 @@ class DCALLMHybridModel:
         # dominant error on contiguous (region-wise) test splits.
         self.gp_comb_all_zero_shot = gp_comb_all_zero_shot
         self._zs_stats = None
-        # Include the supervised DCA-Ridge model ('y_ridge') as an ensemble member. 
-        # It has about zero per-fold Spearman on positions that are not in the training data. 
+        # Include the supervised DCA-Ridge model ('y_ridge') as an ensemble member -- it has 
+        # about zero per-fold Spearman on positions that are not in the training data. 
         self.use_dca_ridge = use_dca_ridge
         if batch_size is None:
             batch_size = 5

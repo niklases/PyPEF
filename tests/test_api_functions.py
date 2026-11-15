@@ -379,6 +379,7 @@ def test_hybrid_model_dca_llm_aneh(
             lora_train=True,
             n_epochs=5,  # Training (only) the LoRA model
             device=device,
+            use_dca_ridge=True  # golden values below cover the DCA-Ridge component
         )
 
         y_test_pred_2 = plm_inference(
@@ -627,7 +628,8 @@ def test_hybrid_model_dca_llm_avgfp(
             pmpnn_conditional_probs=pmpnn_conditional_probs,
             pdb_struct=pdb_file,
             n_epochs=5,
-            device=device
+            device=device,
+            use_dca_ridge=True  # golden values below cover the DCA-Ridge component
         )
 
         if i == 0:
@@ -739,7 +741,8 @@ def test_hybrid_model_dca_llm_avgfp(
                 gauss_opt=True,
                 pdb_struct=pdb_file,
                 n_epochs=5,
-                device=device
+                device=device,
+                use_dca_ridge=True
             )
             y_pred_test_nolora, _ = hm_nolora.hybrid_prediction(
                 x_dca=x_dca_test, x_llm_dict=x_llm_input, sequences=test_seqs

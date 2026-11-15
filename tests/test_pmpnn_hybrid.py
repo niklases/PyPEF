@@ -48,8 +48,8 @@ def test_hybrid_pmpnn_multisplit_and_pickle(ensemble_func, gauss_opt, monkeypatc
         ridge_alphas=np.array([1.]), batch_size=1, seed=8, device='cpu',
         n_ensemble_splits=2, ensemble_func=ensemble_func, gauss_opt=gauss_opt,
     )
-    # The PMPNN GP follows gauss_opt, like the ESM/ProSST GPs.
-    features = ['y_dca', 'y_ridge', 'PMPNN_base'] + (['PMPNN_gp'] if gauss_opt else [])
+    # The PMPNN GP follows gauss_opt, like the ESM/ProSST GPs; the DCA-Ridge is off by default.
+    features = ['y_dca', 'PMPNN_base'] + (['PMPNN_gp'] if gauss_opt else [])
     assert model.feature_names == features
     assert len(model.all_betas) == len(features)
     np.testing.assert_allclose(model.pmpnn_aa_cond_probs.cpu().sum(-1), 1, atol=1e-6)
@@ -81,7 +81,7 @@ def test_separate_pmpnn_gp(monkeypatch):
         sequences=sequences, wt_sequence='AC', pmpnn_conditional_probs=log_p,
         pdb_struct='mock.pdb', device='cpu',
         ridge_alphas=np.array([1.]), batch_size=1, seed=19, n_ensemble_splits=2,
-        gauss_opt=True,
+        gauss_opt=True, use_dca_ridge=True,
     )
     assert model.feature_names == ['y_dca', 'y_ridge', 'PMPNN_base', 'PMPNN_gp']
     kernel = model.pmpnn_gp.covar_module.structure_kernel.base_kernel
@@ -235,6 +235,7 @@ def test_refit_full_train_and_clipping(monkeypatch):
         x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
         pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
         ridge_alphas=np.array([1.]), batch_size=1, seed=5, gauss_opt=True,
+        use_dca_ridge=True,  # the refit of the DCA-Ridge is part of what is checked here
     )
     base = DCALLMHybridModel(x, y, **kwargs)
     refit = DCALLMHybridModel(x, y, refit_full_train=True, **kwargs)
@@ -277,8 +278,8 @@ def test_gp_standardized_targets_and_pmpnn_probs(monkeypatch):
         pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
         ridge_alphas=np.array([1.]), batch_size=1, seed=13, gauss_opt=True,
     )
-    DCALLMHybridModel(x, y, **kwargs)
-    assert abs(seen[-1].mean()) > 10  # raw targets by default
+    DCALLMHybridModel(x, y, gp_standardize_targets=False, **kwargs)
+    assert abs(seen[-1].mean()) > 10  # raw targets with the flag off
     model = DCALLMHybridModel(x, y, gp_standardize_targets=True, refit_full_train=True, **kwargs)
     ttrain, full = seen[-2], seen[-1]
     assert len(full) == 24 > len(ttrain)
@@ -324,7 +325,7 @@ def test_gp_predictions_on_target_scale(monkeypatch):
     assert np.isfinite(pred).all()
 
     # Without the flag nothing is transformed, and the raw targets are already on their own scale
-    plain = DCALLMHybridModel(x, y, **kwargs)
+    plain = DCALLMHybridModel(x, y, gp_standardize_targets=False, **kwargs)
     assert plain._gp_untransform(np.arange(3.0)).tolist() == [0.0, 1.0, 2.0]
     plain_gp = plain.hybrid_prediction(x, sequences=sequences)[1]['PMPNN_gp']
     assert abs(np.mean(plain_gp) - np.mean(y)) < 3 * np.std(y)
@@ -340,11 +341,11 @@ def test_comb_all_zero_shot_matrix():
     model = DCALLMHybridModel(
         x, y, x_dca_wt=np.zeros(2), sequences=sequences, wt_sequence='AC',
         pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
-        ridge_alphas=np.array([1.]), batch_size=1, seed=5,
+        ridge_alphas=np.array([1.]), batch_size=1, seed=5, gp_comb_all_zero_shot=False,
     )
     plm_scores = [torch.arange(24, dtype=torch.float32), torch.zeros(24)]
 
-    # Default: PLM scores only, unstandardized
+    # Flag off: PLM scores only, unstandardized
     plain = model._comb_zs_matrix(plm_scores, x, sequences)
     assert plain.shape == (24, 2)
     np.testing.assert_allclose(plain[:, 0].numpy(), np.arange(24), atol=1e-5)
@@ -377,11 +378,11 @@ def test_use_dca_ridge_false():
         pmpnn_conditional_probs=rng.normal(size=(2, 21)), pdb_struct='mock.pdb', device='cpu',
         ridge_alphas=np.array([1.]), batch_size=1, seed=11,
     )
-    with_ridge = DCALLMHybridModel(x, y, **kwargs)
+    with_ridge = DCALLMHybridModel(x, y, use_dca_ridge=True, **kwargs)
     assert with_ridge.ridge_opt is not None
     assert list(with_ridge.hybrid_prediction(x, sequences=sequences)[1])[:2] == ['y_dca', 'y_ridge']
 
-    without = DCALLMHybridModel(x, y, use_dca_ridge=False, **kwargs)
+    without = DCALLMHybridModel(x, y, **kwargs)  # off by default
     assert without.ridge_opt is None
     pred, components = without.hybrid_prediction(x, sequences=sequences)
     assert 'y_ridge' not in components and list(components)[0] == 'y_dca'
