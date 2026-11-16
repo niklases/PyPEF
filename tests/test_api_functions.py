@@ -694,7 +694,13 @@ def test_hybrid_model_dca_llm_avgfp(
                 spearmanr(hm.y_ttest, hm.y_llm_ttest)[0], 0.4626402221687696
             )
             np.testing.assert_almost_equal(
-                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6719074588353634
+                # GP trained on standardized targets (the gp_standardize_targets=True
+                # default); it was 0.6719074588353634 when the GP was trained on the raw
+                # DMS scores. The predictions are on the target scale either way
+                # (_gp_untransform), and Spearman is scale-invariant -- what differs is
+                # the fitted GP: the HalfCauchy(0.1) noise prior and the lr/150-step
+                # schedule assume unit-variance targets.
+                spearmanr(hm.y_ttest, hm.y_gp_opt_ttest)[0], 0.6730139292821063
             )
             assert_portable_corr(
                 spearmanr(hm.y_ttest, hm.y_llm_lora_ttest)[0], "ESM y_llm_lora_ttest"

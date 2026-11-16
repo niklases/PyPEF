@@ -87,3 +87,12 @@ markers = [
     "wheel_build",
     "gui_slow: long-running GUI end-to-end runs with PLMs (opt-in: -m gui_slow)"
 ]
+filterwarnings = [
+    # torch_geometric (up to 2.8.1, the current release) resolves type hints with the
+    # private typing._eval_type() without passing type_params; its Inspector runs for
+    # every MessagePassing subclass, so the ProSST structure encoder
+    # (pypef/plm/prosst_structure/encoder/layer.py) emits this hundreds of times per
+    # PLM test. Nothing to fix in PyPEF -- but Python 3.15 turns the call into an
+    # error, so torch-geometric must not be pinned to <= 2.8.1 when moving to 3.15.
+    "ignore:Failing to pass a value to the 'type_params' parameter:DeprecationWarning",
+]
