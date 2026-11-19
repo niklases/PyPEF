@@ -147,6 +147,16 @@ class DCALLMHybridModel:
         self.gauss_comb_plm_emb = gauss_comb_plm_emb
         self.pdb_struct = pdb_struct
         self.lora_train = lora_train
+        if lora_train and not self.llm_keys:
+            # LoRA fine-tuning needs a transformer PLM (ESM/ProSST). ProteinMPNN is not one and is
+            # removed from the PLM list before the model is built (see `parse_llm_flag` usage), so
+            # e.g. `--plm pmpnn --lora` leaves nothing to tune: the flag would be silently ignored.
+            logger.warning(
+                "LoRA fine-tuning was requested (lora_train=True / --lora) but no LoRA-capable PLM "
+                "is selected, so the flag has no effect. ProteinMPNN cannot be LoRA-tuned; add ESM "
+                "and/or ProSST (e.g. --plm esm+pmpnn), or use --gauss_opt for a supervised "
+                "ProteinMPNN Gaussian process."
+            )
         self.ridge_alphas = ridge_alphas
         self.x_train_dca = x_train_dca
         self.y_train = y_train
@@ -268,9 +278,34 @@ class DCALLMHybridModel:
         self.train_and_optimize()
 
     def _pmpnn_scores(self, sequences):
+        """
+        ProteinMPNN zero-shot scores of `sequences`, memoized per sequence set.
+
+        The same sequence sets are scored several times per fit (ttrain/ttest for the combined GP's
+        zero-shot matrix, for the unsupervised-performance log and for the PMPNN GP; the prediction
+        set for the zero-shot matrix, `PMPNN_base` and the PMPNN GP). The scores only depend on
+        `pmpnn_log_probs` and `wt_sequence`, both fixed after `__init__`, so they are cached here.
+        """
         if sequences is None:
             raise ValueError("PMPNN prediction requires variant sequences.")
-        return score_sequences_from_probs(self.pmpnn_log_probs, sequences, self.wt_sequence)
+        cache = getattr(self, '_pmpnn_score_cache', None)
+        if cache is None:
+            cache = self._pmpnn_score_cache = {}
+        # The tuple itself is the key (not its hash): dicts fall back to equality, so a hash
+        # collision cannot silently return another sequence set's scores.
+        key = tuple(str(s) for s in sequences)
+        cached = cache.get(key)
+        if cached is not None:
+            return cached.copy()
+        scores = score_sequences_from_probs(self.pmpnn_log_probs, sequences, self.wt_sequence)
+        cache[key] = np.asarray(scores)
+        return np.asarray(scores).copy()
+
+    def __getstate__(self):
+        # The PMPNN score cache is a pure memo of `pmpnn_log_probs`; keep it out of pickles.
+        state = self.__dict__.copy()
+        state.pop('_pmpnn_score_cache', None)
+        return state
 
     def _gp_targets(self, targets) -> np.ndarray:
         """GP training targets, standardized if `gp_standardize_targets` is set."""
@@ -346,7 +381,9 @@ class DCALLMHybridModel:
         self.pmpnn_gp, self.pmpnn_gp_likelihood = train_pmpnn_gp(
             sequences, targets, self.pmpnn_log_probs,
             self.pmpnn_aa_cond_probs, self.wt_sequence, self.pdb_struct, self.device,
-            lr=getattr(self, 'gp_lr', 0.05)
+            lr=getattr(self, 'gp_lr', 0.05),
+            # Same scores as the GP would compute itself, from the memo (see `_pmpnn_scores`).
+            scores=self._pmpnn_scores(sequences)
         )
 
     def _fit_plm_gp(self, sequences, x_embed, x_zero_shot, targets, aa_cond_probs):
@@ -423,7 +460,8 @@ class DCALLMHybridModel:
     def _predict_pmpnn_gp(self, sequences):
         return self._gp_untransform(predict_pmpnn_gp(
             self.pmpnn_gp, self.pmpnn_gp_likelihood, sequences,
-            self.pmpnn_log_probs, self.wt_sequence, self.device
+            self.pmpnn_log_probs, self.wt_sequence, self.device,
+            scores=self._pmpnn_scores(sequences)
         ))
 
     @staticmethod
@@ -1010,9 +1048,11 @@ class DCALLMHybridModel:
             self.betas_str += f"{llm_name}-ZS, "
 
             if self.lora_train:
-                logger.info('Refining/training the model... gradient calculation adds a computational '
-                      'graph that requires quite some memory - if you are facing an (out of memory) '
-                      'error, try reducing the batch size or sticking to CPU device...')
+                logger.info(
+                    'Refining/training the model... gradient calculation adds a computational '
+                    'graph that requires quite some memory - if you are facing an (out of memory) '
+                    'error, try reducing the batch size or sticking to CPU device...'
+                )
                 training_fn(
                     x_sequences=x_tok_llm_ttrain,
                     scores=self.y_ttrain,
@@ -1314,7 +1354,7 @@ class DCALLMHybridModel:
         else:
             self.ridge_opt = None
             self.y_dca_ridge_ttrain = self.y_dca_ridge_ttest = None
-            logger.info("DCA-Ridge is excluded from the ensemble (use_dca_ridge=False).")
+            logger.info("DCA-Ridge is excluded from the ensemble (use_dca_ridge=False)...")
 
         # Train and extract PLM predictions if applicable
         if self.llm_keys:
@@ -1633,7 +1673,7 @@ class DCALLMHybridModel:
             )
 
         predictions = np.array(list(self.hybrid_preds.values()), dtype=float)
-        logger.info(f"Running hybrid prediction with: {current_keys}")
+        logger.info(f"Running hybrid prediction with: {current_keys}...")
         
         # --- PREDICTION AGGREGATION ---
         self.y_hybrid = np.zeros_like(y_dca)

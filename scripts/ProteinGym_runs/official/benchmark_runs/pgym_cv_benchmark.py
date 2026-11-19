@@ -5,6 +5,7 @@ Structured based on Kermut run script.
 
 from pathlib import Path
 import gc
+import random
 import hydra
 import numpy as np
 import pandas as pd
@@ -252,6 +253,15 @@ def main(cfg: DictConfig) -> None:
     except KeyError as e:
         raise RuntimeError(f"KeyError: {e}. Available columns: {df.columns.to_list()}")
 
+    # ProteinMPNN conditional probabilities depend only on the structure and the seed, not on the
+    # CV split, so they are computed once per DMS instead of once per fold (identical result).
+    if "pmpnn" in llm.lower():
+        pmpnn_conditional_probs = run_protein_mpnn_conditional(
+            pdb_file, seed=seed
+        )
+    else:
+        pmpnn_conditional_probs = None
+
     for i, test_fold in enumerate(tqdm(unique_folds, disable=not progress_bar)):
         print(f'Split {i+1}/{len(unique_folds)}...')
         # Assign splits
@@ -289,7 +299,6 @@ def main(cfg: DictConfig) -> None:
         if len(pdb_trimmed_common_sequence) > 1500:
             llm_dict_train = None
             gauss_opt = False
-
         
         #if df.shape[0] >= 100000:  # Not CV-training the PLM on much data but just relying on DCA
         #    llm_kwargs = None      # Datasets: HIS7_YEAST_Pokusaeva_2019.csv
@@ -297,12 +306,20 @@ def main(cfg: DictConfig) -> None:
         #    print(f'\nSkipping LLM CV training for dataset {csv_substitutions_file} as it '
         #          f'would take up (too) much time...')
 
-        if "pmpnn" in llm.lower():
-            pmpnn_conditional_probs = run_protein_mpnn_conditional(
-                pdb_file, seed=seed
-            )
-        else:
-            pmpnn_conditional_probs = None
+        if pmpnn_conditional_probs is not None:
+            # Start the fold from an explicit global RNG state, exactly where the hoisted
+            # `run_pmpnn` used to reset it (hence gated on pmpnn: adding this to esm/prosst-only
+            # runs would change *their* behaviour). Per-fold reseeding also happens implicitly via
+            # `_set_seeds(seed)` in `get_esm_models` / `get_prosst_models`, so this is only load-
+            # bearing for a pmpnn-only run; it makes the intent visible in the others.
+            # The internal 66/34 subsplit does not depend on it
+            # (`random_state=self.seed`); what does is the GP's mini-batched training path
+            # (`torch.randperm` in kermut/gp/optimize_gp.py), taken when a GP training set exceeds
+            # `batch_threshold=2000`.
+            _pmpnn_seed = seed if seed is not None else 42  # as in `run_pmpnn`
+            torch.manual_seed(_pmpnn_seed)
+            random.seed(_pmpnn_seed)
+            np.random.seed(_pmpnn_seed)
 
         hm = DCALLMHybridModel(
             x_train_dca=np.array(x_dca_train),

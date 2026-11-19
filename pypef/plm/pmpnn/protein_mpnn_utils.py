@@ -94,7 +94,9 @@ def parse_PDB_biounits(x, atoms=['N','CA','C'], chain=None):
     return ["".join([aa_N_1.get(a,"-") for a in y]) for y in x]
 
   xyz,seq,min_resn,max_resn = {},{},1e6,-1e6
-  for line in open(x,"rb"):
+  with open(x, "rb") as pdb_file:
+    pdb_lines = pdb_file.readlines()
+  for line in pdb_lines:
     line = line.decode("utf-8","ignore").rstrip()
 
     if line[:6] == "HETATM" and line[17:17+3] == "MSE":

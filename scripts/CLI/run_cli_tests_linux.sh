@@ -318,7 +318,9 @@ echo
 
 ### Reproducibility check: with a fixed --seed, hybrid training (train/validation
 ### split + differential-evolution beta optimization) must give identical results.
-### Without a seed (default) results vary run to run, so we do NOT assert a value there.
+### --seed has [default: 42], so runs are seeded even without the flag; it is passed
+### explicitly to make the intent visible. No specific value is asserted: the number is
+### hardware/library dependent.
 seed_perf_1=$($pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
 seed_perf_2=$($pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
 echo -e "${BLUE}Seeded hybrid reproducibility: run1=${seed_perf_1} run2=${seed_perf_2}${NC}"
@@ -491,6 +493,8 @@ $pypef predict_ssm -w P42212_F64L.fasta --plm esm
 echo
 $pypef predict_ssm -w P42212_F64L.fasta --plm prosst --pdb GFP_AEQVI.pdb
 echo
+$pypef predict_ssm -w P42212_F64L.fasta --plm pmpnn --pdb GFP_AEQVI.pdb
+echo
 
 $pypef encode -i avGFP.csv -e dca -w P42212_F64L.fasta --params uref100_avgfp_jhmmer_119_plmc_42.6.params --threads $threads
 echo
@@ -596,10 +600,76 @@ echo
 $pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst+pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
 echo
 
+# PMPNN-specific combinations (cheap: PMPNN needs no PLM weights, only the PDB)
+# PMPNN as the only "PLM" next to DCA: zero-shot component only (no --gauss_opt -> no PMPNN GP)
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+# ... and the same with the PMPNN Gaussian process
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
+echo
+# --pmpnn is equivalent to listing pmpnn in --plm
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+# --pmpnn_cond_probs reuses precomputed conditional log probabilities. No CLI flag writes that NPZ
+# (run_protein_mpnn_conditional(save_npz_files=...) is not exposed), so it is created via the API here.
+python3 -c "import numpy as np; from pypef.plm.pmpnn.get_cond_probs import run_protein_mpnn_conditional; np.savez('pmpnn_cond_probs.npz', **run_protein_mpnn_conditional('GFP_AEQVI.pdb', seed=42))"
+echo
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --pmpnn_cond_probs pmpnn_cond_probs.npz --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+# Save -> load -> predict for a PMPNN-containing model (pickled as Pickles/HYBRIDGREMLINPMPNN);
+# reloading runs the feature-name/beta consistency checks of the hybrid model
+$pypef hybrid -m HYBRIDGREMLINPMPNN --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+$pypef hybrid -m HYBRIDGREMLINPMPNN --ps avGFP_prediction_set.fasta --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+$pypef hybrid directevo -m HYBRIDGREMLINPMPNN -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb
+echo
+# Combined multi-PLM GP together with PMPNN = the library default configuration
+# (gauss_comb_plm_emb + gp_comb_all_zero_shot + PMPNN), and its model round trip
+$pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst+pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --gauss_comb
+echo
+$pypef hybrid -m HYBRIDGREMLINESMPROSSTPMPNN --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+echo
+
+### DCA-Ridge auto rule (use_dca_ridge=None, the default): the supervised DCA-Ridge is kept when it
+### would otherwise be the only supervised ensemble member, and dropped as soon as a GP (or LoRA)
+### predictor exists. This is a model-content check, which a pure run/fail check cannot see, so the
+### component list that the hybrid model logs is asserted instead of a performance value.
+ridge_components_dca=$($pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN 2>&1 | sed -n 's/.*Running hybrid prediction with: \(\[[^]]*\]\).*/\1/p' | tail -1)
+ridge_components_gp=$($pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt 2>&1 | sed -n 's/.*Running hybrid prediction with: \(\[[^]]*\]\).*/\1/p' | tail -1)
+echo -e "${BLUE}DCA-Ridge auto rule: pure DCA -> ${ridge_components_dca} | with GP -> ${ridge_components_gp}${NC}"
+if [[ "$ridge_components_dca" != *"y_ridge"* ]]; then
+    echo -e "${RED}DCA-Ridge auto rule FAILED: pure DCA hybrid must keep the supervised DCA-Ridge (got ${ridge_components_dca})${NC}"
+    exit 1
+fi
+if [[ "$ridge_components_gp" == *"y_ridge"* ]]; then
+    echo -e "${RED}DCA-Ridge auto rule FAILED: with a GP predictor the DCA-Ridge must be dropped (got ${ridge_components_gp})${NC}"
+    exit 1
+fi
+echo -e "${GREEN}DCA-Ridge auto rule OK: kept without and dropped with a GP predictor.${NC}"
+echo
+
+### Value recheck for the new PMPNN path: the DCA+PMPNN hybrid with a PMPNN Gaussian process
+### must give the identical performance value across runs with the same seed. This is the cheapest
+### command that exercises GP training (no PLM weights are loaded), so it is a fast guard against
+### nondeterminism creeping into the GP/beta path. Note --seed defaults to 42, so it is passed
+### explicitly only to make the intent visible. No specific value is asserted: the number is
+### hardware/library dependent.
+pmpnn_gp_perf_1=$($pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
+pmpnn_gp_perf_2=$($pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
+echo -e "${BLUE}Seeded DCA+PMPNN+GP reproducibility: run1=${pmpnn_gp_perf_1} run2=${pmpnn_gp_perf_2}${NC}"
+if [ -z "$pmpnn_gp_perf_1" ] || [ "$pmpnn_gp_perf_1" != "$pmpnn_gp_perf_2" ]; then
+    echo -e "${RED}Reproducibility FAILED: seeded (--seed 42) DCA+PMPNN+GP runs differ or failed to parse (${pmpnn_gp_perf_1} != ${pmpnn_gp_perf_2})${NC}"
+    exit 1
+fi
+echo -e "${GREEN}Reproducibility OK: seeded (--seed 42) DCA+PMPNN+GP runs are identical (${pmpnn_gp_perf_1}).${NC}"
+echo
+
 ### Reproducibility check INCLUDING a PLM (and GP training): with a fixed --seed the
 ### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)
-### must be identical run to run. Without --seed these vary (torch/GP RNG), so we only
-### assert reproducibility with a seed, not a specific value (results are hardware/version dependent).
+### must be identical run to run. --seed has [default: 42], so runs are seeded even without
+### the flag; it is passed explicitly to make the intent visible. Only reproducibility is
+### asserted, not a specific value (results are hardware/library dependent).
 plm_perf_1=$($pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
 plm_perf_2=$($pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | sed -n 's/.*Hybrid performance: \([-0-9.]*\).*/\1/p' | tail -1)
 echo -e "${BLUE}Seeded PLM+GP hybrid reproducibility: run1=${plm_perf_1} run2=${plm_perf_2}${NC}"

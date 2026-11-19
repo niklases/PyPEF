@@ -105,6 +105,10 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
+    # Triton can never work in a frozen build: it JIT-compiles its CUDA driver shim at runtime and
+    # there are no Python headers / C compiler in the bundle, so it fails with
+    # "_internal/triton/backends/nvidia/driver/driver.c:9:10: fatal error: Python.h".
+    #   excludes=['PyQt5', 'tensorboard', 'triton'],
     excludes=['PyQt5', 'tensorboard'],
     noarchive=False,
     optimize=0,

@@ -14,6 +14,7 @@ from biotite.sequence import ProteinSequence
 import math
 import numpy as np
 import os
+import sys
 import torch
 import torch.nn.functional as F
 from pathlib import Path
@@ -40,6 +41,17 @@ def safe_compile(*args, **kwargs):
         actual_args = ()
     else:
         actual_args = args
+
+    # In a frozen build (PyInstaller) there are no Python development headers and usually no C
+    # compiler, so Triton's runtime JIT always fails while building its driver shim. The failure is
+    # caught below and falls back to eager mode, but the compiler writes its own error to stderr
+    # from a subprocess (e.g. "driver.c:9:10: fatal error: Python.h: No such file or directory"),
+    # which no warnings filter can suppress and which looks like a crash to the user. Skip
+    # compilation entirely instead; eager mode is the outcome either way.
+    if getattr(sys, 'frozen', False):
+        if func_to_compile is not None:
+            return func_to_compile
+        return lambda func: func
 
     def create_wrapper(func):
         compiled_ref = [None]

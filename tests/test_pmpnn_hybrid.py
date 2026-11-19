@@ -2,11 +2,13 @@ import pickle
 
 import numpy as np
 import pytest
+import torch
 
 from pypef.hybrid.hybrid_model import DCALLMHybridModel
 from pypef.plm.pmpnn.get_cond_probs import (
     load_conditional_log_probs, score_sequences_from_probs,
 )
+from pypef.plm.pmpnn.gp import prepare_pmpnn_gp_inputs
 
 
 def test_conditional_scores_and_input_formats(tmp_path):
@@ -508,3 +510,77 @@ def test_ridge_block_cv_in_hybrid_model():
     pred, _ = restored.hybrid_prediction(x, sequences=sequences)
     np.testing.assert_allclose(pred, model.hybrid_prediction(x, sequences=sequences)[0])
     assert np.isfinite(pred).all()
+
+
+def test_pmpnn_gp_inputs_precomputed_scores_match_fallback():
+    """
+    Threading precomputed PMPNN scores into the GP inputs must change nothing.
+
+    The hybrid model hands its memoized `_pmpnn_scores` to `train_pmpnn_gp`/`predict_pmpnn_gp`
+    instead of letting them score the same sequence set again, so the `scores=None` fallback has
+    no caller left inside PyPEF; this pins it, and the guard against misaligned scores.
+    """
+    rng = np.random.default_rng(23)
+    wt = 'ACDEFGHIKLMNPQRSTVWY'
+    log_p = rng.normal(size=(len(wt), 21))
+    sequences = [wt[:i] + 'Y' + wt[i + 1:] for i in range(len(wt))]
+    scores = score_sequences_from_probs(log_p, sequences, wt)
+
+    fallback = prepare_pmpnn_gp_inputs(sequences, log_p, wt, 'cpu')
+    threaded = prepare_pmpnn_gp_inputs(sequences, log_p, wt, 'cpu', scores=scores)
+
+    def tensors(obj):
+        if torch.is_tensor(obj):
+            return [obj]
+        if isinstance(obj, dict):
+            return [t for key in sorted(obj) for t in tensors(obj[key])]
+        if isinstance(obj, (list, tuple)):
+            return [t for item in obj for t in tensors(item)]
+        return []
+
+    flat_fallback, flat_threaded = tensors(fallback), tensors(threaded)
+    assert flat_fallback and len(flat_fallback) == len(flat_threaded)
+    for a, b in zip(flat_fallback, flat_threaded):
+        assert a.shape == b.shape
+        assert torch.equal(a, b)
+
+    # `scores` must actually be used, not silently ignored (which the equality above would miss)
+    altered = prepare_pmpnn_gp_inputs(sequences, log_p, wt, 'cpu', scores=scores + 1.0)
+    assert any(
+        not torch.equal(a, b) for a, b in zip(flat_fallback, tensors(altered))
+    ), 'passing different scores had no effect: the argument is being ignored'
+
+    for misaligned in (scores[:-1], np.concatenate([scores, scores[:1]])):
+        with pytest.raises(ValueError, match='align'):
+            prepare_pmpnn_gp_inputs(sequences, log_p, wt, 'cpu', scores=misaligned)
+
+
+def test_lora_without_lora_capable_plm_warns(caplog):
+    """
+    `--lora` with only ProteinMPNN (or pure DCA) has no effect and must say so.
+
+    ProteinMPNN cannot be LoRA-tuned and is removed from the PLM list before the model is built,
+    so `--plm pmpnn --lora` leaves nothing to fine-tune. The DCA-Ridge auto rule already handles
+    this correctly (`has_lora` requires a PLM input), but the flag itself was silently ignored.
+    """
+    rng = np.random.default_rng(31)
+    wt = 'ACDEFGHIKLMNPQRST'
+    sequences = [wt[:i] + 'W' + wt[i + 1:] for i in range(len(wt))] * 3
+    x = rng.normal(size=(len(sequences), 3))
+    y = rng.normal(size=len(sequences))
+    kwargs = dict(
+        x_dca_wt=np.zeros(3), sequences=sequences, wt_sequence=wt,
+        pmpnn_conditional_probs=rng.normal(size=(len(wt), 21)), device='cpu',
+        batch_size=1, seed=31,
+    )
+
+    with caplog.at_level('WARNING', logger='pypef.hybrid.hybrid_model'):
+        model = DCALLMHybridModel(x, y, lora_train=True, **kwargs)
+    assert 'LoRA fine-tuning was requested' in caplog.text
+    # the flag must not have cost the model its only supervised member
+    assert 'y_ridge' in model.feature_names, model.feature_names
+
+    caplog.clear()
+    with caplog.at_level('WARNING', logger='pypef.hybrid.hybrid_model'):
+        DCALLMHybridModel(x, y, lora_train=False, **kwargs)
+    assert 'LoRA fine-tuning was requested' not in caplog.text

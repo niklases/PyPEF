@@ -439,7 +439,9 @@ Write-Host
 
 ### Reproducibility check: with a fixed --seed, hybrid training (train/validation
 ### split + differential-evolution beta optimization) must give identical results.
-### Without a seed (default) results vary run to run, so we do NOT assert a value there.
+### --seed has [default: 42], so runs are seeded even without the flag; it is passed
+### explicitly to make the intent visible. No specific value is asserted: the number is
+### hardware/library dependent.
 $seedPerf1 = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
@@ -682,6 +684,9 @@ ExitOnExitCode
 Write-Host 
 pypef predict_ssm -w P42212_F64L.fasta --plm prosst --pdb GFP_AEQVI.pdb
 ExitOnExitCode
+Write-Host
+pypef predict_ssm -w P42212_F64L.fasta --plm pmpnn --pdb GFP_AEQVI.pdb
+ExitOnExitCode
 Write-Host 
 
 ### Similar to old CLI run test from here
@@ -836,10 +841,98 @@ pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst+pmpnn -
 ExitOnExitCode
 Write-Host
 
+# PMPNN-specific combinations (cheap: PMPNN needs no PLM weights, only the PDB)
+# PMPNN as the only "PLM" next to DCA: zero-shot component only (no --gauss_opt -> no PMPNN GP)
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+# ... and the same with the PMPNN Gaussian process
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt
+ExitOnExitCode
+Write-Host
+# --pmpnn is equivalent to listing pmpnn in --plm
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+# --pmpnn_cond_probs reuses precomputed conditional log probabilities. No CLI flag writes that NPZ
+# (run_protein_mpnn_conditional(save_npz_files=...) is not exposed), so it is created via the API here.
+python -c "import numpy as np; from pypef.plm.pmpnn.get_cond_probs import run_protein_mpnn_conditional; np.savez('pmpnn_cond_probs.npz', **run_protein_mpnn_conditional('GFP_AEQVI.pdb', seed=42))"
+ExitOnExitCode
+Write-Host
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --pmpnn_cond_probs pmpnn_cond_probs.npz --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+# Save -> load -> predict for a PMPNN-containing model (pickled as Pickles/HYBRIDGREMLINPMPNN);
+# reloading runs the feature-name/beta consistency checks of the hybrid model
+pypef hybrid -m HYBRIDGREMLINPMPNN --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINPMPNN --ps avGFP_prediction_set.fasta --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+pypef hybrid directevo -m HYBRIDGREMLINPMPNN -w P42212_F64L.fasta --params GREMLIN --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+# Combined multi-PLM GP together with PMPNN = the library default configuration
+# (gauss_comb_plm_emb + gp_comb_all_zero_shot + PMPNN), and its model round trip
+pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm+prosst+pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --gauss_comb
+ExitOnExitCode
+Write-Host
+pypef hybrid -m HYBRIDGREMLINESMPROSSTPMPNN --ts TS.fasl --params GREMLIN --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb
+ExitOnExitCode
+Write-Host
+
+### DCA-Ridge auto rule (use_dca_ridge=None, the default): the supervised DCA-Ridge is kept when it
+### would otherwise be the only supervised ensemble member, and dropped as soon as a GP (or LoRA)
+### predictor exists. This is a model-content check, which a pure run/fail check cannot see, so the
+### component list that the hybrid model logs is asserted instead of a performance value.
+$ridgeComponentsDca = (pypef hybrid -l LS.fasl -t TS.fasl --params GREMLIN 2>&1 | 
+    Select-String 'Running hybrid prediction with: (\[[^\]]*\])' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+$ridgeComponentsGp = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt 2>&1 | 
+    Select-String 'Running hybrid prediction with: (\[[^\]]*\])' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+Write-Host "DCA-Ridge auto rule: pure DCA -> $ridgeComponentsDca | with GP -> $ridgeComponentsGp" -ForegroundColor Blue
+if ($ridgeComponentsDca -notlike '*y_ridge*') {
+    Write-Host "DCA-Ridge auto rule FAILED: pure DCA hybrid must keep the supervised DCA-Ridge (got $ridgeComponentsDca)" -ForegroundColor Red
+    exit 1
+}
+if ($ridgeComponentsGp -like '*y_ridge*') {
+    Write-Host "DCA-Ridge auto rule FAILED: with a GP predictor the DCA-Ridge must be dropped (got $ridgeComponentsGp)" -ForegroundColor Red
+    exit 1
+}
+Write-Host "DCA-Ridge auto rule OK: kept without and dropped with a GP predictor." -ForegroundColor Green
+Write-Host
+
+### Value recheck for the new PMPNN path: the DCA+PMPNN hybrid with a PMPNN Gaussian process
+### must give the identical performance value across runs with the same seed. This is the cheapest
+### command that exercises GP training (no PLM weights are loaded), so it is a fast guard against
+### nondeterminism creeping into the GP/beta path. Note --seed defaults to 42, so it is passed
+### explicitly only to make the intent visible. No specific value is asserted: the number is
+### hardware/library dependent.
+$pmpnnGpPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+$pmpnnGpPerf2 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm pmpnn --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | 
+    Select-String 'Hybrid performance: ([-0-9.]+)' | 
+    ForEach-Object { $_.Matches[0].Groups[1].Value } | 
+    Select-Object -Last 1)
+Write-Host "Seeded DCA+PMPNN+GP reproducibility: run1=$pmpnnGpPerf1 run2=$pmpnnGpPerf2" -ForegroundColor Blue
+if ([string]::IsNullOrWhiteSpace($pmpnnGpPerf1) -or ($pmpnnGpPerf1 -ne $pmpnnGpPerf2)) {
+    Write-Host "Reproducibility FAILED: seeded (--seed 42) DCA+PMPNN+GP runs differ or failed to parse ($pmpnnGpPerf1 != $pmpnnGpPerf2)" -ForegroundColor Red
+    exit 1
+}
+Write-Host "Reproducibility OK: seeded (--seed 42) DCA+PMPNN+GP runs are identical ($pmpnnGpPerf1)." -ForegroundColor Green
+Write-Host
+
 ### Reproducibility check INCLUDING a PLM (and GP training): with a fixed --seed the
 ### PLM-based hybrid (zero-shot PLM scores + Gaussian-process optimization + beta adjustment)
-### must be identical run to run. Without --seed these vary (torch/GP RNG), so we only
-### assert reproducibility with a seed, not a specific value (results are hardware/version dependent).
+### must be identical run to run. --seed has [default: 42], so runs are seeded even without
+### the flag; it is passed explicitly to make the intent visible. Only reproducibility is
+### asserted, not a specific value (results are hardware/library dependent).
 $plmPerf1 = (pypef hybrid --ls LS.fasl --ts TS.fasl --params GREMLIN --plm esm --wt P42212_F64L.fasta --pdb GFP_AEQVI.pdb --gauss_opt --seed 42 2>&1 | 
     Select-String 'Hybrid performance: ([-0-9.]+)' | 
     ForEach-Object { $_.Matches[0].Groups[1].Value } | 
