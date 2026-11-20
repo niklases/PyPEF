@@ -572,6 +572,11 @@ if __name__ == '__main__':
     elif os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
+        if df.empty:
+            raise SystemError(
+                f"DataFrame from read CSV '{out_results_csv}' is empty, "
+                f"cannot plot performances."
+            )
         print(df)
         try:
             start_i = df['No.'].to_list()[-1]

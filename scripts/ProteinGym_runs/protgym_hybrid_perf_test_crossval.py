@@ -15,13 +15,13 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from Bio import SeqIO, BiopythonParserWarning
 
-from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 warnings.filterwarnings(action='ignore', category=BiopythonParserWarning)
 
 import sys  # Use local directory PyPEF files
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from pypef.dca.gremlin_inference import GREMLIN
 from pypef.plm.esm_lora_tune import get_esm_models
+from pypef.plm.inference import esm_setup, plm_inference, prosst_setup, tokenize_sequences
 from pypef.plm.prosst_lora_tune import get_prosst_models, get_structure_quantizied
 from pypef.utils.variant_data import (
     get_seqs_from_var_name, check_alignment, shift_and_trim_vars_seqs, crop_pdb_to_alignment
@@ -544,6 +544,11 @@ if __name__ == '__main__':
     elif os.path.exists(out_results_csv):
         print(f'\nReading existing file {out_results_csv}...')
         df = pd.read_csv(out_results_csv, sep=',')
+        if df.empty:
+            raise SystemError(
+                f"DataFrame from read CSV '{out_results_csv}' is empty, "
+                f"cannot plot performances."
+            )
         print(df)
         try:
             start_i = df['No.'].to_list()[-1]
@@ -578,6 +583,7 @@ if __name__ == '__main__':
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
+    print('lines::', lines)
     clean_out_results_csv = os.path.splitext(out_results_csv)[0] + '_clean.csv'
     with open(clean_out_results_csv, 'w') as fh2:
         header = lines[0]
