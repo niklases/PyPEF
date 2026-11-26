@@ -583,7 +583,6 @@ if __name__ == '__main__':
 
     with open(out_results_csv, 'r') as fh:
         lines = fh.readlines()
-    print('lines::', lines)
     clean_out_results_csv = os.path.splitext(out_results_csv)[0] + '_clean.csv'
     with open(clean_out_results_csv, 'w') as fh2:
         header = lines[0]
